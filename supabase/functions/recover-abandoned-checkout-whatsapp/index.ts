@@ -367,6 +367,48 @@ Deno.serve(async (req) => {
       by_stage: {} as Record<string, number>,
     };
 
+    // === TRILHO "COPIOU" PRIMEIRO ===
+    // Precisa rodar antes do genérico: ao entrar neste trilho o lead tem o
+    // estágio de 15min fechado com motivo próprio, garantindo que os dois
+    // trilhos nunca disparem em paralelo.
+    const copyStages = await loadCopyStages(supabase);
+    if (copyStages.length === 0) {
+      console.log("⏸️ [WA-COPIOU] Trilho desligado: nenhum ContentSid aprovado em system_config.wa_copiou_templates.");
+    }
+    const dryRunReport: any[] = [];
+    for (const cfg of copyStages) {
+      const contactedThisStage = new Set<string>();
+      const rc = await processCopyStage(
+        supabase,
+        cfg,
+        activeEmailSet,
+        activePhoneSet,
+        completedEmailSet,
+        completedPhoneSet,
+        contactedThisStage,
+        lifetimeBannedPhones,
+        dryRun,
+        dryRunReport,
+      );
+      totals.sent += rc.sent;
+      totals.failed += rc.failed;
+      totals.skipped += rc.skipped;
+      totals.by_stage[`copiou_${cfg.label}`] = rc.sent;
+    }
+
+    if (dryRun) {
+      console.log("🧪 [WA-RECOVERY] dryRun: nenhum envio real, trilho genérico não avaliado.");
+      return new Response(
+        JSON.stringify({
+          status: "dry_run",
+          copy_track_enabled: copyStages.length > 0,
+          copy_stages: copyStages.map((c) => c.label),
+          candidates: dryRunReport,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     for (const cfg of STAGES) {
       // Set compartilhado de telefones contatados neste ciclo (dedup cross-source).
       const contactedThisStage = new Set<string>();
@@ -397,6 +439,7 @@ Deno.serve(async (req) => {
       totals.by_stage[`stripe_${cfg.label}`] = r1.sent;
       totals.by_stage[`pix_${cfg.label}`] = r2.sent;
     }
+
 
     console.log(
       `✅ [WA-RECOVERY] Finalizado — sent=${totals.sent} failed=${totals.failed} skipped=${totals.skipped}`,
