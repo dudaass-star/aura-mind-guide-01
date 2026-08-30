@@ -1,35 +1,37 @@
-# "Tente mais tarde" no PIX: o que os dados mostram e como parar de ficar cego
+# Recuperação específica: copiou o código PIX e não concluiu
 
-## O que já está confirmado
+## Por que esse recorte
 
-Nos últimos 21 dias, 140 autorizações de PIX Automático foram criadas e **apenas 46 foram aprovadas (33%)**.
+É o segmento de maior intenção do funil inteiro: a pessoa preencheu tudo, escolheu PIX, gerou o QR e **copiou o código para colar no banco**. Nos últimos 21 dias foram 141 cópias e só ~46 autorizações — a maior perda do funil está exatamente aí, e inclui casos de erro real (a Luiza copiou, o banco deu "tente mais tarde" e ninguém ficou sabendo). Merece tratamento próprio, não o template genérico de 15 min.
 
-Sobre as 96 "rejeições" registradas: elas **não são recusas do banco**. Comparando a hora de cada evento com a hora da criação:
+## Como identificar com precisão
 
-- aprovações chegam em média **2 minutos** depois (46 das 47 em menos de 10 min);
-- rejeições chegam em média **36 horas** depois — ou seja, são o QR de 24h expirando sem ninguém concluir. Só **1** rejeição em 21 dias chegou rápido o suficiente para ser recusa real.
+Hoje o evento `pix_copy` do funil **não está ligado ao lead** (é anônimo, sem vínculo com o checkout). Primeiro passo técnico: o checkout passa a gravar o identificador da sessão de checkout nos eventos do fluxo PIX (`pix_qr_generated`, `pix_copy`), assim sabemos exatamente quem copiou, quando, e se concluiu.
 
-E o caso da Luiza: o QR dela foi gerado e copiado, mas **não existe nenhum evento** do provedor para ela — nem aprovação, nem rejeição. A falha que ela viu aconteceu dentro do app do banco e **não deixou rastro nenhum do nosso lado**.
+## O fluxo
 
-Conclusão dura: entre "copiei o código" e "mandato aprovado" existe um vão de aproximadamente **2 em cada 3 tentativas** onde não temos absolutamente nenhum dado. Hoje é impossível distinguir "desistiu" de "tentou e o banco deu erro". Não dá para afirmar quantos são erro — dá para afirmar que estamos cegos nesse trecho, e que a Luiza é a prova de que existe erro ali.
+```text
+copiou o código ──► 20 min sem autorização ──► mensagem 1 (diagnóstico + ajuda)
+                        │                             │
+                        │                       respondeu? ──► recovery-agent assume com contexto
+                        │                             │        ("deu erro no banco" / "não achei" /
+                        │                             │         "desisti") e age conforme o motivo
+                        ▼
+                 ~2h sem conclusão ──► mensagem 2 com QR novo gerado na hora
+                        ▼
+                 24h ──► entra na régua normal de recuperação (como hoje)
+```
 
-Dois agravantes já visíveis nos dados:
-
-- `payer_bank` está vazio em 83 dos casos que não concluíram — não sabemos nem em qual banco a tentativa aconteceu, então não conseguimos ver se um banco específico concentra a falha;
-- o fluxo em uso é composto (entrada da 1ª semana + autorização das mensalidades), e em vários bancos isso aparece em duas telas separadas — mais superfície para erro do que a jornada nativa.
-
-## O que fazer
-
-1. **Enxergar o vão.** Consultar ativamente o status do mandato no provedor durante as primeiras horas após a geração do QR (por exemplo aos 3, 10, 30, 60 e 120 minutos) e gravar cada transição de status com o horário, o banco pagador e qualquer código/mensagem de erro retornado. Hoje só existe reação passiva a webhook — se o webhook não vem, nada acontece e o caso morre em silêncio.
-2. **Preencher sempre o banco pagador.** Registrar a instituição em toda tentativa, aprovada ou não. Sem esse campo é impossível descobrir se "tente mais tarde" é de um banco específico (e, se for, tratar aquele banco de forma diferente).
-3. **Perguntar a quem travou.** Alguns minutos depois do QR sem conclusão, mandar uma pergunta curta e objetiva no WhatsApp com opções de resposta: apareceu erro no app do banco / o banco não encontrou a autorização / ainda não tentei / desisti. A resposta vira campo estruturado no registro da tentativa. Isso converte o silêncio de 57% em diagnóstico real, e ainda recupera venda.
-4. **Consultar o provedor sobre os casos concretos.** Levantar (por leitura de API e, se necessário, pelo suporte do provedor) se existe motivo de recusa disponível para essas tentativas e se há incidente conhecido de "tente mais tarde" no fluxo de autorização — comparando a taxa de conclusão da jornada composta com a da jornada nativa nos nossos próprios números.
-5. **Não deixar o lead na mão quando trava.** Para quem tentou e não conseguiu autorizar, oferecer caminho alternativo imediato em vez de só reenviar o mesmo QR: nova autorização gerada na hora e, se falhar de novo, PIX simples da 1ª semana com a autorização das mensalidades feita em seguida.
-6. **Painel com a verdade do funil.** No admin, separar por dia: QR gerado, autorização aprovada, entrada paga, expirado sem tentativa, tentou e falhou (a partir dos itens 1 e 3). Hoje o painel mistura expiração com recusa e a leitura fica errada.
+1. **Mensagem 1 (~20 min após a cópia, sem autorização)** — curta e útil, não de vendas: "Oi Luiza, vi que você copiou o código do PIX — conseguiu concluir aí no app do banco? Se apareceu algum erro, me fala que eu resolvo agora." Com opções de resposta rápida (deu erro / não achei no banco / mudei de ideia). Se ela responder, o agente de recuperação já recebe o motivo no contexto e age: erro no banco → gera autorização nova na hora e orienta; não achou → explica onde fica (PIX Automático/Agendados); desistiu → conversa de valor normal.
+2. **Mensagem 2 (~2h)** — QR/autorização novos gerados na hora (o código copiado pode ter expirado no app do banco) com frase de continuidade, não de cobrança.
+3. **Integração com o que já existe**: quem copiou e não recebeu essas duas mensagens cai na régua normal (15 min / 24h) como fallback — a mensagem específica substitui a genérica de 15 min para esse grupo, não acumula.
+4. **Guardas**: respeita as regras já existentes — não dispara se pagou/ativou (com a checagem ao vivo no provedor que já existe), se é cliente ativo, e dentro do horário permitido; a captura da resposta vira campo estruturado no registro da tentativa.
+5. **Métrica no admin**: taxa "copiou → autorizou" por dia e motivos de resposta (erro no banco / não achou / desistiu) — é o que finalmente vai separar abandono de falha técnica, e mostrar se algum banco concentra o "tente mais tarde".
 
 ## Detalhes técnicos
 
-- Polling: nova função agendada lendo `woovi_subscriptions` com `pix_status='CREATED'` e criação recente, consultando o mandato na Woovi e gravando transições em uma tabela de eventos por tentativa (`status`, `payer_bank`, `raw`, `observed_at`), sem alterar as regras de concessão de acesso.
-- O `pix_status='REJECTED'` gravado hoje pela auditoria por expiração precisa de rótulo próprio (expirado ≠ recusado) para os relatórios pararem de somar as duas coisas.
-- Pergunta de diagnóstico: reutilizar a infraestrutura de recuperação já existente (template curto + captura da resposta), gravando o motivo no registro da tentativa.
-- Nada aqui exige mudar o gateway nem o checkout: primeiro instrumentar e medir, depois decidir se a jornada composta sai.
+- Vínculo: `CheckoutV2` inclui o id da sessão de checkout no `meta` dos eventos PIX do funil; o worker de recuperação passa a ler esse vínculo para classificar o lead como "copiou".
+- Mensagem 1: novo template no provedor de WhatsApp da recuperação (texto curto, 1 variável = nome), com quick replies; respostas capturadas pelo webhook já existente e gravadas como motivo estruturado.
+- Mensagem 2: gera autorização nova chamando a função de criação PIX já existente (mesmo endpoint que o checkout usa) e envia o código copia-e-cola no texto.
+- Prioridade sobre a régua atual: para esse grupo, o estágio de 15 min genérico é substituído (mesma marcação de envio, sem disparo duplo).
+- Sem mudança de gateway, de preços ou de concessão de acesso.
