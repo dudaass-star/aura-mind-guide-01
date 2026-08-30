@@ -428,7 +428,9 @@ Deno.serve(async (req) => {
         completedPhoneSet,
         contactedThisStage,
         lifetimeBannedPhones,
+        copyStages.length > 0,
       );
+
       const r2 = await processStageAsaas(
         supabase,
         cfg,
