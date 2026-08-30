@@ -221,11 +221,17 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // dryRun: só mostra qual trilho cada lead receberia. Nenhum envio, nenhuma
+    // marcação. Usado para validar exclusividade mútua sem tocar em ninguém.
+    const reqBody = await req.json().catch(() => ({})) as Record<string, unknown>;
+    const dryRun = reqBody?.dryRun === true;
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log("📱 [WA-RECOVERY] Iniciando recuperação WhatsApp (subaccount)...");
+    console.log(`📱 [WA-RECOVERY] Iniciando recuperação WhatsApp (subaccount)${dryRun ? " [dryRun]" : ""}...`);
+
 
     // Kill switch (system_config.twilio_recovery_enabled). Default true.
     const { data: killCfg } = await supabase
