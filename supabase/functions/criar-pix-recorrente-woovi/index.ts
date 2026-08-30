@@ -655,8 +655,9 @@ Deno.serve(async (req) => {
 
     return json({
       authorizationId: subscriptionId,
+      checkoutSessionId,
       amount: entryCents / 100,
-      recurringAmount: amountCents / 100,
+
       trial: withTrial,
       trialMode: withTrial ? "paid" : "none",
       trialDays: 0,
