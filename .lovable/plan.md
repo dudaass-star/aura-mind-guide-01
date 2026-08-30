@@ -39,7 +39,10 @@ lead sem pagamento
 ## Detalhes técnicos
 
 - Vínculo: `CheckoutV2` inclui o id da sessão de checkout no `meta` dos eventos PIX do funil; o worker de recuperação passa a ler esse vínculo para classificar o lead como "copiou".
-- Mensagem 1: novo template no provedor de WhatsApp da recuperação (texto curto, 1 variável = nome), com quick replies; respostas capturadas pelo webhook já existente e gravadas como motivo estruturado.
+- Mensagem 1 depende de **template novo aprovado pela Meta**: só cabe em template (o lead não interagiu, então a janela de 24h está fechada). Precisa ser criado e submetido na subconta da recuperação, categoria Utility, texto curto com 1 variável ({{1}} = primeiro nome), com quick replies para os três motivos; o ContentSid aprovado é registrado no cadastro de templates antes de ligar o trilho. Enquanto não estiver aprovado, o trilho fica desligado e o lead segue no fluxo atual — nada de fallback improvisado.
+- Mensagem 2 (2h) também exige template aprovado; se o lead tiver respondido a mensagem 1, a janela de 24h está aberta e o envio pode ir como texto livre com o código copia-e-cola.
+- Respostas dos quick replies são capturadas pelo webhook já existente e gravadas como motivo estruturado na tentativa.
+
 - Mensagem 2: gera autorização nova chamando a função de criação PIX já existente (mesmo endpoint que o checkout usa) e envia o código copia-e-cola no texto.
 - Exclusividade: um único seletor de trilho no worker de recuperação, resolvido antes de qualquer envio. Ao entrar no trilho "copiou", as marcações do estágio de 15 min são preenchidas com motivo próprio — nenhum caminho novo é criado em paralelo, e nenhuma outra função ganha permissão de enviar.
 - Sem mudança de gateway, de preços ou de concessão de acesso.
