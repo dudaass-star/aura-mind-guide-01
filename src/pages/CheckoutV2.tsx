@@ -1117,6 +1117,7 @@ const CheckoutV2 = () => {
       if (!data?.qrCodeImage || !data?.copyPaste) {
         throw new Error("PIX não retornado pelo provedor");
       }
+      pixCheckoutSessionRef.current = data.checkoutSessionId || null;
       setPixData({
         qrImage: data.qrCodeImage,
         copyPaste: data.copyPaste,
@@ -1129,6 +1130,7 @@ const CheckoutV2 = () => {
         firstRecurringChargeDate: data.firstRecurringChargeDate ?? null,
         authorizationOnly: !!data.authorizationOnly,
       });
+
       setAuthState(pixMode === "subscription" && data.authorizationId ? "pending" : null);
       setPixStage("qr");
       if (pixMode === "subscription" && pixGateway === "inter") {
