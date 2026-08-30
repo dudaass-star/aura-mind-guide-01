@@ -927,3 +927,195 @@ async function markSkippedAsaas(supabase: any, id: string, cfg: StageConfig, rea
     whatsapp_recovery_last_error: `skipped: ${reason}`,
   }).eq("id", id);
 }
+
+// ============================================================
+// Trilho "copiou o código PIX e não concluiu"
+// ------------------------------------------------------------
+// Seleção: checkout_sessions com pix_copied_at preenchido, ainda em `created`.
+// Exclusividade mútua com o genérico:
+//   • entrada no trilho exige whatsapp_recovery_15min_sent_at IS NULL
+//     (se o genérico já saiu, o lead segue na régua antiga);
+//   • ao enviar a 1ª mensagem daqui, fechamos whatsapp_recovery_15min_sent_at
+//     com motivo `skipped: trilho_copiou` — o genérico de 15min nunca sai.
+// Convergência: como o 15min fica marcado, o estágio de 24h (que exige o 15min
+// preenchido) continua valendo para todos.
+// ============================================================
+async function processCopyStage(
+  supabase: any,
+  cfg: StageConfig,
+  activeEmailSet: Set<string>,
+  activePhoneSet: Set<string>,
+  completedEmailSet: Set<string>,
+  completedPhoneSet: Set<string>,
+  contactedThisStage: Set<string>,
+  lifetimeBannedPhones: Set<string>,
+  dryRun: boolean,
+  dryRunReport: any[],
+): Promise<{ sent: number; failed: number; skipped: number }> {
+  const copiedBefore = new Date(Date.now() - cfg.minAgeMinutes * 60 * 1000).toISOString();
+
+  if (cfg.respectsQuietHours && isQuietHourBRT()) {
+    console.log(`🌙 [WA-COPIOU ${cfg.label}] quiet hours 22h-08h BRT, pulando.`);
+    return { sent: 0, failed: 0, skipped: 0 };
+  }
+
+  let query = supabase
+    .from("checkout_sessions")
+    .select("id, phone, name, plan, email, payment_method, whatsapp_recovery_15min_sent_at")
+    .eq("status", "created")
+    .not("phone", "is", null)
+    .not("pix_copied_at", "is", null)
+    .gte("created_at", WHATSAPP_RECOVERY_CUTOFF)
+    .lt("pix_copied_at", copiedBefore)
+    .is(cfg.sentColumn, null)
+    .limit(50);
+
+  if (cfg.prevSentColumn) {
+    query = query.not(cfg.prevSentColumn, "is", null);
+  } else {
+    // Entrada no trilho: nunca rouba lead que já recebeu o genérico de 15min.
+    query = query.is("whatsapp_recovery_15min_sent_at", null);
+  }
+
+  const { data: rows, error } = await query;
+  if (error) {
+    console.error(`❌ [WA-COPIOU ${cfg.label}] Query error:`, error);
+    return { sent: 0, failed: 0, skipped: 0 };
+  }
+  if (!rows || rows.length === 0) return { sent: 0, failed: 0, skipped: 0 };
+
+  console.log(`📋 [WA-COPIOU ${cfg.label}] ${rows.length} candidatos.`);
+
+  const byKey = new Map<string, any>();
+  for (const s of rows) {
+    const key = s.phone || s.email || `__${s.id}`;
+    if (!byKey.has(key)) byKey.set(key, s);
+  }
+
+  let sent = 0, failed = 0, skipped = 0;
+
+  for (const session of byKey.values()) {
+    const phoneVars = getPhoneVariations(session.phone);
+    const emailKey = session.email ? session.email.toLowerCase() : null;
+
+    // Guardas idênticas ao trilho genérico.
+    let reason: string | null = null;
+    if (emailKey && activeEmailSet.has(emailKey)) reason = "active_customer_email";
+    else if (phoneVars.some((v) => activePhoneSet.has(v))) reason = "active_customer_phone";
+    else if (phoneVars.some((v) => lifetimeBannedPhones.has(v))) reason = "phone_window_cap";
+    else if (emailKey && completedEmailSet.has(emailKey)) reason = "already_paid_email";
+    else if (phoneVars.some((v) => completedPhoneSet.has(v))) reason = "already_paid_phone";
+    else if (phoneVars.some((v) => contactedThisStage.has(v))) reason = "already_contacted_this_stage";
+
+    if (!reason) {
+      // Checagem ao vivo na Woovi: mandato/entrada podem estar pagos antes da
+      // reconciliação local. Quem copiou e pagou não pode receber cobrança.
+      try {
+        const live = await hasLiveWooviCommitment(supabase, {
+          email: session.email,
+          phone: session.phone,
+        });
+        if (live.committed) reason = live.reason || "woovi_committed";
+      } catch (_) { /* falha da guarda não bloqueia o trilho */ }
+    }
+
+    if (!reason) {
+      const fails = await stageFailureCount(supabase, cfg, { sessionId: session.id });
+      if (fails >= MAX_STAGE_FAILURES) reason = `max_failures_${fails}`;
+    }
+
+    if (dryRun) {
+      dryRunReport.push({
+        stage: cfg.label,
+        track: "copiou",
+        session_id: session.id,
+        would_send: !reason,
+        skip_reason: reason,
+        generic_15min_already_sent: !!session.whatsapp_recovery_15min_sent_at,
+      });
+      if (reason) skipped++; else sent++;
+      continue;
+    }
+
+    if (reason) {
+      await markSkipped(supabase, session.id, cfg, reason);
+      skipped++;
+      continue;
+    }
+
+    try {
+      const name = firstName(session.name);
+      const result = await sendRecoveryTemplate(session.phone, cfg.contentSid, { "1": name });
+
+      await supabase.from("checkout_recovery_attempts").insert({
+        checkout_session_id: session.id,
+        phone_raw: session.phone,
+        phone_normalized: normalizeBrazilianPhone(session.phone),
+        status: result.success ? `wa_stage_${cfg.stage}_sent` : `wa_stage_${cfg.stage}_failed`,
+        error_message: result.success ? null : (result.error || "unknown"),
+        provider_response: { track: "copiou", stage: cfg.label, twilio: result.response ?? null },
+      });
+
+      if (!result.success) {
+        await supabase.from("checkout_sessions").update({
+          whatsapp_recovery_last_error: result.error || "unknown",
+        }).eq("id", session.id);
+        failed++;
+        console.error(`❌ [WA-COPIOU ${cfg.label}] falhou:`, result.error);
+        continue;
+      }
+
+      const nowIso = new Date().toISOString();
+      const update: Record<string, unknown> = {
+        [cfg.sentColumn]: nowIso,
+        whatsapp_recovery_last_error: null,
+      };
+      // Fecha o genérico de 15min: uma régua só, dois trilhos nunca coexistem.
+      if (!cfg.prevSentColumn && !session.whatsapp_recovery_15min_sent_at) {
+        update.whatsapp_recovery_15min_sent_at = nowIso;
+        update.whatsapp_recovery_last_error = "skipped: trilho_copiou";
+      }
+      await supabase.from("checkout_sessions").update(update).eq("id", session.id);
+
+      sent++;
+      for (const v of phoneVars) contactedThisStage.add(v);
+      await markPhoneSiblings(supabase, cfg, session.phone, session.id);
+      console.log(`✅ [WA-COPIOU ${cfg.label}] enviado → ${session.phone.substring(0, 6)}*** sid=${result.messageSid}`);
+
+      try {
+        const cleanPhone = normalizeBrazilianPhone(session.phone);
+        const previewBody = `[Template ${cfg.label} • copiou PIX] Olá ${name}, o código travou no banco?`;
+        await supabase.from("recovery_messages").insert({
+          phone: cleanPhone,
+          direction: "out",
+          body: previewBody,
+          message_sid: result.messageSid || null,
+          sent_by_admin: false,
+          metadata: {
+            template: cfg.label,
+            track: "copiou",
+            content_sid: cfg.contentSid,
+            checkout_session_id: session.id,
+          },
+        });
+        await supabase.from("recovery_conversations").upsert({
+          phone: cleanPhone,
+          name: session.name || null,
+          last_outbound_at: nowIso,
+          last_message_preview: previewBody.substring(0, 200),
+          checkout_session_id: session.id,
+          updated_at: nowIso,
+        }, { onConflict: "phone" });
+      } catch (logErr) {
+        console.warn(`⚠️ [WA-COPIOU ${cfg.label}] log inbox falhou:`, logErr);
+      }
+    } catch (err) {
+      console.error(`❌ [WA-COPIOU ${cfg.label}] exceção:`, err);
+      failed++;
+    }
+
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
+  return { sent, failed, skipped };
+}
