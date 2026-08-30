@@ -476,6 +476,7 @@ async function processStage(
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
   lifetimeBannedPhones: Set<string>,
+  copyTrackEnabled = false,
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -495,9 +496,17 @@ async function processStage(
     .is(cfg.sentColumn, null)
     .limit(50);
 
+  // Quem copiou o código PIX pertence ao trilho específico (20min/2h). O
+  // genérico dispara em 15min, então sem este filtro ele sairia primeiro e
+  // anularia o trilho. No estágio de 24h os dois trilhos convergem.
+  if (copyTrackEnabled && cfg.stage === 1) {
+    query = query.is("pix_copied_at", null);
+  }
+
   if (cfg.prevSentColumn) {
     query = query.not(cfg.prevSentColumn, "is", null);
   }
+
 
   const { data: rows, error } = await query;
   if (error) {
