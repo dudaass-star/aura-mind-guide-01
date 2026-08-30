@@ -657,8 +657,9 @@ Deno.serve(async (req) => {
       authorizationId: subscriptionId,
       checkoutSessionId,
       amount: entryCents / 100,
-
+      recurringAmount: amountCents / 100,
       trial: withTrial,
+
       trialMode: withTrial ? "paid" : "none",
       trialDays: 0,
       // Na jornada 3 sempre há dinheiro no ato — nunca é só autorização.
