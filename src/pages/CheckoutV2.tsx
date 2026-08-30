@@ -272,6 +272,10 @@ const CheckoutV2 = () => {
   const [cpf, setCpf] = useState("");
   const [cpfError, setCpfError] = useState<string | undefined>(undefined);
   const [pixLoading, setPixLoading] = useState(false);
+  // Id da linha em checkout_sessions criada junto com o QR. Serve para marcar
+  // "copiou o código PIX" no lead certo (o evento de funil é anônimo).
+  const pixCheckoutSessionRef = useRef<string | null>(null);
+
   const [pixData, setPixData] = useState<{
     qrImage: string;
     copyPaste: string;
@@ -1117,6 +1121,7 @@ const CheckoutV2 = () => {
       if (!data?.qrCodeImage || !data?.copyPaste) {
         throw new Error("PIX não retornado pelo provedor");
       }
+      pixCheckoutSessionRef.current = data.checkoutSessionId || null;
       setPixData({
         qrImage: data.qrCodeImage,
         copyPaste: data.copyPaste,
@@ -1129,6 +1134,7 @@ const CheckoutV2 = () => {
         firstRecurringChargeDate: data.firstRecurringChargeDate ?? null,
         authorizationOnly: !!data.authorizationOnly,
       });
+
       setAuthState(pixMode === "subscription" && data.authorizationId ? "pending" : null);
       setPixStage("qr");
       if (pixMode === "subscription" && pixGateway === "inter") {
@@ -1165,7 +1171,18 @@ const CheckoutV2 = () => {
         plan: selectedPlan,
         billing: billingPeriod,
         paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+        meta: { checkoutSessionId: pixCheckoutSessionRef.current },
       });
+      // Marca o lead como "copiou o código" para o trilho de recuperação
+      // específico. Fire-and-forget: nunca atrasa nem quebra a cópia.
+      if (pixCheckoutSessionRef.current) {
+        supabase.functions
+          .invoke("mark-pix-copied", {
+            body: { checkoutSessionId: pixCheckoutSessionRef.current },
+          })
+          .catch(() => {});
+      }
+
     } catch {
       toast.error("Não foi possível copiar. Selecione manualmente.");
     }

@@ -633,13 +633,18 @@ Deno.serve(async (req) => {
     // Visibilidade de funil: PIX aparece em checkout_sessions junto com o cartão.
     // recovery_sent=true impede o carrinho abandonado (desenhado pro cartão) de
     // disparar mensagem para quem apenas gerou QR.
+    // O id volta pro checkout para o trilho "copiou o código PIX" poder marcar
+    // pix_copied_at nesta linha (o evento de funil é anônimo e não serve pra isso).
+    let checkoutSessionId: string | null = null;
     if (!isReauth) {
-      const { error: funnelErr } = await supabase.from("checkout_sessions").insert({
+      const { data: funnelRow, error: funnelErr } = await supabase.from("checkout_sessions").insert({
         phone: phoneClean || "sem-telefone", email: emailClean, name, plan, billing,
         payment_method: "pix_auto", status: "created", recovery_sent: true,
-      });
+      }).select("id").maybeSingle();
       if (funnelErr) console.warn("[criar-pix-recorrente-woovi] funil não logado:", funnelErr.message);
+      checkoutSessionId = funnelRow?.id ?? null;
     }
+
 
     if (isReauth && previousSubscriptionId && !deferReplacement) {
       await supabase.from("woovi_subscriptions")
@@ -650,9 +655,11 @@ Deno.serve(async (req) => {
 
     return json({
       authorizationId: subscriptionId,
+      checkoutSessionId,
       amount: entryCents / 100,
       recurringAmount: amountCents / 100,
       trial: withTrial,
+
       trialMode: withTrial ? "paid" : "none",
       trialDays: 0,
       // Na jornada 3 sempre há dinheiro no ato — nunca é só autorização.

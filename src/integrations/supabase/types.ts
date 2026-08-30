@@ -580,6 +580,7 @@ export type Database = {
           name: string | null
           payment_method: string | null
           phone: string
+          pix_copied_at: string | null
           plan: string | null
           recovery_attempts_count: number
           recovery_last_error: string | null
@@ -591,6 +592,8 @@ export type Database = {
           recovery_stage3_sent_at: string | null
           status: string
           stripe_session_id: string | null
+          wa_copiou_20min_sent_at: string | null
+          wa_copiou_2h_sent_at: string | null
           whatsapp_recovery_15min_sent_at: string | null
           whatsapp_recovery_24h_sent_at: string | null
           whatsapp_recovery_last_error: string | null
@@ -604,6 +607,7 @@ export type Database = {
           name?: string | null
           payment_method?: string | null
           phone: string
+          pix_copied_at?: string | null
           plan?: string | null
           recovery_attempts_count?: number
           recovery_last_error?: string | null
@@ -615,6 +619,8 @@ export type Database = {
           recovery_stage3_sent_at?: string | null
           status?: string
           stripe_session_id?: string | null
+          wa_copiou_20min_sent_at?: string | null
+          wa_copiou_2h_sent_at?: string | null
           whatsapp_recovery_15min_sent_at?: string | null
           whatsapp_recovery_24h_sent_at?: string | null
           whatsapp_recovery_last_error?: string | null
@@ -628,6 +634,7 @@ export type Database = {
           name?: string | null
           payment_method?: string | null
           phone?: string
+          pix_copied_at?: string | null
           plan?: string | null
           recovery_attempts_count?: number
           recovery_last_error?: string | null
@@ -639,6 +646,8 @@ export type Database = {
           recovery_stage3_sent_at?: string | null
           status?: string
           stripe_session_id?: string | null
+          wa_copiou_20min_sent_at?: string | null
+          wa_copiou_2h_sent_at?: string | null
           whatsapp_recovery_15min_sent_at?: string | null
           whatsapp_recovery_24h_sent_at?: string | null
           whatsapp_recovery_last_error?: string | null

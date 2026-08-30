@@ -37,14 +37,18 @@ const TEMPLATE_24H = "HX50f03fdffb5195da970bdbfab08a2488";
 const WHATSAPP_RECOVERY_CUTOFF = "2026-05-24T00:00:00Z";
 
 interface StageConfig {
-  stage: 1 | 2;
-  label: "15min" | "24h";
+  stage: 1 | 2 | 3 | 4;
+  label: "15min" | "24h" | "copiou_20min" | "copiou_2h";
   contentSid: string;
   minAgeMinutes: number;
   sentColumn: string;
   prevSentColumn: string | null;
   utmCampaign: string;
   respectsQuietHours: boolean;
+  // Coluna que marca o início da contagem do estágio.
+  ageColumn: "created_at" | "pix_copied_at";
+  // Trilho ao qual o estágio pertence. Nunca coexistem para o mesmo lead.
+  track: "generic" | "copiou";
 }
 
 const STAGES: StageConfig[] = [
@@ -58,6 +62,8 @@ const STAGES: StageConfig[] = [
     utmCampaign: "wa_stage1_15min",
     // Continuação de interação ativa: usuário acabou de quase contratar, ainda quente.
     respectsQuietHours: false,
+    ageColumn: "created_at",
+    track: "generic",
   },
   {
     stage: 2,
@@ -69,8 +75,70 @@ const STAGES: StageConfig[] = [
     utmCampaign: "wa_stage2_24h",
     // Cold outreach 24h depois: respeita silêncio noturno.
     respectsQuietHours: true,
+    ageColumn: "created_at",
+    track: "generic",
   },
 ];
+
+// ============================================================
+// TRILHO "COPIOU O CÓDIGO PIX E NÃO CONCLUIU"
+// ------------------------------------------------------------
+// Segmento de maior intenção do funil (copiou o copia-e-cola, abriu o banco e
+// travou) e o que mais perdemos. Régua ÚNICA: quem copiou recebe as mensagens
+// deste trilho NO LUGAR do genérico de 15min — nunca os dois. Depois os dois
+// trilhos convergem no estágio de 24h.
+//
+// Os ContentSids vêm de system_config.wa_copiou_templates:
+//   { "m1": "HX...", "m2": "HX..." }
+// Sem template aprovado pela Meta cadastrado, o trilho fica DESLIGADO e a régua
+// atual segue intacta — nenhum fallback improvisado.
+// ============================================================
+const COPY_STAGE_DEFS: Omit<StageConfig, "contentSid">[] = [
+  {
+    stage: 3,
+    label: "copiou_20min",
+    minAgeMinutes: 20,
+    sentColumn: "wa_copiou_20min_sent_at",
+    prevSentColumn: null,
+    utmCampaign: "wa_copiou_20min",
+    // Continuação direta da tentativa de pagamento: janela quente.
+    respectsQuietHours: false,
+    ageColumn: "pix_copied_at",
+    track: "copiou",
+  },
+  {
+    stage: 4,
+    label: "copiou_2h",
+    minAgeMinutes: 120,
+    sentColumn: "wa_copiou_2h_sent_at",
+    prevSentColumn: "wa_copiou_20min_sent_at",
+    utmCampaign: "wa_copiou_2h",
+    respectsQuietHours: true,
+    ageColumn: "pix_copied_at",
+    track: "copiou",
+  },
+];
+
+async function loadCopyStages(supabase: any): Promise<StageConfig[]> {
+  try {
+    const { data } = await supabase
+      .from("system_config")
+      .select("value")
+      .eq("key", "wa_copiou_templates")
+      .maybeSingle();
+    const v = (data?.value ?? null) as { m1?: string; m2?: string } | null;
+    const isSid = (s: unknown) => typeof s === "string" && /^HX[0-9a-f]{32}$/i.test(s);
+    if (!v || !isSid(v.m1)) return [];
+    const stages: StageConfig[] = [{ ...COPY_STAGE_DEFS[0], contentSid: v.m1! }];
+    // 2º contato só entra se tiver template próprio aprovado (fora da janela de 24h
+    // não existe texto livre).
+    if (isSid(v.m2)) stages.push({ ...COPY_STAGE_DEFS[1], contentSid: v.m2! });
+    return stages;
+  } catch {
+    return [];
+  }
+}
+
 
 // === Quiet hours: 22h-08h BRT (UTC-3) ===
 function isQuietHourBRT(now: Date = new Date()): boolean {
@@ -153,11 +221,17 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // dryRun: só mostra qual trilho cada lead receberia. Nenhum envio, nenhuma
+    // marcação. Usado para validar exclusividade mútua sem tocar em ninguém.
+    const reqBody = await req.json().catch(() => ({})) as Record<string, unknown>;
+    const dryRun = reqBody?.dryRun === true;
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log("📱 [WA-RECOVERY] Iniciando recuperação WhatsApp (subaccount)...");
+    console.log(`📱 [WA-RECOVERY] Iniciando recuperação WhatsApp (subaccount)${dryRun ? " [dryRun]" : ""}...`);
+
 
     // Kill switch (system_config.twilio_recovery_enabled). Default true.
     const { data: killCfg } = await supabase
@@ -299,6 +373,48 @@ Deno.serve(async (req) => {
       by_stage: {} as Record<string, number>,
     };
 
+    // === TRILHO "COPIOU" PRIMEIRO ===
+    // Precisa rodar antes do genérico: ao entrar neste trilho o lead tem o
+    // estágio de 15min fechado com motivo próprio, garantindo que os dois
+    // trilhos nunca disparem em paralelo.
+    const copyStages = await loadCopyStages(supabase);
+    if (copyStages.length === 0) {
+      console.log("⏸️ [WA-COPIOU] Trilho desligado: nenhum ContentSid aprovado em system_config.wa_copiou_templates.");
+    }
+    const dryRunReport: any[] = [];
+    for (const cfg of copyStages) {
+      const contactedThisStage = new Set<string>();
+      const rc = await processCopyStage(
+        supabase,
+        cfg,
+        activeEmailSet,
+        activePhoneSet,
+        completedEmailSet,
+        completedPhoneSet,
+        contactedThisStage,
+        lifetimeBannedPhones,
+        dryRun,
+        dryRunReport,
+      );
+      totals.sent += rc.sent;
+      totals.failed += rc.failed;
+      totals.skipped += rc.skipped;
+      totals.by_stage[`copiou_${cfg.label}`] = rc.sent;
+    }
+
+    if (dryRun) {
+      console.log("🧪 [WA-RECOVERY] dryRun: nenhum envio real, trilho genérico não avaliado.");
+      return new Response(
+        JSON.stringify({
+          status: "dry_run",
+          copy_track_enabled: copyStages.length > 0,
+          copy_stages: copyStages.map((c) => c.label),
+          candidates: dryRunReport,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     for (const cfg of STAGES) {
       // Set compartilhado de telefones contatados neste ciclo (dedup cross-source).
       const contactedThisStage = new Set<string>();
@@ -312,7 +428,9 @@ Deno.serve(async (req) => {
         completedPhoneSet,
         contactedThisStage,
         lifetimeBannedPhones,
+        copyStages.length > 0,
       );
+
       const r2 = await processStageAsaas(
         supabase,
         cfg,
@@ -329,6 +447,7 @@ Deno.serve(async (req) => {
       totals.by_stage[`stripe_${cfg.label}`] = r1.sent;
       totals.by_stage[`pix_${cfg.label}`] = r2.sent;
     }
+
 
     console.log(
       `✅ [WA-RECOVERY] Finalizado — sent=${totals.sent} failed=${totals.failed} skipped=${totals.skipped}`,
@@ -359,6 +478,7 @@ async function processStage(
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
   lifetimeBannedPhones: Set<string>,
+  copyTrackEnabled = false,
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -378,9 +498,17 @@ async function processStage(
     .is(cfg.sentColumn, null)
     .limit(50);
 
+  // Quem copiou o código PIX pertence ao trilho específico (20min/2h). O
+  // genérico dispara em 15min, então sem este filtro ele sairia primeiro e
+  // anularia o trilho. No estágio de 24h os dois trilhos convergem.
+  if (copyTrackEnabled && cfg.stage === 1) {
+    query = query.is("pix_copied_at", null);
+  }
+
   if (cfg.prevSentColumn) {
     query = query.not(cfg.prevSentColumn, "is", null);
   }
+
 
   const { data: rows, error } = await query;
   if (error) {
@@ -809,4 +937,196 @@ async function markSkippedAsaas(supabase: any, id: string, cfg: StageConfig, rea
     [cfg.sentColumn]: new Date().toISOString(),
     whatsapp_recovery_last_error: `skipped: ${reason}`,
   }).eq("id", id);
+}
+
+// ============================================================
+// Trilho "copiou o código PIX e não concluiu"
+// ------------------------------------------------------------
+// Seleção: checkout_sessions com pix_copied_at preenchido, ainda em `created`.
+// Exclusividade mútua com o genérico:
+//   • entrada no trilho exige whatsapp_recovery_15min_sent_at IS NULL
+//     (se o genérico já saiu, o lead segue na régua antiga);
+//   • ao enviar a 1ª mensagem daqui, fechamos whatsapp_recovery_15min_sent_at
+//     com motivo `skipped: trilho_copiou` — o genérico de 15min nunca sai.
+// Convergência: como o 15min fica marcado, o estágio de 24h (que exige o 15min
+// preenchido) continua valendo para todos.
+// ============================================================
+async function processCopyStage(
+  supabase: any,
+  cfg: StageConfig,
+  activeEmailSet: Set<string>,
+  activePhoneSet: Set<string>,
+  completedEmailSet: Set<string>,
+  completedPhoneSet: Set<string>,
+  contactedThisStage: Set<string>,
+  lifetimeBannedPhones: Set<string>,
+  dryRun: boolean,
+  dryRunReport: any[],
+): Promise<{ sent: number; failed: number; skipped: number }> {
+  const copiedBefore = new Date(Date.now() - cfg.minAgeMinutes * 60 * 1000).toISOString();
+
+  if (cfg.respectsQuietHours && isQuietHourBRT()) {
+    console.log(`🌙 [WA-COPIOU ${cfg.label}] quiet hours 22h-08h BRT, pulando.`);
+    return { sent: 0, failed: 0, skipped: 0 };
+  }
+
+  let query = supabase
+    .from("checkout_sessions")
+    .select("id, phone, name, plan, email, payment_method, whatsapp_recovery_15min_sent_at")
+    .eq("status", "created")
+    .not("phone", "is", null)
+    .not("pix_copied_at", "is", null)
+    .gte("created_at", WHATSAPP_RECOVERY_CUTOFF)
+    .lt("pix_copied_at", copiedBefore)
+    .is(cfg.sentColumn, null)
+    .limit(50);
+
+  if (cfg.prevSentColumn) {
+    query = query.not(cfg.prevSentColumn, "is", null);
+  } else {
+    // Entrada no trilho: nunca rouba lead que já recebeu o genérico de 15min.
+    query = query.is("whatsapp_recovery_15min_sent_at", null);
+  }
+
+  const { data: rows, error } = await query;
+  if (error) {
+    console.error(`❌ [WA-COPIOU ${cfg.label}] Query error:`, error);
+    return { sent: 0, failed: 0, skipped: 0 };
+  }
+  if (!rows || rows.length === 0) return { sent: 0, failed: 0, skipped: 0 };
+
+  console.log(`📋 [WA-COPIOU ${cfg.label}] ${rows.length} candidatos.`);
+
+  const byKey = new Map<string, any>();
+  for (const s of rows) {
+    const key = s.phone || s.email || `__${s.id}`;
+    if (!byKey.has(key)) byKey.set(key, s);
+  }
+
+  let sent = 0, failed = 0, skipped = 0;
+
+  for (const session of byKey.values()) {
+    const phoneVars = getPhoneVariations(session.phone);
+    const emailKey = session.email ? session.email.toLowerCase() : null;
+
+    // Guardas idênticas ao trilho genérico.
+    let reason: string | null = null;
+    if (emailKey && activeEmailSet.has(emailKey)) reason = "active_customer_email";
+    else if (phoneVars.some((v) => activePhoneSet.has(v))) reason = "active_customer_phone";
+    else if (phoneVars.some((v) => lifetimeBannedPhones.has(v))) reason = "phone_window_cap";
+    else if (emailKey && completedEmailSet.has(emailKey)) reason = "already_paid_email";
+    else if (phoneVars.some((v) => completedPhoneSet.has(v))) reason = "already_paid_phone";
+    else if (phoneVars.some((v) => contactedThisStage.has(v))) reason = "already_contacted_this_stage";
+
+    if (!reason) {
+      // Checagem ao vivo na Woovi: mandato/entrada podem estar pagos antes da
+      // reconciliação local. Quem copiou e pagou não pode receber cobrança.
+      try {
+        const live = await hasLiveWooviCommitment(supabase, {
+          email: session.email,
+          phone: session.phone,
+        });
+        if (live.committed) reason = live.reason || "woovi_committed";
+      } catch (_) { /* falha da guarda não bloqueia o trilho */ }
+    }
+
+    if (!reason) {
+      const fails = await stageFailureCount(supabase, cfg, { sessionId: session.id });
+      if (fails >= MAX_STAGE_FAILURES) reason = `max_failures_${fails}`;
+    }
+
+    if (dryRun) {
+      dryRunReport.push({
+        stage: cfg.label,
+        track: "copiou",
+        session_id: session.id,
+        would_send: !reason,
+        skip_reason: reason,
+        generic_15min_already_sent: !!session.whatsapp_recovery_15min_sent_at,
+      });
+      if (reason) skipped++; else sent++;
+      continue;
+    }
+
+    if (reason) {
+      await markSkipped(supabase, session.id, cfg, reason);
+      skipped++;
+      continue;
+    }
+
+    try {
+      const name = firstName(session.name);
+      const result = await sendRecoveryTemplate(session.phone, cfg.contentSid, { "1": name });
+
+      await supabase.from("checkout_recovery_attempts").insert({
+        checkout_session_id: session.id,
+        phone_raw: session.phone,
+        phone_normalized: normalizeBrazilianPhone(session.phone),
+        status: result.success ? `wa_stage_${cfg.stage}_sent` : `wa_stage_${cfg.stage}_failed`,
+        error_message: result.success ? null : (result.error || "unknown"),
+        provider_response: { track: "copiou", stage: cfg.label, twilio: result.response ?? null },
+      });
+
+      if (!result.success) {
+        await supabase.from("checkout_sessions").update({
+          whatsapp_recovery_last_error: result.error || "unknown",
+        }).eq("id", session.id);
+        failed++;
+        console.error(`❌ [WA-COPIOU ${cfg.label}] falhou:`, result.error);
+        continue;
+      }
+
+      const nowIso = new Date().toISOString();
+      const update: Record<string, unknown> = {
+        [cfg.sentColumn]: nowIso,
+        whatsapp_recovery_last_error: null,
+      };
+      // Fecha o genérico de 15min: uma régua só, dois trilhos nunca coexistem.
+      if (!cfg.prevSentColumn && !session.whatsapp_recovery_15min_sent_at) {
+        update.whatsapp_recovery_15min_sent_at = nowIso;
+        update.whatsapp_recovery_last_error = "skipped: trilho_copiou";
+      }
+      await supabase.from("checkout_sessions").update(update).eq("id", session.id);
+
+      sent++;
+      for (const v of phoneVars) contactedThisStage.add(v);
+      await markPhoneSiblings(supabase, cfg, session.phone, session.id);
+      console.log(`✅ [WA-COPIOU ${cfg.label}] enviado → ${session.phone.substring(0, 6)}*** sid=${result.messageSid}`);
+
+      try {
+        const cleanPhone = normalizeBrazilianPhone(session.phone);
+        const previewBody = `[Template ${cfg.label} • copiou PIX] Olá ${name}, o código travou no banco?`;
+        await supabase.from("recovery_messages").insert({
+          phone: cleanPhone,
+          direction: "out",
+          body: previewBody,
+          message_sid: result.messageSid || null,
+          sent_by_admin: false,
+          metadata: {
+            template: cfg.label,
+            track: "copiou",
+            content_sid: cfg.contentSid,
+            checkout_session_id: session.id,
+          },
+        });
+        await supabase.from("recovery_conversations").upsert({
+          phone: cleanPhone,
+          name: session.name || null,
+          last_outbound_at: nowIso,
+          last_message_preview: previewBody.substring(0, 200),
+          checkout_session_id: session.id,
+          updated_at: nowIso,
+        }, { onConflict: "phone" });
+      } catch (logErr) {
+        console.warn(`⚠️ [WA-COPIOU ${cfg.label}] log inbox falhou:`, logErr);
+      }
+    } catch (err) {
+      console.error(`❌ [WA-COPIOU ${cfg.label}] exceção:`, err);
+      failed++;
+    }
+
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
+  return { sent, failed, skipped };
 }
