@@ -79,9 +79,17 @@ export async function checkTasterEligibility(
   const phone = normalizeBrazilianPhone(args.phone || "");
   if (!phone) return { eligible: false, reason: "sem_telefone", phone: "" };
 
+  // Bypass de TESTE: só telefones listados em system_config.taster_test_phones.
+  // Serve para validar o trilho ponta a ponta antes de ligar o kill switch.
+  // Não afeta nenhum outro número.
+  if (await isTasterTestPhone(supabase, phone)) {
+    return { eligible: true, reason: "teste_bypass", phone };
+  }
+
   if (!(await isTasterEnabled(supabase))) {
     return { eligible: false, reason: "desligado_por_config", phone };
   }
+
 
   const phoneVars = getPhoneVariations(phone);
   const email = (args.email || "").toLowerCase() || null;
