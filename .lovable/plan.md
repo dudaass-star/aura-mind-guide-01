@@ -2,7 +2,22 @@
 
 Oferta usada **só na conversa** (nunca em página): quem travou no PIX porque não quer autorizar cobrança automática recebe a chance de pagar **R$ 6,90 num PIX comum, sem mandato**, e fazer **um encontro guiado de 45 minutos**. Prazo pra usar: **48h**. Sem crédito no plano. Ao final da sessão, a própria Aura convida pro plano.
 
-Decisões travadas: só o encontro de 45 min (sem chat casual, sem meditação, sem áudio fora da sessão) · 48h pra agendar · R$ 6,90 não abate nada · elegível só para lead do trilho PIX que já viu o preço.
+Decisões travadas: só o encontro de 45 min (sem chat casual, sem meditação, sem áudio fora da sessão) · 48h pra agendar · R$ 6,90 não abate nada · elegível **só para quem entrou no trilho do PIX copia e cola** que já existe.
+
+## Duas portas, mesmo trilho do copia e cola
+
+**Porta A — quem responde (sai primeiro).** O lead respondeu à m1 (15 min) ou m2 (2h), o agente já explicou o que precisava, e a oferta entra a partir da 2ª resposta como saída pra quem travou na autorização recorrente. Não depende de aprovação da Meta: é texto livre dentro da janela de 24h aberta pelo clique.
+
+**Porta B — quem não responde (3º degrau do trilho).** Você tem razão: silêncio não é recusa — muita gente só não quis gastar tempo respondendo, mas abriria uma oferta diferente. Entra um **degrau novo no trilho copia e cola**: quem copiou o código, recebeu m1 e m2 e **não respondeu nada**, recebe ~24h depois de m2 uma mensagem ofertando o encontro de 45 min por R$ 6,90 sem cobrança automática.
+
+Restrições que essa porta impõe (é fora da janela de 24h):
+- Exige **template próprio criado, configurado e aprovado pela Meta**, com quick reply ("Quero experimentar" / "Tenho uma dúvida"). Pela sua regra, o degrau nasce **desligado** e só liga com o ContentSid aprovado em `system_config.wa_copiou_templates.m3` — nunca antes.
+- Corpo nunca começa com variável (foi o motivo da recusa anterior: "Olá {{1}}, ...").
+- Uma vez por telefone, respeitando o cap de 30 dias por telefone, o cap de 3 falhas e o silêncio 22h–08h BRT.
+- Clique em "Quero experimentar" resolve **determinístico** (gera o PIX de R$ 6,90 na hora, sem LLM); "Tenho uma dúvida" cai no agente com o contexto de que ele travou na autorização.
+- Só entra quem continua sem pagar e sem mandato no momento do envio (mesmas guardas ao vivo Woovi já usadas).
+
+
 
 ## As brechas que o plano fecha
 
@@ -14,7 +29,7 @@ Estas são as formas reais de isso "não funcionar direito" — cada uma tem tra
 4. **Ganhar mais do que pagou.** Não se cria plano novo. Usa-se o mecanismo de tiers que já existe (`profiles.plan_tier`, hoje com `lite` e `base`): entra um terceiro valor, `taster`, com 1 sessão, 0 min de áudio, 0 meditação, 0 jornada, 0 mensagem de chat casual. A trava é determinística no `aura-agent`, antes do LLM: dentro da janela da sessão ele conduz o encontro normalmente; fora dela responde uma linha fixa ("nosso encontro está marcado pra X — fora dele eu volto quando você escolher um plano") sem gastar modelo. `profiles.plan` continua guardando o plano que ele estava comprando, pra o convite do fim da sessão ser do plano certo.
 5. **Pagar duas vezes / dois códigos.** Trava de idempotência por telefone: um código de taster por hora, um taster pago por telefone com cooldown de 180 dias. Clique repetido no botão devolve o mesmo copia-e-cola.
 6. **Quem já é ou já foi pagante recebendo a oferta.** Elegibilidade é calculada **no backend**, não pelo LLM: bloqueia perfil ativo/trial/canceling/past_due, histórico de assinatura Stripe/Asaas/Woovi, e quem já usou taster.
-7. **Oferta cedo demais / virando isca.** Só a partir da 2ª resposta do agente na mesma conversa, só com preço já mostrado, só uma vez por lead. Recusa registra e o agente nunca repete.
+7. **Oferta cedo demais / virando isca.** Porta A: só a partir da 2ª resposta do agente, com preço já mostrado. Porta B: só depois de m1 e m2 enviadas e nenhuma resposta. Uma oferta por lead nas duas portas somadas — quem recebeu por uma nunca recebe pela outra, e recusa encerra o assunto.
 8. **Pagou e nada aconteceu.** O webhook cria o perfil taster e responde na hora; e uma varredura de reconciliação (junto da auditoria Woovi já existente) pega pagamento que não virou acesso, cria o perfil e manda a mensagem de agendamento.
 9. **Pagou e não agendou.** Lembrete às 6h e às 24h restantes. Passadas as 48h sem sessão feita, expira e o lead volta pro trilho de venda — sem cobrar nada.
 10. **Sessão nunca acontecendo por conflito de agenda.** A criação respeita o trigger `prevent_duplicate_sessions` (janela de 30 min) e, em conflito, o agente pede outro horário em vez de falhar silencioso.
@@ -24,10 +39,11 @@ Estas são as formas reais de isso "não funcionar direito" — cada uma tem tra
 ## Como o lead vive isso
 
 ```text
-lead copiou PIX e travou ("não quero deixar cobrança automática")
-        ↓  (2ª resposta do agente, backend liberou elegibilidade)
-agente oferece: 45 min por R$ 6,90, PIX comum, sem autorização
-        ↓  aceita
+copiou o código PIX e não pagou
+   ├─ respondeu m1/m2 → agente explica → 2ª resposta → oferece o encontro
+   └─ não respondeu   → 24h depois de m2, template m3 oferta o encontro
+        ↓  aceita (clique ou texto)
+
 código PIX avulso de R$ 6,90 na hora, ainda no número da recuperação
         ↓  paga
 Aura chama do número OFICIAL dela (mesmo template de welcome que já usamos)
@@ -50,6 +66,9 @@ O agendamento **não** acontece no agente de recuperação: ele só vende e entr
 **Backend**
 - `criar-pix-taster` (nova): valida elegibilidade, cria charge avulsa de 690 na Woovi, grava `taster_offers`, devolve copia-e-cola. Idempotente por `correlationID`.
 - `recovery-agent`: função `checkTasterEligibility()` no backend injeta no prompt "pode oferecer / não pode"; nova tag `[OFERECER_TASTER]` (aceite) e classificação determinística do aceite curto ("quero", "bora", "sim") em `pix-buttons.ts`, gerando o código sem passar pelo LLM. Tag inválida cai no strip já existente.
+- `recover-abandoned-checkout-whatsapp`: novo estágio **m3** do trilho copia e cola (≥24h depois de m2, sem nenhuma resposta do lead, sem pagamento e sem mandato ao vivo), gated por ContentSid aprovado em `system_config.wa_copiou_templates.m3`. Sem SID aprovado, o estágio simplesmente não roda. Validável com `{"dryRun": true}`, que já lista candidato, trilho e motivo do skip.
+- `webhook-twilio-recovery` + `pix-buttons.ts`: botão "Quero experimentar" do m3 resolve na hora com o PIX de R$ 6,90; "Tenho uma dúvida" abre a janela de 24h e segue pro agente com o contexto de trava na autorização.
+
 - `webhook-woovi`: reconhece `correlationID` de taster **antes** do fluxo de assinatura, cria/atualiza perfil `status='taster'`, `plan_tier='taster'`, `taster_expires_at = now + 48h`, e chama o mesmo `sendWelcomeWhatsApp` de hoje — **template de welcome já aprovado, sem template novo** — com o `pending_insight [WELCOME]` na versão taster (encontro de 45 min liberado + pedido do horário em 48h). O agendamento acontece no chat da Aura, pelo contrato de tag que já existe (`[AGENDAR_SESSAO]`), com `is_taster = true` na sessão criada.
 - `woovi-pix-audit`: varredura extra para taster pago sem perfil, e expiração dos que passaram de 48h.
 - `aura-agent`: `plan_tier = 'taster'` no mesmo bloco de entitlements do `lite`/`base` (1 sessão, 0 áudio, 0 meditação, 0 jornada); parede determinística fora da janela da sessão; convite ao plano no fechamento e expiração em seguida.
