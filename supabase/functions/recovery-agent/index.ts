@@ -482,6 +482,13 @@ ATENÇÃO — A MENSAGEM É CURTA ("ok", "obrigada", "beleza"): responda em NO M
 ATENÇÃO — VEIO SÓ UM ANEXO, SEM TEXTO: trate como "paguei / mandei o comprovante, e agora?". Confirme que o pagamento cai automaticamente no acesso, diga que a Aura chama no WhatsApp em poucos minutos depois da confirmação, e ofereça o ${SUPPORT_EMAIL} caso não chegue. Não peça pra reenviar o anexo. Não venda.
 ` : "";
 
+    // Trilho "copiou o código PIX": a pessoa já abriu o app do banco. Não é lead
+    // frio — é alguém a um passo de entrar, que travou ou ficou em dúvida.
+    const copiedPixInstruction = (checkout?.pix_copied_at || pixIntent === "conversational") ? `
+CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já decidiu, travou no último passo (dúvida de última hora, erro do banco ou insegurança). NÃO recomece a venda do zero e não explique tudo de novo. Trate a dúvida específica dela de frente, em duas ou três frases, e feche com o próximo passo concreto ("te mando o código novo agora?" / "quer marcar o primeiro encontro pra hoje à noite?"). Se ela sinalizar erro ou código expirado, diga que você gera um novo na hora — você realmente gera.
+` : "";
+
+
     const contextBlock = `${supportBlock}
 BASE DE CONHECIMENTO:
 ${renderKb(kbItems)}
