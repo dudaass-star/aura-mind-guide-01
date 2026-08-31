@@ -259,7 +259,10 @@ export async function createTasterCharge(
       correlationID: correlationId,
       value: TASTER_VALUE_CENTS,
       paymentType: "DYNAMIC",
-      comment: "Aura — encontro guiado de 45 minutos (avulso)",
+      // Woovi rejeita caracteres fora do ASCII simples no comentario (erro
+      // "Emoji nao e permitido"): manter texto plano, sem travessao nem acento.
+      comment: "Aura - encontro guiado de 45 minutos (avulso)",
+
       expiresIn: TASTER_QR_TTL_SECONDS,
       customer,
     },
