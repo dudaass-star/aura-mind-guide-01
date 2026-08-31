@@ -18,6 +18,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { classifyPixButton, handlePixButton, classifyTasterIntent, handleTasterAccept, tasterOfferAlreadySent } from "./pix-buttons.ts";
+import { isTasterTestPhone } from "../_shared/taster.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
