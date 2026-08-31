@@ -34,17 +34,42 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
     const sessionId = String(body.checkoutSessionId || "");
-    if (!UUID_RE.test(sessionId)) return json({ error: "checkoutSessionId inválido" }, 400);
+    const phone = String(body.phone || "").replace(/\D/g, "");
+    const email = String(body.email || "").trim().toLowerCase();
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    // Caminho 1: id da sessão (quando o checkout conseguiu recebê-lo).
+    let targetId: string | null = UUID_RE.test(sessionId) ? sessionId : null;
+
+    // Caminho 2 (fallback robusto): sem id, resolve a sessão PIX mais recente
+    // do mesmo telefone/email. Evita que a marcação dependa de o id trafegar
+    // pela resposta do provedor — quem copiou é o segmento mais valioso do funil.
+    if (!targetId && (phone || email)) {
+      let q = supabase
+        .from("checkout_sessions")
+        .select("id")
+        .in("payment_method", ["pix", "pix_auto", "pix_automatic"])
+        .eq("status", "created")
+        .gte("created_at", new Date(Date.now() - 6 * 3600_000).toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1);
+      q = phone
+        ? q.in("phone", [phone, phone.replace(/^55/, ""), phone.startsWith("55") ? phone : `55${phone}`])
+        : q.eq("email", email);
+      const { data } = await q.maybeSingle();
+      targetId = data?.id ?? null;
+    }
+
+    if (!targetId) return json({ ok: false, reason: "sessao_nao_encontrada" }, 200);
+
     const { error } = await supabase
       .from("checkout_sessions")
       .update({ pix_copied_at: new Date().toISOString() })
-      .eq("id", sessionId)
+      .eq("id", targetId)
       .eq("status", "created")
       .is("pix_copied_at", null);
 
@@ -52,7 +77,7 @@ Deno.serve(async (req) => {
       console.error("[mark-pix-copied] falha ao gravar:", error.message);
       return json({ ok: false }, 200); // nunca quebra a UX do checkout
     }
-    return json({ ok: true });
+    return json({ ok: true, id: targetId });
   } catch (err) {
     console.error("[mark-pix-copied] erro:", err);
     return json({ ok: false }, 200);

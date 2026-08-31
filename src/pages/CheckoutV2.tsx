@@ -1175,13 +1175,17 @@ const CheckoutV2 = () => {
       });
       // Marca o lead como "copiou o código" para o trilho de recuperação
       // específico. Fire-and-forget: nunca atrasa nem quebra a cópia.
-      if (pixCheckoutSessionRef.current) {
-        supabase.functions
-          .invoke("mark-pix-copied", {
-            body: { checkoutSessionId: pixCheckoutSessionRef.current },
-          })
-          .catch(() => {});
-      }
+      // Manda telefone/email também: se o id da sessão não vier do provedor,
+      // o backend resolve a sessão PIX recente por esses dados.
+      supabase.functions
+        .invoke("mark-pix-copied", {
+          body: {
+            checkoutSessionId: pixCheckoutSessionRef.current,
+            phone: phone.replace(/\D/g, ""),
+            email: email.trim(),
+          },
+        })
+        .catch(() => {});
 
     } catch {
       toast.error("Não foi possível copiar. Selecione manualmente.");
