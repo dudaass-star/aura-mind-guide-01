@@ -28,14 +28,17 @@ lead copiou PIX e travou ("não quero deixar cobrança automática")
         ↓  (2ª resposta do agente, backend liberou elegibilidade)
 agente oferece: 45 min por R$ 6,90, PIX comum, sem autorização
         ↓  aceita
-código PIX avulso de R$ 6,90 na hora, no WhatsApp
+código PIX avulso de R$ 6,90 na hora, ainda no número da recuperação
         ↓  paga
-"seu encontro está liberado — me diz o horário nas próximas 48h"
-        ↓  agenda
-encontro de 45 min com a Aura (sessão completa, sem cortes)
+Aura chama do número OFICIAL dela (mesmo template de welcome que já usamos)
+        ↓  ele combina o horário direto com a Aura, no chat dela
+encontro de 45 min (sessão completa, sem cortes)
         ↓  fim da sessão
 convite ao plano com link próprio · acesso expira
 ```
+
+O agendamento **não** acontece no agente de recuperação: ele só vende e entrega o código. Depois do pagamento, quem assume é a Aura no número oficial, exatamente como acontece hoje com quem assina — inclusive reusando o **template de welcome já aprovado** (não precisa de template novo na Meta). Só o texto livre que vem junto muda: em vez de "escolheu o plano X", ele diz que o encontro de 45 min está liberado e pede o horário dentro de 48h.
+
 
 ## Detalhes técnicos
 
