@@ -50,9 +50,10 @@ O agendamento **não** acontece no agente de recuperação: ele só vende e entr
 **Backend**
 - `criar-pix-taster` (nova): valida elegibilidade, cria charge avulsa de 690 na Woovi, grava `taster_offers`, devolve copia-e-cola. Idempotente por `correlationID`.
 - `recovery-agent`: função `checkTasterEligibility()` no backend injeta no prompt "pode oferecer / não pode"; nova tag `[OFERECER_TASTER]` (aceite) e classificação determinística do aceite curto ("quero", "bora", "sim") em `pix-buttons.ts`, gerando o código sem passar pelo LLM. Tag inválida cai no strip já existente.
-- `webhook-woovi`: reconhece `correlationID` de taster **antes** do fluxo de assinatura, cria/atualiza perfil `status='taster'`, `taster_expires_at = now + 48h`, e manda a mensagem de agendamento pelo WhatsApp oficial.
+- `webhook-woovi`: reconhece `correlationID` de taster **antes** do fluxo de assinatura, cria/atualiza perfil `status='taster'`, `plan_tier='taster'`, `taster_expires_at = now + 48h`, e chama o mesmo `sendWelcomeWhatsApp` de hoje — **template de welcome já aprovado, sem template novo** — com o `pending_insight [WELCOME]` na versão taster (encontro de 45 min liberado + pedido do horário em 48h). O agendamento acontece no chat da Aura, pelo contrato de tag que já existe (`[AGENDAR_SESSAO]`), com `is_taster = true` na sessão criada.
 - `woovi-pix-audit`: varredura extra para taster pago sem perfil, e expiração dos que passaram de 48h.
-- `aura-agent`: tier `taster` com 1 sessão / 0 áudio / 0 meditação / 0 jornada; parede determinística fora da sessão; convite ao plano no fechamento.
+- `aura-agent`: `plan_tier = 'taster'` no mesmo bloco de entitlements do `lite`/`base` (1 sessão, 0 áudio, 0 meditação, 0 jornada); parede determinística fora da janela da sessão; convite ao plano no fechamento e expiração em seguida.
+
 - Guardas de recuperação (`recover-abandoned-checkout`, `recover-abandoned-checkout-whatsapp`, `recovery-agent`, `woovi-recovery-guard`): `'taster'` explicitamente **não** entra nas listas de cliente ativo.
 
 **Admin**
