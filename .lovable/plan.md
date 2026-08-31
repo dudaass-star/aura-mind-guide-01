@@ -2,7 +2,22 @@
 
 Oferta usada **só na conversa** (nunca em página): quem travou no PIX porque não quer autorizar cobrança automática recebe a chance de pagar **R$ 6,90 num PIX comum, sem mandato**, e fazer **um encontro guiado de 45 minutos**. Prazo pra usar: **48h**. Sem crédito no plano. Ao final da sessão, a própria Aura convida pro plano.
 
-Decisões travadas: só o encontro de 45 min (sem chat casual, sem meditação, sem áudio fora da sessão) · 48h pra agendar · R$ 6,90 não abate nada · elegível só para lead do trilho PIX que já viu o preço.
+Decisões travadas: só o encontro de 45 min (sem chat casual, sem meditação, sem áudio fora da sessão) · 48h pra agendar · R$ 6,90 não abate nada · elegível **só para quem entrou no trilho do PIX copia e cola** que já existe.
+
+## Duas portas, mesmo trilho do copia e cola
+
+**Porta A — quem responde (sai primeiro).** O lead respondeu à m1 (15 min) ou m2 (2h), o agente já explicou o que precisava, e a oferta entra a partir da 2ª resposta como saída pra quem travou na autorização recorrente. Não depende de aprovação da Meta: é texto livre dentro da janela de 24h aberta pelo clique.
+
+**Porta B — quem não responde (3º degrau do trilho).** Você tem razão: silêncio não é recusa — muita gente só não quis gastar tempo respondendo, mas abriria uma oferta diferente. Entra um **degrau novo no trilho copia e cola**: quem copiou o código, recebeu m1 e m2 e **não respondeu nada**, recebe ~24h depois de m2 uma mensagem ofertando o encontro de 45 min por R$ 6,90 sem cobrança automática.
+
+Restrições que essa porta impõe (é fora da janela de 24h):
+- Exige **template próprio criado, configurado e aprovado pela Meta**, com quick reply ("Quero experimentar" / "Tenho uma dúvida"). Pela sua regra, o degrau nasce **desligado** e só liga com o ContentSid aprovado em `system_config.wa_copiou_templates.m3` — nunca antes.
+- Corpo nunca começa com variável (foi o motivo da recusa anterior: "Olá {{1}}, ...").
+- Uma vez por telefone, respeitando o cap de 30 dias por telefone, o cap de 3 falhas e o silêncio 22h–08h BRT.
+- Clique em "Quero experimentar" resolve **determinístico** (gera o PIX de R$ 6,90 na hora, sem LLM); "Tenho uma dúvida" cai no agente com o contexto de que ele travou na autorização.
+- Só entra quem continua sem pagar e sem mandato no momento do envio (mesmas guardas ao vivo Woovi já usadas).
+
+
 
 ## As brechas que o plano fecha
 
