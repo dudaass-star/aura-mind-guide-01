@@ -58,7 +58,21 @@ export interface TasterEligibility {
 }
 
 /** Kill switch. Default: DESLIGADO — só liga depois do teste ponta a ponta. */
+/** Telefones autorizados a testar o trilho com o kill switch ainda desligado. */
+export async function isTasterTestPhone(supabase: Supa, phone: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("system_config").select("value").eq("key", "taster_test_phones").maybeSingle();
+    const list = Array.isArray(data?.value) ? data.value : [];
+    const target = normalizeBrazilianPhone(phone);
+    return list.some((p: unknown) => normalizeBrazilianPhone(String(p)) === target);
+  } catch {
+    return false;
+  }
+}
+
 export async function isTasterEnabled(supabase: Supa): Promise<boolean> {
+
   try {
     const { data } = await supabase
       .from("system_config").select("value").eq("key", "taster_enabled").maybeSingle();
@@ -79,9 +93,17 @@ export async function checkTasterEligibility(
   const phone = normalizeBrazilianPhone(args.phone || "");
   if (!phone) return { eligible: false, reason: "sem_telefone", phone: "" };
 
+  // Bypass de TESTE: só telefones listados em system_config.taster_test_phones.
+  // Serve para validar o trilho ponta a ponta antes de ligar o kill switch.
+  // Não afeta nenhum outro número.
+  if (await isTasterTestPhone(supabase, phone)) {
+    return { eligible: true, reason: "teste_bypass", phone };
+  }
+
   if (!(await isTasterEnabled(supabase))) {
     return { eligible: false, reason: "desligado_por_config", phone };
   }
+
 
   const phoneVars = getPhoneVariations(phone);
   const email = (args.email || "").toLowerCase() || null;
@@ -237,7 +259,10 @@ export async function createTasterCharge(
       correlationID: correlationId,
       value: TASTER_VALUE_CENTS,
       paymentType: "DYNAMIC",
-      comment: "Aura — encontro guiado de 45 minutos (avulso)",
+      // Woovi rejeita caracteres fora do ASCII simples no comentario (erro
+      // "Emoji nao e permitido"): manter texto plano, sem travessao nem acento.
+      comment: "Aura - encontro guiado de 45 minutos (avulso)",
+
       expiresIn: TASTER_QR_TTL_SECONDS,
       customer,
     },
