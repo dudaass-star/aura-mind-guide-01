@@ -454,9 +454,14 @@ Deno.serve(async (req) => {
       console.warn("[recovery-agent] dryRun taster falhou:", (e as Error)?.message);
     }
 
+    // Bypass de TESTE: telefones em system_config.taster_test_phones passam
+    // pelo trilho mesmo sendo cliente ativo, senão é impossível validar ponta
+    // a ponta com a própria conta. Não afeta nenhum outro número.
+    const tasterTestBypass = await isTasterTestPhone(supabase, phone);
+
     // Aceite: clique do template (Porta B) ou "quero/bora" depois de a oferta ter saído.
     const tasterIntent = classifyTasterIntent(text);
-    if (!customer && tasterEligible && tasterIntent) {
+    if ((!customer || tasterTestBypass) && tasterEligible && tasterIntent) {
       const okToGenerate = tasterIntent === "button" || await tasterOfferAlreadySent(supabase, phone);
       if (okToGenerate) {
         const res = await handleTasterAccept(
