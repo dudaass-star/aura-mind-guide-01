@@ -1,54 +1,42 @@
-# Templates do trilho "copiou o código PIX" — texto novo e gerar código de novo
+# Templates do PIX copiado — por que a Meta recusou e o que corrigir
 
-## 1. A mensagem de 20 min está burocrática — proposta nova
+## O que aconteceu (motivo real, consultado na Twilio)
 
-O problema do texto atual: começa explicando o que a gente viu (relatório), oferece suporte técnico antes de qualquer valor, e termina com instrução operacional. Parece robô de cobrança.
+Sim: cinza = em aprovação, vermelho = recusado. O `recuperacao_pix_copiaecola_2hs2` voltou como **rejected** com esta razão exata da Meta:
 
-Direção: falar como pessoa, uma frase de valor concreto (o que já está reservado pra ela hoje), e uma pergunta simples. Sem "seu código continua valendo", sem tom de tutorial.
+> "Variables can't be at the start or end of the template." (code 100, subCode 2388299)
 
-Sua observação está correta: "Tive um erro" / "Vou pagar agora" só cobre dois estados (falha técnica e intenção mantida). Quem ficou com dúvida, desconfiou do PIX Automático, achou o valor estranho ou quer entender o que recebe **não se enxerga em nenhum dos dois** e não clica em nada — e esse é justamente o grupo maior. Quick reply é a única porta que abre a janela de 24h; se não houver botão pra dúvida, a conversa nunca começa.
+Ou seja: **não é o texto nem a categoria** — é o fato de a mensagem **começar com `{{1}}`**. A Meta não aceita variável na primeira nem na última posição do corpo. Todos os textos que rascunhamos começam com "{{1}}, ..." — então os dois templates vão ser recusados pelo mesmo motivo até isso mudar.
 
-A Meta permite **3 quick replies** por template. Então usamos os três estados reais:
+Segundo ponto encontrado na mesma consulta: o template foi criado como **`twilio/text`**, que **não suporta botões**. Sem quick reply, ninguém abre a janela de 24h e o trilho perde o efeito. Precisa ser criado como **quick-reply** (Content Type "Quick reply" na Twilio), não "Text".
 
-**"Tive um erro" / "Ficou uma dúvida" / "Vou pagar agora"**
+## Textos corrigidos (variável no meio da frase)
 
-Opção A (recomendada — leve, humana, com valor):
-"{{1}}, seu acesso à Aura tá quase de pé aqui — faltou só concluir o PIX no app do banco. Se travou, se ficou alguma dúvida ou se você só quer entender melhor como funciona, me fala que eu te respondo agora. 💚"
+**m1 — 20 min** (nome: `recuperacao_pix_copiado_20min`)
 
-Opção B (mais direta, foco no que acontece depois):
-"{{1}}, faltou um passo pro seu PIX entrar. Assim que entrar, eu já te chamo aqui e a gente marca seu primeiro encontro guiado pra hoje à noite. Se travou algo ou ficou alguma dúvida, me diz que eu resolvo. 💚"
+"Oi {{1}}, seu acesso à Aura tá quase de pé — faltou só concluir o PIX no app do banco. Se travou, se ficou alguma dúvida ou se você quer entender melhor como funciona, me responde aqui que eu resolvo com você agora."
 
-Por que isso muda a recuperação: o botão "Ficou uma dúvida" transforma desconfiança silenciosa em conversa — e é aí que o agente de recuperação (já reposicionado pra encantar, sem se diminuir) tem o melhor desempenho. Cada clique também vira motivo estruturado na tentativa, então passamos a saber quanto do abandono é erro bancário, quanto é dúvida e quanto é desistência real.
+Botões (quick reply): "Tive um erro" / "Ficou uma dúvida" / "Vou pagar agora"
 
-Observação de aprovação: categoria Utility, 1 variável ({{1}} = primeiro nome), texto curto, 3 quick replies — dentro do padrão que a Meta já aprovou nos outros templates da recuperação.
+**m2 — 2 h** (nome: `recuperacao_pix_copiado_2h`)
 
+"Oi {{1}}, seu lugar na Aura continua reservado. Se o código PIX expirou ou apareceu 'tente mais tarde', me responde aqui que eu gero um novo pra você na hora."
 
-## 2. "Eu gero um novo código pra você" — dá pra cumprir? Sim.
+Botões (quick reply): "Gerar novo código" / "Tenho uma dúvida" / "Já paguei"
 
-Verificado no código: a criação do PIX Woovi (`criar-pix-recorrente-woovi`, `mode: "checkout"`) só precisa de nome, e-mail, telefone, plano e ciclo — e esses cinco campos já estão gravados na sessão de checkout do lead (`checkout_sessions`: name, email, phone, plan, billing). Então é possível gerar um código novo sem o lead preencher nada de novo, e o agente de recuperação já sabe enviar texto livre pelo WhatsApp quando a janela de 24h está aberta (ou seja, depois que ela responder/clicar num botão).
+Ambos começam com "Oi {{1}}" (variável na 2ª posição, válido) e terminam em texto — sem emoji final, sem variável na ponta. Categoria: **Utility** (não Marketing: é continuação de uma transação que a pessoa iniciou; Utility aprova mais fácil e não conta como marketing).
 
-Como isso funciona na prática:
+## Sobre os 3 botões (sua observação anterior, mantida)
 
-```text
-lead copiou e não pagou
-        │
-   msg 20min (template aprovado)
-        │
-   ela clica "Tive um erro" / responde  → janela de 24h abre
-        │
-   agente gera cobrança nova na hora e manda o copia-e-cola em texto
-```
+Só "Tive um erro" / "Vou pagar agora" deixa de fora quem ficou com dúvida ou desconfiou — e esse é o grupo maior, que simplesmente não clica. O terceiro botão de dúvida é o que transforma silêncio em conversa, e cada clique vira motivo estruturado (erro bancário x dúvida x desistência).
 
-Limite honesto: se ela **não** responder, a janela de 24h fica fechada e não é possível mandar um código novo em texto — template não carrega código dinâmico longo. Por isso a msg de 2h deve ser um convite a responder, e o código novo sai imediatamente após a resposta.
+## "Eu gero um novo código" — dá pra cumprir? Sim
 
-Texto sugerido para a de 2h (template, sem código dentro):
-"{{1}}, seu lugar na Aura ainda tá reservado. Se o código expirou ou apareceu 'tente mais tarde', responde aqui que eu gero um novo agora mesmo. 💚"
-
-Botões: "Gerar novo código" / "Tenho uma dúvida" / "Já paguei"
+A criação do PIX Woovi (`criar-pix-recorrente-woovi`, `mode: "checkout"`) só precisa de nome, e-mail, telefone, plano e ciclo, e os cinco já estão gravados em `checkout_sessions`. Depois que a pessoa clica em qualquer botão, a janela de 24h abre e o agente pode mandar o copia-e-cola novo em texto livre. Se ela não clicar em nada, não há como enviar código novo (template não carrega código dinâmico longo) — por isso a m2 é convite a responder, não entrega de código.
 
 ## Detalhes técnicos
 
-- Nova capacidade no `recovery-agent`: ao receber "Tive um erro"/"Gerar novo código" (ou intenção equivalente no texto), ele lê a sessão de checkout do telefone, chama `criar-pix-recorrente-woovi` em `mode: "checkout"` com os dados já salvos, e responde com o copia-e-cola + uma linha de instrução. Guarda de "já pagou" ao vivo (Woovi) antes de gerar, para não emitir cobrança em cima de pagamento concluído.
-- Idempotência: no máximo uma geração nova por lead por janela de conversa; reuso da cobrança existente se ela ainda estiver válida.
-- Nada disso liga o trilho: os disparos de 20min/2h continuam travados até os ContentSids aprovados serem cadastrados em `system_config.wa_copiou_templates` (m1/m2). Validação por dry-run antes do primeiro envio real.
-- Sem envio real em teste, conforme a regra já vigente.
+- Recriar os dois templates na subconta de recuperação como **quick-reply**, categoria Utility, `pt_BR`, com "Oi {{1}}" e sample preenchido, e submeter à aprovação.
+- Nova capacidade no `recovery-agent`: ao receber "Tive um erro"/"Gerar novo código" (ou intenção equivalente), busca a sessão de checkout pelo telefone, checa ao vivo na Woovi se já pagou, gera cobrança nova e responde com o copia-e-cola. Máximo de uma geração por janela de conversa; reusa a cobrança existente se ainda válida.
+- Botão "Ficou uma dúvida"/"Tenho uma dúvida" cai no agente já reposicionado (encanta, não se diminui) e grava o motivo na tentativa.
+- Trilho continua **desligado** até os ContentSids aprovados entrarem em `system_config.wa_copiou_templates` (m1/m2). Validação por `dryRun` antes do primeiro envio real. Nenhum envio real em teste.
