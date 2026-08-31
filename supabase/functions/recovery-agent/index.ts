@@ -511,7 +511,7 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-${shortAckInstruction}${mediaInstruction}
+${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}
 ${modeInstructions}`;
 
 
