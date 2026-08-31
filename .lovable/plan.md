@@ -39,10 +39,11 @@ Estas são as formas reais de isso "não funcionar direito" — cada uma tem tra
 ## Como o lead vive isso
 
 ```text
-lead copiou PIX e travou ("não quero deixar cobrança automática")
-        ↓  (2ª resposta do agente, backend liberou elegibilidade)
-agente oferece: 45 min por R$ 6,90, PIX comum, sem autorização
-        ↓  aceita
+copiou o código PIX e não pagou
+   ├─ respondeu m1/m2 → agente explica → 2ª resposta → oferece o encontro
+   └─ não respondeu   → 24h depois de m2, template m3 oferta o encontro
+        ↓  aceita (clique ou texto)
+
 código PIX avulso de R$ 6,90 na hora, ainda no número da recuperação
         ↓  paga
 Aura chama do número OFICIAL dela (mesmo template de welcome que já usamos)
