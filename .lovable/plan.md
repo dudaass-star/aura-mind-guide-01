@@ -1,42 +1,27 @@
-# Templates do PIX copiado — por que a Meta recusou e o que corrigir
+# Ligar o trilho "copiou o código PIX" com os templates aprovados
 
-## O que aconteceu (motivo real, consultado na Twilio)
+Os dois templates estão aprovados na subconta de recuperação, com quick reply e "Olá {{1}}" (variável fora das pontas — foi isso que derrubou a versão anterior):
 
-Sim: cinza = em aprovação, vermelho = recusado. O `recuperacao_pix_copiaecola_2hs2` voltou como **rejected** com esta razão exata da Meta:
+- 15 min — `copy_of_recuperacao_pix_copiaecola_15min` — `HX438035e6d8892b4463e99b6abfaad832` — botões: Ficou uma dúvida / Vou pagar agora / Tive um erro
+- 2 h — `copy_of_recuperacao_pix_copiaecola_2hs` — `HX8a208cd323ef2b99c92790caa0118b25` — botões: Gerar novo código / Já paguei / Tenho uma dúvida
 
-> "Variables can't be at the start or end of the template." (code 100, subCode 2388299)
+## O que fazer
 
-Ou seja: **não é o texto nem a categoria** — é o fato de a mensagem **começar com `{{1}}`**. A Meta não aceita variável na primeira nem na última posição do corpo. Todos os textos que rascunhamos começam com "{{1}}, ..." — então os dois templates vão ser recusados pelo mesmo motivo até isso mudar.
+1. **Ligar o trilho**: gravar os dois SIDs em `system_config.wa_copiou_templates` (`m1` = 15 min, `m2` = 2 h). O worker já valida o formato `HX...` e só liga o 2º contato quando `m2` existe. Registrar também os dois templates em `whatsapp_templates` para o painel de admin refletir os SIDs ativos.
 
-Segundo ponto encontrado na mesma consulta: o template foi criado como **`twilio/text`**, que **não suporta botões**. Sem quick reply, ninguém abre a janela de 24h e o trilho perde o efeito. Precisa ser criado como **quick-reply** (Content Type "Quick reply" na Twilio), não "Text".
+2. **Ajustar a janela do 1º contato para 15 min**: o estágio hoje se chama `copiou_20min` e dispara 20 minutos após `pix_copied_at`. O template aprovado é o de 15 min — alinhar o atraso para 15 minutos (mantendo o nome interno da coluna, para não perder histórico) e o 2º em 2 h.
 
-## Textos corrigidos (variável no meio da frase)
+3. **Tratar os cliques de botão no `recovery-agent`**: os cliques chegam no `webhook-twilio-recovery` como texto (`ButtonText`), já gravado como inbound. Adicionar roteamento determinístico antes do LLM:
+   - "Gerar novo código" / "Tive um erro" → busca a `checkout_sessions` do telefone, confere ao vivo na Woovi se já pagou (guarda existente), reaproveita a cobrança se ainda válida ou gera nova via `criar-pix-recorrente-woovi`, e responde com o copia-e-cola. Uma geração por conversa/hora.
+   - "Já paguei" → checagem ao vivo; se pago, confirma acesso e não oferece nada; se não achou, cai no modo suporte.
+   - "Ficou uma dúvida" / "Tenho uma dúvida" / "Vou pagar agora" → segue para o agente conversacional já reposicionado (encanta, não se diminui), com o contexto de que a pessoa copiou o código e travou.
 
-**m1 — 20 min** (nome: `recuperacao_pix_copiado_20min`)
-
-"Oi {{1}}, seu acesso à Aura tá quase de pé — faltou só concluir o PIX no app do banco. Se travou, se ficou alguma dúvida ou se você quer entender melhor como funciona, me responde aqui que eu resolvo com você agora."
-
-Botões (quick reply): "Tive um erro" / "Ficou uma dúvida" / "Vou pagar agora"
-
-**m2 — 2 h** (nome: `recuperacao_pix_copiado_2h`)
-
-"Oi {{1}}, seu lugar na Aura continua reservado. Se o código PIX expirou ou apareceu 'tente mais tarde', me responde aqui que eu gero um novo pra você na hora."
-
-Botões (quick reply): "Gerar novo código" / "Tenho uma dúvida" / "Já paguei"
-
-Ambos começam com "Oi {{1}}" (variável na 2ª posição, válido) e terminam em texto — sem emoji final, sem variável na ponta. Categoria: **Utility** (não Marketing: é continuação de uma transação que a pessoa iniciou; Utility aprova mais fácil e não conta como marketing).
-
-## Sobre os 3 botões (sua observação anterior, mantida)
-
-Só "Tive um erro" / "Vou pagar agora" deixa de fora quem ficou com dúvida ou desconfiou — e esse é o grupo maior, que simplesmente não clica. O terceiro botão de dúvida é o que transforma silêncio em conversa, e cada clique vira motivo estruturado (erro bancário x dúvida x desistência).
-
-## "Eu gero um novo código" — dá pra cumprir? Sim
-
-A criação do PIX Woovi (`criar-pix-recorrente-woovi`, `mode: "checkout"`) só precisa de nome, e-mail, telefone, plano e ciclo, e os cinco já estão gravados em `checkout_sessions`. Depois que a pessoa clica em qualquer botão, a janela de 24h abre e o agente pode mandar o copia-e-cola novo em texto livre. Se ela não clicar em nada, não há como enviar código novo (template não carrega código dinâmico longo) — por isso a m2 é convite a responder, não entrega de código.
+4. **Validar sem enviar nada**: `POST recover-abandoned-checkout-whatsapp {"dryRun": true}` para conferir candidatos, trilho escolhido e motivos de skip; depois um envio real controlado para o seu número antes de liberar em produção.
 
 ## Detalhes técnicos
 
-- Recriar os dois templates na subconta de recuperação como **quick-reply**, categoria Utility, `pt_BR`, com "Oi {{1}}" e sample preenchido, e submeter à aprovação.
-- Nova capacidade no `recovery-agent`: ao receber "Tive um erro"/"Gerar novo código" (ou intenção equivalente), busca a sessão de checkout pelo telefone, checa ao vivo na Woovi se já pagou, gera cobrança nova e responde com o copia-e-cola. Máximo de uma geração por janela de conversa; reusa a cobrança existente se ainda válida.
-- Botão "Ficou uma dúvida"/"Tenho uma dúvida" cai no agente já reposicionado (encanta, não se diminui) e grava o motivo na tentativa.
-- Trilho continua **desligado** até os ContentSids aprovados entrarem em `system_config.wa_copiou_templates` (m1/m2). Validação por `dryRun` antes do primeiro envio real. Nenhum envio real em teste.
+- `loadCopyStages()` já é o gate: sem SID válido o trilho fica desligado, então o passo 1 é o que efetivamente liga.
+- Régua única preservada: quem tem `pix_copied_at` sai do genérico de 15 min (`skipped: trilho_copiou`) e os dois trilhos convergem no estágio de 24 h.
+- Guardas compartilhadas intactas: cliente ativo, já pago, guarda Woovi ao vivo, cap de telefone 30 d, cap de 3 falhas, quiet hours 22h–08h BRT.
+- Categoria dos templates ficou Marketing (aprovados assim); nada a mudar agora, mas se a Meta apertar entrega, resubmeter como Utility é o caminho.
+- Atualizar `mem/features/recovery/trilho-copiou-codigo-pix.md` com os SIDs ativos, os textos finais e o roteamento de botões.
