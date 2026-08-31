@@ -1,0 +1,221 @@
+/**
+ * Roteamento determinístico dos cliques de quick reply dos templates do trilho
+ * "copiou o código PIX" (15 min e 2h).
+ *
+ * Os cliques chegam no webhook-twilio-recovery como TEXTO (campo ButtonText do
+ * Twilio) e já são gravados como inbound. Aqui eles deixam de ser "mais uma
+ * frase pro LLM" e passam a resolver o problema:
+ *
+ *   - "Gerar novo código" / "Tive um erro" → devolve um copia-e-cola VÁLIDO na
+ *     hora (reaproveita o QR se ainda vale, gera outro se expirou).
+ *   - "Já paguei" → confere ao vivo na Woovi; se pagou, confirma o acesso e não
+ *     oferece nada.
+ *   - Dúvida / "Vou pagar agora" → não é determinístico: segue pro agente
+ *     conversacional, mas com o contexto de que a pessoa copiou e travou.
+ */
+
+import { hasLiveWooviCommitment } from "../_shared/woovi-recovery-guard.ts";
+import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
+
+// deno-lint-ignore no-explicit-any
+type Supa = any;
+
+export type PixButtonIntent = "new_code" | "already_paid" | "conversational" | null;
+
+const RE_NEW_CODE = /(gerar novo c[oó]digo|tive um erro|c[oó]digo (n[aã]o|nao) funciona|expirou)/i;
+const RE_ALREADY_PAID = /^\s*(j[aá] paguei|paguei|j[aá] pagou)\s*[.!]?\s*$/i;
+const RE_DOUBT = /(ficou uma d[uú]vida|tenho uma d[uú]vida|vou pagar agora)/i;
+
+/** Classifica o texto do clique. `null` = não é clique de botão do trilho. */
+export function classifyPixButton(text: string): PixButtonIntent {
+  const t = (text || "").trim();
+  if (!t) return null;
+  if (RE_NEW_CODE.test(t)) return "new_code";
+  if (RE_ALREADY_PAID.test(t)) return "already_paid";
+  if (RE_DOUBT.test(t)) return "conversational";
+  return null;
+}
+
+/** Assinatura Woovi mais recente do contato (por telefone ou e-mail). */
+async function findLatestSubscription(
+  supabase: Supa,
+  phone: string,
+  email?: string | null,
+): Promise<Record<string, unknown> | null> {
+  const since = new Date(Date.now() - 60 * 86400000).toISOString();
+  const digits = normalizeBrazilianPhone(phone);
+  if (digits) {
+    const { data } = await supabase
+      .from("woovi_subscriptions")
+      .select("*")
+      .ilike("customer_phone", `%${digits.slice(-8)}%`)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (data?.[0]) return data[0];
+  }
+  if (email) {
+    const { data } = await supabase
+      .from("woovi_subscriptions")
+      .select("*")
+      .eq("customer_email", email.toLowerCase())
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (data?.[0]) return data[0];
+  }
+  return null;
+}
+
+/** Cliente já ativo no app? (não pode receber código nenhum) */
+async function isActiveCustomer(supabase: Supa, phone: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("id")
+    .in("phone", getPhoneVariations(phone))
+    .in("status", ["active", "trial", "canceling"])
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}
+
+/**
+ * Trava: no máximo UM código gerado por hora para o mesmo telefone. Sem isso,
+ * cliques repetidos no botão criariam mandatos duplicados.
+ */
+async function recentCodeSent(supabase: Supa, phone: string): Promise<string | null> {
+  const since = new Date(Date.now() - 3600 * 1000).toISOString();
+  const { data } = await supabase
+    .from("recovery_messages")
+    .select("body, metadata, created_at")
+    .eq("phone", phone)
+    .eq("direction", "out")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  for (const m of data || []) {
+    // deno-lint-ignore no-explicit-any
+    if ((m as any)?.metadata?.pix_code_sent) return String((m as any).metadata.pix_code || "") || null;
+  }
+  return null;
+}
+
+function qrStillValid(sub: Record<string, unknown> | null): string | null {
+  if (!sub) return null;
+  const payload = sub.qr_payload ? String(sub.qr_payload) : "";
+  const exp = sub.qr_expires_at ? new Date(String(sub.qr_expires_at)).getTime() : 0;
+  if (!payload) return null;
+  // 5 min de margem: código que morre no meio do pagamento é pior que nenhum.
+  if (exp && exp - Date.now() < 5 * 60 * 1000) return null;
+  return payload;
+}
+
+export interface PixButtonResult {
+  handled: boolean;
+  body?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Resolve o clique. Retorna `handled: false` quando o caso deve seguir para o
+ * agente conversacional.
+ */
+export async function handlePixButton(
+  supabase: Supa,
+  intent: Exclude<PixButtonIntent, null | "conversational">,
+  phone: string,
+  checkout: { plan?: string | null; billing?: string | null; name?: string | null; email?: string | null } | null,
+): Promise<PixButtonResult> {
+  const email = checkout?.email ?? null;
+
+  // 1. Já pagou / já autorizou? Nunca oferecer pagamento de novo.
+  const live = await hasLiveWooviCommitment(supabase, { email, phone });
+  const active = await isActiveCustomer(supabase, phone);
+  if (live.committed || active) {
+    return {
+      handled: true,
+      body: "Achei aqui: seu pagamento entrou e o acesso já está liberado. A Aura te chama no WhatsApp oficial dela em alguns minutos — se preferir, você pode escrever primeiro e ela responde. Seu histórico fica em olaaura.com.br/meu-espaco.",
+      metadata: { pix_button: intent, resolution: "already_paid", reason: live.reason ?? (active ? "active_profile" : null) },
+    };
+  }
+
+  if (intent === "already_paid") {
+    return {
+      handled: true,
+      body: "Ainda não vi o pagamento cair aqui — às vezes o banco leva alguns minutos. Se você tem o comprovante, manda a print aqui que eu confiro na hora. Se travou no meio, me diz que eu já te mando um código novo.",
+      metadata: { pix_button: intent, resolution: "payment_not_found" },
+    };
+  }
+
+  // 2. Código novo. Trava de 1 por hora.
+  const recent = await recentCodeSent(supabase, phone);
+  if (recent) {
+    return {
+      handled: true,
+      body: `Esse é o código que te mandei agora, ainda válido — cola no PIX copia e cola do app do banco:\n\n${recent}\n\nSe der erro na hora de confirmar, me diz qual banco você está usando que eu te ajudo.`,
+      metadata: { pix_button: intent, resolution: "code_reused_recent" },
+    };
+  }
+
+  const sub = await findLatestSubscription(supabase, phone, email);
+  const valid = qrStillValid(sub);
+  if (valid) {
+    return {
+      handled: true,
+      body: `Seu código continua valendo — é só colar no PIX copia e cola do app do banco:\n\n${valid}\n\nAssim que entrar, a Aura te chama no WhatsApp e a gente já marca seu primeiro encontro guiado pra hoje se você quiser.`,
+      metadata: { pix_button: intent, resolution: "qr_reused", pix_code_sent: true, pix_code: valid },
+    };
+  }
+
+  // 3. QR expirado: gera outro reusando os dados do cadastro anterior.
+  const plan = (checkout?.plan || sub?.plan || "") as string;
+  const billing = (checkout?.billing || sub?.billing_period || "monthly") as string;
+  const name = (checkout?.name || sub?.customer_name || "Cliente") as string;
+  const mail = (email || sub?.customer_email || "") as string;
+  const cpf = (sub?.customer_cpf || "") as string;
+
+  if (!plan || !mail || !cpf) {
+    return {
+      handled: true,
+      body: "Consigo gerar um código novo pra você agora — só me confirma seu CPF (é o que o banco exige pro PIX Automático) e qual plano você quer, que eu mando o copia e cola na sequência.",
+      metadata: { pix_button: intent, resolution: "missing_data", missing: { plan: !plan, email: !mail, cpf: !cpf } },
+    };
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke("criar-pix-recorrente-woovi", {
+      body: {
+        mode: "checkout",
+        plan,
+        billing,
+        name,
+        email: mail,
+        phone,
+        cpf,
+        requestKey: `recovery_btn_${normalizeBrazilianPhone(phone)}_${Math.floor(Date.now() / 3600000)}`,
+      },
+    });
+    if (error) throw new Error(error.message);
+    if (data?.blocked) {
+      return {
+        handled: true,
+        body: "Sua assinatura já está de pé aqui — não precisa pagar de novo. Qualquer ajuste de plano ou de forma de pagamento você faz em olaaura.com.br/meu-espaco.",
+        metadata: { pix_button: intent, resolution: "already_subscribed" },
+      };
+    }
+    const code = data?.copyPaste ? String(data.copyPaste) : "";
+    if (!code) throw new Error("sem copyPaste na resposta");
+    return {
+      handled: true,
+      body: `Código novo, gerado agora — cola no PIX copia e cola do app do banco:\n\n${code}\n\nO banco vai mostrar o valor da mensalidade como autorização, mas hoje sai só a primeira semana. Assim que entrar, a Aura te chama e a gente marca seu primeiro encontro guiado.`,
+      metadata: { pix_button: intent, resolution: "qr_regenerated", pix_code_sent: true, pix_code: code },
+    };
+  } catch (e) {
+    console.error("[recovery-agent] falha ao gerar PIX novo:", (e as Error)?.message);
+    return {
+      handled: true,
+      body: "O banco recusou a geração agora — isso costuma ser instabilidade do PIX Automático e passa em minutos. Me responde aqui em uns 10 minutos que eu gero de novo pra você, ou entra em olaaura.com.br/v2/checkout que o código sai na tela.",
+      metadata: { pix_button: intent, resolution: "generation_failed" },
+    };
+  }
+}

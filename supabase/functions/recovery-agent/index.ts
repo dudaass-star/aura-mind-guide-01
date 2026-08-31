@@ -17,6 +17,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
+import { classifyPixButton, handlePixButton } from "./pix-buttons.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -397,9 +398,47 @@ Deno.serve(async (req) => {
     if (conv?.checkout_session_id) {
       const { data: ck } = await supabase
         .from("checkout_sessions")
-        .select("plan, billing, name, email, created_at")
+        .select("plan, billing, name, email, created_at, pix_copied_at")
         .eq("id", conv.checkout_session_id).maybeSingle();
       checkout = ck;
+    }
+    if (!checkout) {
+      // Clique de botão pode chegar antes de o checkout estar vinculado à conversa.
+      const { data: ck2 } = await supabase
+        .from("checkout_sessions")
+        .select("plan, billing, name, email, created_at, pix_copied_at")
+        .in("phone", getPhoneVariations(phone))
+        .order("created_at", { ascending: false })
+        .limit(1).maybeSingle();
+      checkout = ck2 || null;
+    }
+
+    // 6b. Clique de quick reply do trilho "copiou o código PIX": resolve na hora.
+    const pixIntent = classifyPixButton(text);
+    if (pixIntent === "new_code" || pixIntent === "already_paid") {
+      const res = await handlePixButton(supabase, pixIntent, phone, checkout);
+      if (res.handled && res.body) {
+        const sendBtn = await sendTwilioFreeText(phone, res.body);
+        const nowBtn = new Date().toISOString();
+        await supabase.from("recovery_messages").insert({
+          phone, direction: "out", body: res.body, message_sid: sendBtn.sid || null, sent_by_admin: false,
+          metadata: { bot: true, ...(res.metadata || {}) },
+        });
+        await supabase.from("recovery_conversations").upsert({
+          phone,
+          last_outbound_at: nowBtn,
+          last_bot_reply_at: nowBtn,
+          last_message_preview: res.body.slice(0, 200),
+          auto_reply_count: replyCount + 1,
+          pending_reply_at: null,
+          pending_inbound: null,
+          updated_at: nowBtn,
+        }, { onConflict: "phone" });
+        console.log(`[recovery-agent] pix_button=${pixIntent} resolution=${res.metadata?.resolution} sent=${sendBtn.ok}`);
+        return new Response(JSON.stringify({ ok: sendBtn.ok, pix_button: pixIntent, resolution: res.metadata?.resolution }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const kbItems = await loadKb(supabase, text);
@@ -443,6 +482,13 @@ ATENÇÃO — A MENSAGEM É CURTA ("ok", "obrigada", "beleza"): responda em NO M
 ATENÇÃO — VEIO SÓ UM ANEXO, SEM TEXTO: trate como "paguei / mandei o comprovante, e agora?". Confirme que o pagamento cai automaticamente no acesso, diga que a Aura chama no WhatsApp em poucos minutos depois da confirmação, e ofereça o ${SUPPORT_EMAIL} caso não chegue. Não peça pra reenviar o anexo. Não venda.
 ` : "";
 
+    // Trilho "copiou o código PIX": a pessoa já abriu o app do banco. Não é lead
+    // frio — é alguém a um passo de entrar, que travou ou ficou em dúvida.
+    const copiedPixInstruction = (checkout?.pix_copied_at || pixIntent === "conversational") ? `
+CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já decidiu, travou no último passo (dúvida de última hora, erro do banco ou insegurança). NÃO recomece a venda do zero e não explique tudo de novo. Trate a dúvida específica dela de frente, em duas ou três frases, e feche com o próximo passo concreto ("te mando o código novo agora?" / "quer marcar o primeiro encontro pra hoje à noite?"). Se ela sinalizar erro ou código expirado, diga que você gera um novo na hora — você realmente gera.
+` : "";
+
+
     const contextBlock = `${supportBlock}
 BASE DE CONHECIMENTO:
 ${renderKb(kbItems)}
@@ -465,7 +511,7 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-${shortAckInstruction}${mediaInstruction}
+${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}
 ${modeInstructions}`;
 
 

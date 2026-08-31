@@ -96,8 +96,10 @@ const STAGES: StageConfig[] = [
 const COPY_STAGE_DEFS: Omit<StageConfig, "contentSid">[] = [
   {
     stage: 3,
+    // Nome interno mantido (colunas e histórico), mas o template aprovado pela
+    // Meta é o de 15 min — a régua segue o template, não o nome.
     label: "copiou_20min",
-    minAgeMinutes: 20,
+    minAgeMinutes: 15,
     sentColumn: "wa_copiou_20min_sent_at",
     prevSentColumn: null,
     utmCampaign: "wa_copiou_20min",
