@@ -544,7 +544,7 @@ CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já 
     // Carta na manga: encontro guiado avulso de R$ 6,90, PIX comum, sem autorizar
     // débito automático. Só existe pra quem travou exatamente nessa objeção —
     // e só quando o backend já disse que a pessoa é elegível.
-    const tasterInstruction = (!customer && tasterEligible) ? `
+    const tasterInstruction = ((!customer || tasterTestBypass) && tasterEligible) ? `
 CARTA NA MANGA (use SÓ se a trava for autorização de cobrança automática, medo de recorrência, "não quero deixar autorizado", "quero testar antes" ou preço): existe um encontro guiado de 45 minutos AVULSO por R$ 6,90, num PIX comum de copia e cola, SEM autorizar nada automático e SEM virar assinatura. É um encontro só, com 48h pra fazer, e depois a pessoa decide com calma se escolhe um plano.
 Regras: ofereça no máximo UMA vez; descreva em cena ("um encontro de 45 minutos, marcado pra hoje à noite se você quiser"); NUNCA gere ou invente código PIX — quem gera é o sistema; NÃO ofereça se a trava for outra (dúvida técnica, erro do banco, comparação com terapia). Se for oferecer, termine com [OFERECER_TASTER] em vez de [ENVIAR_LINK] e feche perguntando se quer que você mande o código de R$ 6,90.
 ` : "";
@@ -610,7 +610,7 @@ ${modeInstructions}`;
     const sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
     const stop = /\[STOP\]/i.test(raw);
-    const offerTaster = !customer && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
+    const offerTaster = (!customer || tasterTestBypass) && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
     let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP|OFERECER_TASTER)\]/gi, "").trim();
     if (customer) body = body.replace(new RegExp(CHECKOUT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "").trim();
 
