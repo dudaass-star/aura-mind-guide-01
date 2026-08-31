@@ -44,7 +44,7 @@ Limite honesto: se ela **não** responder, a janela de 24h fica fechada e não �
 Texto sugerido para a de 2h (template, sem código dentro):
 "{{1}}, seu lugar na Aura ainda tá reservado. Se o código expirou ou apareceu 'tente mais tarde', responde aqui que eu gero um novo agora mesmo. 💚"
 
-Botões: "Gerar novo código" / "Já paguei"
+Botões: "Gerar novo código" / "Tenho uma dúvida" / "Já paguei"
 
 ## Detalhes técnicos
 
