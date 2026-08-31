@@ -58,7 +58,21 @@ export interface TasterEligibility {
 }
 
 /** Kill switch. Default: DESLIGADO — só liga depois do teste ponta a ponta. */
+/** Telefones autorizados a testar o trilho com o kill switch ainda desligado. */
+export async function isTasterTestPhone(supabase: Supa, phone: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("system_config").select("value").eq("key", "taster_test_phones").maybeSingle();
+    const list = Array.isArray(data?.value) ? data.value : [];
+    const target = normalizeBrazilianPhone(phone);
+    return list.some((p: unknown) => normalizeBrazilianPhone(String(p)) === target);
+  } catch {
+    return false;
+  }
+}
+
 export async function isTasterEnabled(supabase: Supa): Promise<boolean> {
+
   try {
     const { data } = await supabase
       .from("system_config").select("value").eq("key", "taster_enabled").maybeSingle();
