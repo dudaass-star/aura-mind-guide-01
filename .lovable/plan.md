@@ -11,7 +11,7 @@ Estas são as formas reais de isso "não funcionar direito" — cada uma tem tra
 1. **PIX com mandato por engano.** A cobrança é `/api/v1/charge` avulsa na Woovi, com `correlationID` próprio (`taster_<telefone>_<data>`). Nenhuma chamada a `/subscriptions`, nenhuma linha em `woovi_subscriptions` — assim nada no ecossistema confunde isso com assinatura.
 2. **Virar cliente ativo aos olhos do sistema.** O acesso não usa `status = 'active'`. Nasce `status = 'taster'` + `plan_tier = 'taster'` + `taster_expires_at`. Nenhum trilho de dunning, renovação, winback ou relatório de assinante pega esse perfil.
 3. **Deixar de ser recuperável.** Os guardas de recuperação hoje silenciam quem tem perfil ativo. `status = 'taster'` fica **fora** dessas listas: se ele não assinar, o trilho de venda continua podendo falar com ele.
-4. **Ganhar mais do que pagou.** No `aura-agent` o tier `taster` entra na mesma tabela de entitlements do `lite`/`base`: 1 sessão, 0 minuto de áudio, 0 meditação, 0 jornada, e fora da janela da sessão a Aura responde uma linha determinística ("nosso encontro está marcado pra X; fora dele eu volto quando você escolher um plano") sem chamar o LLM.
+4. **Ganhar mais do que pagou.** Não se cria plano novo. Usa-se o mecanismo de tiers que já existe (`profiles.plan_tier`, hoje com `lite` e `base`): entra um terceiro valor, `taster`, com 1 sessão, 0 min de áudio, 0 meditação, 0 jornada, 0 mensagem de chat casual. A trava é determinística no `aura-agent`, antes do LLM: dentro da janela da sessão ele conduz o encontro normalmente; fora dela responde uma linha fixa ("nosso encontro está marcado pra X — fora dele eu volto quando você escolher um plano") sem gastar modelo. `profiles.plan` continua guardando o plano que ele estava comprando, pra o convite do fim da sessão ser do plano certo.
 5. **Pagar duas vezes / dois códigos.** Trava de idempotência por telefone: um código de taster por hora, um taster pago por telefone com cooldown de 180 dias. Clique repetido no botão devolve o mesmo copia-e-cola.
 6. **Quem já é ou já foi pagante recebendo a oferta.** Elegibilidade é calculada **no backend**, não pelo LLM: bloqueia perfil ativo/trial/canceling/past_due, histórico de assinatura Stripe/Asaas/Woovi, e quem já usou taster.
 7. **Oferta cedo demais / virando isca.** Só a partir da 2ª resposta do agente na mesma conversa, só com preço já mostrado, só uma vez por lead. Recusa registra e o agente nunca repete.
@@ -28,14 +28,17 @@ lead copiou PIX e travou ("não quero deixar cobrança automática")
         ↓  (2ª resposta do agente, backend liberou elegibilidade)
 agente oferece: 45 min por R$ 6,90, PIX comum, sem autorização
         ↓  aceita
-código PIX avulso de R$ 6,90 na hora, no WhatsApp
+código PIX avulso de R$ 6,90 na hora, ainda no número da recuperação
         ↓  paga
-"seu encontro está liberado — me diz o horário nas próximas 48h"
-        ↓  agenda
-encontro de 45 min com a Aura (sessão completa, sem cortes)
+Aura chama do número OFICIAL dela (mesmo template de welcome que já usamos)
+        ↓  ele combina o horário direto com a Aura, no chat dela
+encontro de 45 min (sessão completa, sem cortes)
         ↓  fim da sessão
 convite ao plano com link próprio · acesso expira
 ```
+
+O agendamento **não** acontece no agente de recuperação: ele só vende e entrega o código. Depois do pagamento, quem assume é a Aura no número oficial, exatamente como acontece hoje com quem assina — inclusive reusando o **template de welcome já aprovado** (não precisa de template novo na Meta). Só o texto livre que vem junto muda: em vez de "escolheu o plano X", ele diz que o encontro de 45 min está liberado e pede o horário dentro de 48h.
+
 
 ## Detalhes técnicos
 
@@ -47,9 +50,10 @@ convite ao plano com link próprio · acesso expira
 **Backend**
 - `criar-pix-taster` (nova): valida elegibilidade, cria charge avulsa de 690 na Woovi, grava `taster_offers`, devolve copia-e-cola. Idempotente por `correlationID`.
 - `recovery-agent`: função `checkTasterEligibility()` no backend injeta no prompt "pode oferecer / não pode"; nova tag `[OFERECER_TASTER]` (aceite) e classificação determinística do aceite curto ("quero", "bora", "sim") em `pix-buttons.ts`, gerando o código sem passar pelo LLM. Tag inválida cai no strip já existente.
-- `webhook-woovi`: reconhece `correlationID` de taster **antes** do fluxo de assinatura, cria/atualiza perfil `status='taster'`, `taster_expires_at = now + 48h`, e manda a mensagem de agendamento pelo WhatsApp oficial.
+- `webhook-woovi`: reconhece `correlationID` de taster **antes** do fluxo de assinatura, cria/atualiza perfil `status='taster'`, `plan_tier='taster'`, `taster_expires_at = now + 48h`, e chama o mesmo `sendWelcomeWhatsApp` de hoje — **template de welcome já aprovado, sem template novo** — com o `pending_insight [WELCOME]` na versão taster (encontro de 45 min liberado + pedido do horário em 48h). O agendamento acontece no chat da Aura, pelo contrato de tag que já existe (`[AGENDAR_SESSAO]`), com `is_taster = true` na sessão criada.
 - `woovi-pix-audit`: varredura extra para taster pago sem perfil, e expiração dos que passaram de 48h.
-- `aura-agent`: tier `taster` com 1 sessão / 0 áudio / 0 meditação / 0 jornada; parede determinística fora da sessão; convite ao plano no fechamento.
+- `aura-agent`: `plan_tier = 'taster'` no mesmo bloco de entitlements do `lite`/`base` (1 sessão, 0 áudio, 0 meditação, 0 jornada); parede determinística fora da janela da sessão; convite ao plano no fechamento e expiração em seguida.
+
 - Guardas de recuperação (`recover-abandoned-checkout`, `recover-abandoned-checkout-whatsapp`, `recovery-agent`, `woovi-recovery-guard`): `'taster'` explicitamente **não** entra nas listas de cliente ativo.
 
 **Admin**
