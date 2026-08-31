@@ -397,9 +397,47 @@ Deno.serve(async (req) => {
     if (conv?.checkout_session_id) {
       const { data: ck } = await supabase
         .from("checkout_sessions")
-        .select("plan, billing, name, email, created_at")
+        .select("plan, billing, name, email, created_at, pix_copied_at")
         .eq("id", conv.checkout_session_id).maybeSingle();
       checkout = ck;
+    }
+    if (!checkout) {
+      // Clique de botão pode chegar antes de o checkout estar vinculado à conversa.
+      const { data: ck2 } = await supabase
+        .from("checkout_sessions")
+        .select("plan, billing, name, email, created_at, pix_copied_at")
+        .in("phone", getPhoneVariations(phone))
+        .order("created_at", { ascending: false })
+        .limit(1).maybeSingle();
+      checkout = ck2 || null;
+    }
+
+    // 6b. Clique de quick reply do trilho "copiou o código PIX": resolve na hora.
+    const pixIntent = classifyPixButton(text);
+    if (pixIntent === "new_code" || pixIntent === "already_paid") {
+      const res = await handlePixButton(supabase, pixIntent, phone, checkout);
+      if (res.handled && res.body) {
+        const sendBtn = await sendTwilioFreeText(phone, res.body);
+        const nowBtn = new Date().toISOString();
+        await supabase.from("recovery_messages").insert({
+          phone, direction: "out", body: res.body, message_sid: sendBtn.sid || null, sent_by_admin: false,
+          metadata: { bot: true, ...(res.metadata || {}) },
+        });
+        await supabase.from("recovery_conversations").upsert({
+          phone,
+          last_outbound_at: nowBtn,
+          last_bot_reply_at: nowBtn,
+          last_message_preview: res.body.slice(0, 200),
+          auto_reply_count: replyCount + 1,
+          pending_reply_at: null,
+          pending_inbound: null,
+          updated_at: nowBtn,
+        }, { onConflict: "phone" });
+        console.log(`[recovery-agent] pix_button=${pixIntent} resolution=${res.metadata?.resolution} sent=${sendBtn.ok}`);
+        return new Response(JSON.stringify({ ok: sendBtn.ok, pix_button: pixIntent, resolution: res.metadata?.resolution }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const kbItems = await loadKb(supabase, text);
