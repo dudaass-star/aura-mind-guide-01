@@ -19,6 +19,7 @@ import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
 import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
+import { isTasterCorrelationId, TASTER_WINDOW_HOURS } from "../_shared/taster.ts";
 import {
   wooviFetch, brtDate,
   WOOVI_APPROVED_STATUSES as APPROVED_STATUSES,
@@ -254,6 +255,129 @@ async function claimChargeActivation(supabase: any, chargeRowId: string): Promis
 }
 
 // Libera/estende o acesso — só quando dinheiro entra de fato.
+
+// ============================================================
+// Encontro avulso de R$ 6,90 (taster)
+// ------------------------------------------------------------
+// Cobrança AVULSA: não existe mandato, não existe ciclo, não renova. Libera UM
+// encontro guiado de 45 minutos com 48h de validade. Nunca rebaixa quem já tem
+// relação viva — se o pagador já for cliente, o dinheiro é registrado e o
+// acesso atual fica intacto.
+// ============================================================
+async function activateTaster(
+  supabase: any,
+  args: { correlationId: string; valueCents: number; paidAt: string; body: any },
+): Promise<boolean> {
+  const { data: offer } = await supabase
+    .from("taster_offers").select("*")
+    .eq("charge_correlation_id", args.correlationId).maybeSingle();
+  if (!offer) {
+    console.warn(`[webhook-woovi] taster ${args.correlationId} sem oferta registrada`);
+    return false;
+  }
+  if (offer.paid_at) {
+    console.log(`[webhook-woovi] taster ${args.correlationId} já processado`);
+    return true;
+  }
+
+  const phone = normalizeBrazilianPhone(String(offer.phone_normalized || offer.phone_raw || ""));
+  const email = (offer.email as string) || "";
+  const name = (offer.name as string) || "Cliente";
+  const now = new Date();
+  const expires = new Date(now.getTime() + TASTER_WINDOW_HOURS * 3600000).toISOString();
+  const today = now.toISOString().split("T")[0];
+
+  await supabase.from("taster_offers").update({
+    paid_at: args.paidAt,
+    paid_value_cents: args.valueCents,
+    expires_at: expires,
+    metadata: { ...(offer.metadata || {}), payer_bank: extractPayerBank(args.body) },
+  }).eq("id", offer.id);
+
+  const orParts: string[] = [];
+  if (email) orParts.push(`email.eq.${email}`);
+  if (phone) orParts.push(`phone.eq.${phone}`, `phone.eq.55${phone}`);
+  let profile: Record<string, any> | null = null;
+  if (orParts.length > 0) {
+    const { data } = await supabase.from("profiles")
+      .select("id, user_id, status, plan, plan_expires_at")
+      .or(orParts.join(",")).limit(1).maybeSingle();
+    profile = data || null;
+  }
+
+  const LIVE = ["active", "trial", "canceling", "past_due"];
+  if (profile && LIVE.includes(String(profile.status || "").toLowerCase())) {
+    // Não rebaixa cliente. Registra e segue — o valor entra como crédito manual.
+    console.warn(`[webhook-woovi] taster pago por cliente ativo (${profile.user_id}) — acesso preservado`);
+    await supabase.from("taster_offers")
+      .update({ converted_plan: "cliente_ativo_preservado" }).eq("id", offer.id);
+    return true;
+  }
+
+  let userId: string;
+  if (!profile) {
+    userId = crypto.randomUUID();
+    const { error: insErr } = await supabase.from("profiles").insert({
+      user_id: userId,
+      name, phone: phone || null, email: email || null,
+      plan: "essencial", status: "taster", plan_tier: "taster",
+      plan_expires_at: expires,
+      taster_paid_at: args.paidAt, taster_expires_at: expires,
+      taster_source: offer.source || "porta_a",
+      sessions_used_this_month: 0, sessions_reset_date: today,
+      messages_today: 0, last_message_date: today,
+      needs_schedule_setup: true,
+      whatsapp_provider: "meta",
+      card_gateway: null,
+    });
+    if (insErr) {
+      console.error("[webhook-woovi] ❌ falha criando perfil do taster:", insErr);
+      return false;
+    }
+    console.log(`[webhook-woovi] ✅ perfil taster criado ${userId}`);
+  } else {
+    userId = profile.user_id as string;
+    const { error: updErr } = await supabase.from("profiles").update({
+      status: "taster", plan_tier: "taster", plan: profile.plan || "essencial",
+      plan_expires_at: expires,
+      taster_paid_at: args.paidAt, taster_expires_at: expires,
+      taster_source: offer.source || "porta_a",
+      needs_schedule_setup: true,
+      sessions_used_this_month: 0, sessions_reset_date: today,
+      updated_at: now.toISOString(),
+    }).eq("user_id", userId);
+    if (updErr) {
+      console.error("[webhook-woovi] ❌ falha atualizando perfil do taster:", updErr);
+      return false;
+    }
+  }
+
+  await supabase.from("taster_offers").update({ profile_user_id: userId }).eq("id", offer.id);
+
+  try {
+    await supabase.from("user_portal_tokens").upsert({ user_id: userId }, { onConflict: "user_id" });
+  } catch (_) { /* non-blocking */ }
+
+  const welcome =
+    `Oi, ${name.split(" ")[0]}! Recebi seu PIX — seu encontro guiado de 45 minutos está garantido. ✨\n\n` +
+    `Eu sou a AURA. Aqui a gente senta pra olhar de verdade o que está pesando: eu conduzo, você fala no seu ritmo, ` +
+    `por texto ou áudio.\n\nMe diz o melhor dia e horário pra gente fazer esse encontro — vale até ` +
+    `${new Date(expires).toLocaleDateString("pt-BR")}.`;
+  await supabase.from("profiles").update({ pending_insight: `[WELCOME]${welcome}` }).eq("user_id", userId);
+
+  if (phone) {
+    try {
+      await sendWelcomeWhatsApp(supabase, { phone, name, userId, functionName: "webhook-woovi-taster" });
+    } catch (e) {
+      await logWhatsappFailure(supabase, {
+        functionName: "webhook-woovi-taster", userId, phone,
+        content: `[WELCOME_TASTER] ${welcome}`, error: (e as Error)?.message,
+      });
+    }
+  }
+  return true;
+}
+
 async function activateAccess(
   supabase: any,
   sub: Record<string, any>,
@@ -742,6 +866,33 @@ Deno.serve(async (req) => {
     const chargePaid = PAID_STATUSES.includes(chargeStatus)
       || PAID_STATUSES.some((s) => event.toUpperCase().includes(s));
     const chargeId = charge.correlationID || charge.globalID || charge.identifier;
+
+    // Cobrança avulsa do encontro de R$ 6,90: caminho próprio, sem mandato.
+    if (chargePaid && chargeId && isTasterCorrelationId(chargeId)) {
+      const key = `charge:${chargeId}:taster`;
+      if (await claimEvent(supabase, key, "charge", body)) {
+        try {
+          const confirmed = await confirmChargePaid(String(chargeId));
+          if (confirmed !== null && !PAID_STATUSES.includes(confirmed.toUpperCase())) {
+            throw new Error(`Woovi não confirma pagamento do taster ${chargeId} (status ${confirmed})`);
+          }
+          const ok = await activateTaster(supabase, {
+            correlationId: String(chargeId),
+            valueCents: Number(charge.value ?? 690),
+            paidAt: charge.paidAt || new Date().toISOString(),
+            body,
+          });
+          if (!ok) throw new Error(`falha ativando taster ${chargeId}`);
+          await finishEvent(supabase, key);
+        } catch (e) {
+          await failEvent(supabase, key, (e as Error)?.message || "erro no taster");
+          throw e;
+        }
+      }
+      return new Response(JSON.stringify({ ok: true, taster: String(chargeId) }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (chargePaid && chargeId) {
       const key = `charge:${chargeId}:paid`;

@@ -5044,6 +5044,72 @@ serve(async (req) => {
       planConfig = { ...planConfig, sessions: 0 };
     }
 
+    // ------------------------------------------------------------------
+    // TASTER (encontro avulso de R$ 6,90): UM encontro guiado de 45 min,
+    // 48h pra fazer, sem conversa casual fora dele. A parede é determinística
+    // aqui no backend — a Aura nunca precisa negociar acesso no prompt.
+    // ------------------------------------------------------------------
+    const isTasterTier = planTier === 'taster' || String(profile?.status || '').toLowerCase() === 'taster';
+    if (isTasterTier) {
+      planConfig = { ...planConfig, sessions: 1 };
+    }
+    if (isTasterTier && profile && message) {
+      const nowMs = Date.now();
+      const expMs = profile.taster_expires_at ? new Date(profile.taster_expires_at).getTime() : 0;
+
+      const { data: tasterSessions } = await supabase
+        .from('sessions')
+        .select('id, status, scheduled_at, completed_at')
+        .eq('user_id', profile.user_id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      const list = tasterSessions || [];
+      const inProgress = list.some((x: any) => x.status === 'in_progress');
+      const doneOne = list.some((x: any) => x.status === 'completed');
+      const scheduled = list.some((x: any) => x.status === 'scheduled');
+      // Janela de 15 min antes do horário marcado: a pessoa pode confirmar/remarcar.
+      const nearScheduled = list.some((x: any) =>
+        x.status === 'scheduled' && x.scheduled_at &&
+        new Date(x.scheduled_at).getTime() - nowMs < 15 * 60 * 1000);
+
+      let wall: string | null = null;
+      if (doneOne && !inProgress) {
+        wall =
+          'Nosso encontro já aconteceu — e o que você trouxe ali fica guardado. ' +
+          'Se quiser continuar comigo com encontros e acompanhamento contínuo, escolhe um plano por aqui: ' +
+          'https://olaaura.com.br/meu-espaco';
+      } else if (expMs && nowMs > expMs && !inProgress) {
+        wall =
+          'O prazo de 48h do seu encontro passou. Se ainda quiser fazer, é rápido: ' +
+          'escolhe um plano aqui e a gente marca na hora — https://olaaura.com.br/meu-espaco';
+      } else if (scheduled && !inProgress && !nearScheduled) {
+        wall =
+          'Seu encontro já está marcado — a gente conversa com calma nele. ' +
+          'Se precisar mudar o horário, me diz aqui só o novo dia e hora.';
+      }
+
+      if (wall) {
+        try {
+          let instanceConfig = undefined;
+          try { instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id); } catch (_) {}
+          if (phone) await sendMessage(cleanPhoneNumber(phone), wall, instanceConfig);
+          await supabase.from('messages').insert({
+            user_id: profile.user_id, role: 'assistant', content: wall,
+          });
+        } catch (e) {
+          console.error('❌ [TASTER] Falha ao enviar parede:', e);
+        }
+        await supabase
+          .from('aura_response_state')
+          .update({ is_responding: false, pending_content: null, pending_context: null })
+          .eq('user_id', profile.user_id);
+        console.log('🚧 [TASTER] Parede aplicada — LLM não chamado');
+        return new Response(JSON.stringify({ tasterWall: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     console.log('📊 Plan mapping:', { rawPlan, normalizedPlan: userPlan, planTier: planTier || null });
 
     // Atualizar contador de mensagens diárias

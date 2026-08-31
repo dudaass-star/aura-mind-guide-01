@@ -17,7 +17,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
-import { classifyPixButton, handlePixButton } from "./pix-buttons.ts";
+import { classifyPixButton, handlePixButton, classifyTasterIntent, handleTasterAccept, tasterOfferAlreadySent } from "./pix-buttons.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -441,6 +441,52 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 6c. Encontro avulso de R$ 6,90: elegibilidade SEMPRE do backend.
+    // O LLM nunca decide se pode oferecer, e nunca gera código.
+    let tasterEligible = false;
+    try {
+      const { data: tEl } = await supabase.functions.invoke("criar-pix-taster", {
+        body: { phone, email: checkout?.email ?? null, dryRun: true },
+      });
+      tasterEligible = tEl?.eligible === true;
+    } catch (e) {
+      console.warn("[recovery-agent] dryRun taster falhou:", (e as Error)?.message);
+    }
+
+    // Aceite: clique do template (Porta B) ou "quero/bora" depois de a oferta ter saído.
+    const tasterIntent = classifyTasterIntent(text);
+    if (!customer && tasterEligible && tasterIntent) {
+      const okToGenerate = tasterIntent === "button" || await tasterOfferAlreadySent(supabase, phone);
+      if (okToGenerate) {
+        const res = await handleTasterAccept(
+          supabase, phone, checkout,
+          tasterIntent === "button" ? "porta_b" : "porta_a",
+        );
+        if (res.handled && res.body) {
+          const sendT = await sendTwilioFreeText(phone, res.body);
+          const nowT = new Date().toISOString();
+          await supabase.from("recovery_messages").insert({
+            phone, direction: "out", body: res.body, message_sid: sendT.sid || null, sent_by_admin: false,
+            metadata: { bot: true, ...(res.metadata || {}) },
+          });
+          await supabase.from("recovery_conversations").upsert({
+            phone,
+            last_outbound_at: nowT,
+            last_bot_reply_at: nowT,
+            last_message_preview: res.body.slice(0, 200),
+            auto_reply_count: replyCount + 1,
+            pending_reply_at: null,
+            pending_inbound: null,
+            updated_at: nowT,
+          }, { onConflict: "phone" });
+          console.log(`[recovery-agent] taster=${tasterIntent} resolution=${res.metadata?.resolution} sent=${sendT.ok}`);
+          return new Response(JSON.stringify({ ok: sendT.ok, taster: tasterIntent, resolution: res.metadata?.resolution }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
     const kbItems = await loadKb(supabase, text);
 
     // 8. Monta prompt
@@ -471,7 +517,7 @@ Se ele perguntar O QUE a Aura é ou comparar com algo ("é terapia?", "é um rob
 A última linha antes do link é convite, não ressalva: uma cena ou UMA pergunta concreta de fechamento ("quer marcar o primeiro encontro pra hoje à noite?").
 Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
 Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
-Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP], [OFERECER_TASTER] ou nenhuma.`;
 
 
     const shortAckInstruction = shortAck ? `
@@ -488,6 +534,14 @@ ATENÇÃO — VEIO SÓ UM ANEXO, SEM TEXTO: trate como "paguei / mandei o compro
 CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já decidiu, travou no último passo (dúvida de última hora, erro do banco ou insegurança). NÃO recomece a venda do zero e não explique tudo de novo. Trate a dúvida específica dela de frente, em duas ou três frases, e feche com o próximo passo concreto ("te mando o código novo agora?" / "quer marcar o primeiro encontro pra hoje à noite?"). Se ela sinalizar erro ou código expirado, diga que você gera um novo na hora — você realmente gera.
 ` : "";
 
+
+    // Carta na manga: encontro guiado avulso de R$ 6,90, PIX comum, sem autorizar
+    // débito automático. Só existe pra quem travou exatamente nessa objeção —
+    // e só quando o backend já disse que a pessoa é elegível.
+    const tasterInstruction = (!customer && tasterEligible) ? `
+CARTA NA MANGA (use SÓ se a trava for autorização de cobrança automática, medo de recorrência, "não quero deixar autorizado", "quero testar antes" ou preço): existe um encontro guiado de 45 minutos AVULSO por R$ 6,90, num PIX comum de copia e cola, SEM autorizar nada automático e SEM virar assinatura. É um encontro só, com 48h pra fazer, e depois a pessoa decide com calma se escolhe um plano.
+Regras: ofereça no máximo UMA vez; descreva em cena ("um encontro de 45 minutos, marcado pra hoje à noite se você quiser"); NUNCA gere ou invente código PIX — quem gera é o sistema; NÃO ofereça se a trava for outra (dúvida técnica, erro do banco, comparação com terapia). Se for oferecer, termine com [OFERECER_TASTER] em vez de [ENVIAR_LINK] e feche perguntando se quer que você mande o código de R$ 6,90.
+` : "";
 
     const contextBlock = `${supportBlock}
 BASE DE CONHECIMENTO:
@@ -511,7 +565,7 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}
+${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}
 ${modeInstructions}`;
 
 
@@ -550,10 +604,16 @@ ${modeInstructions}`;
     const sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
     const stop = /\[STOP\]/i.test(raw);
-    let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP)\]/gi, "").trim();
+    const offerTaster = !customer && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
+    let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP|OFERECER_TASTER)\]/gi, "").trim();
     if (customer) body = body.replace(new RegExp(CHECKOUT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "").trim();
 
-    if (sendLink && !body.includes(CHECKOUT_URL)) {
+    if (sendLink && offerTaster) {
+      // Oferta de encontro avulso e link de plano na mesma mensagem = ruído. O
+      // encontro é justamente pra quem NÃO quer autorizar cobrança agora.
+      console.log("[recovery-agent] taster ofertado: link de checkout suprimido");
+    }
+    if (sendLink && !offerTaster && !body.includes(CHECKOUT_URL)) {
       body = `${body}\n\n${CHECKOUT_URL}`;
     }
     if (escalate && !body.toLowerCase().includes(SUPPORT_EMAIL)) {
@@ -577,7 +637,7 @@ ${modeInstructions}`;
 
     await supabase.from("recovery_messages").insert({
       phone, direction: "out", body, message_sid: send.sid || null, sent_by_admin: false,
-      metadata: { bot: true, kb_used: kbIds, tags: { sendLink, escalate, stop } },
+      metadata: { bot: true, kb_used: kbIds, tags: { sendLink, escalate, stop, offerTaster }, ...(offerTaster ? { taster_offered: true } : {}) },
     });
 
     const newCount = replyCount + 1;
