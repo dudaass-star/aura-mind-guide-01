@@ -16,6 +16,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { normalizeBrazilianPhone, getPhoneVariations } from "../_shared/zapi-client.ts";
 import { sendRecoveryTemplate } from "../_shared/twilio-recovery-client.ts";
 import { loadWooviCommitmentSets, hasLiveWooviCommitment } from "../_shared/woovi-recovery-guard.ts";
+import { checkTasterEligibility, isTasterEnabled } from "../_shared/taster.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,6 +120,24 @@ const COPY_STAGE_DEFS: Omit<StageConfig, "contentSid">[] = [
     ageColumn: "pix_copied_at",
     track: "copiou",
   },
+  {
+    // Porta B do encontro avulso de R$ 6,90: quem copiou o código, recebeu as
+    // duas mensagens do trilho e NÃO respondeu nada. Última carta, ~24h depois
+    // do m2, e só para quem o backend considera elegível.
+    stage: 5,
+    label: "copiou_taster",
+    // 48h depois do checkout, e depois do genérico de 24h ter saído. Ancorado em
+    // `created_at` e no estágio genérico de propósito: o rastro `pix_copied_at`
+    // só existe em build publicado com a marcação de cópia, e a Porta B não pode
+    // depender disso pra existir.
+    minAgeMinutes: 48 * 60,
+    sentColumn: "wa_copiou_taster_sent_at",
+    prevSentColumn: "whatsapp_recovery_24h_sent_at",
+    utmCampaign: "wa_copiou_taster",
+    respectsQuietHours: true,
+    ageColumn: "created_at",
+    track: "copiou",
+  },
 ];
 
 async function loadCopyStages(supabase: any): Promise<StageConfig[]> {
@@ -128,13 +147,17 @@ async function loadCopyStages(supabase: any): Promise<StageConfig[]> {
       .select("value")
       .eq("key", "wa_copiou_templates")
       .maybeSingle();
-    const v = (data?.value ?? null) as { m1?: string; m2?: string } | null;
+    const v = (data?.value ?? null) as { m1?: string; m2?: string; m3?: string } | null;
     const isSid = (s: unknown) => typeof s === "string" && /^HX[0-9a-f]{32}$/i.test(s);
     if (!v || !isSid(v.m1)) return [];
     const stages: StageConfig[] = [{ ...COPY_STAGE_DEFS[0], contentSid: v.m1! }];
     // 2º contato só entra se tiver template próprio aprovado (fora da janela de 24h
     // não existe texto livre).
     if (isSid(v.m2)) stages.push({ ...COPY_STAGE_DEFS[1], contentSid: v.m2! });
+    // m3 (encontro avulso de R$ 6,90) exige template aprovado E kill switch ligado.
+    if (isSid(v.m3) && isSid(v.m2) && await isTasterEnabled(supabase)) {
+      stages.push({ ...COPY_STAGE_DEFS[2], contentSid: v.m3! });
+    }
     return stages;
   } catch {
     return [];
@@ -972,16 +995,27 @@ async function processCopyStage(
     return { sent: 0, failed: 0, skipped: 0 };
   }
 
+  const isTasterStage = cfg.label === "copiou_taster";
+
   let query = supabase
     .from("checkout_sessions")
-    .select("id, phone, name, plan, email, payment_method, whatsapp_recovery_15min_sent_at")
+    .select("id, phone, name, plan, email, payment_method, pix_copied_at, whatsapp_recovery_15min_sent_at")
     .eq("status", "created")
     .not("phone", "is", null)
-    .not("pix_copied_at", "is", null)
     .gte("created_at", WHATSAPP_RECOVERY_CUTOFF)
-    .lt("pix_copied_at", copiedBefore)
     .is(cfg.sentColumn, null)
     .limit(50);
+
+  if (isTasterStage) {
+    // Porta B: intenção de PIX (gerou QR) basta — a marcação de cópia é bônus.
+    query = query
+      .in("payment_method", ["pix", "pix_auto", "pix_automatic"])
+      .lt("created_at", copiedBefore);
+  } else {
+    query = query
+      .not("pix_copied_at", "is", null)
+      .lt("pix_copied_at", copiedBefore);
+  }
 
   if (cfg.prevSentColumn) {
     query = query.not(cfg.prevSentColumn, "is", null);
@@ -1035,6 +1069,27 @@ async function processCopyStage(
     if (!reason) {
       const fails = await stageFailureCount(supabase, cfg, { sessionId: session.id });
       if (fails >= MAX_STAGE_FAILURES) reason = `max_failures_${fails}`;
+    }
+
+    // Porta B: só silenciosos e só elegíveis. Quem já respondeu recebe a oferta
+    // dentro da conversa (Porta A), nunca por template.
+    if (!reason && cfg.label === "copiou_taster") {
+      const { data: convRow } = await supabase
+        .from("recovery_conversations")
+        .select("last_inbound_at")
+        .in("phone", phoneVars)
+        .not("last_inbound_at", "is", null)
+        .limit(1)
+        .maybeSingle();
+      if (convRow) reason = "lead_respondeu_usa_porta_a";
+      if (!reason) {
+        const elig = await checkTasterEligibility(supabase, {
+          phone: session.phone,
+          email: session.email,
+          checkoutSessionId: session.id,
+        });
+        if (!elig.eligible) reason = `taster_${elig.reason}`;
+      }
     }
 
     if (dryRun) {

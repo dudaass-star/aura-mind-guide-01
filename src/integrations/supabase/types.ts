@@ -594,6 +594,7 @@ export type Database = {
           stripe_session_id: string | null
           wa_copiou_20min_sent_at: string | null
           wa_copiou_2h_sent_at: string | null
+          wa_copiou_taster_sent_at: string | null
           whatsapp_recovery_15min_sent_at: string | null
           whatsapp_recovery_24h_sent_at: string | null
           whatsapp_recovery_last_error: string | null
@@ -621,6 +622,7 @@ export type Database = {
           stripe_session_id?: string | null
           wa_copiou_20min_sent_at?: string | null
           wa_copiou_2h_sent_at?: string | null
+          wa_copiou_taster_sent_at?: string | null
           whatsapp_recovery_15min_sent_at?: string | null
           whatsapp_recovery_24h_sent_at?: string | null
           whatsapp_recovery_last_error?: string | null
@@ -648,6 +650,7 @@ export type Database = {
           stripe_session_id?: string | null
           wa_copiou_20min_sent_at?: string | null
           wa_copiou_2h_sent_at?: string | null
+          wa_copiou_taster_sent_at?: string | null
           whatsapp_recovery_15min_sent_at?: string | null
           whatsapp_recovery_24h_sent_at?: string | null
           whatsapp_recovery_last_error?: string | null
@@ -1912,6 +1915,12 @@ export type Database = {
           sessions_reset_date: string | null
           sessions_used_this_month: number | null
           status: string | null
+          taster_closed_at: string | null
+          taster_expires_at: string | null
+          taster_offered_at: string | null
+          taster_paid_at: string | null
+          taster_session_id: string | null
+          taster_source: string | null
           therapy_experience: string | null
           tier_limit_notified_month: string | null
           trial_aha_at_count: number | null
@@ -1993,6 +2002,12 @@ export type Database = {
           sessions_reset_date?: string | null
           sessions_used_this_month?: number | null
           status?: string | null
+          taster_closed_at?: string | null
+          taster_expires_at?: string | null
+          taster_offered_at?: string | null
+          taster_paid_at?: string | null
+          taster_session_id?: string | null
+          taster_source?: string | null
           therapy_experience?: string | null
           tier_limit_notified_month?: string | null
           trial_aha_at_count?: number | null
@@ -2074,6 +2089,12 @@ export type Database = {
           sessions_reset_date?: string | null
           sessions_used_this_month?: number | null
           status?: string | null
+          taster_closed_at?: string | null
+          taster_expires_at?: string | null
+          taster_offered_at?: string | null
+          taster_paid_at?: string | null
+          taster_session_id?: string | null
+          taster_source?: string | null
           therapy_experience?: string | null
           tier_limit_notified_month?: string | null
           trial_aha_at_count?: number | null
@@ -2531,6 +2552,7 @@ export type Database = {
           focus_topic: string | null
           had_dated_bridge: boolean | null
           id: string
+          is_taster: boolean
           key_insights: Json | null
           last_user_emotional_state: string | null
           post_session_sent: boolean | null
@@ -2567,6 +2589,7 @@ export type Database = {
           focus_topic?: string | null
           had_dated_bridge?: boolean | null
           id?: string
+          is_taster?: boolean
           key_insights?: Json | null
           last_user_emotional_state?: string | null
           post_session_sent?: boolean | null
@@ -2603,6 +2626,7 @@ export type Database = {
           focus_topic?: string | null
           had_dated_bridge?: boolean | null
           id?: string
+          is_taster?: boolean
           key_insights?: Json | null
           last_user_emotional_state?: string | null
           post_session_sent?: boolean | null
@@ -3073,6 +3097,93 @@ export type Database = {
           key?: string
           updated_at?: string | null
           value?: Json
+        }
+        Relationships: []
+      }
+      taster_offers: {
+        Row: {
+          accepted_at: string | null
+          billing_period: string | null
+          charge_correlation_id: string | null
+          charge_created_at: string | null
+          checkout_session_id: string | null
+          converted_plan: string | null
+          converted_subscription_at: string | null
+          created_at: string
+          email: string | null
+          expired_at: string | null
+          expires_at: string | null
+          id: string
+          metadata: Json
+          name: string | null
+          offered_at: string
+          paid_at: string | null
+          paid_value_cents: number | null
+          phone_normalized: string
+          phone_raw: string | null
+          plan: string | null
+          profile_user_id: string | null
+          session_completed_at: string | null
+          session_id: string | null
+          source: string
+          updated_at: string
+          value_cents: number
+        }
+        Insert: {
+          accepted_at?: string | null
+          billing_period?: string | null
+          charge_correlation_id?: string | null
+          charge_created_at?: string | null
+          checkout_session_id?: string | null
+          converted_plan?: string | null
+          converted_subscription_at?: string | null
+          created_at?: string
+          email?: string | null
+          expired_at?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json
+          name?: string | null
+          offered_at?: string
+          paid_at?: string | null
+          paid_value_cents?: number | null
+          phone_normalized: string
+          phone_raw?: string | null
+          plan?: string | null
+          profile_user_id?: string | null
+          session_completed_at?: string | null
+          session_id?: string | null
+          source?: string
+          updated_at?: string
+          value_cents?: number
+        }
+        Update: {
+          accepted_at?: string | null
+          billing_period?: string | null
+          charge_correlation_id?: string | null
+          charge_created_at?: string | null
+          checkout_session_id?: string | null
+          converted_plan?: string | null
+          converted_subscription_at?: string | null
+          created_at?: string
+          email?: string | null
+          expired_at?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json
+          name?: string | null
+          offered_at?: string
+          paid_at?: string | null
+          paid_value_cents?: number | null
+          phone_normalized?: string
+          phone_raw?: string | null
+          plan?: string | null
+          profile_user_id?: string | null
+          session_completed_at?: string | null
+          session_id?: string | null
+          source?: string
+          updated_at?: string
+          value_cents?: number
         }
         Relationships: []
       }

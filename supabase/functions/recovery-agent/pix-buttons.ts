@@ -219,3 +219,107 @@ export async function handlePixButton(
     };
   }
 }
+
+// ============================================================
+// Encontro avulso de R$ 6,90 (taster) — resolução determinística
+// ------------------------------------------------------------
+// Chegou pelo botão do template (Porta B) ou como aceite curto depois de a
+// oferta ter saído em texto livre (Porta A). Em nenhum dos casos o LLM decide:
+// a elegibilidade é do backend e o código é gerado aqui.
+// ============================================================
+
+const RE_TASTER_BUTTON = /(quero experimentar|experimentar (a|uma) sess[aã]o|quero (a )?sess[aã]o avulsa|quero o encontro)/i;
+const RE_SHORT_ACCEPT = /^\s*(sim|quero|bora|vamos|manda|fechado|topo|pode mandar|manda o c[oó]digo|quero sim)\s*[.!]?\s*$/i;
+
+/**
+ * `button` = clique/pedido explícito. `short_accept` = "quero/bora" solto, que
+ * só vale se a oferta já tiver saído nas mensagens anteriores.
+ */
+export function classifyTasterIntent(text: string): "button" | "short_accept" | null {
+  const t = (text || "").trim();
+  if (!t) return null;
+  if (RE_TASTER_BUTTON.test(t)) return "button";
+  if (RE_SHORT_ACCEPT.test(t)) return "short_accept";
+  return null;
+}
+
+/** A oferta do encontro avulso já saiu para este telefone? */
+export async function tasterOfferAlreadySent(supabase: Supa, phone: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("recovery_messages")
+    .select("metadata, body")
+    .eq("phone", normalizeBrazilianPhone(phone))
+    .eq("direction", "out")
+    .order("created_at", { ascending: false })
+    .limit(12);
+  for (const m of data || []) {
+    // deno-lint-ignore no-explicit-any
+    const meta = (m as any)?.metadata || {};
+    if (meta.taster_offered || meta.taster === true || meta.template === "copiou_taster") return true;
+    if (typeof (m as any)?.body === "string" && /6,90/.test((m as any).body) && /45 minutos/i.test((m as any).body)) return true;
+  }
+  return false;
+}
+
+/**
+ * Gera o código de R$ 6,90 na hora. Toda trava (cliente ativo, ex-assinante,
+ * cooldown, rastro do trilho, kill switch) vive em `criar-pix-taster`.
+ */
+export async function handleTasterAccept(
+  supabase: Supa,
+  phone: string,
+  checkout: { plan?: string | null; billing?: string | null; name?: string | null; email?: string | null } | null,
+  source: string,
+): Promise<PixButtonResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke("criar-pix-taster", {
+      body: {
+        phone,
+        name: checkout?.name ?? null,
+        email: checkout?.email ?? null,
+        source,
+      },
+    });
+    if (error) throw new Error(error.message);
+
+    if (!data?.ok || !data?.copyPaste) {
+      const reason = String(data?.reason || "falha");
+      // Não elegível: nunca inventar oferta. Segue conversa normal.
+      if (["cliente_ativo", "cliente_ativo_email", "ex_assinante", "ex_assinante_email",
+           "taster_ja_usado", "taster_ja_pago", "pagou_asaas", "pagou_woovi",
+           "sem_rastro_trilho_pix", "checkout_concluido", "desligado_por_config"].includes(reason)) {
+        console.log(`[recovery-agent] taster não elegível: ${reason}`);
+        return { handled: false };
+      }
+      return {
+        handled: true,
+        body: "O banco recusou a geração agora — costuma ser instabilidade e passa em minutos. Me responde aqui em uns 10 minutos que eu gero de novo pra você.",
+        metadata: { taster: true, resolution: `falha_${reason}` },
+      };
+    }
+
+    const code = String(data.copyPaste);
+    return {
+      handled: true,
+      body:
+        "Fechado. Esse é o código de R$ 6,90 do encontro guiado de 45 minutos — PIX comum, copia e cola normal, sem autorizar nada automático:\n\n" +
+        `${code}\n\n` +
+        "Assim que cair, a Aura te chama no WhatsApp oficial dela e vocês marcam o horário. Você tem 48h pra fazer o encontro — depois, se fizer sentido, você escolhe o plano com calma.",
+      metadata: {
+        taster: true,
+        taster_offered: true,
+        resolution: "taster_code_sent",
+        correlation_id: data.correlationId ?? null,
+        pix_code_sent: true,
+        pix_code: code,
+      },
+    };
+  } catch (e) {
+    console.error("[recovery-agent] falha no taster:", (e as Error)?.message);
+    return {
+      handled: true,
+      body: "Deu um erro aqui na hora de gerar o código. Me responde em alguns minutos que eu mando pra você.",
+      metadata: { taster: true, resolution: "exception" },
+    };
+  }
+}
