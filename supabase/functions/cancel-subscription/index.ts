@@ -968,7 +968,6 @@ serve(async (req) => {
       await logRetention('pause', 'applied', { days });
 
       // Update profile status
-      // Update profile status
       await updateProfileState({ status: "paused" });
 
 
