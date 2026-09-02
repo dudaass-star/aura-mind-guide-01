@@ -1221,14 +1221,11 @@ serve(async (req) => {
         }
         await logRetention("cancel", "applied", { reason, immediate: true });
 
-        await supabase
-          .from("profiles")
-          .update({
-            status: "canceled",
-            canceled_at: new Date().toISOString(),
-            plan_expires_at: new Date().toISOString(),
-          })
-          .eq("phone", phoneClean);
+        await updateProfileState({
+          status: "canceled",
+          canceled_at: new Date().toISOString(),
+          plan_expires_at: new Date().toISOString(),
+        });
 
         return jsonResponse({
           success: true,
