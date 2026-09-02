@@ -968,14 +968,9 @@ serve(async (req) => {
       await logRetention('pause', 'applied', { days });
 
       // Update profile status
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ status: "paused" })
-        .eq("phone", phoneClean);
+      // Update profile status
+      await updateProfileState({ status: "paused" });
 
-      if (updateError) {
-        logStep("Warning: Failed to update profile status", { error: updateError.message });
-      }
 
       const resumesAtDate = new Date(resumesAt * 1000);
 
