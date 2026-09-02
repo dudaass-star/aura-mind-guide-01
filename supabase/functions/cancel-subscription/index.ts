@@ -170,6 +170,46 @@ serve(async (req) => {
       if (data && data.length > 0) profile = data[0] as any;
     }
 
+    // Grava estado no perfil pelo user_id (ou por TODAS as variações de telefone).
+    // Antes era `.eq("phone", phoneClean)`: quando o telefone digitado não era
+    // idêntico ao gravado (com/sem 55, com/sem o 9), o UPDATE casava 0 linhas e o
+    // cancelamento desaparecia do banco em silêncio — perfil seguia ativo.
+    const updateProfileState = async (patch: Record<string, unknown>) => {
+      const base = supabase.from("profiles").update(patch);
+      const { error } = profile?.user_id
+        ? await base.eq("user_id", profile.user_id)
+        : await base.in("phone", getPhoneVariations(phoneClean));
+      if (error) {
+        logStep("Warning: falha ao atualizar perfil", { error: error.message, patch });
+      } else {
+        logStep("Perfil atualizado", { patch });
+      }
+      return error;
+    };
+
+    // Confirma no provedor que o cancelamento realmente pegou antes de gravar o
+    // perfil como cancelado. Sem isso, um cancelamento que falhou silenciosamente
+    // deixa o cliente sendo cobrado com o ticket "resolvido".
+    const assertStripeCanceled = async (subscriptionId: string, atPeriodEnd: boolean) => {
+      const fresh = await stripe.subscriptions.retrieve(subscriptionId);
+      const ok = atPeriodEnd
+        ? fresh.cancel_at_period_end === true || fresh.status === "canceled"
+        : fresh.status === "canceled";
+      logStep("Verificação pós-cancelamento", {
+        subscriptionId,
+        status: fresh.status,
+        cancelAtPeriodEnd: fresh.cancel_at_period_end,
+        ok,
+      });
+      if (!ok) {
+        throw new Error(
+          "O cancelamento não foi confirmado pelo provedor de pagamento. Nada foi alterado — tente novamente.",
+        );
+      }
+    };
+
+
+
     // Oferta prometida no WhatsApp (link /cancelar?t=<token>&offer=<tier>).
     const offeredTier: "discount_30" | "lite" | "base" | null =
       offer === "discount_30" || offer === "lite" || offer === "base" ? offer : null;
