@@ -1206,6 +1206,7 @@ serve(async (req) => {
         }
 
         await stripe.subscriptions.cancel(subscription.id);
+        await assertStripeCanceled(subscription.id, false);
 
         if (reason) {
           await supabase.from("cancellation_feedback").insert({
