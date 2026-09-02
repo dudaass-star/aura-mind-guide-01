@@ -255,8 +255,10 @@ serve(async (req) => {
         case "cancel_subscription": {
           const subId = params.subscription_id;
           if (!subId) throw new Error("subscription_id required");
-          const sub = await stripe.subscriptions.cancel(subId);
-          stripeResponse = { id: sub.id, status: sub.status };
+          // Idempotente: se já está cancelada no provedor, trata como sucesso.
+          const current = await stripe.subscriptions.retrieve(subId);
+          const sub = current.status === "canceled" ? current : await stripe.subscriptions.cancel(subId);
+          stripeResponse = { id: sub.id, status: sub.status, already_canceled: current.status === "canceled" };
           if (ticket.profile_user_id) {
             await supabase.from("profiles").update({ status: "canceled" }).eq("user_id", ticket.profile_user_id);
           }
@@ -288,6 +290,23 @@ serve(async (req) => {
           const invoice = await stripe.invoices.retrieve(invoiceId);
           const piId = typeof invoice.payment_intent === "string" ? invoice.payment_intent : invoice.payment_intent?.id;
           if (!piId) throw new Error("No payment_intent on invoice");
+
+          // Idempotente: se a fatura já foi estornada (total ou no valor pedido), não tenta de novo.
+          const existing = await stripe.refunds.list({ payment_intent: piId, limit: 100 });
+          const refundedSoFar = existing.data
+            .filter((r) => r.status !== "failed" && r.status !== "canceled")
+            .reduce((sum, r) => sum + (r.amount || 0), 0);
+          const wanted = params.amount_cents ? Number(params.amount_cents) : (invoice.amount_paid || 0);
+          if (refundedSoFar > 0 && refundedSoFar >= wanted) {
+            stripeResponse = {
+              already_refunded: true,
+              refunded_amount: refundedSoFar,
+              refund_id: existing.data[0]?.id ?? null,
+            };
+            success = true;
+            break;
+          }
+
           const refund = await stripe.refunds.create({
             payment_intent: piId,
             ...(params.amount_cents ? { amount: Number(params.amount_cents) } : {}),
@@ -296,6 +315,7 @@ serve(async (req) => {
           success = true;
           break;
         }
+
 
         case "retry_payment": {
           const invoiceId = params.invoice_id;
