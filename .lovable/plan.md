@@ -29,12 +29,8 @@ Cliente: Julianne Menezes Veríssimo de França — julianne.jmvf@gmail.com / 55
 - **Verificação pós-cancelamento**: depois de cancelar, reconsultar a assinatura no provedor e só então gravar o perfil como cancelado; se a consulta não confirmar, o cancelamento não é considerado feito.
 - **Perfil cancelado corta mensagens proativas**: garantir que nenhuma jornada, resumo mensal ou lembrete saia para quem pediu cancelamento.
 
-### 4. Varredura
-Procurar todos os casos com o mesmo padrão: perfil ativo (ou assinatura ativa no provedor) com pedido de cancelamento/estorno registrado em ticket — para saber se existem outros clientes sendo cobrados depois de cancelar.
-
 ## Detalhes técnicos
 - Assinatura: `sub_1TLFaFQU15XnZ7VvgV80yvlg` (cliente `cus_UJtKNQEzqBxWVJ`), preço `price_1SuJYdQU15XnZ7VvCqhIQbDR` (R$ 29,90/mês).
-- Cobranças a estornar: `ch_3TjuwxQU15XnZ7Vv3NkOH1YU` (jun), `ch_3TunEaQU15XnZ7Vv2Ux4axzs` (jul), `ch_3U621NQU15XnZ7Vv1SZkiCLJ` (ago). Já estornada: `ch_3TYgAsQU15XnZ7Vv4jyoQlLt` (mai).
+- Cobrança a estornar: `ch_3U621NQU15XnZ7Vv1SZkiCLJ` (19/08, R$ 29,90). Já estornada anteriormente: `ch_3TYgAsQU15XnZ7Vv4jyoQlLt` (mai).
 - Perfil `4bc5e432-3e56-4bdd-b0c9-31b1e09c483c`: atualizar `status`/`canceled_at` via migração ou pelo painel admin, que já chama `cancel-subscription`.
 - Verificação pós-cancelamento e bloqueio de proativos em `cancel-subscription` + workers de jornada/resumo.
-- Nova varredura de assinaturas ativas com ticket de cancelamento, exposta no painel administrativo.
