@@ -16,9 +16,9 @@ Cliente: Julianne Menezes Veríssimo de França — julianne.jmvf@gmail.com / 55
 
 ### 1. Resolver o caso dela (hoje)
 - Cancelar a assinatura de cartão imediatamente (cancelamento definitivo, não no fim do ciclo).
-- Estornar as três cobranças indevidas: junho, julho e agosto — **R$ 89,70**.
+- Estornar **apenas o último pagamento** (19/08 — R$ 29,90). Junho e julho ficam como estão.
 - Marcar o perfil como cancelado (`status`, `canceled_at`) para parar imediatamente as mensagens proativas da Aura.
-- Fechar o ticket com resposta objetiva: cancelamento efetivado agora, estorno dos três meses solicitado, prazo de até 5 dias úteis conforme o banco.
+- Fechar o ticket com resposta objetiva: cancelamento efetivado agora, estorno da última cobrança solicitado, prazo de até 5 dias úteis conforme o banco.
 
 ### 2. Descobrir por que o cancelamento de maio não saiu
 - Levantar como o cancelamento foi tratado em maio: se houve chamada real ao cancelamento da assinatura, se o retorno foi erro engolido, ou se ninguém executou nada além do estorno.
