@@ -1242,6 +1242,7 @@ serve(async (req) => {
       await stripe.subscriptions.update(subscription.id, {
         cancel_at_period_end: true,
       });
+      await assertStripeCanceled(subscription.id, true);
 
       // Save feedback
       if (reason) {
@@ -1258,20 +1259,12 @@ serve(async (req) => {
       await logRetention('cancel', 'applied', { reason });
 
       // Update profile status in database
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          status: "canceling",
-          // Acesso vale só até o fim do período realmente pago.
-          ...(accessEnd ? { plan_expires_at: accessEnd.toISOString() } : {}),
-        })
-        .eq("phone", phoneClean);
-
-      if (updateError) {
-        logStep("Warning: Failed to update profile status", { error: updateError.message });
-      } else {
-        logStep("Profile status updated to canceling");
-      }
+      await updateProfileState({
+        status: "canceling",
+        canceled_at: new Date().toISOString(),
+        // Acesso vale só até o fim do período realmente pago.
+        ...(accessEnd ? { plan_expires_at: accessEnd.toISOString() } : {}),
+      });
 
       return new Response(
         JSON.stringify({
