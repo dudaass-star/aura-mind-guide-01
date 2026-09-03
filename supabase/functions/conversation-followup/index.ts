@@ -117,7 +117,9 @@ Retorne APENAS o contexto no formato acima, sem explicações.`
             content: conversationText
           }
         ],
-        max_tokens: 150,
+        // Mesmo motivo do follow-up: tokens de raciocínio consomem o orçamento,
+        // e com 150 a extração voltava vazia (contexto perdido silenciosamente).
+        max_tokens: 600,
       }),
     });
     
