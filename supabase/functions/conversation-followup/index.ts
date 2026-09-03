@@ -117,7 +117,9 @@ Retorne APENAS o contexto no formato acima, sem explicações.`
             content: conversationText
           }
         ],
-        max_tokens: 150,
+        // Mesmo motivo do follow-up: tokens de raciocínio consomem o orçamento,
+        // e com 150 a extração voltava vazia (contexto perdido silenciosamente).
+        max_tokens: 600,
       }),
     });
     
@@ -206,18 +208,36 @@ Caso contrário, gere UMA mensagem curta (1-2 frases, máximo 100 caracteres) qu
                 content: 'Gere a mensagem de follow-up:'
               }
             ],
-            max_tokens: 80,
+            // Gemini 2.5 Flash é modelo com raciocínio: os tokens de "pensamento"
+            // consomem este orçamento ANTES do texto visível. Com 80 o modelo
+            // estourava no meio da frase e a Aura mandava fragmento ("Ainda
+            // pensando nesse") pro WhatsApp do usuário. Orçamento folgado + guarda
+            // de truncamento abaixo.
+            max_tokens: 600,
           }),
         });
 
         if (response.ok) {
           const data = await response.json();
+          const finishReason = data.choices?.[0]?.finish_reason;
           const aiMessage = data.choices?.[0]?.message?.content?.trim();
           if (aiMessage && aiMessage.trim().toUpperCase() === 'SKIP') {
             console.log('⚠️ AI decided to SKIP follow-up based on context sensitivity');
             return 'SKIP';
           }
-          if (aiMessage && aiMessage.length <= 200) {
+          // Guarda de truncamento: nunca enviar frase cortada pro usuário.
+          // Um fragmento ("Ainda pensando nesse") chegou a ser entregue e foi a
+          // última coisa que a pessoa viu antes de contestar o pagamento.
+          const truncated =
+            (finishReason && finishReason !== 'stop') ||
+            !aiMessage ||
+            aiMessage.length < 15 ||
+            !/[.!?…💜✨🙂😊)\]"']$/.test(aiMessage);
+          if (aiMessage && truncated) {
+            console.warn(
+              `⚠️ Follow-up descartado por truncamento (finish_reason=${finishReason}, len=${aiMessage.length}): "${aiMessage}" — usando mensagem fixa`,
+            );
+          } else if (aiMessage && aiMessage.length <= 200) {
             console.log('✨ Generated contextual follow-up:', aiMessage);
             return aiMessage;
           }
