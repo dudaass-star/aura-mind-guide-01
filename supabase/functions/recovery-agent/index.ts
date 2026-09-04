@@ -656,12 +656,37 @@ ${modeInstructions}`;
     }
 
     // 9. Parse tags (cliente em modo suporte nunca recebe link de checkout)
-    const sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
+    let sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
     const stop = /\[STOP\]/i.test(raw);
     const offerTaster = (!customer || tasterTestBypass) && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
     let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP|OFERECER_TASTER)\]/gi, "").trim();
     if (customer) body = body.replace(new RegExp(CHECKOUT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "").trim();
+
+    // Trava anti-robô: link não é assinatura de mensagem. Se o link já saiu nas
+    // últimas 24h e o lead NÃO pediu, não manda de novo (nem o modelo escolhe).
+    const askedLink = RE_ASK_LINK.test(text);
+    if (sendLink && !askedLink) {
+      const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { data: recentOut } = await supabase
+        .from("recovery_messages")
+        .select("body")
+        .in("phone", phoneMatchList(phone))
+        .eq("direction", "out")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(15);
+      const alreadySent = (recentOut || []).some((m: any) => typeof m?.body === "string" && m.body.includes("/v2/checkout"));
+      if (alreadySent) {
+        sendLink = false;
+        console.log("[recovery-agent] link suprimido: já enviado nas últimas 24h e lead não pediu");
+      }
+    }
+
+    // O modelo pode ter colado o link no texto sem tag (ou com a tag suprimida).
+    if (!sendLink && !customer && body.includes(CHECKOUT_URL)) {
+      body = body.split(CHECKOUT_URL).join("").replace(/\n{3,}/g, "\n\n").trim();
+    }
 
     if (sendLink && offerTaster) {
       // Oferta de encontro avulso e link de plano na mesma mensagem = ruído. O
@@ -671,6 +696,7 @@ ${modeInstructions}`;
     if (sendLink && !offerTaster && !body.includes(CHECKOUT_URL)) {
       body = `${body}\n\n${CHECKOUT_URL}`;
     }
+
     if (escalate && !body.toLowerCase().includes(SUPPORT_EMAIL)) {
       body = `${body}\n\nSe quiser, manda um email pra ${SUPPORT_EMAIL} que o time responde por aí.`;
     }
