@@ -3123,6 +3123,8 @@ export type Database = {
           phone_raw: string | null
           plan: string | null
           profile_user_id: string | null
+          public_token: string | null
+          qr_image_url: string | null
           session_completed_at: string | null
           session_id: string | null
           source: string
@@ -3151,6 +3153,8 @@ export type Database = {
           phone_raw?: string | null
           plan?: string | null
           profile_user_id?: string | null
+          public_token?: string | null
+          qr_image_url?: string | null
           session_completed_at?: string | null
           session_id?: string | null
           source?: string
@@ -3179,6 +3183,8 @@ export type Database = {
           phone_raw?: string | null
           plan?: string | null
           profile_user_id?: string | null
+          public_token?: string | null
+          qr_image_url?: string | null
           session_completed_at?: string | null
           session_id?: string | null
           source?: string
