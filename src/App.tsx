@@ -125,6 +125,7 @@ const App = () => (
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/pagamento" element={<Pagamento />} />
             <Route path="/reautorizar-pix" element={<ReautorizarPix />} />
+            <Route path="/pix/:token" element={<PixTaster />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
