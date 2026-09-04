@@ -536,7 +536,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    const kbItems = await loadKb(supabase, text);
+    // PIX Automático só entra em cena se o lead abriu o assunto (mensagem atual
+    // ou as 2 últimas trocas) ou se ele já copiou o código.
+    const recentHistoryTxt = historyAsc.slice(-2).map(m => m.body || "").join("\n");
+    const pixContext = !blankDoubt && (
+      pixTopicActive(text, recentHistoryTxt) || !!checkout?.pix_copied_at || pixIntent === "conversational"
+    );
+    const kbItems = await loadKb(supabase, text, pixContext);
+
 
     // 8. Monta prompt
     const planTxt = checkout?.plan ? `${checkout.plan}${checkout.billing ? ` (${checkout.billing})` : ""}` : "não identificado";
