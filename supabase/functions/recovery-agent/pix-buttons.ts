@@ -123,7 +123,7 @@ async function recentCodeSent(supabase: Supa, phone: string): Promise<string | n
   const { data } = await supabase
     .from("recovery_messages")
     .select("body, metadata, created_at")
-    .eq("phone", phone)
+    .in("phone", phoneMatchList(phone))
     .eq("direction", "out")
     .gte("created_at", since)
     .order("created_at", { ascending: false })
