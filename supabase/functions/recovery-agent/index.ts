@@ -27,10 +27,15 @@ const corsHeaders = {
 
 const CHECKOUT_URL = "https://olaaura.com.br/v2/checkout?utm_source=whatsapp&utm_medium=recovery_agent&utm_campaign=auto_reply";
 const SUPPORT_EMAIL = "suporte@olaaura.com.br";
+// `duvida_tecnica` (16 itens, quase todos sobre PIX Automático) SAIU do
+// always-include: quando ela entrava em todo prompt, o agente explicava
+// autorização/8º dia mesmo pra quem falou de outra coisa. Agora entra por
+// relevância (palavra do lead ou contexto de "copiou o código").
 const ALWAYS_CATEGORIES = [
   "preco", "garantia", "como_funciona", "pagamento", "seguranca", "beneficio",
-  "duvida_tecnica", "objecao",
+  "objecao",
 ];
+
 const HISTORY_LIMIT = 12;
 const MAX_KB_ITEMS = 40;
 
