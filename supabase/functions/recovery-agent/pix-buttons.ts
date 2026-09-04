@@ -41,6 +41,25 @@ export function isBlankDoubt(text: string): boolean {
   return RE_DOUBT_BLANK.test(t);
 }
 
+/**
+ * Todas as grafias possíveis do mesmo número (com e sem o nono dígito, com e
+ * sem o 55). O histórico do lead pode estar gravado numa grafia e a busca
+ * chegar na outra — foi exatamente isso que fez um aceite de encontro avulso
+ * cair no LLM e virar link de assinatura.
+ */
+export function phoneMatchList(phone: string): string[] {
+  const digits = (phone || "").replace(/\D/g, "");
+  const local = digits.startsWith("55") && digits.length >= 12 ? digits.slice(2) : digits;
+  const set = new Set<string>([digits, local, ...getPhoneVariations(local)]);
+  const norm = normalizeBrazilianPhone(phone);
+  if (norm) {
+    set.add(norm);
+    // Mesma linha sem o nono dígito (55 + DDD + 8 dígitos).
+    if (norm.length === 13) set.add(norm.slice(0, 4) + norm.slice(5));
+  }
+  return [...set].filter(Boolean);
+}
+
 /** Classifica o texto do clique. `null` = não é clique de botão do trilho. */
 export function classifyPixButton(text: string): PixButtonIntent {
   const t = (text || "").trim();
@@ -50,6 +69,7 @@ export function classifyPixButton(text: string): PixButtonIntent {
   if (RE_DOUBT.test(t)) return "conversational";
   return null;
 }
+
 
 /** Assinatura Woovi mais recente do contato (por telefone ou e-mail). */
 async function findLatestSubscription(
