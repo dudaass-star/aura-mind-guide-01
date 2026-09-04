@@ -2,21 +2,24 @@
 
 Hoje o código PIX vai escrito dentro da mensagem, e o cliente tem que selecionar tudo à mão — é aí que ele copia pedaço errado e o pagamento falha.
 
-O WhatsApp não permite botão de copiar em mensagem escrita na hora (o botão de copiar código da Meta aceita no máximo 15 caracteres, e o PIX tem mais de 100). Então a mensagem passa a levar **um link curto nosso** que abre uma página com a cara da Aura: valor, QR Code e um botão grande **"Copiar código PIX"**.
+O WhatsApp não permite botão de copiar dentro da mensagem escrita na hora (o botão de copiar código da Meta aceita no máximo 15 caracteres, e o PIX tem mais de 100). O que dá pra fazer é o que você pediu: **um botão na mensagem** ("Pagar R$ 6,90") que abre uma página nossa com a cara da Aura, com valor, QR Code e um botão grande **"Copiar código PIX"**.
+
+Esse botão de mensagem exige um modelo próprio criado e **aprovado pela Meta** antes de entrar no ar — pela sua regra, nasce desligado e só liga com o modelo aprovado. Enquanto a aprovação não sai, a mensagem sai com o link escrito (clicável no WhatsApp) e a página é a mesma; quando o modelo for aprovado, vira botão sem mexer em mais nada.
 
 ## Como fica pro lead
 
 ```text
 aceita o encontro de R$ 6,90
    ↓
-mensagem curta: "seu encontro está reservado · abre aqui pra pagar" + link olaaura.com.br/...
+mensagem curta: "seu encontro está reservado"  [ Pagar R$ 6,90 ]  ← botão
    ↓
 página da Aura: R$ 6,90 · QR Code · botão "Copiar código PIX" (vira "Código copiado")
    ↓
 paga → a página avisa "pagamento confirmado" e a Aura chama no WhatsApp oficial
 ```
 
-A mensagem passa a levar **só o link** (sem o código escrito), como você escolheu.
+A mensagem nunca mais leva o código escrito (sem o código no corpo, como você escolheu).
+
 
 ## A página
 
@@ -33,10 +36,12 @@ A mensagem passa a levar **só o link** (sem o código escrito), como você esco
 - **Token público** gerado junto da cobrança em `supabase/functions/_shared/taster.ts` e guardado na linha de `taster_offers` (migração: coluna `public_token` única + índice). Token aleatório, sem expor telefone nem id interno.
 - **Edge function nova** `pix-taster-info` (`verify_jwt = false`): recebe o token, devolve valor, código copia-e-cola, imagem/QR e status de pagamento. Nenhum dado pessoal na resposta. Nada de leitura direta da tabela pelo navegador — RLS de `taster_offers` continua fechada.
 - **Link curto**: gerado via `create-short-link` (domínio `olaaura.com.br` já está na allowlist) apontando pra `/pix/<token>`; se a geração falhar, cai no link completo.
-- **Mensagem**: em `supabase/functions/recovery-agent/pix-buttons.ts`, `handleTasterAccept` para de colar o código no corpo e passa a mandar o link. `metadata` continua guardando `pix_code` e `correlation_id` pro histórico do admin.
-- **Reaproveitamento**: quando a cobrança já existe (idempotência por `correlationID`), reusa o token já gravado — clique repetido devolve o mesmo link.
+- **Botão na mensagem**: novo Content Template Twilio tipo CTA URL (`twilio/call-to-action`) com sufixo dinâmico — base fixa `olaaura.com.br/l/` + `{{1}}` = código curto — e botão "Pagar R$ 6,90". SID gravado em `system_config` (`wa_taster_pix_button`) e em `whatsapp_templates`; sem SID aprovado, o envio cai automaticamente no texto com link.
+- **Mensagem**: em `supabase/functions/recovery-agent/pix-buttons.ts`, `handleTasterAccept` para de colar o código no corpo, gera o link curto e envia via template de botão (com fallback pra texto). `metadata` continua guardando `pix_code` e `correlation_id` pro histórico do admin.
+- **Reaproveitamento**: quando a cobrança já existe (idempotência por `correlationID`), reusa o token e o código curto já gravados — clique repetido devolve o mesmo destino.
 - **Status na página**: consulta o status já gravado pelo `webhook-woovi`, com recarga leve a cada poucos segundos enquanto estiver aberta.
-- Nenhuma mudança em gateway, valores, elegibilidade, travas do taster, régua de recuperação ou templates aprovados.
+- Nenhuma mudança em gateway, valores, elegibilidade, travas do taster, régua de recuperação ou nos templates já aprovados (m1/m2/m3).
+
 
 ## Validação
 
