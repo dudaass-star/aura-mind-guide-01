@@ -13,3 +13,4 @@
 - [Cap não pune engajamento](mem://features/recovery/cap-nao-pune-engajamento) — Cap 30d conta só templates (limite 3), conversa ativa 48h pausa sem fechar estágio, falha de infra não esgota lead, irmãos de telefone só em 6h
 
 
+- [PIX só quando perguntado, link é exceção](mem://features/recovery/pix-so-quando-perguntado-e-link-excecao) — Agente de recuperação para de explicar PIX Automático sem pergunta e só manda o link do checkout sob condição

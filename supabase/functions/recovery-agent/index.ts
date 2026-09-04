@@ -17,7 +17,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
-import { classifyPixButton, handlePixButton, classifyTasterIntent, handleTasterAccept, tasterOfferAlreadySent, isBlankDoubt } from "./pix-buttons.ts";
+import { classifyPixButton, handlePixButton, classifyTasterIntent, handleTasterAccept, tasterOfferAlreadySent, isBlankDoubt, phoneMatchList } from "./pix-buttons.ts";
 import { isTasterTestPhone } from "../_shared/taster.ts";
 
 const corsHeaders = {
@@ -536,7 +536,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    const kbItems = await loadKb(supabase, text);
+    // PIX Automático só entra em cena se o lead abriu o assunto (mensagem atual
+    // ou as 2 últimas trocas) ou se ele já copiou o código.
+    const recentHistoryTxt = historyAsc.slice(-2).map(m => m.body || "").join("\n");
+    const pixContext = !blankDoubt && (
+      pixTopicActive(text, recentHistoryTxt) || !!checkout?.pix_copied_at || pixIntent === "conversational"
+    );
+    const kbItems = await loadKb(supabase, text, pixContext);
+
 
     // 8. Monta prompt
     const planTxt = checkout?.plan ? `${checkout.plan}${checkout.billing ? ` (${checkout.billing})` : ""}` : "não identificado";
@@ -564,15 +571,17 @@ Termine com UMA das tags em linha separada: [ESCALAR_HUMANO] ou nenhuma.`
 Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA cena do NÍVEL A da vitrine — em cena e no presente, como se estivesse acontecendo com ele agora, não como lista de recursos. Nunca abra a mensagem por um item do nível C. Se as cenas A que conversam com a mensagem já estão marcadas como JÁ CITADO, aprofunde uma delas com um detalhe novo em vez de descer pra B ou C. Itens do nível B só entram como reforço de uma cena A (ex: "e dá pra responder por áudio mesmo"); nunca como argumento principal.
 NUNCA SE DIMINUA: não abra a mensagem por negação ("não é...", "não faz...", "não substitui..."), não se posicione como versão menor de terapia, de psicólogo ou de app nenhum, e não use palavra que esvazia ("ferramenta", "assistente", "apoio pra organizar pensamentos", "praticar autoconhecimento", "complementa", "não substitui", "não faz diagnóstico"). Ressalva clínica só se ELE pedir tratamento/diagnóstico/remédio ou sinalizar risco — e nunca como abertura ou fecho.
 Se ele perguntar O QUE a Aura é ou comparar com algo ("é terapia?", "é um robô?", "é tipo app de meditação?"), responda pelo que ela É, em cena, e deixe a diferença aparecer sozinha (disponibilidade e continuidade como vantagem, nunca como limitação). Definição funcional sem cena do NÍVEL A na mesma mensagem é ERRO.
-A última linha antes do link é convite, não ressalva: uma cena ou UMA pergunta concreta de fechamento ("quer marcar o primeiro encontro pra hoje à noite?").
-Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
+Feche com convite, não com ressalva: uma cena ou UMA pergunta concreta ("quer marcar o primeiro encontro pra hoje à noite?", "quer que eu gere o código agora?"). Mensagem NÃO termina em link: link é resposta a pedido, não assinatura.
+NÃO EXPLIQUE PIX AUTOMÁTICO, AUTORIZAÇÃO NO BANCO NEM "8º DIA" SE ELE NÃO PERGUNTOU — nem de bônus no fim. Se ele falou de dinheiro apertado, de preço ou de qualquer outro assunto, responda AQUELE assunto: reconheça em poucas palavras, diga em UMA frase o valor que sai hoje e siga pelo que ele ganha. Aula de cobrança automática sem pergunta é o que te faz parecer robô.
+LINK É EXCEÇÃO: só emita [ENVIAR_LINK] se ele pediu o link, disse que vai pagar/quer continuar, ou se a dúvida que travava foi resolvida agora E o link ainda não foi enviado nesta conversa. Nos outros casos, sem tag.
+
 NUNCA ADIVINHE A DÚVIDA: se ele não disse QUAL é a dúvida (ex: "ficou uma dúvida"), não escolha um assunto por ele nem despeje explicação — pergunte qual é, em uma frase, e pare. Encher de informação sem ele ter perguntado é o que faz você parecer robô.
 Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
 Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP], [OFERECER_TASTER] ou nenhuma.`;
 
 
     const shortAckInstruction = shortAck ? `
-ATENÇÃO — A MENSAGEM É CURTA ("ok", "obrigada", "beleza"): responda em NO MÁXIMO 2 frases, sem reabrir argumento e sem repetir explicação. Feche com leveza. Se ele ainda não pagou e a conversa já explicou o que precisava, emita [ENVIAR_LINK] pra deixar o caminho na mão dele.
+ATENÇÃO — A MENSAGEM É CURTA ("ok", "obrigada", "beleza"): responda em NO MÁXIMO 2 frases, sem reabrir argumento, sem repetir explicação e SEM mandar link. Feche com leveza. NÃO emita nenhuma tag.
 ` : "";
 
     const mediaInstruction = mediaOnly ? `
@@ -607,7 +616,7 @@ CONTEXTO DO CHECKOUT:
 - Plano iniciado: ${planTxt}
 
 VALORES DO PLANO DESTE LEAD:
-${renderPlanValues(checkout?.plan, checkout?.billing)}
+${renderPlanValues(checkout?.plan, checkout?.billing, pixContext)}
 ${(customer || blankDoubt) ? "" : `
 O QUE ${nameTxt.toUpperCase()} GANHA AO ENTRAR:
 ${renderValueShowcase(historyTxt)}
