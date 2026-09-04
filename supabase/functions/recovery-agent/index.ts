@@ -59,10 +59,13 @@ function normalizePlanKey(plan?: string | null): string | null {
   return null;
 }
 
-/** Bloco de valores concretos do plano escolhido (só o mensal tem 1ª semana). */
-function renderPlanValues(plan?: string | null, billing?: string | null): string {
-  const key = normalizePlanKey(plan);
-  if (!key) {
+const STOP_WORDS = [
+  /\batendente\b/i, /\bhumano\b/i, /\bpessoa de verdade\b/i,
+  /\bn[aã]o quero\b/i, /\bpara de me mandar\b/i, /\bparem? de mandar\b/i,
+  /\bremove(r)? meu n[uú]mero\b/i, /\bdescadastr/i, /\bsair da lista\b/i,
+];
+
+
 /**
  * O lead abriu o assunto cobrança automática / banco / autorização? Só nesse
  * caso o agente recebe a explicação completa do PIX Automático.
