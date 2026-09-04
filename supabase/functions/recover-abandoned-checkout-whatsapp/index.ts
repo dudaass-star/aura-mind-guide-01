@@ -766,11 +766,16 @@ async function markSkipped(supabase: any, id: string, cfg: StageConfig, reason: 
 }
 
 /**
- * Fecha o estágio para TODOS os registros pendentes do mesmo telefone (outras
- * checkout_sessions e cobranças PIX). Duplo clique no checkout gera 2 linhas
- * quase simultâneas; sem isso a rodada seguinte do cron reenviava o template
- * pro mesmo lead poucos minutos depois.
+ * Fecha o estágio para os registros pendentes do MESMO telefone criados nas
+ * últimas 6 horas (outras checkout_sessions e cobranças PIX). Duplo clique no
+ * checkout gera 2 linhas quase simultâneas; sem isso a rodada seguinte do cron
+ * reenviava o template pro mesmo lead poucos minutos depois.
+ *
+ * Janela de 6h de propósito: tentativa de outro dia é oportunidade nova e não
+ * pode ser fechada como "duplicada" (era o que barrava leads reais).
  */
+const SIBLING_WINDOW_MS = 6 * 60 * 60 * 1000;
+
 async function markPhoneSiblings(
   supabase: any,
   cfg: StageConfig,
@@ -779,21 +784,23 @@ async function markPhoneSiblings(
   paymentId?: string,
 ) {
   const nowIso = new Date().toISOString();
+  const siblingSince = new Date(Date.now() - SIBLING_WINDOW_MS).toISOString();
   const vars = getPhoneVariations(phone);
   try {
     let q = supabase.from("checkout_sessions").update({
       [cfg.sentColumn]: nowIso,
       whatsapp_recovery_last_error: "skipped: duplicate_phone_sibling",
-    }).in("phone", vars).is(cfg.sentColumn, null);
+    }).in("phone", vars).is(cfg.sentColumn, null).gte("created_at", siblingSince);
     if (sessionId) q = q.neq("id", sessionId);
     await q;
 
     let q2 = supabase.from("asaas_payments").update({
       [cfg.sentColumn]: nowIso,
       whatsapp_recovery_last_error: "skipped: duplicate_phone_sibling",
-    }).in("customer_phone", vars).is(cfg.sentColumn, null);
+    }).in("customer_phone", vars).is(cfg.sentColumn, null).gte("created_at", siblingSince);
     if (paymentId) q2 = q2.neq("id", paymentId);
     await q2;
+
   } catch (err) {
     console.warn(`⚠️ [WA stage ${cfg.label}] markPhoneSiblings falhou:`, err);
   }
