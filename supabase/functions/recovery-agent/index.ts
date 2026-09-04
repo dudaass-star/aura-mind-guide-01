@@ -167,10 +167,16 @@ async function loadKb(supabase: any, lastInbound: string, pixContext = false): P
     for (const t of tokens) {
       if ((m.question || "").toLowerCase().includes(t)) score += 1;
     }
+    // Dúvida técnica (PIX Automático) só ganha peso quando o assunto está na mesa.
+    if (m.category === "duvida_tecnica") {
+      if (!pixContext && score < 3) score = 0;
+      else if (pixContext && score > 0) score += 2;
+    }
     return { item: m, score };
   }).filter((x: any) => x.score > 0)
     .sort((a: any, b: any) => b.score - a.score)
-    .slice(0, 5)
+    .slice(0, pixContext ? 6 : 5)
+
     .map((x: any) => x.item);
 
   const merged: KbItem[] = [...(base || []), ...scored].slice(0, MAX_KB_ITEMS);
