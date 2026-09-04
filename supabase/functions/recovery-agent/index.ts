@@ -140,7 +140,7 @@ function isQuietHourBRT(start: number, end: number): boolean {
 
 interface KbItem { id: string; category: string; question: string; answer: string; keywords: string[]; }
 
-async function loadKb(supabase: any, lastInbound: string): Promise<KbItem[]> {
+async function loadKb(supabase: any, lastInbound: string, pixContext = false): Promise<KbItem[]> {
   // Always-include base
   const { data: base } = await supabase
     .from("recovery_knowledge_base")
