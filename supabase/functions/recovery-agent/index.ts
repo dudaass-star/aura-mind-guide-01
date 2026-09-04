@@ -572,7 +572,7 @@ Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [ST
 
 
     const shortAckInstruction = shortAck ? `
-ATENÇÃO — A MENSAGEM É CURTA ("ok", "obrigada", "beleza"): responda em NO MÁXIMO 2 frases, sem reabrir argumento e sem repetir explicação. Feche com leveza. Se ele ainda não pagou e a conversa já explicou o que precisava, emita [ENVIAR_LINK] pra deixar o caminho na mão dele.
+ATENÇÃO — A MENSAGEM É CURTA ("ok", "obrigada", "beleza"): responda em NO MÁXIMO 2 frases, sem reabrir argumento, sem repetir explicação e SEM mandar link. Feche com leveza. NÃO emita nenhuma tag.
 ` : "";
 
     const mediaInstruction = mediaOnly ? `
