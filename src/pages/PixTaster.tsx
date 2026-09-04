@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Check, Copy, Loader2, ShieldCheck, AlertCircle } from "lucide-react";
@@ -33,9 +34,18 @@ export default function PixTaster() {
       const { data, error: fnError } = await supabase.functions.invoke("pix-taster-info", {
         body: { token },
       });
-      if (fnError) throw new Error(fnError.message);
+      // Erro da função vem como "non-2xx": a mensagem de verdade está no corpo.
+      if (fnError) {
+        let detalhe = "Link inválido ou expirado";
+        try {
+          const corpo = fnError instanceof FunctionsHttpError ? await fnError.context.text() : "";
+          const parsed = corpo ? JSON.parse(corpo) : null;
+          if (parsed?.error) detalhe = String(parsed.error);
+        } catch { /* mantém a mensagem amigável */ }
+        throw new Error(detalhe);
+      }
       if (!data || (data as { error?: string }).error) {
-        throw new Error((data as { error?: string })?.error || "Link inválido");
+        throw new Error((data as { error?: string })?.error || "Link inválido ou expirado");
       }
       setInfo(data as TasterInfo);
       setError(null);
