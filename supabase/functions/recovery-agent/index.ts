@@ -27,10 +27,15 @@ const corsHeaders = {
 
 const CHECKOUT_URL = "https://olaaura.com.br/v2/checkout?utm_source=whatsapp&utm_medium=recovery_agent&utm_campaign=auto_reply";
 const SUPPORT_EMAIL = "suporte@olaaura.com.br";
+// `duvida_tecnica` (16 itens, quase todos sobre PIX Automático) SAIU do
+// always-include: quando ela entrava em todo prompt, o agente explicava
+// autorização/8º dia mesmo pra quem falou de outra coisa. Agora entra por
+// relevância (palavra do lead ou contexto de "copiou o código").
 const ALWAYS_CATEGORIES = [
   "preco", "garantia", "como_funciona", "pagamento", "seguranca", "beneficio",
-  "duvida_tecnica", "objecao",
+  "objecao",
 ];
+
 const HISTORY_LIMIT = 12;
 const MAX_KB_ITEMS = 40;
 
@@ -54,8 +59,33 @@ function normalizePlanKey(plan?: string | null): string | null {
   return null;
 }
 
+const STOP_WORDS = [
+  /\batendente\b/i, /\bhumano\b/i, /\bpessoa de verdade\b/i,
+  /\bn[aã]o quero\b/i, /\bpara de me mandar\b/i, /\bparem? de mandar\b/i,
+  /\bremove(r)? meu n[uú]mero\b/i, /\bdescadastr/i, /\bsair da lista\b/i,
+];
+
+
+/**
+ * O lead abriu o assunto cobrança automática / banco / autorização? Só nesse
+ * caso o agente recebe a explicação completa do PIX Automático.
+ */
+const RE_PIX_TOPIC =
+  /(pix autom|autoriza|autoriz[aá]|d[eé]bito|debitar|recorren|mandato|banco|app do banco|assinatura recorrente|cobran[cç]a autom|desconta|8[ºo]?\s*dia|oitavo dia|revoga|cart[aã]o|renova)/i;
+
+/** O lead está pedindo o link / dizendo que vai pagar agora? */
+const RE_ASK_LINK =
+  /(manda(r)? o link|me manda o link|qual o link|link do checkout|onde (eu )?pago|quero (pagar|assinar|continuar|fechar)|vou pagar|como (eu )?pago|manda o c[oó]digo|reenvia)/i;
+
+function pixTopicActive(text: string, historyTxt: string): boolean {
+  if (RE_PIX_TOPIC.test(text || "")) return true;
+  // Só o rabo do histórico: assunto de 5 mensagens atrás não deve reabrir aula de PIX.
+  const tail = (historyTxt || "").split("\n").slice(-2).join("\n");
+  return RE_PIX_TOPIC.test(tail);
+}
+
 /** Bloco de valores concretos do plano escolhido (só o mensal tem 1ª semana). */
-function renderPlanValues(plan?: string | null, billing?: string | null): string {
+function renderPlanValues(plan?: string | null, billing?: string | null, pixContext = false): string {
   const key = normalizePlanKey(plan);
   if (!key) {
     return `- Plano não identificado no checkout: NÃO cite valor específico. Se o lead perguntar preço, pergunte qual plano ele quer ou use a faixa da base.`;
@@ -64,6 +94,15 @@ function renderPlanValues(plan?: string | null, billing?: string | null): string
   const isMonthly = !billing || /month|mensal/i.test(billing);
   if (!isMonthly) {
     return `- Plano: ${v.label} (ciclo ${billing}). Ciclo longo NÃO tem 1ª semana promocional: é pagamento à vista do ciclo. Valor mensal cheio de referência: R$ ${v.monthly}. Use os valores por mês do ciclo que estão na base.`;
+  }
+  if (!pixContext) {
+    // Versão enxuta: o lead não falou de banco/autorização. Nada de 8º dia aqui.
+    return [
+      `- Plano: ${v.label} mensal.`,
+      `- Sai HOJE (1ª semana): R$ ${v.trial}. Mensalidade depois: R$ ${v.monthly}.`,
+      `- Use SOMENTE esses números. Nunca cite valor de outro plano.`,
+      `- NÃO explique autorização bancária, débito automático nem "8º dia": ele não perguntou isso.`,
+    ].join("\n");
   }
   const firstCharge = new Date(Date.now() + 7 * 86400000).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
   return [
@@ -75,11 +114,6 @@ function renderPlanValues(plan?: string | null, billing?: string | null): string
   ].join("\n");
 }
 
-const STOP_WORDS = [
-  /\batendente\b/i, /\bhumano\b/i, /\bpessoa de verdade\b/i,
-  /\bn[aã]o quero\b/i, /\bpara de me mandar\b/i, /\bparem? de mandar\b/i,
-  /\bremove(r)? meu n[uú]mero\b/i, /\bdescadastr/i, /\bsair da lista\b/i,
-];
 
 function isShortGreeting(text: string): boolean {
   const cleaned = text.trim().toLowerCase().replace(/[!.?,;]+/g, "");
@@ -106,7 +140,7 @@ function isQuietHourBRT(start: number, end: number): boolean {
 
 interface KbItem { id: string; category: string; question: string; answer: string; keywords: string[]; }
 
-async function loadKb(supabase: any, lastInbound: string): Promise<KbItem[]> {
+async function loadKb(supabase: any, lastInbound: string, pixContext = false): Promise<KbItem[]> {
   // Always-include base
   const { data: base } = await supabase
     .from("recovery_knowledge_base")
@@ -133,10 +167,16 @@ async function loadKb(supabase: any, lastInbound: string): Promise<KbItem[]> {
     for (const t of tokens) {
       if ((m.question || "").toLowerCase().includes(t)) score += 1;
     }
+    // Dúvida técnica (PIX Automático) só ganha peso quando o assunto está na mesa.
+    if (m.category === "duvida_tecnica") {
+      if (!pixContext && score < 3) score = 0;
+      else if (pixContext && score > 0) score += 2;
+    }
     return { item: m, score };
   }).filter((x: any) => x.score > 0)
     .sort((a: any, b: any) => b.score - a.score)
-    .slice(0, 5)
+    .slice(0, pixContext ? 6 : 5)
+
     .map((x: any) => x.item);
 
   const merged: KbItem[] = [...(base || []), ...scored].slice(0, MAX_KB_ITEMS);
@@ -616,12 +656,37 @@ ${modeInstructions}`;
     }
 
     // 9. Parse tags (cliente em modo suporte nunca recebe link de checkout)
-    const sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
+    let sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
     const stop = /\[STOP\]/i.test(raw);
     const offerTaster = (!customer || tasterTestBypass) && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
     let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP|OFERECER_TASTER)\]/gi, "").trim();
     if (customer) body = body.replace(new RegExp(CHECKOUT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "").trim();
+
+    // Trava anti-robô: link não é assinatura de mensagem. Se o link já saiu nas
+    // últimas 24h e o lead NÃO pediu, não manda de novo (nem o modelo escolhe).
+    const askedLink = RE_ASK_LINK.test(text);
+    if (sendLink && !askedLink) {
+      const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { data: recentOut } = await supabase
+        .from("recovery_messages")
+        .select("body")
+        .in("phone", phoneMatchList(phone))
+        .eq("direction", "out")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(15);
+      const alreadySent = (recentOut || []).some((m: any) => typeof m?.body === "string" && m.body.includes("/v2/checkout"));
+      if (alreadySent) {
+        sendLink = false;
+        console.log("[recovery-agent] link suprimido: já enviado nas últimas 24h e lead não pediu");
+      }
+    }
+
+    // O modelo pode ter colado o link no texto sem tag (ou com a tag suprimida).
+    if (!sendLink && !customer && body.includes(CHECKOUT_URL)) {
+      body = body.split(CHECKOUT_URL).join("").replace(/\n{3,}/g, "\n\n").trim();
+    }
 
     if (sendLink && offerTaster) {
       // Oferta de encontro avulso e link de plano na mesma mensagem = ruído. O
@@ -631,6 +696,7 @@ ${modeInstructions}`;
     if (sendLink && !offerTaster && !body.includes(CHECKOUT_URL)) {
       body = `${body}\n\n${CHECKOUT_URL}`;
     }
+
     if (escalate && !body.toLowerCase().includes(SUPPORT_EMAIL)) {
       body = `${body}\n\nSe quiser, manda um email pra ${SUPPORT_EMAIL} que o time responde por aí.`;
     }
