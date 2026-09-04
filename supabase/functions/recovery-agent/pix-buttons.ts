@@ -284,7 +284,7 @@ export async function tasterOfferAlreadySent(supabase: Supa, phone: string): Pro
   const { data } = await supabase
     .from("recovery_messages")
     .select("metadata, body")
-    .eq("phone", normalizeBrazilianPhone(phone))
+    .in("phone", phoneMatchList(phone))
     .eq("direction", "out")
     .order("created_at", { ascending: false })
     .limit(12);
