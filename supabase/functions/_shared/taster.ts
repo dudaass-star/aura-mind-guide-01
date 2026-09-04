@@ -210,6 +210,27 @@ export interface TasterChargeResult {
   reason?: string;
   error?: string;
   offerId?: string;
+  /** Página pública de pagamento (QR + botão de copiar). */
+  pageUrl?: string;
+  publicToken?: string;
+}
+
+/** Domínio canônico do app (usado no link da página de pagamento). */
+const PUBLIC_BASE_URL = "https://olaaura.com.br";
+
+/**
+ * Token público curto da oferta. Só serve pra abrir a página de pagamento —
+ * não dá acesso a nada além do valor, do QR e do status daquela cobrança.
+ */
+function generatePublicToken(): string {
+  const alphabet = "abcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(10);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+}
+
+export function tasterPageUrl(token: string): string {
+  return `${PUBLIC_BASE_URL}/pix/${token}`;
 }
 
 /**
@@ -239,9 +260,16 @@ export async function createTasterCharge(
     .from("taster_offers").select("*")
     .eq("charge_correlation_id", correlationId).maybeSingle();
   if (prior?.metadata && (prior.metadata as any).copy_paste) {
+    // Oferta antiga sem token: cria um agora, pra sempre existir link.
+    let token = prior.public_token as string | null;
+    if (!token) {
+      token = generatePublicToken();
+      await supabase.from("taster_offers").update({ public_token: token }).eq("id", prior.id);
+    }
     return {
       ok: true, copyPaste: String((prior.metadata as any).copy_paste),
       correlationId, reason: "codigo_reaproveitado", offerId: prior.id,
+      publicToken: token, pageUrl: tasterPageUrl(token),
     };
   }
 
@@ -274,6 +302,7 @@ export async function createTasterCharge(
   const brCode = charge?.brCode ? String(charge.brCode) : "";
   if (!brCode) return { ok: false, reason: "sem_brcode" };
 
+  const publicToken = generatePublicToken();
   const nowIso = new Date().toISOString();
   const { data: offer, error: offerErr } = await supabase
     .from("taster_offers")
@@ -290,11 +319,15 @@ export async function createTasterCharge(
       charge_correlation_id: correlationId,
       charge_created_at: nowIso,
       value_cents: TASTER_VALUE_CENTS,
+      public_token: publicToken,
+      qr_image_url: charge?.qrCodeImage ? String(charge.qrCodeImage) : null,
       metadata: { copy_paste: brCode, woovi_charge_id: charge?.globalID ?? null },
     }, { onConflict: "charge_correlation_id" })
-    .select("id")
+    .select("id, public_token")
     .maybeSingle();
   if (offerErr) console.error("[taster] falha registrando oferta:", offerErr.message);
+
+  const token = (offer?.public_token as string | undefined) || publicToken;
 
   // Marca no perfil (quando já existir) que a oferta saiu.
   try {
@@ -304,10 +337,30 @@ export async function createTasterCharge(
       .is("taster_paid_at", null);
   } catch { /* perfil pode não existir ainda — normal */ }
 
-  return { ok: true, copyPaste: brCode, correlationId, offerId: offer?.id };
+  return {
+    ok: true, copyPaste: brCode, correlationId, offerId: offer?.id,
+    publicToken: token, pageUrl: tasterPageUrl(token),
+  };
 }
 
-/** Texto único do código, usado igual na Porta A e na Porta B. */
+/**
+ * Texto único da oferta, usado igual na Porta A e na Porta B.
+ * O código copia-e-cola NÃO vai mais escrito no WhatsApp: vai um link com QR
+ * Code e botão de copiar, porque a linha gigante de PIX no chat assustava e
+ * quebrava a cópia no celular.
+ */
+export function tasterOfferMessage(pageUrl: string): string {
+  return (
+    "Fechado. Aqui é o encontro guiado de 45 minutos por R$ 6,90 — " +
+    "PIX comum, sem autorizar nada automático:\n\n" +
+    `${pageUrl}\n\n` +
+    "Nesse link tem o QR Code e o botão de copiar o código. " +
+    "Assim que cair, a Aura te chama no WhatsApp oficial dela e vocês marcam o horário. " +
+    "Você tem 48h pra fazer o encontro. Se depois disso você quiser continuar, escolhe o plano com calma."
+  );
+}
+
+/** Compatibilidade: caso raro em que só existe o código (sem link). */
 export function tasterCodeMessage(code: string): string {
   return (
     "Fechado. Esse é o código de R$ 6,90 do encontro guiado de 45 minutos — " +
@@ -317,3 +370,4 @@ export function tasterCodeMessage(code: string): string {
     "Você tem 48h pra fazer o encontro. Se depois disso você quiser continuar, escolhe o plano com calma."
   );
 }
+
