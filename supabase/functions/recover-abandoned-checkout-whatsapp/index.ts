@@ -219,7 +219,7 @@ async function stageFailureCount(
     const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
     let q = supabase
       .from("checkout_recovery_attempts")
-      .select("id", { count: "exact", head: true })
+      .select("error_message")
       .like("status", `wa_%stage_${cfg.stage}_failed`)
       .gte("created_at", since);
 
@@ -230,12 +230,15 @@ async function stageFailureCount(
     } else {
       return 0;
     }
-    const { count } = await q;
-    return count ?? 0;
+    const { data } = await q;
+    // Falha de configuração nossa (SID/template inválido, 5xx) não esgota o lead:
+    // corrigido o template, ele tem que voltar à fila.
+    return (data || []).filter((r: any) => !isInfraFailure(r.error_message)).length;
   } catch {
     return 0;
   }
 }
+
 
 
 
@@ -337,8 +340,11 @@ Deno.serve(async (req) => {
     }
 
     // === CAP POR TELEFONE (janela de 30 dias, não vitalício) ===
-    // Regra sã: telefone que já recebeu 2+ mensagens de recuperação nos últimos 30 dias
-    // fica de fora do ciclo. Lead que volta meses depois é oportunidade nova, não contato queimado.
+    // Conta APENAS mensagens de campanha (templates proativos: metadata.template
+    // ou metadata.track). Resposta do agente dentro de uma conversa iniciada pelo
+    // lead NUNCA conta — lead que responde é a mais quente; punir engajamento com
+    // 30 dias de silêncio é o inverso do que queremos (caso Luciana, 04/09/2026:
+    // 5 mensagens de saída em 35 min, sendo 4 respostas de conversa).
     //
     // Falhas: só banem o telefone quando o erro é atribuível ao número/usuário
     // (número inválido, destinatário inexistente, opt-out). Erro da NOSSA
@@ -346,11 +352,12 @@ Deno.serve(async (req) => {
     // inválido, 5xx) nunca bane — foi falha nossa, a mensagem nem chegou.
     const lifetimeBannedPhones = new Set<string>();
     const CAP_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+    const CAP_LIMIT = 3; // templates proativos por número em 30 dias
     const capWindowStart = new Date(Date.now() - CAP_WINDOW_MS).toISOString();
 
     const { data: outboundLog } = await supabase
       .from("recovery_messages")
-      .select("phone")
+      .select("phone, metadata")
       .eq("direction", "out")
       .eq("sent_by_admin", false)
       .gte("created_at", capWindowStart);
@@ -358,11 +365,14 @@ Deno.serve(async (req) => {
       const counts = new Map<string, number>();
       for (const m of outboundLog) {
         if (!m.phone) continue;
+        const meta = (m.metadata ?? {}) as Record<string, unknown>;
+        const isCampaign = !!(meta.template || meta.track || meta.content_sid);
+        if (!isCampaign) continue; // resposta de conversa: não conta
         const norm = normalizeBrazilianPhone(m.phone);
         counts.set(norm, (counts.get(norm) ?? 0) + 1);
       }
       for (const [norm, c] of counts) {
-        if (c >= 2) {
+        if (c >= CAP_LIMIT) {
           for (const v of getPhoneVariations(norm)) lifetimeBannedPhones.add(v);
         }
       }
@@ -385,10 +395,32 @@ Deno.serve(async (req) => {
       }
     }
 
+    // === CONVERSA ATIVA: pausa, não bane ===
+    // Lead que trocou mensagem com o agente nas últimas 48h não recebe template
+    // do estágio seguinte agora — mas o estágio NÃO é fechado (nada de *_sent_at),
+    // então volta a ser avaliado nas rodadas seguintes.
+    const activeConversationPhones = new Set<string>();
+    {
+      const since48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { data: inbound } = await supabase
+        .from("recovery_messages")
+        .select("phone")
+        .eq("direction", "in")
+        .gte("created_at", since48h);
+      for (const m of inbound || []) {
+        if (!m.phone) continue;
+        for (const v of getPhoneVariations(normalizeBrazilianPhone(m.phone))) {
+          activeConversationPhones.add(v);
+        }
+      }
+    }
+
     console.log(
-      `🚫 [WA-RECOVERY] Cap 30d: ${lifetimeBannedPhones.size} variações banidas ` +
-      `(${infraSkipped} falhas de infraestrutura ignoradas).`,
+      `🚫 [WA-RECOVERY] Cap 30d (${CAP_LIMIT} templates): ${lifetimeBannedPhones.size} variações banidas ` +
+      `(${infraSkipped} falhas de infraestrutura ignoradas). ` +
+      `💬 conversa ativa 48h: ${activeConversationPhones.size} variações em pausa.`,
     );
+
 
 
     const totals = {
