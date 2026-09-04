@@ -535,7 +535,9 @@ async function processStage(
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
   lifetimeBannedPhones: Set<string>,
+  activeConversationPhones: Set<string>,
   copyTrackEnabled = false,
+
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -608,12 +610,20 @@ async function processStage(
         continue;
       }
 
-      // CAP 30d: telefone já recebeu 2+ msgs na janela OU falha atribuível ao número.
+      // CONVERSA ATIVA: pausa sem fechar o estágio (volta na próxima rodada).
+      if (phoneVars.some(v => activeConversationPhones.has(v))) {
+        console.log(`💬 [WA stage ${cfg.label}] conversa ativa, adiando ${session.phone}.`);
+        skipped++;
+        continue;
+      }
+
+      // CAP 30d: telefone já recebeu templates demais na janela OU falha atribuível ao número.
       if (phoneVars.some(v => lifetimeBannedPhones.has(v))) {
         await markSkipped(supabase, session.id, cfg, "phone_window_cap");
         skipped++;
         continue;
       }
+
 
       // Skip se já existe checkout pago para esse email/telefone (mesmo sem profile ativo)
       if (session.email && completedEmailSet.has(session.email.toLowerCase())) {
@@ -796,6 +806,8 @@ async function processStageAsaas(
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
   lifetimeBannedPhones: Set<string>,
+  activeConversationPhones: Set<string>,
+
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -859,12 +871,20 @@ async function processStageAsaas(
         continue;
       }
 
-      // CAP 30d: telefone já recebeu 2+ msgs na janela OU falha atribuível ao número.
+      // CONVERSA ATIVA: pausa sem fechar o estágio.
+      if (phoneVars.some(v => activeConversationPhones.has(v))) {
+        console.log(`💬 [WA-PIX stage ${cfg.label}] conversa ativa, adiando ${payment.customer_phone}.`);
+        skipped++;
+        continue;
+      }
+
+      // CAP 30d: telefone já recebeu templates demais na janela OU falha atribuível ao número.
       if (phoneVars.some(v => lifetimeBannedPhones.has(v))) {
         await markSkippedAsaas(supabase, payment.id, cfg, "phone_window_cap");
         skipped++;
         continue;
       }
+
 
       if (payment.customer_email && completedEmailSet.has(payment.customer_email.toLowerCase())) {
         await markSkippedAsaas(supabase, payment.id, cfg, "already_paid_email");
@@ -1017,6 +1037,8 @@ async function processCopyStage(
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
   lifetimeBannedPhones: Set<string>,
+  activeConversationPhones: Set<string>,
+
   dryRun: boolean,
   dryRunReport: any[],
 ): Promise<{ sent: number; failed: number; skipped: number }> {
@@ -1077,11 +1099,19 @@ async function processCopyStage(
     const phoneVars = getPhoneVariations(session.phone);
     const emailKey = session.email ? session.email.toLowerCase() : null;
 
+    // CONVERSA ATIVA: pausa sem fechar o estágio (volta na próxima rodada).
+    if (!dryRun && phoneVars.some((v) => activeConversationPhones.has(v))) {
+      console.log(`💬 [WA-COPIOU ${cfg.label}] conversa ativa, adiando ${session.phone}.`);
+      skipped++;
+      continue;
+    }
+
     // Guardas idênticas ao trilho genérico.
     let reason: string | null = null;
     if (emailKey && activeEmailSet.has(emailKey)) reason = "active_customer_email";
     else if (phoneVars.some((v) => activePhoneSet.has(v))) reason = "active_customer_phone";
     else if (phoneVars.some((v) => lifetimeBannedPhones.has(v))) reason = "phone_window_cap";
+
     else if (emailKey && completedEmailSet.has(emailKey)) reason = "already_paid_email";
     else if (phoneVars.some((v) => completedPhoneSet.has(v))) reason = "already_paid_phone";
     else if (phoneVars.some((v) => contactedThisStage.has(v))) reason = "already_contacted_this_stage";
