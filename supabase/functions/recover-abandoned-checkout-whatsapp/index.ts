@@ -450,6 +450,8 @@ Deno.serve(async (req) => {
         completedPhoneSet,
         contactedThisStage,
         lifetimeBannedPhones,
+        activeConversationPhones,
+
         dryRun,
         dryRunReport,
       );
@@ -485,7 +487,9 @@ Deno.serve(async (req) => {
         completedPhoneSet,
         contactedThisStage,
         lifetimeBannedPhones,
+        activeConversationPhones,
         copyStages.length > 0,
+
       );
 
       const r2 = await processStageAsaas(
@@ -497,6 +501,8 @@ Deno.serve(async (req) => {
         completedPhoneSet,
         contactedThisStage,
         lifetimeBannedPhones,
+        activeConversationPhones,
+
       );
       totals.sent += r1.sent + r2.sent;
       totals.failed += r1.failed + r2.failed;
