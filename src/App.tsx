@@ -39,6 +39,7 @@ import Unsubscribe from "./pages/Unsubscribe";
 import UserPortal from "./pages/UserPortal";
 import PortalLogin from "./pages/PortalLogin";
 import ReautorizarPix from "./pages/ReautorizarPix";
+import PixTaster from "./pages/PixTaster";
 import { PortalAuthProvider } from "./contexts/PortalAuthContext";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
@@ -124,6 +125,7 @@ const App = () => (
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/pagamento" element={<Pagamento />} />
             <Route path="/reautorizar-pix" element={<ReautorizarPix />} />
+            <Route path="/pix/:token" element={<PixTaster />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

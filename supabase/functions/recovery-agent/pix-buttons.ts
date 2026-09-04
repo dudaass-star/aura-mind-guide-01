@@ -314,16 +314,24 @@ export async function handleTasterAccept(
     }
 
     const code = String(data.copyPaste);
+    const pageUrl = data.pageUrl ? String(data.pageUrl) : "";
+    // Preferimos SEMPRE o link: a linha gigante do PIX no chat assusta e quebra
+    // a cópia no celular. O copia-e-cola só vai escrito se o link não existir.
+    const body = pageUrl
+      ? "Fechado. Aqui é o encontro guiado de 45 minutos por R$ 6,90 — PIX comum, sem autorizar nada automático:\n\n" +
+        `${pageUrl}\n\n` +
+        "Nesse link tem o QR Code e o botão de copiar o código. Assim que cair, a Aura te chama no WhatsApp oficial dela e vocês marcam o horário. Você tem 48h pra fazer o encontro — depois, se fizer sentido, você escolhe o plano com calma."
+      : "Fechado. Esse é o código de R$ 6,90 do encontro guiado de 45 minutos — PIX comum, copia e cola normal, sem autorizar nada automático:\n\n" +
+        `${code}\n\n` +
+        "Assim que cair, a Aura te chama no WhatsApp oficial dela e vocês marcam o horário. Você tem 48h pra fazer o encontro — depois, se fizer sentido, você escolhe o plano com calma.";
     return {
       handled: true,
-      body:
-        "Fechado. Esse é o código de R$ 6,90 do encontro guiado de 45 minutos — PIX comum, copia e cola normal, sem autorizar nada automático:\n\n" +
-        `${code}\n\n` +
-        "Assim que cair, a Aura te chama no WhatsApp oficial dela e vocês marcam o horário. Você tem 48h pra fazer o encontro — depois, se fizer sentido, você escolhe o plano com calma.",
+      body,
       metadata: {
         taster: true,
         taster_offered: true,
-        resolution: "taster_code_sent",
+        resolution: pageUrl ? "taster_link_sent" : "taster_code_sent",
+        taster_page_url: pageUrl || null,
         correlation_id: data.correlationId ?? null,
         pix_code_sent: true,
         pix_code: code,

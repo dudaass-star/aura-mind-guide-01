@@ -73,6 +73,8 @@ Deno.serve(async (req) => {
     return json({
       ok: true, copyPaste: charge.copyPaste, correlationId: charge.correlationId,
       value_cents: TASTER_VALUE_CENTS, offerId: charge.offerId ?? null, reason: charge.reason ?? "criado",
+      // Link da página pública (QR + botão de copiar). É isso que vai pro WhatsApp.
+      pageUrl: charge.pageUrl ?? null, publicToken: charge.publicToken ?? null,
     });
   } catch (err) {
     console.error("[criar-pix-taster] fatal:", err);
