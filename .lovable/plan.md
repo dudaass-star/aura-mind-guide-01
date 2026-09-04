@@ -2,21 +2,24 @@
 
 Hoje o código PIX vai escrito dentro da mensagem, e o cliente tem que selecionar tudo à mão — é aí que ele copia pedaço errado e o pagamento falha.
 
-O WhatsApp não permite botão de copiar em mensagem escrita na hora (o botão de copiar código da Meta aceita no máximo 15 caracteres, e o PIX tem mais de 100). Então a mensagem passa a levar **um link curto nosso** que abre uma página com a cara da Aura: valor, QR Code e um botão grande **"Copiar código PIX"**.
+O WhatsApp não permite botão de copiar dentro da mensagem escrita na hora (o botão de copiar código da Meta aceita no máximo 15 caracteres, e o PIX tem mais de 100). O que dá pra fazer é o que você pediu: **um botão na mensagem** ("Pagar R$ 6,90") que abre uma página nossa com a cara da Aura, com valor, QR Code e um botão grande **"Copiar código PIX"**.
+
+Esse botão de mensagem exige um modelo próprio criado e **aprovado pela Meta** antes de entrar no ar — pela sua regra, nasce desligado e só liga com o modelo aprovado. Enquanto a aprovação não sai, a mensagem sai com o link escrito (clicável no WhatsApp) e a página é a mesma; quando o modelo for aprovado, vira botão sem mexer em mais nada.
 
 ## Como fica pro lead
 
 ```text
 aceita o encontro de R$ 6,90
    ↓
-mensagem curta: "seu encontro está reservado · abre aqui pra pagar" + link olaaura.com.br/...
+mensagem curta: "seu encontro está reservado"  [ Pagar R$ 6,90 ]  ← botão
    ↓
 página da Aura: R$ 6,90 · QR Code · botão "Copiar código PIX" (vira "Código copiado")
    ↓
 paga → a página avisa "pagamento confirmado" e a Aura chama no WhatsApp oficial
 ```
 
-A mensagem passa a levar **só o link** (sem o código escrito), como você escolheu.
+A mensagem nunca mais leva o código escrito (sem o código no corpo, como você escolheu).
+
 
 ## A página
 
