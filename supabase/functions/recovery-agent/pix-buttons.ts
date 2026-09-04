@@ -26,6 +26,21 @@ const RE_NEW_CODE = /(gerar novo c[oó]digo|tive um erro|c[oó]digo (n[aã]o|nao
 const RE_ALREADY_PAID = /^\s*(j[aá] paguei|paguei|j[aá] pagou)\s*[.!]?\s*$/i;
 const RE_DOUBT = /(ficou uma d[uú]vida|tenho uma d[uú]vida|vou pagar agora)/i;
 
+/**
+ * "Dúvida em branco": o lead DECLARA que tem dúvida mas não diz qual (o clique do
+ * quick reply "Ficou uma dúvida" é exatamente isso). Aqui o agente não pode
+ * adivinhar — tem que perguntar. Só bate em mensagem curta, pra não engolir
+ * "tenho uma dúvida: o valor de 29,90 é cobrado quando?".
+ */
+const RE_DOUBT_BLANK =
+  /^\s*(sim,?\s*)?(oi,?\s*)?((eu\s+)?(ainda\s+)?(fiquei|ficou|tenho|teria|tinha|surgiu)\s+(com\s+)?(uma|umas|algumas|uma\s+pequena)?\s*d[uú]vidas?|(queria|gostaria de|posso)\s+(tirar\s+uma\s+d[uú]vida|perguntar\s+(uma\s+coisa|algo))|d[uú]vidas?|posso\s+(te\s+)?perguntar(\s+uma\s+coisa)?)\s*[.!?]*\s*$/i;
+
+export function isBlankDoubt(text: string): boolean {
+  const t = (text || "").trim();
+  if (!t || t.length > 60) return false;
+  return RE_DOUBT_BLANK.test(t);
+}
+
 /** Classifica o texto do clique. `null` = não é clique de botão do trilho. */
 export function classifyPixButton(text: string): PixButtonIntent {
   const t = (text || "").trim();

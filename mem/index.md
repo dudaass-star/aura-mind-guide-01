@@ -8,5 +8,6 @@
 - [Trilho copiou o código PIX](mem://features/recovery/trilho-copiou-codigo-pix) — Régua única: copiou → 20min/2h no lugar do genérico 15min; gate por ContentSid em system_config.wa_copiou_templates; dryRun valida sem enviar
 
 - [recovery-agent nunca se diminui](mem://features/recovery/nunca-se-diminuir) — Proibido abrir por negação ou se comparar por baixo com terapia; identidade exige cena nível A; cenas A elevadas ao padrão "quero isso agora"
+- [recovery-agent nunca adivinha a dúvida](mem://features/recovery/duvida-em-branco) — "Ficou uma dúvida" sem conteúdo = UMA pergunta curta; sem vitrine, PIX, valores, link ou taster
 - [Estágio 24h da recuperação WhatsApp](mem://features/recovery/checkout-wa-stage2-sid) — ContentSid 24h correto (34 chars), trava de 3 falhas por estágio contra loop do cron de 5min, debug-recovery-template com list_contents
 

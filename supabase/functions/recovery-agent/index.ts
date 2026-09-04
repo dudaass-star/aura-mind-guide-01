@@ -17,7 +17,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
-import { classifyPixButton, handlePixButton, classifyTasterIntent, handleTasterAccept, tasterOfferAlreadySent } from "./pix-buttons.ts";
+import { classifyPixButton, handlePixButton, classifyTasterIntent, handleTasterAccept, tasterOfferAlreadySent, isBlankDoubt } from "./pix-buttons.ts";
 import { isTasterTestPhone } from "../_shared/taster.ts";
 
 const corsHeaders = {
@@ -377,6 +377,9 @@ Deno.serve(async (req) => {
     // 5b. Mensagem curta ("ok", "obrigada") não é mais ignorada: vira resposta curta.
     const shortAck = !mediaOnly && isShortGreeting(text);
 
+    // 5c. "Ficou uma dúvida" sem dizer qual: o agente NÃO adivinha, ele pergunta.
+    const blankDoubt = !mediaOnly && isBlankDoubt(text);
+
     // 6. Stop words
     if (STOP_WORDS.some(re => re.test(text))) {
       await supabase.from("recovery_conversations").update({
@@ -515,6 +518,7 @@ Responda a dúvida dela de forma direta e resolutiva usando a base de conhecimen
 
     const modeInstructions = customer
       ? `Responda curto (2-4 frases), humano, resolvendo o que a pessoa perguntou. Sem venda e sem cena de valor.
+NUNCA responda uma dúvida que ela não formulou: se a mensagem não diz QUAL é a dúvida, apenas pergunte, em uma frase.
 Termine com UMA das tags em linha separada: [ESCALAR_HUMANO] ou nenhuma.`
       : `Antes de escrever: identifique a trava real de ${nameTxt} e defina O QUE essa mensagem precisa fazer o lead entender ou sentir. Escreva com suas próprias palavras, ancorado no que ele acabou de dizer — sem abertura padrão, sem bordão, sem repetir formulação já usada no histórico.
 Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA cena do NÍVEL A da vitrine — em cena e no presente, como se estivesse acontecendo com ele agora, não como lista de recursos. Nunca abra a mensagem por um item do nível C. Se as cenas A que conversam com a mensagem já estão marcadas como JÁ CITADO, aprofunde uma delas com um detalhe novo em vez de descer pra B ou C. Itens do nível B só entram como reforço de uma cena A (ex: "e dá pra responder por áudio mesmo"); nunca como argumento principal.
@@ -522,6 +526,7 @@ NUNCA SE DIMINUA: não abra a mensagem por negação ("não é...", "não faz...
 Se ele perguntar O QUE a Aura é ou comparar com algo ("é terapia?", "é um robô?", "é tipo app de meditação?"), responda pelo que ela É, em cena, e deixe a diferença aparecer sozinha (disponibilidade e continuidade como vantagem, nunca como limitação). Definição funcional sem cena do NÍVEL A na mesma mensagem é ERRO.
 A última linha antes do link é convite, não ressalva: uma cena ou UMA pergunta concreta de fechamento ("quer marcar o primeiro encontro pra hoje à noite?").
 Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
+NUNCA ADIVINHE A DÚVIDA: se ele não disse QUAL é a dúvida (ex: "ficou uma dúvida"), não escolha um assunto por ele nem despeje explicação — pergunte qual é, em uma frase, e pare. Encher de informação sem ele ter perguntado é o que faz você parecer robô.
 Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
 Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP], [OFERECER_TASTER] ou nenhuma.`;
 
@@ -536,7 +541,7 @@ ATENÇÃO — VEIO SÓ UM ANEXO, SEM TEXTO: trate como "paguei / mandei o compro
 
     // Trilho "copiou o código PIX": a pessoa já abriu o app do banco. Não é lead
     // frio — é alguém a um passo de entrar, que travou ou ficou em dúvida.
-    const copiedPixInstruction = (checkout?.pix_copied_at || pixIntent === "conversational") ? `
+    const copiedPixInstruction = (!blankDoubt && (checkout?.pix_copied_at || pixIntent === "conversational")) ? `
 CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já decidiu, travou no último passo (dúvida de última hora, erro do banco ou insegurança). NÃO recomece a venda do zero e não explique tudo de novo. Trate a dúvida específica dela de frente, em duas ou três frases, e feche com o próximo passo concreto ("te mando o código novo agora?" / "quer marcar o primeiro encontro pra hoje à noite?"). Se ela sinalizar erro ou código expirado, diga que você gera um novo na hora — você realmente gera.
 ` : "";
 
@@ -544,9 +549,13 @@ CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já 
     // Carta na manga: encontro guiado avulso de R$ 6,90, PIX comum, sem autorizar
     // débito automático. Só existe pra quem travou exatamente nessa objeção —
     // e só quando o backend já disse que a pessoa é elegível.
-    const tasterInstruction = ((!customer || tasterTestBypass) && tasterEligible) ? `
+    const tasterInstruction = (!blankDoubt && (!customer || tasterTestBypass) && tasterEligible) ? `
 CARTA NA MANGA (use SÓ se a trava for autorização de cobrança automática, medo de recorrência, "não quero deixar autorizado", "quero testar antes" ou preço): existe um encontro guiado de 45 minutos AVULSO por R$ 6,90, num PIX comum de copia e cola, SEM autorizar nada automático e SEM virar assinatura. É um encontro só, com 48h pra fazer, e depois a pessoa decide com calma se escolhe um plano.
 Regras: ofereça no máximo UMA vez; descreva em cena ("um encontro de 45 minutos, marcado pra hoje à noite se você quiser"); NUNCA gere ou invente código PIX — quem gera é o sistema; NÃO ofereça se a trava for outra (dúvida técnica, erro do banco, comparação com terapia). Se for oferecer, termine com [OFERECER_TASTER] em vez de [ENVIAR_LINK] e feche perguntando se quer que você mande o código de R$ 6,90.
+` : "";
+
+    const blankDoubtInstruction = blankDoubt ? `
+ATENÇÃO — ELE DISSE QUE TEM UMA DÚVIDA MAS NÃO DISSE QUAL: sua ÚNICA tarefa nesta mensagem é perguntar qual é a dúvida. UMA frase curta, no tom de quem está ali do lado ("claro, ${nameTxt} — qual ficou?" / "manda a dúvida que eu te respondo agora"). PROIBIDO: adivinhar o assunto, explicar PIX Automático, citar valores, mostrar cena de valor, mandar link, oferecer encontro avulso, listar qualquer coisa. NÃO emita nenhuma tag.
 ` : "";
 
     const contextBlock = `${supportBlock}
@@ -559,7 +568,7 @@ CONTEXTO DO CHECKOUT:
 
 VALORES DO PLANO DESTE LEAD:
 ${renderPlanValues(checkout?.plan, checkout?.billing)}
-${customer ? "" : `
+${(customer || blankDoubt) ? "" : `
 O QUE ${nameTxt.toUpperCase()} GANHA AO ENTRAR:
 ${renderValueShowcase(historyTxt)}
 
@@ -571,7 +580,7 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}
+${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}
 ${modeInstructions}`;
 
 
