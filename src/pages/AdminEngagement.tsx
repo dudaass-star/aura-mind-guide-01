@@ -222,7 +222,10 @@ const SKIP_LABELS: Record<string, string> = {
   no_phone: 'Pulado: sem telefone',
   quiet_hours: 'Pulado: silêncio noturno',
   duplicate_phone: 'Pulado: telefone duplicado',
+  duplicate_phone_sibling: 'Pulado: mesmo checkout repetido',
+  conversa_ativa: 'Adiado: conversando com a Aura',
   infra_error: 'Pulado: falha de configuração',
+
 };
 
 

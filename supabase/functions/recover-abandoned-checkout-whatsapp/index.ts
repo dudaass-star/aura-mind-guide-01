@@ -219,7 +219,7 @@ async function stageFailureCount(
     const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
     let q = supabase
       .from("checkout_recovery_attempts")
-      .select("id", { count: "exact", head: true })
+      .select("error_message")
       .like("status", `wa_%stage_${cfg.stage}_failed`)
       .gte("created_at", since);
 
@@ -230,12 +230,15 @@ async function stageFailureCount(
     } else {
       return 0;
     }
-    const { count } = await q;
-    return count ?? 0;
+    const { data } = await q;
+    // Falha de configuração nossa (SID/template inválido, 5xx) não esgota o lead:
+    // corrigido o template, ele tem que voltar à fila.
+    return (data || []).filter((r: any) => !isInfraFailure(r.error_message)).length;
   } catch {
     return 0;
   }
 }
+
 
 
 
@@ -337,8 +340,11 @@ Deno.serve(async (req) => {
     }
 
     // === CAP POR TELEFONE (janela de 30 dias, não vitalício) ===
-    // Regra sã: telefone que já recebeu 2+ mensagens de recuperação nos últimos 30 dias
-    // fica de fora do ciclo. Lead que volta meses depois é oportunidade nova, não contato queimado.
+    // Conta APENAS mensagens de campanha (templates proativos: metadata.template
+    // ou metadata.track). Resposta do agente dentro de uma conversa iniciada pelo
+    // lead NUNCA conta — lead que responde é a mais quente; punir engajamento com
+    // 30 dias de silêncio é o inverso do que queremos (caso Luciana, 04/09/2026:
+    // 5 mensagens de saída em 35 min, sendo 4 respostas de conversa).
     //
     // Falhas: só banem o telefone quando o erro é atribuível ao número/usuário
     // (número inválido, destinatário inexistente, opt-out). Erro da NOSSA
@@ -346,11 +352,12 @@ Deno.serve(async (req) => {
     // inválido, 5xx) nunca bane — foi falha nossa, a mensagem nem chegou.
     const lifetimeBannedPhones = new Set<string>();
     const CAP_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+    const CAP_LIMIT = 3; // templates proativos por número em 30 dias
     const capWindowStart = new Date(Date.now() - CAP_WINDOW_MS).toISOString();
 
     const { data: outboundLog } = await supabase
       .from("recovery_messages")
-      .select("phone")
+      .select("phone, metadata")
       .eq("direction", "out")
       .eq("sent_by_admin", false)
       .gte("created_at", capWindowStart);
@@ -358,11 +365,14 @@ Deno.serve(async (req) => {
       const counts = new Map<string, number>();
       for (const m of outboundLog) {
         if (!m.phone) continue;
+        const meta = (m.metadata ?? {}) as Record<string, unknown>;
+        const isCampaign = !!(meta.template || meta.track || meta.content_sid);
+        if (!isCampaign) continue; // resposta de conversa: não conta
         const norm = normalizeBrazilianPhone(m.phone);
         counts.set(norm, (counts.get(norm) ?? 0) + 1);
       }
       for (const [norm, c] of counts) {
-        if (c >= 2) {
+        if (c >= CAP_LIMIT) {
           for (const v of getPhoneVariations(norm)) lifetimeBannedPhones.add(v);
         }
       }
@@ -385,10 +395,32 @@ Deno.serve(async (req) => {
       }
     }
 
+    // === CONVERSA ATIVA: pausa, não bane ===
+    // Lead que trocou mensagem com o agente nas últimas 48h não recebe template
+    // do estágio seguinte agora — mas o estágio NÃO é fechado (nada de *_sent_at),
+    // então volta a ser avaliado nas rodadas seguintes.
+    const activeConversationPhones = new Set<string>();
+    {
+      const since48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { data: inbound } = await supabase
+        .from("recovery_messages")
+        .select("phone")
+        .eq("direction", "in")
+        .gte("created_at", since48h);
+      for (const m of inbound || []) {
+        if (!m.phone) continue;
+        for (const v of getPhoneVariations(normalizeBrazilianPhone(m.phone))) {
+          activeConversationPhones.add(v);
+        }
+      }
+    }
+
     console.log(
-      `🚫 [WA-RECOVERY] Cap 30d: ${lifetimeBannedPhones.size} variações banidas ` +
-      `(${infraSkipped} falhas de infraestrutura ignoradas).`,
+      `🚫 [WA-RECOVERY] Cap 30d (${CAP_LIMIT} templates): ${lifetimeBannedPhones.size} variações banidas ` +
+      `(${infraSkipped} falhas de infraestrutura ignoradas). ` +
+      `💬 conversa ativa 48h: ${activeConversationPhones.size} variações em pausa.`,
     );
+
 
 
     const totals = {
@@ -418,6 +450,8 @@ Deno.serve(async (req) => {
         completedPhoneSet,
         contactedThisStage,
         lifetimeBannedPhones,
+        activeConversationPhones,
+
         dryRun,
         dryRunReport,
       );
@@ -453,7 +487,9 @@ Deno.serve(async (req) => {
         completedPhoneSet,
         contactedThisStage,
         lifetimeBannedPhones,
+        activeConversationPhones,
         copyStages.length > 0,
+
       );
 
       const r2 = await processStageAsaas(
@@ -465,6 +501,8 @@ Deno.serve(async (req) => {
         completedPhoneSet,
         contactedThisStage,
         lifetimeBannedPhones,
+        activeConversationPhones,
+
       );
       totals.sent += r1.sent + r2.sent;
       totals.failed += r1.failed + r2.failed;
@@ -503,7 +541,9 @@ async function processStage(
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
   lifetimeBannedPhones: Set<string>,
+  activeConversationPhones: Set<string>,
   copyTrackEnabled = false,
+
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -576,12 +616,20 @@ async function processStage(
         continue;
       }
 
-      // CAP 30d: telefone já recebeu 2+ msgs na janela OU falha atribuível ao número.
+      // CONVERSA ATIVA: pausa sem fechar o estágio (volta na próxima rodada).
+      if (phoneVars.some(v => activeConversationPhones.has(v))) {
+        console.log(`💬 [WA stage ${cfg.label}] conversa ativa, adiando ${session.phone}.`);
+        skipped++;
+        continue;
+      }
+
+      // CAP 30d: telefone já recebeu templates demais na janela OU falha atribuível ao número.
       if (phoneVars.some(v => lifetimeBannedPhones.has(v))) {
         await markSkipped(supabase, session.id, cfg, "phone_window_cap");
         skipped++;
         continue;
       }
+
 
       // Skip se já existe checkout pago para esse email/telefone (mesmo sem profile ativo)
       if (session.email && completedEmailSet.has(session.email.toLowerCase())) {
@@ -718,11 +766,16 @@ async function markSkipped(supabase: any, id: string, cfg: StageConfig, reason: 
 }
 
 /**
- * Fecha o estágio para TODOS os registros pendentes do mesmo telefone (outras
- * checkout_sessions e cobranças PIX). Duplo clique no checkout gera 2 linhas
- * quase simultâneas; sem isso a rodada seguinte do cron reenviava o template
- * pro mesmo lead poucos minutos depois.
+ * Fecha o estágio para os registros pendentes do MESMO telefone criados nas
+ * últimas 6 horas (outras checkout_sessions e cobranças PIX). Duplo clique no
+ * checkout gera 2 linhas quase simultâneas; sem isso a rodada seguinte do cron
+ * reenviava o template pro mesmo lead poucos minutos depois.
+ *
+ * Janela de 6h de propósito: tentativa de outro dia é oportunidade nova e não
+ * pode ser fechada como "duplicada" (era o que barrava leads reais).
  */
+const SIBLING_WINDOW_MS = 6 * 60 * 60 * 1000;
+
 async function markPhoneSiblings(
   supabase: any,
   cfg: StageConfig,
@@ -731,21 +784,23 @@ async function markPhoneSiblings(
   paymentId?: string,
 ) {
   const nowIso = new Date().toISOString();
+  const siblingSince = new Date(Date.now() - SIBLING_WINDOW_MS).toISOString();
   const vars = getPhoneVariations(phone);
   try {
     let q = supabase.from("checkout_sessions").update({
       [cfg.sentColumn]: nowIso,
       whatsapp_recovery_last_error: "skipped: duplicate_phone_sibling",
-    }).in("phone", vars).is(cfg.sentColumn, null);
+    }).in("phone", vars).is(cfg.sentColumn, null).gte("created_at", siblingSince);
     if (sessionId) q = q.neq("id", sessionId);
     await q;
 
     let q2 = supabase.from("asaas_payments").update({
       [cfg.sentColumn]: nowIso,
       whatsapp_recovery_last_error: "skipped: duplicate_phone_sibling",
-    }).in("customer_phone", vars).is(cfg.sentColumn, null);
+    }).in("customer_phone", vars).is(cfg.sentColumn, null).gte("created_at", siblingSince);
     if (paymentId) q2 = q2.neq("id", paymentId);
     await q2;
+
   } catch (err) {
     console.warn(`⚠️ [WA stage ${cfg.label}] markPhoneSiblings falhou:`, err);
   }
@@ -764,6 +819,8 @@ async function processStageAsaas(
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
   lifetimeBannedPhones: Set<string>,
+  activeConversationPhones: Set<string>,
+
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -827,12 +884,20 @@ async function processStageAsaas(
         continue;
       }
 
-      // CAP 30d: telefone já recebeu 2+ msgs na janela OU falha atribuível ao número.
+      // CONVERSA ATIVA: pausa sem fechar o estágio.
+      if (phoneVars.some(v => activeConversationPhones.has(v))) {
+        console.log(`💬 [WA-PIX stage ${cfg.label}] conversa ativa, adiando ${payment.customer_phone}.`);
+        skipped++;
+        continue;
+      }
+
+      // CAP 30d: telefone já recebeu templates demais na janela OU falha atribuível ao número.
       if (phoneVars.some(v => lifetimeBannedPhones.has(v))) {
         await markSkippedAsaas(supabase, payment.id, cfg, "phone_window_cap");
         skipped++;
         continue;
       }
+
 
       if (payment.customer_email && completedEmailSet.has(payment.customer_email.toLowerCase())) {
         await markSkippedAsaas(supabase, payment.id, cfg, "already_paid_email");
@@ -985,6 +1050,8 @@ async function processCopyStage(
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
   lifetimeBannedPhones: Set<string>,
+  activeConversationPhones: Set<string>,
+
   dryRun: boolean,
   dryRunReport: any[],
 ): Promise<{ sent: number; failed: number; skipped: number }> {
@@ -1045,11 +1112,19 @@ async function processCopyStage(
     const phoneVars = getPhoneVariations(session.phone);
     const emailKey = session.email ? session.email.toLowerCase() : null;
 
+    // CONVERSA ATIVA: pausa sem fechar o estágio (volta na próxima rodada).
+    if (!dryRun && phoneVars.some((v) => activeConversationPhones.has(v))) {
+      console.log(`💬 [WA-COPIOU ${cfg.label}] conversa ativa, adiando ${session.phone}.`);
+      skipped++;
+      continue;
+    }
+
     // Guardas idênticas ao trilho genérico.
     let reason: string | null = null;
     if (emailKey && activeEmailSet.has(emailKey)) reason = "active_customer_email";
     else if (phoneVars.some((v) => activePhoneSet.has(v))) reason = "active_customer_phone";
     else if (phoneVars.some((v) => lifetimeBannedPhones.has(v))) reason = "phone_window_cap";
+
     else if (emailKey && completedEmailSet.has(emailKey)) reason = "already_paid_email";
     else if (phoneVars.some((v) => completedPhoneSet.has(v))) reason = "already_paid_phone";
     else if (phoneVars.some((v) => contactedThisStage.has(v))) reason = "already_contacted_this_stage";
