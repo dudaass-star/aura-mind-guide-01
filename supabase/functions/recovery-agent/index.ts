@@ -63,12 +63,43 @@ function normalizePlanKey(plan?: string | null): string | null {
 function renderPlanValues(plan?: string | null, billing?: string | null): string {
   const key = normalizePlanKey(plan);
   if (!key) {
+/**
+ * O lead abriu o assunto cobrança automática / banco / autorização? Só nesse
+ * caso o agente recebe a explicação completa do PIX Automático.
+ */
+const RE_PIX_TOPIC =
+  /(pix autom|autoriza|autoriz[aá]|d[eé]bito|debitar|recorren|mandato|banco|app do banco|assinatura recorrente|cobran[cç]a autom|desconta|8[ºo]?\s*dia|oitavo dia|revoga|cart[aã]o|renova)/i;
+
+/** O lead está pedindo o link / dizendo que vai pagar agora? */
+const RE_ASK_LINK =
+  /(manda(r)? o link|me manda o link|qual o link|link do checkout|onde (eu )?pago|quero (pagar|assinar|continuar|fechar)|vou pagar|como (eu )?pago|manda o c[oó]digo|reenvia)/i;
+
+function pixTopicActive(text: string, historyTxt: string): boolean {
+  if (RE_PIX_TOPIC.test(text || "")) return true;
+  // Só o rabo do histórico: assunto de 5 mensagens atrás não deve reabrir aula de PIX.
+  const tail = (historyTxt || "").split("\n").slice(-2).join("\n");
+  return RE_PIX_TOPIC.test(tail);
+}
+
+/** Bloco de valores concretos do plano escolhido (só o mensal tem 1ª semana). */
+function renderPlanValues(plan?: string | null, billing?: string | null, pixContext = false): string {
+  const key = normalizePlanKey(plan);
+  if (!key) {
     return `- Plano não identificado no checkout: NÃO cite valor específico. Se o lead perguntar preço, pergunte qual plano ele quer ou use a faixa da base.`;
   }
   const v = PLAN_VALUES[key];
   const isMonthly = !billing || /month|mensal/i.test(billing);
   if (!isMonthly) {
     return `- Plano: ${v.label} (ciclo ${billing}). Ciclo longo NÃO tem 1ª semana promocional: é pagamento à vista do ciclo. Valor mensal cheio de referência: R$ ${v.monthly}. Use os valores por mês do ciclo que estão na base.`;
+  }
+  if (!pixContext) {
+    // Versão enxuta: o lead não falou de banco/autorização. Nada de 8º dia aqui.
+    return [
+      `- Plano: ${v.label} mensal.`,
+      `- Sai HOJE (1ª semana): R$ ${v.trial}. Mensalidade depois: R$ ${v.monthly}.`,
+      `- Use SOMENTE esses números. Nunca cite valor de outro plano.`,
+      `- NÃO explique autorização bancária, débito automático nem "8º dia": ele não perguntou isso.`,
+    ].join("\n");
   }
   const firstCharge = new Date(Date.now() + 7 * 86400000).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
   return [
@@ -80,11 +111,6 @@ function renderPlanValues(plan?: string | null, billing?: string | null): string
   ].join("\n");
 }
 
-const STOP_WORDS = [
-  /\batendente\b/i, /\bhumano\b/i, /\bpessoa de verdade\b/i,
-  /\bn[aã]o quero\b/i, /\bpara de me mandar\b/i, /\bparem? de mandar\b/i,
-  /\bremove(r)? meu n[uú]mero\b/i, /\bdescadastr/i, /\bsair da lista\b/i,
-];
 
 function isShortGreeting(text: string): boolean {
   const cleaned = text.trim().toLowerCase().replace(/[!.?,;]+/g, "");
