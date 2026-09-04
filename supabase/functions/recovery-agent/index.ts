@@ -607,7 +607,7 @@ CONTEXTO DO CHECKOUT:
 - Plano iniciado: ${planTxt}
 
 VALORES DO PLANO DESTE LEAD:
-${renderPlanValues(checkout?.plan, checkout?.billing)}
+${renderPlanValues(checkout?.plan, checkout?.billing, pixContext)}
 ${(customer || blankDoubt) ? "" : `
 O QUE ${nameTxt.toUpperCase()} GANHA AO ENTRAR:
 ${renderValueShowcase(historyTxt)}
