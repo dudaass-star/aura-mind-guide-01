@@ -36,10 +36,12 @@ A mensagem nunca mais leva o código escrito (sem o código no corpo, como você
 - **Token público** gerado junto da cobrança em `supabase/functions/_shared/taster.ts` e guardado na linha de `taster_offers` (migração: coluna `public_token` única + índice). Token aleatório, sem expor telefone nem id interno.
 - **Edge function nova** `pix-taster-info` (`verify_jwt = false`): recebe o token, devolve valor, código copia-e-cola, imagem/QR e status de pagamento. Nenhum dado pessoal na resposta. Nada de leitura direta da tabela pelo navegador — RLS de `taster_offers` continua fechada.
 - **Link curto**: gerado via `create-short-link` (domínio `olaaura.com.br` já está na allowlist) apontando pra `/pix/<token>`; se a geração falhar, cai no link completo.
-- **Mensagem**: em `supabase/functions/recovery-agent/pix-buttons.ts`, `handleTasterAccept` para de colar o código no corpo e passa a mandar o link. `metadata` continua guardando `pix_code` e `correlation_id` pro histórico do admin.
-- **Reaproveitamento**: quando a cobrança já existe (idempotência por `correlationID`), reusa o token já gravado — clique repetido devolve o mesmo link.
+- **Botão na mensagem**: novo Content Template Twilio tipo CTA URL (`twilio/call-to-action`) com sufixo dinâmico — base fixa `olaaura.com.br/l/` + `{{1}}` = código curto — e botão "Pagar R$ 6,90". SID gravado em `system_config` (`wa_taster_pix_button`) e em `whatsapp_templates`; sem SID aprovado, o envio cai automaticamente no texto com link.
+- **Mensagem**: em `supabase/functions/recovery-agent/pix-buttons.ts`, `handleTasterAccept` para de colar o código no corpo, gera o link curto e envia via template de botão (com fallback pra texto). `metadata` continua guardando `pix_code` e `correlation_id` pro histórico do admin.
+- **Reaproveitamento**: quando a cobrança já existe (idempotência por `correlationID`), reusa o token e o código curto já gravados — clique repetido devolve o mesmo destino.
 - **Status na página**: consulta o status já gravado pelo `webhook-woovi`, com recarga leve a cada poucos segundos enquanto estiver aberta.
-- Nenhuma mudança em gateway, valores, elegibilidade, travas do taster, régua de recuperação ou templates aprovados.
+- Nenhuma mudança em gateway, valores, elegibilidade, travas do taster, régua de recuperação ou nos templates já aprovados (m1/m2/m3).
+
 
 ## Validação
 
