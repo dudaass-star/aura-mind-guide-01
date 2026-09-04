@@ -263,7 +263,8 @@ export async function handlePixButton(
 // a elegibilidade é do backend e o código é gerado aqui.
 // ============================================================
 
-const RE_TASTER_BUTTON = /(quero experimentar|experimentar (a|uma) sess[aã]o|quero (a )?sess[aã]o avulsa|quero o encontro)/i;
+const RE_TASTER_BUTTON =
+  /(quero experimentar|experimentar (a|uma) sess[aã]o|quero (a )?sess[aã]o avulsa|quero o encontro|encontro avulso|sess[aã]o avulsa|^\s*avuls[oa]\s*[.!]?\s*$)/i;
 const RE_SHORT_ACCEPT = /^\s*(sim|quero|bora|vamos|manda|fechado|topo|pode mandar|manda o c[oó]digo|quero sim)\s*[.!]?\s*$/i;
 
 /**
