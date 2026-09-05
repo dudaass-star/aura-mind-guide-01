@@ -119,14 +119,32 @@ function isShortGreeting(text: string): boolean {
   const cleaned = text.trim().toLowerCase().replace(/[!.?,;]+/g, "");
   if (cleaned.length === 0) return true;
   const words = cleaned.split(/\s+/);
-  if (words.length > 3) return false;
+  if (words.length > 5) return false;
   const greetingTokens = new Set([
     "oi", "ola", "olá", "bom", "boa", "dia", "tarde", "noite",
     "obrigado", "obrigada", "obg", "vlw", "valeu", "blz", "ok",
+    "sim", "beleza", "perfeito", "combinado", "certo", "entendi",
+    "fechado", "tá", "ta", "tudo", "bem", "então", "entao", "isso",
     "👍", "🙏", "❤", "❤️", "👋", "🌿",
   ]);
   return words.every(w => greetingTokens.has(w) || /^[\p{Emoji}]+$/u.test(w));
 }
+
+/**
+ * Lead JÁ DECIDIU: declarou intenção futura de entrar ("segunda vou fazer",
+ * "ok até segunda", "depois eu assino"). Vender pra quem já disse sim é o que
+ * fazia o agente bombardear cena hipotética em cima de "Ok até segunda".
+ */
+const RE_DECIDED = /(vou (fazer|assinar|entrar|pagar|come[çc]ar|tentar)|j[áa] vou|(na|até|ate|no|nesta|essa|dia) (segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|semana que vem|pr[óo]xima semana|m[êe]s que vem)|depois eu (fa[çc]o|assino|vejo|entro)|amanh[ãa] eu|semana que vem eu|assim que (eu )?(receber|puder|der))/i;
+const RE_OBJECTION_HINT = /(\?|caro|n[ãa]o tenho|n[ãa]o consigo|d[úu]vida|erro|problema|como|quanto|por que|porqu[êe]|golpe|confio|desisti|cancelar)/i;
+
+function isDecided(text: string): boolean {
+  const t = text.trim();
+  if (t.length > 160) return false;
+  if (RE_OBJECTION_HINT.test(t)) return false;
+  return RE_DECIDED.test(t);
+}
+
 
 function isQuietHourBRT(start: number, end: number): boolean {
   // BRT = UTC-3
@@ -264,6 +282,23 @@ function renderValueShowcase(historyTxt: string): string {
     block("C", "NÍVEL C — PRESSUPOSTOS (NÃO VENDA)", "o lead já espera isso; só mencione se ELE perguntar"),
   ].join("\n");
 }
+
+/**
+ * Cooldown de cena: se a ÚLTIMA mensagem nossa já trouxe uma cena da vitrine,
+ * a próxima responde só o que foi perguntado. Sem isso o agente empilhava cena
+ * em cima de cena e parecia robô.
+ */
+function sceneUsedRecently(historyAsc: { direction: string; body?: string | null }[]): boolean {
+  for (let i = historyAsc.length - 1; i >= 0; i--) {
+    if (historyAsc[i].direction !== "out") continue;
+    const b = historyAsc[i].body || "";
+    return VALUE_SHOWCASE.some(v => v.tier === "A" && v.probe.test(b)) ||
+      /45 minutos|encontro guiado|medita|trilha|epis[óo]dio/i.test(b);
+  }
+  return false;
+}
+
+
 
 
 /**
@@ -460,6 +495,11 @@ Deno.serve(async (req) => {
     // 5c. "Ficou uma dúvida" sem dizer qual: o agente NÃO adivinha, ele pergunta.
     let blankDoubt = !mediaOnly && isBlankDoubt(text);
 
+    // 5d. Lead já decidiu ("segunda vou fazer"): confirma e para. Não vende.
+    let decided = !mediaOnly && !blankDoubt && isDecided(text);
+
+
+
     // 6. Stop words
     if (STOP_WORDS.some(re => re.test(text))) {
       await supabase.from("recovery_conversations").update({
@@ -497,7 +537,9 @@ Deno.serve(async (req) => {
       // O modelo passa a ver o conjunto, não só o último clique.
       text = unanswered.join("\n");
       shortAck = unanswered.every(t => isShortGreeting(t));
-      console.log(`[recovery-agent] inbounds não respondidos=${unanswered.length} blankDoubt=${blankDoubt}`);
+      decided = !blankDoubt && unanswered.some(t => isDecided(t)) &&
+        unanswered.every(t => isDecided(t) || isShortGreeting(t));
+      console.log(`[recovery-agent] inbounds não respondidos=${unanswered.length} blankDoubt=${blankDoubt} decided=${decided}`);
 
     }
 
@@ -632,7 +674,9 @@ Responda a dúvida dela de forma direta e resolutiva usando a base de conhecimen
 NUNCA responda uma dúvida que ela não formulou: se a mensagem não diz QUAL é a dúvida, apenas pergunte, em uma frase.
 Termine com UMA das tags em linha separada: [ESCALAR_HUMANO] ou nenhuma.`
       : `Antes de escrever: identifique a trava real de ${nameTxt} e defina O QUE essa mensagem precisa fazer o lead entender ou sentir. Escreva com suas próprias palavras, ancorado no que ele acabou de dizer — sem abertura padrão, sem bordão, sem repetir formulação já usada no histórico.
-Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA cena do NÍVEL A da vitrine — em cena e no presente, como se estivesse acontecendo com ele agora, não como lista de recursos. Nunca abra a mensagem por um item do nível C. Se as cenas A que conversam com a mensagem já estão marcadas como JÁ CITADO, aprofunde uma delas com um detalhe novo em vez de descer pra B ou C. Itens do nível B só entram como reforço de uma cena A (ex: "e dá pra responder por áudio mesmo"); nunca como argumento principal.
+Sua mensagem SEMPRE destrava o que ele perguntou. A cena de valor (NÍVEL A da vitrine) é CONDICIONAL, não obrigatória: só entra quando ele está em dúvida, objeção, comparação ou perguntando o que a Aura é/faz — e só quando o bloco de instrução desta mensagem autorizar. Se ele já decidiu, agradeceu, marcou um dia ou só confirmou algo, responda aquilo e PARE.
+PROIBIDO MANDAR ELE IMAGINAR: nunca escreva "imagina", "pensa no dia em que", "já pensando nos primeiros dias", "vamos supor", "suponha", "quando bater a ansiedade". Cena só pode ser contada quando ancorada em algo que ELE disse (falou de sono, de ansiedade, de falta de tempo). Sem esse gancho, não conte cena nenhuma.
+Nunca abra a mensagem por um item do nível C. Se as cenas A que conversam com a mensagem já estão marcadas como JÁ CITADO, aprofunde uma delas com um detalhe novo em vez de descer pra B ou C. Itens do nível B só entram como reforço de uma cena A; nunca como argumento principal.
 NUNCA SE DIMINUA: não abra a mensagem por negação ("não é...", "não faz...", "não substitui..."), não se posicione como versão menor de terapia, de psicólogo ou de app nenhum, e não use palavra que esvazia ("ferramenta", "assistente", "apoio pra organizar pensamentos", "praticar autoconhecimento", "complementa", "não substitui", "não faz diagnóstico"). Ressalva clínica só se ELE pedir tratamento/diagnóstico/remédio ou sinalizar risco — e nunca como abertura ou fecho.
 Se ele perguntar O QUE a Aura é ou comparar com algo ("é terapia?", "é um robô?", "é tipo app de meditação?"), responda pelo que ela É, em cena, e deixe a diferença aparecer sozinha (disponibilidade e continuidade como vantagem, nunca como limitação). Definição funcional sem cena do NÍVEL A na mesma mensagem é ERRO.
 Feche com convite, não com ressalva: uma cena ou UMA pergunta concreta ("quer marcar o primeiro encontro pra hoje à noite?", "quer que eu gere o código agora?"). Mensagem NÃO termina em link: link é resposta a pedido, não assinatura.
@@ -640,7 +684,7 @@ NÃO EXPLIQUE PIX AUTOMÁTICO, AUTORIZAÇÃO NO BANCO NEM "8º DIA" SE ELE NÃO 
 LINK É EXCEÇÃO: só emita [ENVIAR_LINK] se ele pediu o link, disse que vai pagar/quer continuar, ou se a dúvida que travava foi resolvida agora E o link ainda não foi enviado nesta conversa. Nos outros casos, sem tag.
 
 NUNCA ADIVINHE A DÚVIDA: se ele não disse QUAL é a dúvida (ex: "ficou uma dúvida"), não escolha um assunto por ele nem despeje explicação — pergunte qual é, em uma frase, e pare. Encher de informação sem ele ter perguntado é o que faz você parecer robô.
-Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
+Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; no máximo 3 frases e UM parágrafo nos outros casos.
 Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP], [OFERECER_TASTER] ou nenhuma.`;
 
 
@@ -654,7 +698,7 @@ ATENÇÃO — VEIO SÓ UM ANEXO, SEM TEXTO: trate como "paguei / mandei o compro
 
     // Trilho "copiou o código PIX": a pessoa já abriu o app do banco. Não é lead
     // frio — é alguém a um passo de entrar, que travou ou ficou em dúvida.
-    const copiedPixInstruction = (!blankDoubt && (checkout?.pix_copied_at || pixIntent === "conversational")) ? `
+    const copiedPixInstruction = (!blankDoubt && !decided && (checkout?.pix_copied_at || pixIntent === "conversational")) ? `
 CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já decidiu, travou no último passo (dúvida de última hora, erro do banco ou insegurança). NÃO recomece a venda do zero e não explique tudo de novo. Trate a dúvida específica dela de frente, em duas ou três frases, e feche com o próximo passo concreto ("te mando o código novo agora?" / "quer marcar o primeiro encontro pra hoje à noite?"). Se ela sinalizar erro ou código expirado, diga que você gera um novo na hora — você realmente gera.
 ` : "";
 
@@ -662,7 +706,7 @@ CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já 
     // Carta na manga: encontro guiado avulso de R$ 6,90, PIX comum, sem autorizar
     // débito automático. Só existe pra quem travou exatamente nessa objeção —
     // e só quando o backend já disse que a pessoa é elegível.
-    const tasterInstruction = (!blankDoubt && (!customer || tasterTestBypass) && tasterEligible) ? `
+    const tasterInstruction = (!blankDoubt && !decided && (!customer || tasterTestBypass) && tasterEligible) ? `
 CARTA NA MANGA (use SÓ se a trava for autorização de cobrança automática, medo de recorrência, "não quero deixar autorizado", "quero testar antes" ou preço): existe um encontro guiado de 45 minutos AVULSO por R$ 6,90, num PIX comum de copia e cola, SEM autorizar nada automático e SEM virar assinatura. É um encontro só, com 48h pra fazer, e depois a pessoa decide com calma se escolhe um plano.
 Regras: ofereça no máximo UMA vez; descreva em cena ("um encontro de 45 minutos, marcado pra hoje à noite se você quiser"); NUNCA gere ou invente código PIX — quem gera é o sistema; NÃO ofereça se a trava for outra (dúvida técnica, erro do banco, comparação com terapia). Se for oferecer, termine com [OFERECER_TASTER] em vez de [ENVIAR_LINK] e feche perguntando se quer que você mande o código de R$ 6,90.
 ` : "";
@@ -685,6 +729,23 @@ ATENÇÃO — ELE PERGUNTOU O QUE A AURA É / SE COMPARA COM TERAPIA. Esta é a 
 - Feche com convite concreto ("quer marcar o primeiro encontro pra hoje à noite?"), nunca com ressalva.
 ` : "";
 
+    // Lead já decidiu: confirmar e sair de cena. Vender aqui é o que fazia o
+    // agente empilhar cena hipotética em cima de "Ok até segunda".
+    const decidedInstruction = decided ? `
+ATENÇÃO — ELE JÁ DECIDIU (disse que vai fazer / marcou um dia): NÃO venda mais nada. Responda em NO MÁXIMO 2 frases: confirme com naturalidade e diga que você fica por aqui se ele precisar de algo antes. PROIBIDO: cena de valor, vitrine, "imagina", "pensa no dia em que", valores, PIX, link, encontro avulso. NÃO emita nenhuma tag.
+` : "";
+
+    // Gate de cena: precisa de gatilho real E não pode vir logo depois de outra cena.
+    const sceneCooldown = sceneUsedRecently(historyAsc);
+    const sceneTrigger = !customer && !decided && !shortAck && !blankDoubt && !mediaOnly &&
+      (identityAsk || /\?|d[úu]vida|caro|valor|pre[çc]o|vale a pena|funciona|n[ãa]o sei|pensar|medo|confio|ansiedade|sono|dormir|tempo|triste|cansad/i.test(text));
+    const sceneInstruction = customer || decided || shortAck || blankDoubt ? "" : (
+      !sceneTrigger || sceneCooldown ? `
+SEM CENA NESTA MENSAGEM: ${sceneCooldown ? "a última mensagem que você mandou já trouxe uma cena de valor" : "não há gancho na fala dele pra sustentar uma cena"}. Responda só o que ele trouxe, curto (até 3 frases), sem vitrine e sem pedir pra ele imaginar nada.
+` : `
+CENA LIBERADA: você pode incluir UMA cena do NÍVEL A — ancorada no que ele acabou de dizer, no presente e no concreto, nunca em hipótese ("imagina que...").
+`);
+
     const contextBlock = `${supportBlock}
 BASE DE CONHECIMENTO:
 ${renderKb(kbItems)}
@@ -695,7 +756,7 @@ CONTEXTO DO CHECKOUT:
 
 VALORES DO PLANO DESTE LEAD:
 ${renderPlanValues(checkout?.plan, checkout?.billing, pixContext)}
-${(customer || blankDoubt) ? "" : `
+${(customer || blankDoubt || decided) ? "" : `
 O QUE ${nameTxt.toUpperCase()} GANHA AO ENTRAR:
 ${renderValueShowcase(historyTxt)}
 
@@ -707,7 +768,7 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}${identityInstruction}
+${decidedInstruction}${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}${identityInstruction}${sceneInstruction}
 ${modeInstructions}`;
 
 
@@ -746,7 +807,7 @@ ${modeInstructions}`;
     let sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
     const stop = /\[STOP\]/i.test(raw);
-    const offerTaster = (!customer || tasterTestBypass) && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
+    let offerTaster = (!customer || tasterTestBypass) && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
     let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP|OFERECER_TASTER)\]/gi, "").trim();
     if (customer) body = body.replace(new RegExp(CHECKOUT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "").trim();
 
@@ -783,6 +844,32 @@ ${modeInstructions}`;
       const limpo = frases.join(" ").replace(/^[\s—-]+/, "").trim();
       if (limpo.length > 40) body = limpo;
     }
+
+    // Rede de segurança contra enquadramento hipotético ("imagina que...",
+    // "pensa no dia em que..."): o modelo usava isso pra forçar cena sem gancho.
+    // Removemos o parágrafo/frase inteiro em vez de mandar o lead imaginar coisa.
+    if (body) {
+      const RE_HYPOTHETICAL = /^\s*(e\s+|mas\s+|j[áa]\s+)?(pra ir |j[áa] pra ir )?(imagin|pensa (n?o|no dia|só)|pensando n|vamos supor|suponha|se um dia|quando bater)/i;
+      const cleanChunk = (chunk: string) => chunk
+        .split(/(?<=[.!?])\s+/)
+        .filter(f => !RE_HYPOTHETICAL.test(f))
+        .join(" ")
+        .trim();
+      const paras = body.split(/\n{2,}/).map(cleanChunk).filter(Boolean);
+      const limpo = paras.join("\n\n").replace(/^[\s—-]+/, "").trim();
+      if (limpo.length > 40 && limpo !== body) {
+        console.log("[recovery-agent] frase hipotética removida");
+        body = limpo;
+      }
+    }
+
+    // Lead que já decidiu não recebe link nem oferta.
+    if (decided) {
+      sendLink = false;
+      offerTaster = false;
+    }
+
+
 
     if (!sendLink && !customer && body.includes(CHECKOUT_URL)) {
       body = body.split(CHECKOUT_URL).join("").replace(/\n{3,}/g, "\n\n").trim();
