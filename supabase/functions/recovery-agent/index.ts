@@ -729,6 +729,23 @@ ATENÇÃO — ELE PERGUNTOU O QUE A AURA É / SE COMPARA COM TERAPIA. Esta é a 
 - Feche com convite concreto ("quer marcar o primeiro encontro pra hoje à noite?"), nunca com ressalva.
 ` : "";
 
+    // Lead já decidiu: confirmar e sair de cena. Vender aqui é o que fazia o
+    // agente empilhar cena hipotética em cima de "Ok até segunda".
+    const decidedInstruction = decided ? `
+ATENÇÃO — ELE JÁ DECIDIU (disse que vai fazer / marcou um dia): NÃO venda mais nada. Responda em NO MÁXIMO 2 frases: confirme com naturalidade e diga que você fica por aqui se ele precisar de algo antes. PROIBIDO: cena de valor, vitrine, "imagina", "pensa no dia em que", valores, PIX, link, encontro avulso. NÃO emita nenhuma tag.
+` : "";
+
+    // Gate de cena: precisa de gatilho real E não pode vir logo depois de outra cena.
+    const sceneCooldown = sceneUsedRecently(historyAsc);
+    const sceneTrigger = !customer && !decided && !shortAck && !blankDoubt && !mediaOnly &&
+      (identityAsk || /\?|d[úu]vida|caro|valor|pre[çc]o|vale a pena|funciona|n[ãa]o sei|pensar|medo|confio|ansiedade|sono|dormir|tempo|triste|cansad/i.test(text));
+    const sceneInstruction = customer || decided || shortAck || blankDoubt ? "" : (
+      !sceneTrigger || sceneCooldown ? `
+SEM CENA NESTA MENSAGEM: ${sceneCooldown ? "a última mensagem que você mandou já trouxe uma cena de valor" : "não há gancho na fala dele pra sustentar uma cena"}. Responda só o que ele trouxe, curto (até 3 frases), sem vitrine e sem pedir pra ele imaginar nada.
+` : `
+CENA LIBERADA: você pode incluir UMA cena do NÍVEL A — ancorada no que ele acabou de dizer, no presente e no concreto, nunca em hipótese ("imagina que...").
+`);
+
     const contextBlock = `${supportBlock}
 BASE DE CONHECIMENTO:
 ${renderKb(kbItems)}
