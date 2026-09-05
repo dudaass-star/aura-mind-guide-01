@@ -495,6 +495,11 @@ Deno.serve(async (req) => {
     // 5c. "Ficou uma dúvida" sem dizer qual: o agente NÃO adivinha, ele pergunta.
     let blankDoubt = !mediaOnly && isBlankDoubt(text);
 
+    // 5d. Lead já decidiu ("segunda vou fazer"): confirma e para. Não vende.
+    let decided = !mediaOnly && !blankDoubt && isDecided(text);
+
+
+
     // 6. Stop words
     if (STOP_WORDS.some(re => re.test(text))) {
       await supabase.from("recovery_conversations").update({
