@@ -119,14 +119,32 @@ function isShortGreeting(text: string): boolean {
   const cleaned = text.trim().toLowerCase().replace(/[!.?,;]+/g, "");
   if (cleaned.length === 0) return true;
   const words = cleaned.split(/\s+/);
-  if (words.length > 3) return false;
+  if (words.length > 5) return false;
   const greetingTokens = new Set([
     "oi", "ola", "olá", "bom", "boa", "dia", "tarde", "noite",
     "obrigado", "obrigada", "obg", "vlw", "valeu", "blz", "ok",
+    "sim", "beleza", "perfeito", "combinado", "certo", "entendi",
+    "fechado", "tá", "ta", "tudo", "bem", "então", "entao", "isso",
     "👍", "🙏", "❤", "❤️", "👋", "🌿",
   ]);
   return words.every(w => greetingTokens.has(w) || /^[\p{Emoji}]+$/u.test(w));
 }
+
+/**
+ * Lead JÁ DECIDIU: declarou intenção futura de entrar ("segunda vou fazer",
+ * "ok até segunda", "depois eu assino"). Vender pra quem já disse sim é o que
+ * fazia o agente bombardear cena hipotética em cima de "Ok até segunda".
+ */
+const RE_DECIDED = /(vou (fazer|assinar|entrar|pagar|come[çc]ar|tentar)|j[áa] vou|(na|até|ate|no|nesta|essa|dia) (segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo|semana que vem|pr[óo]xima semana|m[êe]s que vem)|depois eu (fa[çc]o|assino|vejo|entro)|amanh[ãa] eu|semana que vem eu|assim que (eu )?(receber|puder|der))/i;
+const RE_OBJECTION_HINT = /(\?|caro|n[ãa]o tenho|n[ãa]o consigo|d[úu]vida|erro|problema|como|quanto|por que|porqu[êe]|golpe|confio|desisti|cancelar)/i;
+
+function isDecided(text: string): boolean {
+  const t = text.trim();
+  if (t.length > 160) return false;
+  if (RE_OBJECTION_HINT.test(t)) return false;
+  return RE_DECIDED.test(t);
+}
+
 
 function isQuietHourBRT(start: number, end: number): boolean {
   // BRT = UTC-3
