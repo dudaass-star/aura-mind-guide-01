@@ -455,7 +455,7 @@ Deno.serve(async (req) => {
     const shortAck = !mediaOnly && isShortGreeting(text);
 
     // 5c. "Ficou uma dúvida" sem dizer qual: o agente NÃO adivinha, ele pergunta.
-    const blankDoubt = !mediaOnly && isBlankDoubt(text);
+    let blankDoubt = !mediaOnly && isBlankDoubt(text);
 
     // 6. Stop words
     if (STOP_WORDS.some(re => re.test(text))) {
