@@ -775,7 +775,7 @@ ${modeInstructions}`;
     // por negação ("a Aura não é terapia..."). Removemos a frase de abertura em
     // vez de mandar a Aura se apresentar como versão menor de outra coisa.
     if (identityAsk && body) {
-      const RE_DIMINISH = /(n[ãa]o (é|eh|faz|substitui)|no sentido tradicional|n[ãa]o se trata de)/i;
+      const RE_DIMINISH = /(n[ãa]o (é|eh|faz|substitui)|no sentido tradicional|n[ãa]o se trata de|é diferente de|diferente de (uma )?terapia)/i;
       const frases = body.split(/(?<=[.!?])\s+/);
       while (frases.length > 1 && RE_DIMINISH.test(frases[0]) && /terapia|psic[oó]log|psiquiatr|diagn[oó]stico|tratamento/i.test(frases[0])) {
         frases.shift();
