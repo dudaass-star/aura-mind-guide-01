@@ -807,7 +807,7 @@ ${modeInstructions}`;
     let sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
     const stop = /\[STOP\]/i.test(raw);
-    const offerTaster = (!customer || tasterTestBypass) && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
+    let offerTaster = (!customer || tasterTestBypass) && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
     let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP|OFERECER_TASTER)\]/gi, "").trim();
     if (customer) body = body.replace(new RegExp(CHECKOUT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "").trim();
 
