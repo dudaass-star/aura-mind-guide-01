@@ -311,7 +311,10 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json().catch(() => ({}));
-    const { phone: rawPhone, inbound_text, flush_pending } = payload || {};
+    const { phone: rawPhone, inbound_text, flush_pending, preview } = payload || {};
+    // preview = gera a resposta e devolve no retorno, SEM enviar no WhatsApp
+    // nem gravar no histórico. Usado para conferir o texto antes de mandar.
+    const previewMode = preview === true;
 
     // ─── Modo cron: responde o que chegou durante o horário silencioso ───
     // Sem isso, mensagem de madrugada era descartada e nunca voltava.
@@ -520,7 +523,7 @@ Deno.serve(async (req) => {
 
     // 6b. Clique de quick reply do trilho "copiou o código PIX": resolve na hora.
     const pixIntent = classifyPixButton(text);
-    if (pixIntent === "new_code" || pixIntent === "already_paid") {
+    if (!previewMode && (pixIntent === "new_code" || pixIntent === "already_paid")) {
       const res = await handlePixButton(supabase, pixIntent, phone, checkout);
       if (res.handled && res.body) {
         const sendBtn = await sendTwilioFreeText(phone, res.body);
@@ -565,7 +568,7 @@ Deno.serve(async (req) => {
 
     // Aceite: clique do template (Porta B) ou "quero/bora" depois de a oferta ter saído.
     const tasterIntent = classifyTasterIntent(text);
-    if ((!customer || tasterTestBypass) && tasterEligible && tasterIntent) {
+    if (!previewMode && (!customer || tasterTestBypass) && tasterEligible && tasterIntent) {
       const okToGenerate = tasterIntent === "button" || await tasterOfferAlreadySent(supabase, phone);
       if (okToGenerate) {
         const res = await handleTasterAccept(
@@ -668,6 +671,20 @@ Regras: ofereça no máximo UMA vez; descreva em cena ("um encontro de 45 minuto
 ATENÇÃO — ELE DISSE QUE TEM UMA DÚVIDA MAS NÃO DISSE QUAL: sua ÚNICA tarefa nesta mensagem é perguntar qual é a dúvida. UMA frase curta, no tom de quem está ali do lado ("claro, ${nameTxt} — qual ficou?" / "manda a dúvida que eu te respondo agora"). PROIBIDO: adivinhar o assunto, explicar PIX Automático, citar valores, mostrar cena de valor, mandar link, oferecer encontro avulso, listar qualquer coisa. NÃO emita nenhuma tag.
 ` : "";
 
+    // Pergunta de identidade ("é terapia?", "não entendi o que é"): é o momento
+    // em que o lead está mais perto de querer — e onde o modelo insistia em
+    // abrir por negação, virando "versão fraca de terapia".
+    const identityAsk = !customer && !blankDoubt &&
+      /(terapia|psic[oó]log|psiquiatr|rob[oô]|o que (é|eh) (a )?aura|n[ãa]o entendi|como funciona a aura|é tipo)/i.test(text);
+    const identityInstruction = identityAsk ? `
+ATENÇÃO — ELE PERGUNTOU O QUE A AURA É / SE COMPARA COM TERAPIA. Esta é a mensagem mais importante da conversa: ela precisa fazer ${nameTxt} QUERER experimentar hoje.
+- ABRA pela cena, nunca por negação. A primeira frase NÃO pode conter "não é", "não faz", "não substitui", "no sentido tradicional", "não é terapia".
+- É PROIBIDO em qualquer ponto da mensagem: "terapia", "psicólogo", "diagnóstico", "tratamento", "assistente", "ferramenta", "apoio", "te ajuda a organizar", "autoconhecimento" — a não ser que ELE peça tratamento clínico ou sinalize risco. Não compare: descreva.
+- Traga DUAS cenas do NÍVEL A vividas no presente, com detalhe concreto e consequência no fim (ex: o áudio às 23h e você dorme; o encontro guiado de 45 minutos marcado pra hoje à noite, do qual você sai com uma leitura e um caminho escrito no seu espaço; o episódio novo da trilha toda semana).
+- Deixe a vantagem aparecer sozinha: ela lembra da sua história, está disponível na hora exata em que aperta, e o encontro é pra hoje — sem espera de semanas, sem sala de espera, sem recomeçar do zero.
+- Feche com convite concreto ("quer marcar o primeiro encontro pra hoje à noite?"), nunca com ressalva.
+` : "";
+
     const contextBlock = `${supportBlock}
 BASE DE CONHECIMENTO:
 ${renderKb(kbItems)}
@@ -690,7 +707,7 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}
+${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}${identityInstruction}
 ${modeInstructions}`;
 
 
@@ -754,6 +771,19 @@ ${modeInstructions}`;
     }
 
     // O modelo pode ter colado o link no texto sem tag (ou com a tag suprimida).
+    // Rede de segurança: em pergunta de identidade o modelo às vezes ainda abre
+    // por negação ("a Aura não é terapia..."). Removemos a frase de abertura em
+    // vez de mandar a Aura se apresentar como versão menor de outra coisa.
+    if (identityAsk && body) {
+      const RE_DIMINISH = /(n[ãa]o (é|eh|faz|substitui)|no sentido tradicional|n[ãa]o se trata de|é diferente de|diferente de (uma )?terapia)/i;
+      const frases = body.split(/(?<=[.!?])\s+/);
+      while (frases.length > 1 && RE_DIMINISH.test(frases[0]) && /terapia|psic[oó]log|psiquiatr|diagn[oó]stico|tratamento/i.test(frases[0])) {
+        frases.shift();
+      }
+      const limpo = frases.join(" ").replace(/^[\s—-]+/, "").trim();
+      if (limpo.length > 40) body = limpo;
+    }
+
     if (!sendLink && !customer && body.includes(CHECKOUT_URL)) {
       body = body.split(CHECKOUT_URL).join("").replace(/\n{3,}/g, "\n\n").trim();
     }
@@ -776,7 +806,10 @@ ${modeInstructions}`;
       return new Response(JSON.stringify({ skipped: "empty_after_strip" }), { status: 200, headers: corsHeaders });
     }
 
-    // 10. Envia
+    // 10. Envia (em preview, devolve o texto sem enviar nem gravar)
+    if (previewMode) {
+      return new Response(JSON.stringify({ preview: true, body, tags: { sendLink, escalate, stop, offerTaster } }), { status: 200, headers: corsHeaders });
+    }
     const send = await sendTwilioFreeText(phone, body);
     if (!send.ok) {
       console.error("[recovery-agent] Twilio send failed", send.error);
