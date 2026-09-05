@@ -311,7 +311,10 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json().catch(() => ({}));
-    const { phone: rawPhone, inbound_text, flush_pending } = payload || {};
+    const { phone: rawPhone, inbound_text, flush_pending, preview } = payload || {};
+    // preview = gera a resposta e devolve no retorno, SEM enviar no WhatsApp
+    // nem gravar no histórico. Usado para conferir o texto antes de mandar.
+    const previewMode = preview === true;
 
     // ─── Modo cron: responde o que chegou durante o horário silencioso ───
     // Sem isso, mensagem de madrugada era descartada e nunca voltava.
