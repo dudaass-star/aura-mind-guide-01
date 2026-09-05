@@ -537,7 +537,9 @@ Deno.serve(async (req) => {
       // O modelo passa a ver o conjunto, não só o último clique.
       text = unanswered.join("\n");
       shortAck = unanswered.every(t => isShortGreeting(t));
-      console.log(`[recovery-agent] inbounds não respondidos=${unanswered.length} blankDoubt=${blankDoubt}`);
+      decided = !blankDoubt && unanswered.some(t => isDecided(t)) &&
+        unanswered.every(t => isDecided(t) || isShortGreeting(t));
+      console.log(`[recovery-agent] inbounds não respondidos=${unanswered.length} blankDoubt=${blankDoubt} decided=${decided}`);
 
     }
 
