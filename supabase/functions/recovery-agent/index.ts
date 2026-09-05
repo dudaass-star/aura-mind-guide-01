@@ -452,7 +452,7 @@ Deno.serve(async (req) => {
     }
 
     // 5b. Mensagem curta ("ok", "obrigada") não é mais ignorada: vira resposta curta.
-    const shortAck = !mediaOnly && isShortGreeting(text);
+    let shortAck = !mediaOnly && isShortGreeting(text);
 
     // 5c. "Ficou uma dúvida" sem dizer qual: o agente NÃO adivinha, ele pergunta.
     let blankDoubt = !mediaOnly && isBlankDoubt(text);
