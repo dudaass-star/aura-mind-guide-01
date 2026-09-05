@@ -698,7 +698,7 @@ ATENÇÃO — VEIO SÓ UM ANEXO, SEM TEXTO: trate como "paguei / mandei o compro
 
     // Trilho "copiou o código PIX": a pessoa já abriu o app do banco. Não é lead
     // frio — é alguém a um passo de entrar, que travou ou ficou em dúvida.
-    const copiedPixInstruction = (!blankDoubt && (checkout?.pix_copied_at || pixIntent === "conversational")) ? `
+    const copiedPixInstruction = (!blankDoubt && !decided && (checkout?.pix_copied_at || pixIntent === "conversational")) ? `
 CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já decidiu, travou no último passo (dúvida de última hora, erro do banco ou insegurança). NÃO recomece a venda do zero e não explique tudo de novo. Trate a dúvida específica dela de frente, em duas ou três frases, e feche com o próximo passo concreto ("te mando o código novo agora?" / "quer marcar o primeiro encontro pra hoje à noite?"). Se ela sinalizar erro ou código expirado, diga que você gera um novo na hora — você realmente gera.
 ` : "";
 
@@ -706,7 +706,7 @@ CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já 
     // Carta na manga: encontro guiado avulso de R$ 6,90, PIX comum, sem autorizar
     // débito automático. Só existe pra quem travou exatamente nessa objeção —
     // e só quando o backend já disse que a pessoa é elegível.
-    const tasterInstruction = (!blankDoubt && (!customer || tasterTestBypass) && tasterEligible) ? `
+    const tasterInstruction = (!blankDoubt && !decided && (!customer || tasterTestBypass) && tasterEligible) ? `
 CARTA NA MANGA (use SÓ se a trava for autorização de cobrança automática, medo de recorrência, "não quero deixar autorizado", "quero testar antes" ou preço): existe um encontro guiado de 45 minutos AVULSO por R$ 6,90, num PIX comum de copia e cola, SEM autorizar nada automático e SEM virar assinatura. É um encontro só, com 48h pra fazer, e depois a pessoa decide com calma se escolhe um plano.
 Regras: ofereça no máximo UMA vez; descreva em cena ("um encontro de 45 minutos, marcado pra hoje à noite se você quiser"); NUNCA gere ou invente código PIX — quem gera é o sistema; NÃO ofereça se a trava for outra (dúvida técnica, erro do banco, comparação com terapia). Se for oferecer, termine com [OFERECER_TASTER] em vez de [ENVIAR_LINK] e feche perguntando se quer que você mande o código de R$ 6,90.
 ` : "";
