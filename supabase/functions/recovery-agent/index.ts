@@ -771,6 +771,19 @@ ${modeInstructions}`;
     }
 
     // O modelo pode ter colado o link no texto sem tag (ou com a tag suprimida).
+    // Rede de segurança: em pergunta de identidade o modelo às vezes ainda abre
+    // por negação ("a Aura não é terapia..."). Removemos a frase de abertura em
+    // vez de mandar a Aura se apresentar como versão menor de outra coisa.
+    if (identityAsk && body) {
+      const RE_DIMINISH = /(n[ãa]o (é|eh|faz|substitui)|no sentido tradicional|n[ãa]o se trata de)/i;
+      const frases = body.split(/(?<=[.!?])\s+/);
+      while (frases.length > 1 && RE_DIMINISH.test(frases[0]) && /terapia|psic[oó]log|psiquiatr|diagn[oó]stico|tratamento/i.test(frases[0])) {
+        frases.shift();
+      }
+      const limpo = frases.join(" ").replace(/^[\s—-]+/, "").trim();
+      if (limpo.length > 40) body = limpo;
+    }
+
     if (!sendLink && !customer && body.includes(CHECKOUT_URL)) {
       body = body.split(CHECKOUT_URL).join("").replace(/\n{3,}/g, "\n\n").trim();
     }
