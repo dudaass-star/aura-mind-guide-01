@@ -671,6 +671,20 @@ Regras: ofereça no máximo UMA vez; descreva em cena ("um encontro de 45 minuto
 ATENÇÃO — ELE DISSE QUE TEM UMA DÚVIDA MAS NÃO DISSE QUAL: sua ÚNICA tarefa nesta mensagem é perguntar qual é a dúvida. UMA frase curta, no tom de quem está ali do lado ("claro, ${nameTxt} — qual ficou?" / "manda a dúvida que eu te respondo agora"). PROIBIDO: adivinhar o assunto, explicar PIX Automático, citar valores, mostrar cena de valor, mandar link, oferecer encontro avulso, listar qualquer coisa. NÃO emita nenhuma tag.
 ` : "";
 
+    // Pergunta de identidade ("é terapia?", "não entendi o que é"): é o momento
+    // em que o lead está mais perto de querer — e onde o modelo insistia em
+    // abrir por negação, virando "versão fraca de terapia".
+    const identityAsk = !customer && !blankDoubt &&
+      /(terapia|psic[oó]log|psiquiatr|rob[oô]|o que (é|eh) (a )?aura|n[ãa]o entendi|como funciona a aura|é tipo)/i.test(text);
+    const identityInstruction = identityAsk ? `
+ATENÇÃO — ELE PERGUNTOU O QUE A AURA É / SE COMPARA COM TERAPIA. Esta é a mensagem mais importante da conversa: ela precisa fazer ${nameTxt} QUERER experimentar hoje.
+- ABRA pela cena, nunca por negação. A primeira frase NÃO pode conter "não é", "não faz", "não substitui", "no sentido tradicional", "não é terapia".
+- É PROIBIDO em qualquer ponto da mensagem: "terapia", "psicólogo", "diagnóstico", "tratamento", "assistente", "ferramenta", "apoio", "te ajuda a organizar", "autoconhecimento" — a não ser que ELE peça tratamento clínico ou sinalize risco. Não compare: descreva.
+- Traga DUAS cenas do NÍVEL A vividas no presente, com detalhe concreto e consequência no fim (ex: o áudio às 23h e você dorme; o encontro guiado de 45 minutos marcado pra hoje à noite, do qual você sai com uma leitura e um caminho escrito no seu espaço; o episódio novo da trilha toda semana).
+- Deixe a vantagem aparecer sozinha: ela lembra da sua história, está disponível na hora exata em que aperta, e o encontro é pra hoje — sem espera de semanas, sem sala de espera, sem recomeçar do zero.
+- Feche com convite concreto ("quer marcar o primeiro encontro pra hoje à noite?"), nunca com ressalva.
+` : "";
+
     const contextBlock = `${supportBlock}
 BASE DE CONHECIMENTO:
 ${renderKb(kbItems)}
