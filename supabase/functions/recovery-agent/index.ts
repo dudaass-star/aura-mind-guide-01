@@ -475,6 +475,28 @@ Deno.serve(async (req) => {
       .limit(HISTORY_LIMIT);
     const historyAsc = (history || []).reverse();
 
+    // 7b. Todas as mensagens do lead desde a nossa última resposta.
+    // O clique em "Ficou uma dúvida" não pode apagar o que ele já escreveu antes.
+    const lastOutIdx = (() => {
+      for (let i = historyAsc.length - 1; i >= 0; i--) if (historyAsc[i].direction === "out") return i;
+      return -1;
+    })();
+    const unanswered = historyAsc
+      .slice(lastOutIdx + 1)
+      .filter(m => m.direction === "in")
+      .map(m => (m.body || "").trim())
+      .filter(Boolean);
+    if (unanswered.length && !unanswered.includes(text.trim())) unanswered.push(text.trim());
+
+    if (!mediaOnly && unanswered.length > 1) {
+      // Só é "dúvida em branco" se NADA do que ele mandou disse qual é a dúvida.
+      blankDoubt = unanswered.every(t => isBlankDoubt(t));
+      // O modelo passa a ver o conjunto, não só o último clique.
+      text = unanswered.join("\n");
+      console.log(`[recovery-agent] inbounds não respondidos=${unanswered.length} blankDoubt=${blankDoubt}`);
+    }
+
+
     let checkout: any = null;
     if (conv?.checkout_session_id) {
       const { data: ck } = await supabase
