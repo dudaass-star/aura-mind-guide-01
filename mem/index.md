@@ -14,3 +14,5 @@
 
 
 - [PIX só quando perguntado, link é exceção](mem://features/recovery/pix-so-quando-perguntado-e-link-excecao) — Agente de recuperação para de explicar PIX Automático sem pergunta e só manda o link do checkout sob condição
+- [Madrugada reativa e dúvida em branco](mem://features/recovery/madrugada-reativa-e-duvida-em-branco) — Quiet hours não bloqueia inbound reativo; blankDoubt/shortAck avaliados sobre todos os inbounds desde o último outbound
+
