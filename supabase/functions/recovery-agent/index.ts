@@ -756,7 +756,7 @@ CONTEXTO DO CHECKOUT:
 
 VALORES DO PLANO DESTE LEAD:
 ${renderPlanValues(checkout?.plan, checkout?.billing, pixContext)}
-${(customer || blankDoubt) ? "" : `
+${(customer || blankDoubt || decided) ? "" : `
 O QUE ${nameTxt.toUpperCase()} GANHA AO ENTRAR:
 ${renderValueShowcase(historyTxt)}
 
@@ -768,7 +768,7 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}${identityInstruction}
+${decidedInstruction}${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}${identityInstruction}${sceneInstruction}
 ${modeInstructions}`;
 
 
