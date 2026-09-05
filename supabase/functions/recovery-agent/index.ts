@@ -568,7 +568,7 @@ Deno.serve(async (req) => {
 
     // Aceite: clique do template (Porta B) ou "quero/bora" depois de a oferta ter saído.
     const tasterIntent = classifyTasterIntent(text);
-    if ((!customer || tasterTestBypass) && tasterEligible && tasterIntent) {
+    if (!previewMode && (!customer || tasterTestBypass) && tasterEligible && tasterIntent) {
       const okToGenerate = tasterIntent === "button" || await tasterOfferAlreadySent(supabase, phone);
       if (okToGenerate) {
         const res = await handleTasterAccept(
