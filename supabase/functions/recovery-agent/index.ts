@@ -283,6 +283,23 @@ function renderValueShowcase(historyTxt: string): string {
   ].join("\n");
 }
 
+/**
+ * Cooldown de cena: se a ÚLTIMA mensagem nossa já trouxe uma cena da vitrine,
+ * a próxima responde só o que foi perguntado. Sem isso o agente empilhava cena
+ * em cima de cena e parecia robô.
+ */
+function sceneUsedRecently(historyAsc: { direction: string; body?: string | null }[]): boolean {
+  for (let i = historyAsc.length - 1; i >= 0; i--) {
+    if (historyAsc[i].direction !== "out") continue;
+    const b = historyAsc[i].body || "";
+    return VALUE_SHOWCASE.some(v => v.tier === "A" && v.probe.test(b)) ||
+      /45 minutos|encontro guiado|medita|trilha|epis[óo]dio/i.test(b);
+  }
+  return false;
+}
+
+
+
 
 /**
  * Retorna o perfil do telefone quando ele JÁ é cliente (ativo/trial/canceling/past_due).
