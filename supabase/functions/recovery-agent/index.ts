@@ -779,7 +779,10 @@ ${modeInstructions}`;
       return new Response(JSON.stringify({ skipped: "empty_after_strip" }), { status: 200, headers: corsHeaders });
     }
 
-    // 10. Envia
+    // 10. Envia (em preview, devolve o texto sem enviar nem gravar)
+    if (previewMode) {
+      return new Response(JSON.stringify({ preview: true, body, tags: { sendLink, escalate, stop, offerTaster } }), { status: 200, headers: corsHeaders });
+    }
     const send = await sendTwilioFreeText(phone, body);
     if (!send.ok) {
       console.error("[recovery-agent] Twilio send failed", send.error);
