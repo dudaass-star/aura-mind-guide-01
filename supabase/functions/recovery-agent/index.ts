@@ -355,16 +355,53 @@ Deno.serve(async (req) => {
     // 2. Já é cliente? Não cala mais — muda para modo SUPORTE (sem venda, sem link).
     const customer = await getCustomer(supabase, phone);
 
-    // 3. Quiet hours → enfileira para responder na abertura do dia (08h BRT)
+    // 3. Quiet hours: só vale para iniciativa NOSSA. Quem escreveu pra nós agora
+    //    (reativo a um contato nosso das últimas 24h, ou com o PIX na mão) é
+    //    respondido na hora — está acordado, no banco, decidindo a compra.
     if (isQuietHourBRT(cfg.silent_hours_start, cfg.silent_hours_end)) {
-      await supabase.from("recovery_conversations").update({
-        pending_reply_at: new Date().toISOString(),
-        pending_inbound: text.slice(0, 1000),
-        updated_at: new Date().toISOString(),
-      }).eq("phone", phone);
-      console.log("[recovery-agent] quiet_hours → enfileirado");
-      return new Response(JSON.stringify({ skipped: "quiet_hours", queued: true }), { status: 200, headers: corsHeaders });
+      let reactive = false;
+      try {
+        const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+        const { data: lastOut } = await supabase
+          .from("recovery_messages")
+          .select("created_at")
+          .eq("phone", phone).eq("direction", "out")
+          .gte("created_at", since24h)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        reactive = !!lastOut;
+        if (!reactive) {
+          const { data: ckQ } = await supabase
+            .from("checkout_sessions")
+            .select("pix_copied_at")
+            .in("phone", getPhoneVariations(phone))
+            .not("pix_copied_at", "is", null)
+            .gte("pix_copied_at", since24h)
+            .order("pix_copied_at", { ascending: false }).limit(1).maybeSingle();
+          reactive = !!ckQ?.pix_copied_at;
+        }
+      } catch (e) {
+        console.warn("[recovery-agent] check reativo falhou:", (e as Error)?.message);
+      }
+
+      if (!reactive) {
+        // Enfileira SEM perder o que já estava pendente (antes o último texto
+        // sobrescrevia as perguntas de verdade).
+        const { data: prevPend } = await supabase
+          .from("recovery_conversations")
+          .select("pending_inbound")
+          .eq("phone", phone).maybeSingle();
+        const merged = [prevPend?.pending_inbound, text].filter(Boolean).join("\n").slice(-1000);
+        await supabase.from("recovery_conversations").update({
+          pending_reply_at: new Date().toISOString(),
+          pending_inbound: merged,
+          updated_at: new Date().toISOString(),
+        }).eq("phone", phone);
+        console.log("[recovery-agent] quiet_hours → enfileirado");
+        return new Response(JSON.stringify({ skipped: "quiet_hours", queued: true }), { status: 200, headers: corsHeaders });
+      }
+      console.log("[recovery-agent] quiet_hours ignorado: inbound reativo (responde na hora)");
     }
+
 
     // 4. Conversa
     const { data: conv } = await supabase
@@ -415,10 +452,10 @@ Deno.serve(async (req) => {
     }
 
     // 5b. Mensagem curta ("ok", "obrigada") não é mais ignorada: vira resposta curta.
-    const shortAck = !mediaOnly && isShortGreeting(text);
+    let shortAck = !mediaOnly && isShortGreeting(text);
 
     // 5c. "Ficou uma dúvida" sem dizer qual: o agente NÃO adivinha, ele pergunta.
-    const blankDoubt = !mediaOnly && isBlankDoubt(text);
+    let blankDoubt = !mediaOnly && isBlankDoubt(text);
 
     // 6. Stop words
     if (STOP_WORDS.some(re => re.test(text))) {
@@ -437,6 +474,30 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(HISTORY_LIMIT);
     const historyAsc = (history || []).reverse();
+
+    // 7b. Todas as mensagens do lead desde a nossa última resposta.
+    // O clique em "Ficou uma dúvida" não pode apagar o que ele já escreveu antes.
+    const lastOutIdx = (() => {
+      for (let i = historyAsc.length - 1; i >= 0; i--) if (historyAsc[i].direction === "out") return i;
+      return -1;
+    })();
+    const unanswered = historyAsc
+      .slice(lastOutIdx + 1)
+      .filter(m => m.direction === "in")
+      .map(m => (m.body || "").trim())
+      .filter(Boolean);
+    if (unanswered.length && !unanswered.includes(text.trim())) unanswered.push(text.trim());
+
+    if (!mediaOnly && unanswered.length > 1) {
+      // Só é "dúvida em branco" se NADA do que ele mandou disse qual é a dúvida.
+      blankDoubt = unanswered.every(t => isBlankDoubt(t));
+      // O modelo passa a ver o conjunto, não só o último clique.
+      text = unanswered.join("\n");
+      shortAck = unanswered.every(t => isShortGreeting(t));
+      console.log(`[recovery-agent] inbounds não respondidos=${unanswered.length} blankDoubt=${blankDoubt}`);
+
+    }
+
 
     let checkout: any = null;
     if (conv?.checkout_session_id) {
