@@ -523,7 +523,7 @@ Deno.serve(async (req) => {
 
     // 6b. Clique de quick reply do trilho "copiou o código PIX": resolve na hora.
     const pixIntent = classifyPixButton(text);
-    if (pixIntent === "new_code" || pixIntent === "already_paid") {
+    if (!previewMode && (pixIntent === "new_code" || pixIntent === "already_paid")) {
       const res = await handlePixButton(supabase, pixIntent, phone, checkout);
       if (res.handled && res.body) {
         const sendBtn = await sendTwilioFreeText(phone, res.body);
