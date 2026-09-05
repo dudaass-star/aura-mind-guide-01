@@ -845,6 +845,32 @@ ${modeInstructions}`;
       if (limpo.length > 40) body = limpo;
     }
 
+    // Rede de segurança contra enquadramento hipotético ("imagina que...",
+    // "pensa no dia em que..."): o modelo usava isso pra forçar cena sem gancho.
+    // Removemos o parágrafo/frase inteiro em vez de mandar o lead imaginar coisa.
+    if (body) {
+      const RE_HYPOTHETICAL = /^\s*(e\s+|mas\s+|j[áa]\s+)?(pra ir |j[áa] pra ir )?(imagin|pensa (n?o|no dia|só)|pensando n|vamos supor|suponha|se um dia|quando bater)/i;
+      const cleanChunk = (chunk: string) => chunk
+        .split(/(?<=[.!?])\s+/)
+        .filter(f => !RE_HYPOTHETICAL.test(f))
+        .join(" ")
+        .trim();
+      const paras = body.split(/\n{2,}/).map(cleanChunk).filter(Boolean);
+      const limpo = paras.join("\n\n").replace(/^[\s—-]+/, "").trim();
+      if (limpo.length > 40 && limpo !== body) {
+        console.log("[recovery-agent] frase hipotética removida");
+        body = limpo;
+      }
+    }
+
+    // Lead que já decidiu não recebe link nem oferta.
+    if (decided) {
+      sendLink = false;
+      offerTaster = false;
+    }
+
+
+
     if (!sendLink && !customer && body.includes(CHECKOUT_URL)) {
       body = body.split(CHECKOUT_URL).join("").replace(/\n{3,}/g, "\n\n").trim();
     }
