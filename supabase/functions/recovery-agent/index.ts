@@ -708,7 +708,9 @@ CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já 
     // e só quando o backend já disse que a pessoa é elegível.
     const tasterInstruction = (!blankDoubt && !decided && (!customer || tasterTestBypass) && tasterEligible) ? `
 CARTA NA MANGA (use SÓ se a trava for autorização de cobrança automática, medo de recorrência, "não quero deixar autorizado", "quero testar antes" ou preço): existe um encontro guiado de 45 minutos AVULSO por R$ 6,90, num PIX comum de copia e cola, SEM autorizar nada automático e SEM virar assinatura. É um encontro só, com 48h pra fazer, e depois a pessoa decide com calma se escolhe um plano.
-Regras: ofereça no máximo UMA vez; descreva em cena ("um encontro de 45 minutos, marcado pra hoje à noite se você quiser"); NUNCA gere ou invente código PIX — quem gera é o sistema; NÃO ofereça se a trava for outra (dúvida técnica, erro do banco, comparação com terapia). Se for oferecer, termine com [OFERECER_TASTER] em vez de [ENVIAR_LINK] e feche perguntando se quer que você mande o código de R$ 6,90.
+ATENÇÃO — NÃO CONFUNDA: o encontro de R$ 6,90 NÃO é "a primeira semana do Essencial" nem "experimentar o plano por uma semana". A semana é assinatura com autorização no banco; o encontro é um pagamento único, um encontro só. Nunca descreva o encontro como plano, semana ou assinatura.
+Regras: ofereça no máximo UMA vez; descreva em cena ("um encontro de 45 minutos, marcado pra hoje à noite se você quiser"); NUNCA gere ou invente código PIX — quem gera é o sistema; É PROIBIDO prometer envio ("te mando o código", "gero o QR agora") sem terminar a mensagem com [OFERECER_TASTER]; NÃO ofereça se a trava for outra (dúvida técnica, erro do banco, comparação com terapia). Se for oferecer, termine com [OFERECER_TASTER] em vez de [ENVIAR_LINK] e feche perguntando se quer que você mande o código de R$ 6,90.
+
 ` : "";
 
     const blankDoubtInstruction = blankDoubt ? `
@@ -869,11 +871,28 @@ ${modeInstructions}`;
       offerTaster = false;
     }
 
+    // Rede de segurança: promessa de pagamento que o sistema NÃO vai cumprir.
+    // O modelo escreveu "te mando o código de R$ 6,90 agora" sem emitir a tag,
+    // então nenhum código é gerado e a pessoa fica esperando (caso Lúcia).
+    const RE_PROMISE_CODE = /(mando|te mando|envio|gero|vou gerar|vou mandar)[^.!?\n]{0,40}(c[oó]digo|qr\s*code)/i;
+    if (body && !offerTaster && RE_PROMISE_CODE.test(body)) {
+      const frases = body.split(/(?<=[.!?])\s+/).filter((f) => !RE_PROMISE_CODE.test(f));
+      const limpo = frases.join(" ").replace(/\n{3,}/g, "\n\n").trim();
+      body = limpo.length > 40
+        ? limpo
+        : `${limpo} Quer que eu gere o encontro guiado de R$ 6,90 agora?`.trim();
+      console.log("[recovery-agent] promessa de código sem geração removida");
+    }
 
+    // Mensagem que fala de R$ 6,90 (encontro avulso) nunca termina em link de
+    // assinatura: são coisas diferentes e o link só confunde.
+    const menciona690 = /6,90/.test(body);
+    if (menciona690) sendLink = false;
 
     if (!sendLink && !customer && body.includes(CHECKOUT_URL)) {
       body = body.split(CHECKOUT_URL).join("").replace(/\n{3,}/g, "\n\n").trim();
     }
+
 
     if (sendLink && offerTaster) {
       // Oferta de encontro avulso e link de plano na mesma mensagem = ruído. O

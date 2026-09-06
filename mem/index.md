@@ -6,6 +6,7 @@
 - [Relógio como sinal, não condutor](mem://features/sessions/relogio-como-sinal-nao-condutor) — Proibido citar minutos; costura (dur+15), aterrissagem com consentimento, teto 2x duração; cron só encerra com silêncio real de 15min
 - [recovery-agent sempre responde](mem://features/recovery/recovery-agent-sempre-responde) — Cliente ativo vira modo SUPORTE, madrugada entra em fila (cron 08h05 BRT), cota 8, anexo e "ok" respondidos; nada de skip silencioso
 - [Trilho copiou o código PIX](mem://features/recovery/trilho-copiou-codigo-pix) — Régua única: copiou → 20min/2h no lugar do genérico 15min; gate por ContentSid em system_config.wa_copiou_templates; dryRun valida sem enviar
+- [Aceite taster sem rastro oficial](mem://features/recovery/aceite-taster-sem-rastro-oficial) — Caso Lúcia: "Quero" após oferta improvisada gera código; nunca prometer código sem gerar; 6,90 nunca sai com link de assinatura
 
 - [recovery-agent nunca se diminui](mem://features/recovery/nunca-se-diminuir) — Proibido abrir por negação ou se comparar por baixo com terapia; identidade exige cena nível A; cenas A elevadas ao padrão "quero isso agora"
 - [recovery-agent nunca adivinha a dúvida](mem://features/recovery/duvida-em-branco) — "Ficou uma dúvida" sem conteúdo = UMA pergunta curta; sem vitrine, PIX, valores, link ou taster

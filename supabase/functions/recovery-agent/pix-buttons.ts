@@ -279,7 +279,16 @@ export function classifyTasterIntent(text: string): "button" | "short_accept" | 
   return null;
 }
 
-/** A oferta do encontro avulso já saiu para este telefone? */
+/**
+ * A oferta do encontro avulso já saiu para este telefone?
+ *
+ * Aceita tanto o rastro oficial (metadata gravado quando o agente emitiu
+ * [OFERECER_TASTER] ou o template m3) quanto qualquer mensagem NOSSA recente que
+ * tenha oferecido R$ 6,90. Motivo: o modelo às vezes oferece "o QR Code de
+ * R$ 6,90" com redação própria; quando o lead responde "Quero", o aceite não
+ * pode morrer por causa da redação — a elegibilidade continua sendo decidida
+ * por `criar-pix-taster`.
+ */
 export async function tasterOfferAlreadySent(supabase: Supa, phone: string): Promise<boolean> {
   const { data } = await supabase
     .from("recovery_messages")
@@ -292,10 +301,16 @@ export async function tasterOfferAlreadySent(supabase: Supa, phone: string): Pro
     // deno-lint-ignore no-explicit-any
     const meta = (m as any)?.metadata || {};
     if (meta.taster_offered || meta.taster === true || meta.template === "copiou_taster") return true;
-    if (typeof (m as any)?.body === "string" && /6,90/.test((m as any).body) && /45 minutos/i.test((m as any).body)) return true;
+    // deno-lint-ignore no-explicit-any
+    const body = typeof (m as any)?.body === "string" ? (m as any).body as string : "";
+    if (!body) continue;
+    if (/6,90/.test(body) && /45 minutos/i.test(body)) return true;
+    // Oferta improvisada pelo modelo: R$ 6,90 + promessa/pergunta de código.
+    if (/6,90/.test(body) && /(c[oó]digo|qr\s*code|pix|experimentar|gerar|gero|mando)/i.test(body)) return true;
   }
   return false;
 }
+
 
 /**
  * Gera o código de R$ 6,90 na hora. Toda trava (cliente ativo, ex-assinante,
