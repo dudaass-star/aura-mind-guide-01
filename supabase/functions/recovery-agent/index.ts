@@ -871,11 +871,28 @@ ${modeInstructions}`;
       offerTaster = false;
     }
 
+    // Rede de segurança: promessa de pagamento que o sistema NÃO vai cumprir.
+    // O modelo escreveu "te mando o código de R$ 6,90 agora" sem emitir a tag,
+    // então nenhum código é gerado e a pessoa fica esperando (caso Lúcia).
+    const RE_PROMISE_CODE = /(mando|te mando|envio|gero|vou gerar|vou mandar)[^.!?\n]{0,40}(c[oó]digo|qr\s*code)/i;
+    if (body && !offerTaster && RE_PROMISE_CODE.test(body)) {
+      const frases = body.split(/(?<=[.!?])\s+/).filter((f) => !RE_PROMISE_CODE.test(f));
+      const limpo = frases.join(" ").replace(/\n{3,}/g, "\n\n").trim();
+      body = limpo.length > 40
+        ? limpo
+        : `${limpo} Quer que eu gere o encontro guiado de R$ 6,90 agora?`.trim();
+      console.log("[recovery-agent] promessa de código sem geração removida");
+    }
 
+    // Mensagem que fala de R$ 6,90 (encontro avulso) nunca termina em link de
+    // assinatura: são coisas diferentes e o link só confunde.
+    const menciona690 = /6,90/.test(body);
+    if (menciona690) sendLink = false;
 
     if (!sendLink && !customer && body.includes(CHECKOUT_URL)) {
       body = body.split(CHECKOUT_URL).join("").replace(/\n{3,}/g, "\n\n").trim();
     }
+
 
     if (sendLink && offerTaster) {
       // Oferta de encontro avulso e link de plano na mesma mensagem = ruído. O
