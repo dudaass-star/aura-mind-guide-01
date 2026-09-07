@@ -750,21 +750,30 @@ Deno.serve(async (req) => {
                   console.log(`⏳ woovi ${subscriptionId}: fora da janela (${lead}d) — reagendado`);
                   break;
                 }
-                const created = await createInstallmentCobr(next.globalID, Number(sub.value_cents || 0) || undefined);
-                await logWooviAttempt(supabase, {
-                  subscriptionId,
-                  userId: sub.user_id,
-                  installmentId: next.globalID,
-                  label: 'next_cycle_cobr',
-                  ok: created.ok,
-                  status: created.ok ? 'COBR_CREATED' : `COBR_REJECTED_${created.status}`,
-                  valueCents: Number(sub.value_cents || 0),
-                  dueDate: next.dueDate,
-                  raw: created.raw,
-                });
-                console.log(
-                  `🧾 woovi ${subscriptionId}: CobR ciclo seguinte (${next.dueDate}) ok=${created.ok}`,
-                );
+                // A Woovi já criou a CobR desse ciclo: o débito está garantido.
+                // Repetir o POST devolve 400 "A parcela já tem cobr" e queima o
+                // limite de taxa da conta, cegando as outras conferências.
+                if (next.hasCobr) {
+                  console.log(`✅ woovi ${subscriptionId}: CobR de ${next.dueDate} já existe`);
+                  if (isPreventiveGuard) break;
+                } else {
+                  const created = await createInstallmentCobr(next.globalID, Number(sub.value_cents || 0) || undefined);
+                  await logWooviAttempt(supabase, {
+                    subscriptionId,
+                    userId: sub.user_id,
+                    installmentId: next.globalID,
+                    label: 'next_cycle_cobr',
+                    ok: created.ok,
+                    status: created.ok ? 'COBR_CREATED' : `COBR_REJECTED_${created.status}`,
+                    valueCents: Number(sub.value_cents || 0),
+                    dueDate: next.dueDate,
+                    raw: created.raw,
+                  });
+                  console.log(
+                    `🧾 woovi ${subscriptionId}: CobR ciclo seguinte (${next.dueDate}) ok=${created.ok}`,
+                  );
+                  if (isPreventiveGuard && created.ok) break;
+                }
                 // A oferta só entra depois do vencimento + 7 dias de retries nativos.
                 offerInDays = Math.max(1, daysUntil(next.dueDate) + 8);
               }
