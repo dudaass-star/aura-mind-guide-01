@@ -313,3 +313,41 @@ export function normalizeMandateStatus(remote: unknown, fallback = "CRIANDO"): s
   if (["CREATED", "PENDING", "WAITING", "PIX_AUTOMATIC_CREATED"].includes(s)) return "AGUARDANDO";
   return fallback;
 }
+
+/**
+ * correlationID do CLIENTE dono do mandato, direto na Woovi.
+ *
+ * Serve para atribuir com segurança um pagamento do extrato quando quem pagou
+ * não é a titular (marido/familiar): o extrato traz `payer.correlationID`, que é
+ * o mesmo cliente Woovi do mandato. Sem isso a atribuição seria chute.
+ * Indisponibilidade LANÇA `WooviUnavailable`.
+ */
+export async function getSubscriptionCustomerCorrelation(
+  subscriptionId: string,
+): Promise<string | null> {
+  const path = `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}`;
+  const r = await wooviFetch<Record<string, any>>(path);
+  if (!r.ok) throw new WooviUnavailable(r.status, path, r.raw);
+  const raw = (r.data as Record<string, any>) || {};
+  const sub = (raw.subscription || raw) as Record<string, any>;
+  const cust = (sub?.customer || {}) as Record<string, any>;
+  const id = cust?.correlationID || cust?.correlationId || null;
+  return id ? String(id) : null;
+}
+
+/**
+ * Parcelas cruas do mandato. Usado para PROVAR de quem é um pagamento que
+ * apareceu só no extrato: a parcela liquidada aparece aqui no mandato certo,
+ * mesmo quando quem pagou foi outra pessoa da família.
+ */
+export async function listInstallments(
+  subscriptionId: string,
+): Promise<Record<string, any>[]> {
+  const path = `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/installments`;
+  const r = await wooviFetch<Record<string, any>>(path);
+  if (!r.ok) throw new WooviUnavailable(r.status, path, r.raw);
+  const raw = r.data as Record<string, any> | null;
+  return Array.isArray(raw?.installments)
+    ? raw!.installments
+    : Array.isArray(raw) ? (raw as unknown as Record<string, any>[]) : [];
+}
