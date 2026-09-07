@@ -267,10 +267,10 @@ export async function createInstallmentCobr(
 export async function findScheduledInstallment(
   subscriptionId: string,
 ): Promise<WooviInstallment | null> {
-  const r = await wooviFetch<Record<string, any>>(
-    `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/installments`,
-  );
-  if (!r.ok) return null;
+  const path = `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/installments`;
+  const r = await wooviFetch<Record<string, any>>(path);
+  // Indisponibilidade não é "sem parcela": quem chama precisa reconferir depois.
+  if (!r.ok) throw new WooviUnavailable(r.status, path, r.raw);
   const raw = r.data as Record<string, any> | null;
   const list: Record<string, any>[] = Array.isArray(raw?.installments)
     ? raw!.installments
