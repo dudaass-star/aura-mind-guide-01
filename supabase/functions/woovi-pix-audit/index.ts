@@ -510,7 +510,13 @@ Deno.serve(async (req) => {
         if (!dryRun) {
           const created = await wooviFetch<Record<string, any>>(
             `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}/installments`,
-            { method: "POST", body: { dueDate: sub.next_charge_date, value: Number(sub.value_cents || 0) || undefined } },
+            {
+              method: "POST",
+              body: {
+                dueDate: sub.next_charge_date,
+                value: Number(sub.value_cents || 0) || undefined,
+              },
+            } as RequestInit & { body?: unknown },
           );
           repaired = created.ok;
           await supabase.from("woovi_subscriptions").update({
