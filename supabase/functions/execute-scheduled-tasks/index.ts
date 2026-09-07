@@ -770,6 +770,21 @@ Deno.serve(async (req) => {
               }
             }
 
+            // Guarda preventiva sem parcela na Woovi: o cliente está em dia, não
+            // há nada a oferecer. Reconferimos em 24h em vez de abrir dunning.
+            if (mandateAlive && String(payload.source || '') === 'pre_due_guard'
+                && !(await findScheduledInstallment(subscriptionId))) {
+              await supabase.from('scheduled_tasks').insert({
+                user_id: task.user_id,
+                task_type: 'woovi_next_cycle_cobr',
+                execute_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+                status: 'pending',
+                payload: { ...payload, source: 'pre_due_guard' },
+              });
+              console.warn(`⚠️ woovi ${subscriptionId}: guarda preventiva sem parcela — reconferência em 24h`);
+              break;
+            }
+
             await supabase.from('scheduled_tasks').insert({
               user_id: task.user_id,
               task_type: 'woovi_recovery_offer',
