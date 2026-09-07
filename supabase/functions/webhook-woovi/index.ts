@@ -607,6 +607,22 @@ async function findSubscription(
 }
 
 /**
+ * Vencimento do ciclo, procurado em todos os lugares onde a Woovi pode colocá-lo.
+ * Último recurso: a data prevista de débito do próprio mandato (`next_charge_date`),
+ * que é o que a Aura contratou com o cliente.
+ */
+function cycleDueDate(
+  charge: Record<string, any>,
+  body: Record<string, any>,
+  sub: Record<string, any>,
+): string | null {
+  const raw = charge?.expiresDate || charge?.dueDate || charge?.paymentDate
+    || (body as any)?.cobr?.dueDate || (body as any)?.installment?.dateGenerateCharge
+    || (body as any)?.pixAutomatic?.dueDate || sub?.next_charge_date || null;
+  return raw ? String(raw).slice(0, 10) : null;
+}
+
+/**
  * Ciclo do mandato não pago: registra a cobrança e entra na RECUPERAÇÃO
  * SILENCIOSA de ~30 dias.
  *
