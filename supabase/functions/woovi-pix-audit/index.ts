@@ -159,6 +159,7 @@ Deno.serve(async (req) => {
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
     reautorizacao: [], ciclo_sem_cobranca: [], cobertura: [], status_sincronizado: [],
+    duplicados: [],
     erros: [],
   };
 
@@ -477,7 +478,7 @@ Deno.serve(async (req) => {
     // sempre "quem vence primeiro".
     const { data: upcomingSubs } = await supabase
       .from("woovi_subscriptions")
-      .select("id, user_id, subscription_id, customer_email, next_charge_date, value_cents, status")
+      .select("id, user_id, subscription_id, customer_email, next_charge_date, value_cents, status, last_error")
       .in("status", MANDATE_ACTIVE_STATUSES)
       .is("replaced_by_subscription_id", null)
       .not("subscription_id", "is", null)
@@ -509,7 +510,15 @@ Deno.serve(async (req) => {
       // Parcela existe e JÁ tem CobR criada: está tudo em ordem, não tocar.
       // (Tentar criar de novo devolve 400 "A parcela já tem cobr" e queima o
       // limite de taxa da Woovi, cegando as outras proteções.)
-      if (installment?.globalID && installment.hasCobr) continue;
+      if (installment?.globalID && installment.hasCobr) {
+        // Limpa diagnóstico velho: enquanto líamos o vencimento no campo errado,
+        // mandatos saudáveis ficaram marcados como "sem parcela/sem cobrança".
+        if (sub.last_error && !dryRun) {
+          await supabase.from("woovi_subscriptions")
+            .update({ last_error: null }).eq("id", sub.id);
+        }
+        continue;
+      }
 
       if (!installment?.globalID) {
         // Sem parcela AGENDADA. Não existe criar parcela por fora (a Woovi
@@ -593,6 +602,49 @@ Deno.serve(async (req) => {
         });
       }
     }
+
+    // ---- Mandatos duplicados do mesmo cliente --------------------------------
+    // Troca de plano cria um mandato novo; o antigo continuava vivo na Woovi e
+    // aqui. Isso é risco de débito dobrado e polui o "ciclo sem cobrança" com
+    // mandatos que ninguém usa mais. Mantemos o mais recente e aposentamos os
+    // anteriores (cancelando também na Woovi).
+    if (!onlyExtrato) {
+      const { data: liveAll } = await supabase
+        .from("woovi_subscriptions")
+        .select("id, user_id, subscription_id, customer_email, created_at, mandate_approved_at, entry_paid_at")
+        .in("status", MANDATE_ACTIVE_STATUSES)
+        .is("replaced_by_subscription_id", null)
+        .not("subscription_id", "is", null)
+        .limit(1000);
+      // O mandato que vale é o que o cliente autorizou/pagou por último — não
+      // necessariamente o criado por último (QR gerado e abandonado é comum).
+      const mandateRank = (r: Record<string, any>) => Math.max(
+        Date.parse(r.mandate_approved_at || "") || 0,
+        Date.parse(r.entry_paid_at || "") || 0,
+        Date.parse(r.created_at || "") || 0,
+      );
+      const ordered = [...(liveAll || [])].sort((a, b) => mandateRank(b) - mandateRank(a));
+      const seen = new Map<string, string>(); // chave do cliente → mandato mantido
+      for (const row of ordered) {
+        const key = String(row.user_id || row.customer_email || row.id).toLowerCase();
+        const keeper = seen.get(key);
+        if (!keeper) { seen.set(key, String(row.subscription_id)); continue; }
+        report.duplicados.push({
+          sub: row.subscription_id, email: row.customer_email, mantido: keeper, dryRun,
+        });
+        if (dryRun) continue;
+        await wooviFetch(
+          `/api/v1/subscriptions/${encodeURIComponent(String(row.subscription_id))}/cancel`,
+          { method: "PUT" },
+        ).catch(() => {});
+        await supabase.from("woovi_subscriptions").update({
+          status: "CANCELADA",
+          replaced_by_subscription_id: keeper,
+          last_error: `substituído pelo mandato ${keeper}`,
+        }).eq("id", row.id);
+      }
+    }
+
 
     // No trilho Woovi o débito do ciclo depende da Woovi gerar a cobrança E do
     // webhook chegar. Sem esta varredura, um webhook perdido vira usuário
