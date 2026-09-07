@@ -727,7 +727,34 @@ Deno.serve(async (req) => {
           .order("created_at", { ascending: false }).limit(1);
         sub = data?.[0] ?? null;
       }
-      if (!sub?.subscription_id) continue;
+      // Fallback: pagou outra pessoa. Casa pelo mandato ativo cujo valor bate e
+      // cujo vencimento previsto está a até 10 dias do pagamento.
+      if (!sub) {
+        const payDay = when.slice(0, 10);
+        const from = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) - 10 * 86400000));
+        const to = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) + 10 * 86400000));
+        const { data: candidates } = await supabase.from("woovi_subscriptions")
+          .select("*")
+          .in("status", MANDATE_ACTIVE_STATUSES)
+          .is("replaced_by_subscription_id", null)
+          .not("subscription_id", "is", null)
+          .eq("value_cents", value)
+          .gte("next_charge_date", from)
+          .lte("next_charge_date", to)
+          .limit(5);
+        // Só aceita quando há UM único candidato: dinheiro não se atribui no chute.
+        if (Array.isArray(candidates) && candidates.length === 1) {
+          sub = candidates[0];
+          console.log(`🔎 extrato: pagamento de ${value} casado pelo mandato ${sub.subscription_id} (pagador diferente)`);
+        }
+      }
+      if (!sub?.subscription_id) {
+        report.ciclo_sem_cobranca.push({
+          orfao: true, valor: value, quando: when,
+          motivo: "pagamento no extrato sem mandato correspondente", dryRun,
+        });
+        continue;
+      }
 
       // Já registrado? Aceita match por identificador do extrato ou por
       // valor+janela (o webhook grava o correlationID da cobrança, não o E2E).
