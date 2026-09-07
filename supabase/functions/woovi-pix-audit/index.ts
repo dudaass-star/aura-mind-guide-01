@@ -852,23 +852,55 @@ Deno.serve(async (req) => {
         const r = await wooviFetch<Record<string, any>>(String(p));
         probe.push({ path: p, status: r.status, data: r.data ?? r.raw?.slice?.(0, 1500) });
       }
+      const inWindow = transactions
+        .filter((t) => String(t?.time || t?.createdAt || "") >= extratoSince)
+        .map((t) => ({
+          time: t?.time || t?.createdAt,
+          value: t?.value,
+          subType: t?.subType,
+          payer: t?.payer?.name,
+          payer_cpf: t?.payer?.taxID?.taxID || t?.debitParty?.holder?.taxID?.taxID,
+          payer_email: t?.payer?.email,
+          payer_phone: t?.payer?.phone,
+          payer_correlation: t?.payer?.correlationID,
+          charge_correlation: t?.charge?.correlationID,
+          e2e: t?.endToEndId,
+        }));
+
+      // Resumo de conferência contra o painel da Woovi: quanto entrou na janela,
+      // quantos desses pagamentos já estão gravados aqui e quantos não estão.
+      const { data: knownForSummary } = await supabase.from("woovi_charges")
+        .select("installment_id").not("installment_id", "is", null).limit(5000);
+      const knownSummarySet = new Set(
+        (knownForSummary || []).map((r: Record<string, any>) => String(r.installment_id)),
+      );
+      const byValue: Record<string, { n: number; total: number; sem_registro: number }> = {};
+      let n = 0, total = 0, semRegistro = 0;
+      for (const t of inWindow) {
+        const v = Number(t.value || 0);
+        if (v <= 0) continue;
+        n++; total += v;
+        const known = knownSummarySet.has(String(t.e2e))
+          || knownSummarySet.has(String(t.charge_correlation));
+        if (!known) semRegistro++;
+        const key = (v / 100).toFixed(2);
+        byValue[key] ||= { n: 0, total: 0, sem_registro: 0 };
+        byValue[key].n++;
+        byValue[key].total += v / 100;
+        if (!known) byValue[key].sem_registro++;
+      }
+
       return new Response(JSON.stringify({
         debugExtrato: true,
         probe,
-        transactions: transactions
-          .filter((t) => String(t?.time || t?.createdAt || "") >= extratoSince)
-          .map((t) => ({
-            time: t?.time || t?.createdAt,
-            value: t?.value,
-            subType: t?.subType,
-            payer: t?.payer?.name,
-            payer_cpf: t?.payer?.taxID?.taxID || t?.debitParty?.holder?.taxID?.taxID,
-            payer_email: t?.payer?.email,
-            payer_phone: t?.payer?.phone,
-            payer_correlation: t?.payer?.correlationID,
-            charge_correlation: t?.charge?.correlationID,
-            e2e: t?.endToEndId,
-          })),
+        resumo: {
+          janela_dias: extratoDays,
+          entradas_no_extrato: n,
+          total_recebido: Number((total / 100).toFixed(2)),
+          sem_registro_local: semRegistro,
+          por_valor: byValue,
+        },
+        ...(body.summary_only === true ? {} : { transactions: inWindow }),
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
