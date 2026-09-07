@@ -730,6 +730,13 @@ Deno.serve(async (req) => {
               console.log(
                 `🔁 woovi retry único sub=${subscriptionId} parcela=${installment.globalID} ok=${retry.ok}`,
               );
+              if (retry.ok) {
+                await scheduleWooviRetryConfirm(supabase, {
+                  userId: task.user_id, subscriptionId,
+                  installmentId: installment.globalID, label: 'cycle_retry',
+                  dueDate: installment.dueDate,
+                });
+              }
 
               // Agenda a criação da CobR do ciclo seguinte dentro da janela
               // legal (mira 8 dias antes do vencimento: entre 5 e 10).
