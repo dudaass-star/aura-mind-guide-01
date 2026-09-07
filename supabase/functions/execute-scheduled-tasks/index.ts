@@ -607,7 +607,10 @@ Deno.serve(async (req) => {
 
             const { data: sub } = await supabase
               .from('woovi_subscriptions')
-              .select('id, user_id, subscription_id, status, value_cents, plan, billing_cycle')
+              // billing_period é o nome real da coluna; pedir 'billing_cycle' aqui
+              // fazia a consulta falhar e a recuperação abortar em TODOS os
+              // mandatos com "mandato não encontrado".
+              .select('id, user_id, subscription_id, status, value_cents, plan, billing_period')
               .eq('subscription_id', subscriptionId)
               .maybeSingle();
             if (!sub) {

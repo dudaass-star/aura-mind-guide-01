@@ -26,6 +26,7 @@ import {
   WOOVI_REJECTED_STATUSES as REJECTED_STATUSES,
   WOOVI_CANCELED_STATUSES as CANCELED_STATUSES,
   WOOVI_PAID_STATUSES as PAID_STATUSES,
+  MANDATE_ACTIVE_STATUSES,
 } from "../_shared/woovi.ts";
 
 const corsHeaders = {
@@ -787,6 +788,41 @@ Deno.serve(async (req) => {
                 }).eq("id", sub.id);
               } else {
                 console.log(`[webhook-woovi] ✅ mandato ${sub.subscription_id} atualizado para R$ ${(sub.value_cents / 100).toFixed(2)}`);
+              }
+            }
+
+            // Mandato novo aprovado = troca de plano/reentrada. Todo mandato vivo
+            // ANTERIOR do mesmo cliente é aposentado aqui (na Woovi e aqui),
+            // senão o cliente fica com duas autorizações ativas e leva dois
+            // débitos — e a auditoria fica acusando "ciclo sem cobrança" no
+            // mandato que ninguém usa mais.
+            if (approvedNow) {
+              const or = [
+                sub.user_id ? `user_id.eq.${sub.user_id}` : null,
+                sub.customer_email ? `customer_email.eq.${sub.customer_email}` : null,
+              ].filter(Boolean).join(",");
+              if (or) {
+                const { data: siblings } = await supabase
+                  .from("woovi_subscriptions")
+                  .select("id, subscription_id")
+                  .in("status", MANDATE_ACTIVE_STATUSES)
+                  .is("replaced_by_subscription_id", null)
+                  .neq("id", sub.id)
+                  .or(or);
+                for (const old of siblings || []) {
+                  if (old.subscription_id) {
+                    await wooviFetch(
+                      `/api/v1/subscriptions/${encodeURIComponent(old.subscription_id)}/cancel`,
+                      { method: "PUT" },
+                    ).catch(() => {});
+                  }
+                  await supabase.from("woovi_subscriptions").update({
+                    status: "CANCELADA",
+                    replaced_by_subscription_id: sub.subscription_id,
+                    last_error: `substituído pelo mandato ${sub.subscription_id}`,
+                  }).eq("id", old.id);
+                  console.log(`[webhook-woovi] mandato antigo ${old.subscription_id} aposentado → ${sub.subscription_id}`);
+                }
               }
             }
 
