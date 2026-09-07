@@ -516,7 +516,7 @@ Deno.serve(async (req) => {
                 dueDate: sub.next_charge_date,
                 value: Number(sub.value_cents || 0) || undefined,
               },
-            } as RequestInit & { body?: unknown },
+            } as unknown as RequestInit & { body?: unknown },
           );
           repaired = created.ok;
           await supabase.from("woovi_subscriptions").update({
