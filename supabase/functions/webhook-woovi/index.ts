@@ -607,6 +607,22 @@ async function findSubscription(
 }
 
 /**
+ * Vencimento do ciclo, procurado em todos os lugares onde a Woovi pode colocá-lo.
+ * Último recurso: a data prevista de débito do próprio mandato (`next_charge_date`),
+ * que é o que a Aura contratou com o cliente.
+ */
+function cycleDueDate(
+  charge: Record<string, any>,
+  body: Record<string, any>,
+  sub: Record<string, any>,
+): string | null {
+  const raw = charge?.expiresDate || charge?.dueDate || charge?.paymentDate
+    || (body as any)?.cobr?.dueDate || (body as any)?.installment?.dateGenerateCharge
+    || (body as any)?.pixAutomatic?.dueDate || sub?.next_charge_date || null;
+  return raw ? String(raw).slice(0, 10) : null;
+}
+
+/**
  * Ciclo do mandato não pago: registra a cobrança e entra na RECUPERAÇÃO
  * SILENCIOSA de ~30 dias.
  *
@@ -962,7 +978,7 @@ Deno.serve(async (req) => {
             }
 
             const { data: existing } = await supabase.from("woovi_charges")
-              .select("id, cycle_index, access_activated_at")
+              .select("id, cycle_index, access_activated_at, due_date")
               .eq("installment_id", String(chargeId)).maybeSingle();
 
             let chargeRowId = existing?.id as string | undefined;
@@ -980,7 +996,10 @@ Deno.serve(async (req) => {
                 user_id: sub.user_id,
                 cycle_index: cycleIndex,
                 value_cents: valueCents,
-                due_date: charge.expiresDate ? String(charge.expiresDate).slice(0, 10) : null,
+                // Vencimento do ciclo: a CobR do PIX Automático não traz
+                // `expiresDate`; sem os fallbacks abaixo TODA mensalidade ficava
+                // sem vencimento gravado e "pagou no dia certo?" era inverificável.
+                due_date: cycleDueDate(charge, body, sub),
                 status: chargeStatus || "COMPLETED",
                 paid_at: paidAt,
                 kind: isEntryCharge ? "entry" : (cycleIndex === 0 ? "entry" : "cycle"),
@@ -990,9 +1009,12 @@ Deno.serve(async (req) => {
               if (insErr) throw new Error(`falha registrando cobrança: ${insErr.message}`);
               chargeRowId = inserted?.id;
             } else {
+              // Nunca sobrescreve um vencimento já correto: só preenche o vazio.
+              const due = existing?.due_date ? null : cycleDueDate(charge, body, sub);
               await supabase.from("woovi_charges").update({
                 status: chargeStatus || "COMPLETED", paid_at: paidAt, raw_payload: body,
                 ...(payerBank ? { payer_bank: payerBank } : {}),
+                ...(due ? { due_date: due } : {}),
               }).eq("id", chargeRowId);
             }
 

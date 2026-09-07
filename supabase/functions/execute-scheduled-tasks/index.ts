@@ -50,11 +50,48 @@ async function logWooviAttempt(
   }
 }
 
+/**
+ * Toda tentativa pedida à Woovi precisa de VEREDITO. Sem esta reconferência o
+ * mandato ficava eternamente marcado como "RETRY_REQUESTED": nem pago, nem
+ * recusado, nem em recuperação — parado, sem ninguém agir.
+ */
+async function scheduleWooviRetryConfirm(
+  supabase: any,
+  a: { userId: string | null; subscriptionId: string; installmentId: string; label: string; dueDate?: string | null },
+) {
+  if (!a.userId) return;
+  const { data: dup } = await supabase.from('scheduled_tasks')
+    .select('id').eq('task_type', 'woovi_retry_confirm').eq('status', 'pending')
+    .contains('payload', { subscription_id: a.subscriptionId, installment_id: a.installmentId })
+    .limit(1);
+  if (Array.isArray(dup) && dup.length > 0) return;
+  // 24h depois da tentativa — ou 1 dia depois do vencimento, quando a cobrança
+  // criada é de um ciclo futuro (não há veredito antes de vencer).
+  let at = Date.now() + 24 * 3600 * 1000;
+  if (a.dueDate) {
+    const afterDue = Date.parse(`${a.dueDate}T12:00:00-03:00`) + 24 * 3600 * 1000;
+    if (Number.isFinite(afterDue) && afterDue > at) at = afterDue;
+  }
+  await supabase.from('scheduled_tasks').insert({
+    user_id: a.userId,
+    task_type: 'woovi_retry_confirm',
+    execute_at: new Date(at).toISOString(),
+    status: 'pending',
+    payload: {
+      provider: 'woovi',
+      subscription_id: a.subscriptionId,
+      installment_id: a.installmentId,
+      label: a.label,
+      due_date: a.dueDate ?? null,
+    },
+  });
+}
+
 /** Encerra toda a cadência de recuperação (usado quando o cliente regulariza). */
 async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
   await supabase.from('scheduled_tasks')
     .update({ status: 'canceled', executed_at: new Date().toISOString() })
-    .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final'])
+    .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final', 'woovi_retry_confirm'])
     .eq('status', 'pending')
     .contains('payload', { subscription_id: subscriptionId });
 }
@@ -65,6 +102,7 @@ async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
 const PHONELESS_TASK_TYPES = new Set([
   'woovi_cycle_recycle',
   'woovi_next_cycle_cobr',
+  'woovi_retry_confirm',
   // Encerramento também é técnico: cancela o mandato e fecha o perfil, sem
   // falar com o cliente. Sem isso um perfil sem telefone deixava o mandato vivo.
   'woovi_recovery_final',
@@ -692,6 +730,13 @@ Deno.serve(async (req) => {
               console.log(
                 `🔁 woovi retry único sub=${subscriptionId} parcela=${installment.globalID} ok=${retry.ok}`,
               );
+              if (retry.ok) {
+                await scheduleWooviRetryConfirm(supabase, {
+                  userId: task.user_id, subscriptionId,
+                  installmentId: installment.globalID, label: 'cycle_retry',
+                  dueDate: installment.dueDate,
+                });
+              }
 
               // Agenda a criação da CobR do ciclo seguinte dentro da janela
               // legal (mira 8 dias antes do vencimento: entre 5 e 10).
@@ -791,6 +836,13 @@ Deno.serve(async (req) => {
                   console.log(
                     `🧾 woovi ${subscriptionId}: CobR ciclo seguinte (${next.dueDate}) ok=${created.ok}`,
                   );
+                  if (created.ok) {
+                    await scheduleWooviRetryConfirm(supabase, {
+                      userId: task.user_id, subscriptionId,
+                      installmentId: next.globalID, label: 'next_cycle_cobr',
+                      dueDate: next.dueDate,
+                    });
+                  }
                   if (isPreventiveGuard && created.ok) break;
                 }
                 // A oferta só entra depois do vencimento + 7 dias de retries nativos.
@@ -822,6 +874,105 @@ Deno.serve(async (req) => {
             });
             break;
           }
+
+          // ─────────────────────────────────────────────────────────────────
+          // Veredito de uma tentativa pedida à Woovi.
+          //
+          // Toda retentativa/CobR criada precisa terminar em pago, recusado ou
+          // nova ação. Antes, uma tentativa aceita pela Woovi que nunca voltava
+          // deixava o mandato preso em "RETRY_REQUESTED", fora da régua.
+          // ─────────────────────────────────────────────────────────────────
+          case 'woovi_retry_confirm': {
+            const { findUnpaidInstallment, listInstallments, WooviUnavailable, MANDATE_ACTIVE_STATUSES } =
+              await import('../_shared/woovi.ts');
+            const subscriptionId = String(payload.subscription_id || '');
+            const installmentId = String(payload.installment_id || '');
+            if (!subscriptionId || !Deno.env.get('WOOVI_APP_ID')) break;
+
+            const { data: sub } = await supabase
+              .from('woovi_subscriptions')
+              .select('id, user_id, subscription_id, status, last_error')
+              .eq('subscription_id', subscriptionId)
+              .maybeSingle();
+            if (!sub) break;
+
+            if (!MANDATE_ACTIVE_STATUSES.includes(String(sub.status || '').toUpperCase())) {
+              console.log(`ℹ️ woovi_retry_confirm ${subscriptionId}: mandato não está vivo — nada a confirmar`);
+              break;
+            }
+
+            let paid = false;
+            let stillOpen = true;
+            try {
+              const installments = await listInstallments(subscriptionId);
+              const target = installments.find((i: any) =>
+                String(i?.globalID || i?.id) === installmentId
+              );
+              const st = String(target?.status || '').toUpperCase();
+              if (target) {
+                paid = ['PAID', 'COMPLETED', 'CONFIRMED', 'CONCLUDED'].includes(st);
+                stillOpen = !paid;
+              } else {
+                // Parcela não está mais na lista: só concluímos "pago" se não
+                // houver nenhuma parcela em aberto no mandato.
+                paid = !(await findUnpaidInstallment(subscriptionId));
+                stillOpen = !paid;
+              }
+            } catch (e) {
+              if (!(e instanceof WooviUnavailable)) throw e;
+              await supabase.from('scheduled_tasks').insert({
+                user_id: task.user_id,
+                task_type: 'woovi_retry_confirm',
+                execute_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                status: 'pending',
+                payload: { ...payload, source: 'woovi_unavailable_retry' },
+              });
+              console.warn(`⏳ woovi_retry_confirm ${subscriptionId}: Woovi indisponível — reconferência em 1h`);
+              break;
+            }
+
+            if (paid) {
+              await supabase.from('woovi_subscriptions')
+                .update({ last_error: null }).eq('id', sub.id);
+              await cancelWooviRecovery(supabase, subscriptionId);
+              console.log(`✅ woovi_retry_confirm ${subscriptionId}: tentativa liquidada — cadência encerrada`);
+              break;
+            }
+
+            // Sem veredito de pagamento: a tentativa falhou de fato. Registra o
+            // diagnóstico real e garante que a régua continue andando.
+            if (stillOpen) {
+              await supabase.from('woovi_subscriptions')
+                .update({
+                  last_error: `tentativa ${payload.label || 'cobr'} de ${payload.due_date || 's/ data'} sem pagamento confirmado`,
+                })
+                .eq('id', sub.id);
+              const { data: pending } = await supabase.from('scheduled_tasks')
+                .select('id')
+                .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final'])
+                .eq('status', 'pending')
+                .contains('payload', { subscription_id: subscriptionId })
+                .limit(1);
+              if (!Array.isArray(pending) || pending.length === 0) {
+                await supabase.from('scheduled_tasks').insert({
+                  user_id: task.user_id,
+                  task_type: 'woovi_cycle_recycle',
+                  execute_at: new Date(Date.now() + 60 * 1000).toISOString(),
+                  status: 'pending',
+                  payload: {
+                    provider: 'woovi',
+                    subscription_id: subscriptionId,
+                    attempt: 1,
+                    started_at: new Date().toISOString(),
+                    source: 'retry_confirm_unpaid',
+                  },
+                });
+                console.warn(`🔁 woovi_retry_confirm ${subscriptionId}: sem pagamento — cadência reaberta`);
+              }
+            }
+            break;
+          }
+
 
           case 'woovi_recovery_offer': {
             // Primeira e única conversa da janela: oferta (30% off → Lite).

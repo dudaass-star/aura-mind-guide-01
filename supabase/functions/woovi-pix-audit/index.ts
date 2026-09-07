@@ -159,7 +159,7 @@ Deno.serve(async (req) => {
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
     reautorizacao: [], ciclo_sem_cobranca: [], cobertura: [], status_sincronizado: [],
-    duplicados: [],
+    duplicados: [], vencimento_backfill: [],
     erros: [],
   };
 
@@ -867,6 +867,53 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- 5c) Vencimento das mensalidades (backfill) -------------------------
+    // A CobR do PIX Automático não traz vencimento no webhook, então TODA
+    // mensalidade ficou gravada sem `due_date` — dava para saber que pagou, não
+    // se pagou no dia certo. Aqui perguntamos a data à própria Woovi, em lotes
+    // pequenos para não queimar o limite de taxa.
+    if (!onlyExtrato) {
+      const { data: noDue } = await supabase
+        .from("woovi_charges")
+        .select("id, subscription_id, installment_id, value_cents, paid_at")
+        .eq("kind", "cycle")
+        .is("due_date", null)
+        .order("paid_at", { ascending: false })
+        .limit(6);
+      for (const row of noDue || []) {
+        try {
+          const installments = await listInstallments(String(row.subscription_id));
+          const paidMs = row.paid_at ? Date.parse(String(row.paid_at)) : NaN;
+          const candidates = installments
+            .map((i: Record<string, any>) => ({
+              due: String(i?.dueDate || i?.dateGenerateCharge || i?.cobr?.dueDate || "").slice(0, 10),
+              value: Number(i?.value),
+              status: String(i?.status || "").toUpperCase(),
+            }))
+            .filter((i) => !!i.due);
+          // A parcela certa é a liquidada de mesmo valor com vencimento mais
+          // próximo da data do pagamento.
+          const best = candidates
+            .filter((i) => !Number.isFinite(i.value) || i.value === Number(row.value_cents))
+            .sort((a, b) =>
+              Math.abs(Date.parse(`${a.due}T12:00:00-03:00`) - paidMs)
+              - Math.abs(Date.parse(`${b.due}T12:00:00-03:00`) - paidMs)
+            )[0];
+          if (!best?.due) continue;
+          if (!dryRun) {
+            await supabase.from("woovi_charges")
+              .update({ due_date: best.due }).eq("id", row.id);
+          }
+          report.vencimento_backfill.push({
+            charge: row.installment_id, sub: row.subscription_id,
+            vencimento: best.due, pago_em: row.paid_at, dryRun,
+          });
+        } catch (e) {
+          if (e instanceof WooviUnavailable) break;
+          throw e;
+        }
+      }
+    }
 
 
     // ---- 6) Reconciliação pelo extrato -------------------------------------
