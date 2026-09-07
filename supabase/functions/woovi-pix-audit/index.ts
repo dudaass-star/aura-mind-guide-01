@@ -20,7 +20,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import {
   wooviFetch, brtDate,
   MANDATE_ACTIVE_STATUSES, WOOVI_PAID_STATUSES,
-  findScheduledInstallment, daysUntil,
+  findScheduledInstallment, daysUntil, WooviUnavailable,
 } from "../_shared/woovi.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
@@ -468,6 +468,10 @@ Deno.serve(async (req) => {
     // da CobR. A tarefa é deduplicada por assinatura + vencimento.
     const today = brtDate(now);
     const tenDaysAhead = brtDate(new Date(now.getTime() + 10 * 86400000));
+    // Lote pequeno e ordenado pelo vencimento mais próximo: a Woovi devolve 429
+    // quando varremos dezenas de mandatos de uma vez, e 429 cegava a guarda.
+    // Quem sobra é pego na rodada seguinte (a cada 15 min), já que a ordem é
+    // sempre "quem vence primeiro".
     const { data: upcomingSubs } = await supabase
       .from("woovi_subscriptions")
       .select("id, user_id, subscription_id, customer_email, next_charge_date, value_cents, status")
@@ -477,15 +481,53 @@ Deno.serve(async (req) => {
       .not("next_charge_date", "is", null)
       .gte("next_charge_date", today)
       .lte("next_charge_date", tenDaysAhead)
-      .limit(200);
+      .order("next_charge_date", { ascending: true })
+      .limit(25);
 
     for (const sub of (onlyExtrato ? [] : upcomingSubs) || []) {
-      const installment = await findScheduledInstallment(String(sub.subscription_id));
-      await new Promise((res) => setTimeout(res, 250));
+      let installment: Awaited<ReturnType<typeof findScheduledInstallment>> = null;
+      try {
+        installment = await findScheduledInstallment(String(sub.subscription_id));
+      } catch (e) {
+        if (e instanceof WooviUnavailable) {
+          // Woovi indisponível/limitada: NÃO concluímos nada. Reconferimos na
+          // próxima rodada — este é justamente o caso que antes virava
+          // "parcela ausente" e deixava o cliente sem cobrança.
+          report.ciclo_sem_cobranca.push({
+            sub: sub.subscription_id, email: sub.customer_email,
+            ciclo: sub.next_charge_date, motivo: `woovi indisponível (${e.status}) — reconferir`,
+            dryRun,
+          });
+          continue;
+        }
+        throw e;
+      }
+
       if (!installment?.globalID || !installment.dueDate) {
+        // Resposta confirmada e sem parcela futura: é o furo que deixou 9 pessoas
+        // sem débito. Criamos a parcela/CobR do ciclo em vez de só anotar.
+        let repaired = false;
+        if (!dryRun) {
+          const createBody: Record<string, unknown> = {
+            dueDate: sub.next_charge_date,
+            value: Number(sub.value_cents || 0) || undefined,
+          };
+          const created = await wooviFetch<Record<string, any>>(
+            `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}/installments`,
+            { method: "POST", ...(createBody ? { body: createBody } : {}) } as RequestInit & { body?: unknown },
+          );
+          repaired = created.ok;
+          await supabase.from("woovi_subscriptions").update({
+            last_error: repaired
+              ? null
+              : `ciclo de ${sub.next_charge_date} sem parcela na Woovi — criação manual falhou (${created.status})`,
+          }).eq("id", sub.id);
+        }
         report.ciclo_sem_cobranca.push({
           sub: sub.subscription_id, email: sub.customer_email,
-          ciclo: sub.next_charge_date, motivo: "parcela futura ausente", dryRun,
+          ciclo: sub.next_charge_date,
+          motivo: repaired ? "parcela ausente — recriada" : "parcela futura ausente (intervenção)",
+          dryRun,
         });
         continue;
       }
@@ -545,7 +587,16 @@ Deno.serve(async (req) => {
         `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
       );
       await new Promise((res) => setTimeout(res, 250));
-      if (!r.ok || !r.data) continue;
+      if (!r.ok || !r.data) {
+        // Silêncio da Woovi (429/5xx) não é "mandato sem cobrança": registra pra
+        // reconferência na próxima varredura em vez de sumir do radar.
+        report.ciclo_sem_cobranca.push({
+          sub: sub.subscription_id, email: sub.customer_email,
+          ciclo: sub.next_charge_date,
+          motivo: `woovi indisponível (${r.status}) — reconferir`, dryRun,
+        });
+        continue;
+      }
       const remote = ((r.data as Record<string, any>)?.subscription || r.data) as Record<string, any>;
       const remoteCharges: Record<string, any>[] = Array.isArray(remote?.charges)
         ? remote.charges
@@ -642,11 +693,16 @@ Deno.serve(async (req) => {
     // liquidada e aparece SÓ no extrato — não vem em /api/v1/charge e o webhook
     // de cobrança não chega. Resultado: dinheiro na conta e nenhum registro
     // local (nem woovi_charges, nem entry_paid_at, nem acesso).
-    // Aqui varremos o extrato dos últimos 3 dias, casamos o pagador (CPF, com
+    // Aqui varremos o extrato dos últimos 10 dias, casamos o pagador (CPF, com
     // fallback de e-mail/telefone) com um mandato nosso e, se não houver
     // pagamento local equivalente, fazemos replay pro webhook — que continua
     // sendo a única fonte de verdade da ativação.
-    const extratoSince = new Date(now.getTime() - 3 * 86400000).toISOString();
+    //
+    // Pagador diferente do titular (marido/familiar pagando pela cliente) não
+    // casa por CPF/e-mail/telefone. Nesses casos casamos pelo MANDATO: valor
+    // igual ao esperado e vencimento previsto perto da data do pagamento, num
+    // mandato ativo que não tem pagamento registrado no ciclo.
+    const extratoSince = new Date(now.getTime() - 10 * 86400000).toISOString();
     const onlyDigits = (v: unknown) => String(v || "").replace(/\D/g, "");
     const tx = await wooviFetch<Record<string, any>>("/api/v1/transaction?limit=100");
     const transactions: Record<string, any>[] = Array.isArray((tx.data as any)?.transactions)
@@ -684,7 +740,47 @@ Deno.serve(async (req) => {
           .order("created_at", { ascending: false }).limit(1);
         sub = data?.[0] ?? null;
       }
-      if (!sub?.subscription_id) continue;
+      // Fallback: pagou outra pessoa (marido/familiar). Casa pelo mandato ativo
+      // com valor igual e vencimento previsto perto da data do pagamento; o nome
+      // do pagador desempata quando há mais de um candidato.
+      const payerName = String(payer?.name || t?.debitParty?.holder?.name || "").trim();
+      if (!sub) {
+        const payDay = when.slice(0, 10);
+        const from = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) - 10 * 86400000));
+        const to = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) + 10 * 86400000));
+        const { data: candidates } = await supabase.from("woovi_subscriptions")
+          .select("*")
+          .in("status", MANDATE_ACTIVE_STATUSES)
+          .is("replaced_by_subscription_id", null)
+          .not("subscription_id", "is", null)
+          .eq("value_cents", value)
+          .gte("next_charge_date", from)
+          .lte("next_charge_date", to)
+          .limit(10);
+        let pool = Array.isArray(candidates) ? candidates : [];
+        if (pool.length > 1 && payerName) {
+          const norm = (v: string) =>
+            v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const tokens = norm(payerName).split(/\s+/).filter((w) => w.length > 2);
+          const bySurname = pool.filter((c) =>
+            tokens.some((w) => norm(String(c.customer_name || "")).includes(w))
+          );
+          if (bySurname.length === 1) pool = bySurname;
+        }
+        // Só aceita quando sobra UM candidato: dinheiro não se atribui no chute.
+        if (pool.length === 1) {
+          const matched = pool[0] as Record<string, any>;
+          sub = matched;
+          console.log(`🔎 extrato: pagamento de ${value} casado pelo mandato ${matched.subscription_id} (pagador diferente)`);
+        }
+      }
+      if (!sub?.subscription_id) {
+        report.ciclo_sem_cobranca.push({
+          orfao: true, valor: value, quando: when, pagador: payerName || null,
+          motivo: "pagamento no extrato sem mandato correspondente", dryRun,
+        });
+        continue;
+      }
 
       // Já registrado? Aceita match por identificador do extrato ou por
       // valor+janela (o webhook grava o correlationID da cobrança, não o E2E).

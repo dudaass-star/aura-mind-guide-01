@@ -770,6 +770,21 @@ Deno.serve(async (req) => {
               }
             }
 
+            // Guarda preventiva sem parcela na Woovi: o cliente está em dia, não
+            // há nada a oferecer. Reconferimos em 24h em vez de abrir dunning.
+            if (mandateAlive && String(payload.source || '') === 'pre_due_guard'
+                && !(await findScheduledInstallment(subscriptionId))) {
+              await supabase.from('scheduled_tasks').insert({
+                user_id: task.user_id,
+                task_type: 'woovi_next_cycle_cobr',
+                execute_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+                status: 'pending',
+                payload: { ...payload, source: 'pre_due_guard' },
+              });
+              console.warn(`⚠️ woovi ${subscriptionId}: guarda preventiva sem parcela — reconferência em 24h`);
+              break;
+            }
+
             await supabase.from('scheduled_tasks').insert({
               user_id: task.user_id,
               task_type: 'woovi_recovery_offer',
@@ -961,6 +976,27 @@ Deno.serve(async (req) => {
         executed++;
 
       } catch (error) {
+        // Woovi indisponível (429/5xx) NÃO é falha da tarefa: é pergunta sem
+        // resposta. Se marcássemos como 'failed', o débito do ciclo morreria
+        // aqui — foi o que deixou clientes com mandato válido sem cobrança.
+        // Requeue em 1h e a tarefa continua viva até ter resposta.
+        const unavailable = (error as { name?: string })?.name === 'WooviUnavailable';
+        if (unavailable) {
+          console.warn(`⏳ woovi indisponível na tarefa ${task.id} (${task.task_type}) — reconferindo em 1h`);
+          await supabase.from('scheduled_tasks').insert({
+            user_id: task.user_id,
+            task_type: task.task_type,
+            execute_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+            status: 'pending',
+            payload: { ...(task.payload || {}), requeued_from: task.id, reason: 'woovi_unavailable' },
+          });
+          await supabase
+            .from('scheduled_tasks')
+            .update({ status: 'canceled', executed_at: new Date().toISOString() })
+            .eq('id', task.id);
+          failed++;
+          continue;
+        }
         console.error(`❌ Error processing task ${task.id}:`, error);
         await supabase
           .from('scheduled_tasks')
