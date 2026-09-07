@@ -20,6 +20,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import {
   wooviFetch, brtDate,
   MANDATE_ACTIVE_STATUSES, WOOVI_PAID_STATUSES,
+  findScheduledInstallment, daysUntil,
 } from "../_shared/woovi.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
@@ -459,14 +460,76 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ---- 5) Backstop de ciclo ---------------------------------------------
+    // ---- 5) Garantia preventiva e backstop de ciclo ------------------------
+    // A Woovi deveria criar a CobR automaticamente quatro dias antes do débito,
+    // mas houve mandatos aprovados em que ela nunca apareceu. Antes, a Aura só
+    // percebia isso depois do vencimento. Agora, ao entrar na janela legal do
+    // Bacen (5–10 dias antes), confirmamos a parcela e agendamos a criação manual
+    // da CobR. A tarefa é deduplicada por assinatura + vencimento.
+    const today = brtDate(now);
+    const tenDaysAhead = brtDate(new Date(now.getTime() + 10 * 86400000));
+    const { data: upcomingSubs } = await supabase
+      .from("woovi_subscriptions")
+      .select("id, user_id, subscription_id, customer_email, next_charge_date, value_cents, status")
+      .in("status", MANDATE_ACTIVE_STATUSES)
+      .is("replaced_by_subscription_id", null)
+      .not("subscription_id", "is", null)
+      .not("next_charge_date", "is", null)
+      .gte("next_charge_date", today)
+      .lte("next_charge_date", tenDaysAhead)
+      .limit(200);
+
+    for (const sub of (onlyExtrato ? [] : upcomingSubs) || []) {
+      const installment = await findScheduledInstallment(String(sub.subscription_id));
+      await new Promise((res) => setTimeout(res, 250));
+      if (!installment?.globalID || !installment.dueDate) {
+        report.ciclo_sem_cobranca.push({
+          sub: sub.subscription_id, email: sub.customer_email,
+          ciclo: sub.next_charge_date, motivo: "parcela futura ausente", dryRun,
+        });
+        continue;
+      }
+
+      const lead = daysUntil(installment.dueDate);
+      if (lead < 5 || lead > 10) continue;
+      const { data: existing } = await supabase.from("scheduled_tasks")
+        .select("id")
+        .eq("task_type", "woovi_next_cycle_cobr")
+        .contains("payload", {
+          subscription_id: sub.subscription_id,
+          next_due_date: installment.dueDate,
+        })
+        .limit(1);
+      if (Array.isArray(existing) && existing.length > 0) continue;
+
+      let authUserId: string | null = null;
+      if (sub.user_id) {
+        const { data: profile } = await supabase.from("profiles")
+          .select("user_id").eq("id", sub.user_id).maybeSingle();
+        authUserId = (profile?.user_id as string) || null;
+      }
+      if (authUserId && !dryRun) {
+        await supabase.from("scheduled_tasks").insert({
+          user_id: authUserId,
+          task_type: "woovi_next_cycle_cobr",
+          execute_at: new Date().toISOString(),
+          status: "pending",
+          payload: {
+            provider: "woovi",
+            subscription_id: sub.subscription_id,
+            next_due_date: installment.dueDate,
+            source: "pre_due_guard",
+          },
+        });
+      }
+    }
+
     // No trilho Woovi o débito do ciclo depende da Woovi gerar a cobrança E do
     // webhook chegar. Sem esta varredura, um webhook perdido vira usuário
     // usando de graça em silêncio. Para cada mandato vivo com ciclo vencido:
     //   • cobrança existe e está paga na Woovi → replay (fonte única é o webhook);
     //   • cobrança não existe na Woovi → registra a lacuna pra intervenção
     //     (não forçamos criação: cobrança fora do mandato é dinheiro sem contrato).
-    const today = brtDate(now);
     const { data: dueSubs } = await supabase
       .from("woovi_subscriptions")
       .select("id, user_id, subscription_id, customer_email, next_charge_date, value_cents, status, last_error")
@@ -504,7 +567,6 @@ Deno.serve(async (req) => {
           sub: sub.subscription_id, email: sub.customer_email,
           ciclo: sub.next_charge_date, dryRun,
         });
-        continue;
       }
 
       for (const c of cycleCharges) {

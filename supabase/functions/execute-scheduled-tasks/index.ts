@@ -622,13 +622,36 @@ Deno.serve(async (req) => {
             // Já pagou no meio do caminho? encerra a recuperação em silêncio.
             const installment = mandateAlive ? await findUnpaidInstallment(subscriptionId) : null;
             if (mandateAlive && !installment) {
-              console.log(`✅ woovi ${subscriptionId} sem parcela em aberto — recuperação encerrada`);
-              await supabase
-                .from('scheduled_tasks')
-                .update({ status: 'canceled', executed_at: new Date().toISOString() })
-                .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final'])
-                .eq('status', 'pending')
-                .contains('payload', { subscription_id: subscriptionId });
+              // Ausência de parcela não significa pagamento. Foi exatamente o
+              // caso dos mandatos cujo débito do dia 8 nunca foi criado pela
+              // Woovi. Se houver próxima parcela, garantimos sua CobR; se nem
+              // parcela futura existir, preservamos o diagnóstico e rechecamos
+              // amanhã em vez de encerrar o caso como regularizado.
+              const next = await findScheduledInstallment(subscriptionId);
+              if (next?.dueDate) {
+                const lead = daysUntil(next.dueDate);
+                const runInDays = Math.max(0, lead - 8);
+                await supabase.from('scheduled_tasks').insert({
+                  user_id: task.user_id,
+                  task_type: 'woovi_next_cycle_cobr',
+                  execute_at: new Date(Date.now() + runInDays * 24 * 3600 * 1000 + 60 * 1000).toISOString(),
+                  status: 'pending',
+                  payload: { ...payload, next_due_date: next.dueDate, source: 'missing_cycle_recovery' },
+                });
+                console.warn(`⚠️ woovi ${subscriptionId}: ciclo ausente; próxima CobR (${next.dueDate}) garantida`);
+              } else {
+                await supabase.from('woovi_subscriptions')
+                  .update({ last_error: 'mandato ativo sem parcela atual ou futura na Woovi' })
+                  .eq('subscription_id', subscriptionId);
+                await supabase.from('scheduled_tasks').insert({
+                  user_id: task.user_id,
+                  task_type: 'woovi_cycle_recycle',
+                  execute_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+                  status: 'pending',
+                  payload: { ...payload, source: 'missing_installment_recheck' },
+                });
+                console.error(`❌ woovi ${subscriptionId}: mandato vivo sem nenhuma parcela; nova conferência em 24h`);
+              }
               break;
             }
 
@@ -702,7 +725,9 @@ Deno.serve(async (req) => {
             if (!sub) break;
 
             const mandateAlive = MANDATE_ACTIVE_STATUSES.includes(String(sub.status || '').toUpperCase());
-            if (mandateAlive && !(await findUnpaidInstallment(subscriptionId))) {
+            const isPreventiveGuard = ['pre_due_guard', 'missing_cycle_recovery']
+              .includes(String(payload.source || ''));
+            if (mandateAlive && !isPreventiveGuard && !(await findUnpaidInstallment(subscriptionId))) {
               console.log(`✅ woovi ${subscriptionId} regularizado — cadência encerrada`);
               await cancelWooviRecovery(supabase, subscriptionId);
               break;
