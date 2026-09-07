@@ -468,6 +468,10 @@ Deno.serve(async (req) => {
     // da CobR. A tarefa é deduplicada por assinatura + vencimento.
     const today = brtDate(now);
     const tenDaysAhead = brtDate(new Date(now.getTime() + 10 * 86400000));
+    // Lote pequeno e ordenado pelo vencimento mais próximo: a Woovi devolve 429
+    // quando varremos dezenas de mandatos de uma vez, e 429 cegava a guarda.
+    // Quem sobra é pego na rodada seguinte (a cada 15 min), já que a ordem é
+    // sempre "quem vence primeiro".
     const { data: upcomingSubs } = await supabase
       .from("woovi_subscriptions")
       .select("id, user_id, subscription_id, customer_email, next_charge_date, value_cents, status")
@@ -477,15 +481,49 @@ Deno.serve(async (req) => {
       .not("next_charge_date", "is", null)
       .gte("next_charge_date", today)
       .lte("next_charge_date", tenDaysAhead)
-      .limit(200);
+      .order("next_charge_date", { ascending: true })
+      .limit(25);
 
     for (const sub of (onlyExtrato ? [] : upcomingSubs) || []) {
-      const installment = await findScheduledInstallment(String(sub.subscription_id));
-      await new Promise((res) => setTimeout(res, 250));
+      let installment: Awaited<ReturnType<typeof findScheduledInstallment>> = null;
+      try {
+        installment = await findScheduledInstallment(String(sub.subscription_id));
+      } catch (e) {
+        if (e instanceof WooviUnavailable) {
+          // Woovi indisponível/limitada: NÃO concluímos nada. Reconferimos na
+          // próxima rodada — este é justamente o caso que antes virava
+          // "parcela ausente" e deixava o cliente sem cobrança.
+          report.ciclo_sem_cobranca.push({
+            sub: sub.subscription_id, email: sub.customer_email,
+            ciclo: sub.next_charge_date, motivo: `woovi indisponível (${e.status}) — reconferir`,
+            dryRun,
+          });
+          continue;
+        }
+        throw e;
+      }
+
       if (!installment?.globalID || !installment.dueDate) {
+        // Resposta confirmada e sem parcela futura: é o furo que deixou 9 pessoas
+        // sem débito. Criamos a parcela/CobR do ciclo em vez de só anotar.
+        let repaired = false;
+        if (!dryRun) {
+          const created = await wooviFetch<Record<string, any>>(
+            `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}/installments`,
+            { method: "POST", body: { dueDate: sub.next_charge_date, value: Number(sub.value_cents || 0) || undefined } },
+          );
+          repaired = created.ok;
+          await supabase.from("woovi_subscriptions").update({
+            last_error: repaired
+              ? null
+              : `ciclo de ${sub.next_charge_date} sem parcela na Woovi — criação manual falhou (${created.status})`,
+          }).eq("id", sub.id);
+        }
         report.ciclo_sem_cobranca.push({
           sub: sub.subscription_id, email: sub.customer_email,
-          ciclo: sub.next_charge_date, motivo: "parcela futura ausente", dryRun,
+          ciclo: sub.next_charge_date,
+          motivo: repaired ? "parcela ausente — recriada" : "parcela futura ausente (intervenção)",
+          dryRun,
         });
         continue;
       }
