@@ -1,34 +1,37 @@
-# Falha de cobrança no PIX Automático Woovi — o que já está coberto e os 3 furos que restam
+# Por que a cobrança mensal não saiu no PIX Automático Woovi — causa nova encontrada e correções
 
-## O que já está no ar (verificado no código)
+## Regra que passa a valer
 
-- A conferência roda a cada 15 minutos (`woovi-pix-audit`), mais a reconciliação de extrato a cada 10 minutos.
-- Existe a guarda preventiva: mandatos com débito previsto nos próximos 10 dias são conferidos e, quando a parcela existe e está na janela legal (5 a 10 dias antes), a ordem de débito é criada por nós, sem depender da Woovi.
-- Existe o backstop pós-vencimento: ciclo vencido sem cobrança abre recuperação em vez de encerrar como "regularizado".
-- "Nenhuma parcela encontrada" já não é mais tratado como pagamento em dia.
+Cliente que autorizou o PIX Automático e pagou a entrada nunca pode passar do dia do débito sem cobrança criada. Se em algum momento não houver certeza de que a cobrança existe, o sistema tem que insistir e deixar o caso visível — nunca seguir em silêncio.
 
-Ou seja: o caso em que a Woovi cria a parcela mas esquece de gerar a ordem de débito está resolvido. Os 3 pontos abaixo ainda podem repetir o prejuízo.
+## Causa nova (encontrada agora nos registros)
 
-## Furo 1 — mandato sem nenhuma parcela na Woovi fica só anotado (crítico)
+A Woovi está respondendo "limite de taxa excedido" (429) em praticamente todas as nossas consultas de assinatura e de parcelas. A conferência roda a cada 15 minutos e varre até 200 mandatos com pausa de 0,25s — muito acima do que a Woovi aceita.
 
-Foi exatamente o cenário dos 9 casos: a Woovi não tinha parcela alguma. Hoje, quando a conferência não encontra parcela futura, ela apenas registra "parcela futura ausente" no relatório e passa adiante. Ninguém é avisado e nada é criado — o mês seguinte vence do mesmo jeito.
+Consequência direta, e é o coração do problema: quando a consulta é recusada, o nosso código não distingue "a Woovi recusou a pergunta" de "não existe parcela". Ele conclui que não há parcela, registra "parcela futura ausente" e passa adiante sem criar a cobrança. Ou seja: a guarda preventiva que criamos está cega justamente nos casos que ela deveria salvar.
 
-Correção: nesse caso, tentar recriar a parcela/ordem de débito do mandato na Woovi; se a API não permitir, marcar o mandato com o motivo e registrar como pendência de intervenção com data do vencimento em risco, para aparecer no relatório diário em vez de morrer num log.
+## Correções
 
-## Furo 2 — pagamento feito por outra pessoa continua invisível
+### 1. Nunca tratar recusa da Woovi como "não existe parcela" (crítico)
+As consultas passam a devolver três respostas distintas: existe parcela, não existe parcela, ou não foi possível saber. No terceiro caso, nada é concluído: o caso é reagendado para nova tentativa, e não sai da fila até ter resposta.
 
-A conferência do extrato só olha 3 dias para trás e casa o pagamento pelo CPF/e-mail/telefone de quem pagou. Nos 5 casos em que o marido/familiar pagou, o dinheiro entrou e a cliente segue marcada como não cobrada — podendo até cair na régua de cobrança.
+### 2. Respeitar o limite da Woovi
+Uma fila única de chamadas com espaçamento maior, recuo automático quando vier 429 (aguardar o tempo que ela pede e repetir), lote menor por rodada e retomada de onde parou na rodada seguinte. Sem isso, qualquer proteção continua cega.
 
-Correção: ampliar a janela do extrato de 3 para 10 dias e, quando o pagador não bate com nenhum cadastro, casar pelo mandato: valor esperado do plano dentro da janela do vencimento previsto de um mandato ativo sem pagamento registrado. Sem match, registrar como pagamento órfão em vez de ignorar.
+### 3. Mandato sem nenhuma parcela deixa de ser só uma anotação
+Quando a resposta for confirmada e realmente não houver parcela, tentar criar a ordem de débito; se a Woovi não permitir, marcar o mandato com o motivo e a data em risco, para o caso ficar visível no relatório em vez de morrer num registro técnico.
 
-## Furo 3 — os 5 pagamentos antigos ainda não foram registrados
+### 4. Pagamento feito por outra pessoa
+A conferência do extrato olha só 3 dias e casa o pagamento pelos dados de quem pagou; quando paga o marido/familiar, o dinheiro entra e a cliente fica marcada como não cobrada. Ampliar para 10 dias e, sem casar o pagador, casar pelo mandato (valor esperado próximo do vencimento previsto, sem pagamento registrado). Sem match, registrar como pagamento órfão.
 
-Cirlei, Adriana Gomes, Jaqueline Mattos, Rosemeire e Ritiele pagaram e continuam sem registro. Com a janela de 10 dias os mais recentes entram sozinhos; os antigos precisam de um reprocessamento pontual pelo identificador da transação.
+### 5. Os 5 pagamentos antigos
+Cirlei, Adriana Gomes, Jaqueline Mattos, Rosemeire e Ritiele pagaram e continuam sem registro — reprocessar pelo identificador da transação depois da correção 4.
 
 ## Detalhes técnicos
 
-- `woovi-pix-audit/index.ts`, bloco 5: no ramo `!installment?.globalID`, tentar `POST /api/v1/subscriptions/{id}/installments` (ou recriação equivalente conforme resposta da API) e, em falha, gravar `last_error` + item em `ciclo_sem_cobranca` com `next_charge_date`; alimentar o relatório existente.
-- `woovi-pix-audit/index.ts`, bloco 6: `extratoSince` de 3 → 10 dias; adicionar fallback de match por `value` + proximidade de `next_charge_date` de mandato ativo sem `woovi_charges.paid_at` no ciclo; manter o replay para `webhook-woovi` como fonte única de ativação.
-- `execute-scheduled-tasks/index.ts`, `woovi_next_cycle_cobr`: quando `source = pre_due_guard` e não há parcela, não agendar `woovi_recovery_offer` (hoje agenda em 8 dias) — reagendar reconfirmação em 24h.
-- Reprocessamento dos 5 casos via `woovi-pix-audit` em modo extrato com janela estendida, checando `dryRun` antes.
+- `_shared/woovi.ts`: `wooviFetch` com respeito a `retryAfter` (recuo e repetição, com teto de tentativas) e fila serializada; `findScheduledInstallment` / `findUnpaidInstallment` passam a devolver `{ ok, installment }` em vez de `null` ambíguo (hoje `if (!r.ok) return null`), ou lançar um erro tipado `WooviUnavailable`.
+- `woovi-pix-audit/index.ts` bloco 5: tratar `WooviUnavailable` como "reconferir" (não gerar item em `ciclo_sem_cobranca`, não pular o mandato definitivamente); `.limit(200)` reduzido com cursor por `next_charge_date` e persistência do último processado, para caber no limite da Woovi em 15 min.
+- `woovi-pix-audit/index.ts` bloco 6: `extratoSince` de 3 → 10 dias e fallback de match por `value` + proximidade de `next_charge_date` de mandato ativo sem `woovi_charges.paid_at`; replay continua sendo o único caminho de ativação.
+- `execute-scheduled-tasks/index.ts`, `woovi_next_cycle_cobr`: distinguir indisponibilidade de ausência (hoje `!(await findUnpaidInstallment())` encerra como regularizado e a ausência de parcela cai direto em `woovi_recovery_offer` em 8 dias); em indisponibilidade, reagendar em 1h.
+- Reprocessamento dos 5 casos via `woovi-pix-audit` modo extrato, com `dryRun` antes.
 - Sem migração de banco. Redeploy: `woovi-pix-audit`, `execute-scheduled-tasks`.
