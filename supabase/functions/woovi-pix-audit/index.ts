@@ -740,8 +740,10 @@ Deno.serve(async (req) => {
           .order("created_at", { ascending: false }).limit(1);
         sub = data?.[0] ?? null;
       }
-      // Fallback: pagou outra pessoa. Casa pelo mandato ativo cujo valor bate e
-      // cujo vencimento previsto está a até 10 dias do pagamento.
+      // Fallback: pagou outra pessoa (marido/familiar). Casa pelo mandato ativo
+      // com valor igual e vencimento previsto perto da data do pagamento; o nome
+      // do pagador desempata quando há mais de um candidato.
+      const payerName = String(payer?.name || t?.debitParty?.holder?.name || "").trim();
       if (!sub) {
         const payDay = when.slice(0, 10);
         const from = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) - 10 * 86400000));
@@ -754,17 +756,27 @@ Deno.serve(async (req) => {
           .eq("value_cents", value)
           .gte("next_charge_date", from)
           .lte("next_charge_date", to)
-          .limit(5);
-        // Só aceita quando há UM único candidato: dinheiro não se atribui no chute.
-        if (Array.isArray(candidates) && candidates.length === 1) {
-          const matched = candidates[0] as Record<string, any>;
+          .limit(10);
+        let pool = Array.isArray(candidates) ? candidates : [];
+        if (pool.length > 1 && payerName) {
+          const norm = (v: string) =>
+            v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const tokens = norm(payerName).split(/\s+/).filter((w) => w.length > 2);
+          const bySurname = pool.filter((c) =>
+            tokens.some((w) => norm(String(c.customer_name || "")).includes(w))
+          );
+          if (bySurname.length === 1) pool = bySurname;
+        }
+        // Só aceita quando sobra UM candidato: dinheiro não se atribui no chute.
+        if (pool.length === 1) {
+          const matched = pool[0] as Record<string, any>;
           sub = matched;
           console.log(`🔎 extrato: pagamento de ${value} casado pelo mandato ${matched.subscription_id} (pagador diferente)`);
         }
       }
       if (!sub?.subscription_id) {
         report.ciclo_sem_cobranca.push({
-          orfao: true, valor: value, quando: when,
+          orfao: true, valor: value, quando: when, pagador: payerName || null,
           motivo: "pagamento no extrato sem mandato correspondente", dryRun,
         });
         continue;
