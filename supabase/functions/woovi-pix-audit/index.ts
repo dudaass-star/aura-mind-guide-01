@@ -20,7 +20,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import {
   wooviFetch, brtDate,
   MANDATE_ACTIVE_STATUSES, WOOVI_PAID_STATUSES,
-  findScheduledInstallment, daysUntil,
+  findScheduledInstallment, daysUntil, WooviUnavailable,
 } from "../_shared/woovi.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
