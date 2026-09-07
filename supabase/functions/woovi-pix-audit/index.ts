@@ -750,8 +750,9 @@ Deno.serve(async (req) => {
           .limit(5);
         // Só aceita quando há UM único candidato: dinheiro não se atribui no chute.
         if (Array.isArray(candidates) && candidates.length === 1) {
-          sub = candidates[0];
-          console.log(`🔎 extrato: pagamento de ${value} casado pelo mandato ${sub.subscription_id} (pagador diferente)`);
+          const matched = candidates[0] as Record<string, any>;
+          sub = matched;
+          console.log(`🔎 extrato: pagamento de ${value} casado pelo mandato ${matched.subscription_id} (pagador diferente)`);
         }
       }
       if (!sub?.subscription_id) {
