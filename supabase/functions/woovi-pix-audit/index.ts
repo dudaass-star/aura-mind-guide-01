@@ -508,15 +508,13 @@ Deno.serve(async (req) => {
         // sem débito. Criamos a parcela/CobR do ciclo em vez de só anotar.
         let repaired = false;
         if (!dryRun) {
+          const createBody: Record<string, unknown> = {
+            dueDate: sub.next_charge_date,
+            value: Number(sub.value_cents || 0) || undefined,
+          };
           const created = await wooviFetch<Record<string, any>>(
             `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}/installments`,
-            {
-              method: "POST",
-              body: {
-                dueDate: sub.next_charge_date,
-                value: Number(sub.value_cents || 0) || undefined,
-              },
-            } as unknown as RequestInit & { body?: unknown },
+            { method: "POST", ...(createBody ? { body: createBody } : {}) } as RequestInit & { body?: unknown },
           );
           repaired = created.ok;
           await supabase.from("woovi_subscriptions").update({
