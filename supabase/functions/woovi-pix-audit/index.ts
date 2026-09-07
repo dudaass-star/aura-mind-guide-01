@@ -680,11 +680,16 @@ Deno.serve(async (req) => {
     // liquidada e aparece SÓ no extrato — não vem em /api/v1/charge e o webhook
     // de cobrança não chega. Resultado: dinheiro na conta e nenhum registro
     // local (nem woovi_charges, nem entry_paid_at, nem acesso).
-    // Aqui varremos o extrato dos últimos 3 dias, casamos o pagador (CPF, com
+    // Aqui varremos o extrato dos últimos 10 dias, casamos o pagador (CPF, com
     // fallback de e-mail/telefone) com um mandato nosso e, se não houver
     // pagamento local equivalente, fazemos replay pro webhook — que continua
     // sendo a única fonte de verdade da ativação.
-    const extratoSince = new Date(now.getTime() - 3 * 86400000).toISOString();
+    //
+    // Pagador diferente do titular (marido/familiar pagando pela cliente) não
+    // casa por CPF/e-mail/telefone. Nesses casos casamos pelo MANDATO: valor
+    // igual ao esperado e vencimento previsto perto da data do pagamento, num
+    // mandato ativo que não tem pagamento registrado no ciclo.
+    const extratoSince = new Date(now.getTime() - 10 * 86400000).toISOString();
     const onlyDigits = (v: unknown) => String(v || "").replace(/\D/g, "");
     const tx = await wooviFetch<Record<string, any>>("/api/v1/transaction?limit=100");
     const transactions: Record<string, any>[] = Array.isArray((tx.data as any)?.transactions)
