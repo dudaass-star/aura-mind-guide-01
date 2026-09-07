@@ -587,7 +587,16 @@ Deno.serve(async (req) => {
         `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
       );
       await new Promise((res) => setTimeout(res, 250));
-      if (!r.ok || !r.data) continue;
+      if (!r.ok || !r.data) {
+        // Silêncio da Woovi (429/5xx) não é "mandato sem cobrança": registra pra
+        // reconferência na próxima varredura em vez de sumir do radar.
+        report.ciclo_sem_cobranca.push({
+          sub: sub.subscription_id, email: sub.customer_email,
+          ciclo: sub.next_charge_date,
+          motivo: `woovi indisponível (${r.status}) — reconferir`, dryRun,
+        });
+        continue;
+      }
       const remote = ((r.data as Record<string, any>)?.subscription || r.data) as Record<string, any>;
       const remoteCharges: Record<string, any>[] = Array.isArray(remote?.charges)
         ? remote.charges
