@@ -50,11 +50,48 @@ async function logWooviAttempt(
   }
 }
 
+/**
+ * Toda tentativa pedida à Woovi precisa de VEREDITO. Sem esta reconferência o
+ * mandato ficava eternamente marcado como "RETRY_REQUESTED": nem pago, nem
+ * recusado, nem em recuperação — parado, sem ninguém agir.
+ */
+async function scheduleWooviRetryConfirm(
+  supabase: any,
+  a: { userId: string | null; subscriptionId: string; installmentId: string; label: string; dueDate?: string | null },
+) {
+  if (!a.userId) return;
+  const { data: dup } = await supabase.from('scheduled_tasks')
+    .select('id').eq('task_type', 'woovi_retry_confirm').eq('status', 'pending')
+    .contains('payload', { subscription_id: a.subscriptionId, installment_id: a.installmentId })
+    .limit(1);
+  if (Array.isArray(dup) && dup.length > 0) return;
+  // 24h depois da tentativa — ou 1 dia depois do vencimento, quando a cobrança
+  // criada é de um ciclo futuro (não há veredito antes de vencer).
+  let at = Date.now() + 24 * 3600 * 1000;
+  if (a.dueDate) {
+    const afterDue = Date.parse(`${a.dueDate}T12:00:00-03:00`) + 24 * 3600 * 1000;
+    if (Number.isFinite(afterDue) && afterDue > at) at = afterDue;
+  }
+  await supabase.from('scheduled_tasks').insert({
+    user_id: a.userId,
+    task_type: 'woovi_retry_confirm',
+    execute_at: new Date(at).toISOString(),
+    status: 'pending',
+    payload: {
+      provider: 'woovi',
+      subscription_id: a.subscriptionId,
+      installment_id: a.installmentId,
+      label: a.label,
+      due_date: a.dueDate ?? null,
+    },
+  });
+}
+
 /** Encerra toda a cadência de recuperação (usado quando o cliente regulariza). */
 async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
   await supabase.from('scheduled_tasks')
     .update({ status: 'canceled', executed_at: new Date().toISOString() })
-    .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final'])
+    .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final', 'woovi_retry_confirm'])
     .eq('status', 'pending')
     .contains('payload', { subscription_id: subscriptionId });
 }
@@ -65,6 +102,7 @@ async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
 const PHONELESS_TASK_TYPES = new Set([
   'woovi_cycle_recycle',
   'woovi_next_cycle_cobr',
+  'woovi_retry_confirm',
   // Encerramento também é técnico: cancela o mandato e fecha o perfil, sem
   // falar com o cliente. Sem isso um perfil sem telefone deixava o mandato vivo.
   'woovi_recovery_final',
