@@ -191,15 +191,16 @@ export interface WooviInstallment {
 
 /**
  * Parcela mais recente do mandato que ainda NÃO foi paga (a que precisa de nova
- * tentativa). Devolve `null` quando a Woovi não responde ou tudo está pago.
+ * tentativa). Devolve `null` só quando a Woovi respondeu e nada está em aberto.
+ * Se a Woovi não respondeu, LANÇA `WooviUnavailable` — silêncio dela não pode
+ * virar conclusão nossa.
  */
 export async function findUnpaidInstallment(
   subscriptionId: string,
 ): Promise<WooviInstallment | null> {
-  const r = await wooviFetch<Record<string, any>>(
-    `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/installments`,
-  );
-  if (!r.ok) return null;
+  const path = `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/installments`;
+  const r = await wooviFetch<Record<string, any>>(path);
+  if (!r.ok) throw new WooviUnavailable(r.status, path, r.raw);
   const raw = r.data as Record<string, any> | null;
   const list: Record<string, any>[] = Array.isArray(raw?.installments)
     ? raw!.installments
