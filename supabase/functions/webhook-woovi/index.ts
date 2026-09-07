@@ -1009,9 +1009,11 @@ Deno.serve(async (req) => {
               if (insErr) throw new Error(`falha registrando cobrança: ${insErr.message}`);
               chargeRowId = inserted?.id;
             } else {
+              const due = cycleDueDate(charge, body, sub);
               await supabase.from("woovi_charges").update({
                 status: chargeStatus || "COMPLETED", paid_at: paidAt, raw_payload: body,
                 ...(payerBank ? { payer_bank: payerBank } : {}),
+                ...(due ? { due_date: due } : {}),
               }).eq("id", chargeRowId);
             }
 
