@@ -725,7 +725,9 @@ Deno.serve(async (req) => {
             if (!sub) break;
 
             const mandateAlive = MANDATE_ACTIVE_STATUSES.includes(String(sub.status || '').toUpperCase());
-            if (mandateAlive && !(await findUnpaidInstallment(subscriptionId))) {
+            const isPreventiveGuard = ['pre_due_guard', 'missing_cycle_recovery']
+              .includes(String(payload.source || ''));
+            if (mandateAlive && !isPreventiveGuard && !(await findUnpaidInstallment(subscriptionId))) {
               console.log(`✅ woovi ${subscriptionId} regularizado — cadência encerrada`);
               await cancelWooviRecovery(supabase, subscriptionId);
               break;
