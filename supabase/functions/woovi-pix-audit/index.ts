@@ -159,7 +159,7 @@ Deno.serve(async (req) => {
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
     reautorizacao: [], ciclo_sem_cobranca: [], cobertura: [], status_sincronizado: [],
-    duplicados: [],
+    duplicados: [], vencimento_backfill: [],
     erros: [],
   };
 
