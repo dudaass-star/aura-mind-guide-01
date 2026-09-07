@@ -836,6 +836,13 @@ Deno.serve(async (req) => {
                   console.log(
                     `🧾 woovi ${subscriptionId}: CobR ciclo seguinte (${next.dueDate}) ok=${created.ok}`,
                   );
+                  if (created.ok) {
+                    await scheduleWooviRetryConfirm(supabase, {
+                      userId: task.user_id, subscriptionId,
+                      installmentId: next.globalID, label: 'next_cycle_cobr',
+                      dueDate: next.dueDate,
+                    });
+                  }
                   if (isPreventiveGuard && created.ok) break;
                 }
                 // A oferta só entra depois do vencimento + 7 dias de retries nativos.
