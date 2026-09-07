@@ -506,16 +506,25 @@ Deno.serve(async (req) => {
         throw e;
       }
 
-      if (!installment?.globalID || !installment.dueDate) {
+      // Parcela existe e JÁ tem CobR criada: está tudo em ordem, não tocar.
+      // (Tentar criar de novo devolve 400 "A parcela já tem cobr" e queima o
+      // limite de taxa da Woovi, cegando as outras proteções.)
+      if (installment?.globalID && installment.hasCobr) continue;
+
+      if (!installment?.globalID) {
         // Sem parcela AGENDADA. Não existe criar parcela por fora (a Woovi
         // responde 405 em POST /subscriptions/{id}/installments): o que existe é
         // criar/retentar a CobR de uma parcela que já está lá. Se houver parcela
-        // em aberto, disparamos a cobrança dela; senão, fica para intervenção.
+        // em aberto SEM CobR, disparamos a cobrança dela; senão, fica para
+        // intervenção.
         let repaired = false;
         let detail = "";
         try {
           const unpaid = await findUnpaidInstallment(String(sub.subscription_id));
-          if (unpaid?.globalID && !dryRun) {
+          if (unpaid?.globalID && unpaid.hasCobr) {
+            detail = " (parcela já tem cobrança criada)";
+            repaired = true;
+          } else if (unpaid?.globalID && !dryRun) {
             const cobr = await createInstallmentCobr(
               unpaid.globalID, Number(sub.value_cents || 0) || undefined,
             );
