@@ -158,7 +158,8 @@ Deno.serve(async (req) => {
 
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
-    reautorizacao: [], ciclo_sem_cobranca: [], erros: [],
+    reautorizacao: [], ciclo_sem_cobranca: [], cobertura: [], status_sincronizado: [],
+    erros: [],
   };
 
   try {
@@ -706,6 +707,107 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- 5b) Cobertura: todo mandato vivo precisa ter parcela na Woovi ------
+    // O painel da Woovi mostrou 8 parcelas agendadas para dezenas de mandatos
+    // vivos — ou seja, a criação automática da parcela falha em silêncio muito
+    // antes do vencimento, e a guarda 5 só enxerga a janela de 10 dias.
+    // Aqui varremos TODOS os mandatos vivos com vencimento futuro, em lotes
+    // rotativos (a Woovi devolve 429 se varrermos dezenas de uma vez). A rotação
+    // é derivada do relógio: com o cron de 15 min, o ciclo inteiro é coberto
+    // várias vezes por dia sem precisar de coluna nova.
+    const coverageBatch = Number.isFinite(Number(body.coverage_batch))
+      && Number(body.coverage_batch) >= 0
+        ? Number(body.coverage_batch)
+        : 8;
+    if (!onlyExtrato && coverageBatch > 0) {
+      const { count: liveCount } = await supabase
+        .from("woovi_subscriptions")
+        .select("id", { count: "exact", head: true })
+        .in("status", MANDATE_ACTIVE_STATUSES)
+        .is("replaced_by_subscription_id", null)
+        .not("subscription_id", "is", null)
+        .gt("next_charge_date", tenDaysAhead);
+
+      const total = liveCount || 0;
+      if (total > 0) {
+        const round = Math.floor(now.getTime() / (15 * 60 * 1000));
+        const offset = (round * coverageBatch) % total;
+        const { data: coverSubs } = await supabase
+          .from("woovi_subscriptions")
+          .select("id, user_id, subscription_id, customer_email, next_charge_date, value_cents, status")
+          .in("status", MANDATE_ACTIVE_STATUSES)
+          .is("replaced_by_subscription_id", null)
+          .not("subscription_id", "is", null)
+          .gt("next_charge_date", tenDaysAhead)
+          .order("next_charge_date", { ascending: true })
+          .range(offset, offset + coverageBatch - 1);
+
+        for (const sub of coverSubs || []) {
+          try {
+            const inst = await findScheduledInstallment(String(sub.subscription_id));
+            if (inst?.globalID) continue; // parcela existe: nada a fazer
+
+            // Sem parcela agendada e fora da janela legal do Bacen (5–10 dias):
+            // não há o que criar agora. Antes de registrar a lacuna, confirmamos
+            // na Woovi se o mandato ainda está vivo — foi assim que apareceu a
+            // diferença de "ativas" entre o painel dela e o nosso banco.
+            const r = await wooviFetch<Record<string, any>>(
+              `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
+            );
+            if (!r.ok) {
+              report.cobertura.push({
+                sub: sub.subscription_id, email: sub.customer_email,
+                ciclo: sub.next_charge_date,
+                motivo: `woovi indisponível (${r.status}) — reconferir`, dryRun,
+              });
+              continue;
+            }
+            const remote = ((r.data as any)?.subscription || r.data) as Record<string, any>;
+            const localStatus = normalizeMandateStatus(
+              remote?.status ?? remote?.pixAutomatic?.status,
+              String(sub.status),
+            );
+            if (localStatus !== String(sub.status)) {
+              if (!dryRun) {
+                await supabase.from("woovi_subscriptions")
+                  .update({ status: localStatus })
+                  .eq("id", sub.id);
+              }
+              report.status_sincronizado.push({
+                sub: sub.subscription_id, email: sub.customer_email,
+                de: sub.status, para: localStatus, dryRun,
+              });
+              continue;
+            }
+
+            if (!dryRun) {
+              await supabase.from("woovi_subscriptions").update({
+                last_error: `ciclo de ${sub.next_charge_date} sem parcela agendada na Woovi (cobertura)`,
+              }).eq("id", sub.id);
+            }
+            report.cobertura.push({
+              sub: sub.subscription_id, email: sub.customer_email,
+              ciclo: sub.next_charge_date, motivo: "sem parcela agendada na Woovi", dryRun,
+            });
+          } catch (e) {
+            if (e instanceof WooviUnavailable) {
+              report.cobertura.push({
+                sub: sub.subscription_id, email: sub.customer_email,
+                ciclo: sub.next_charge_date,
+                motivo: `woovi indisponível (${e.status}) — reconferir`, dryRun,
+              });
+              // Limite de taxa: insistir só piora. O resto do lote fica para a
+              // próxima rodada.
+              break;
+            }
+            throw e;
+          }
+        }
+      }
+    }
+
+
+
     // ---- 6) Reconciliação pelo extrato -------------------------------------
     // Ponto cego descoberto em 19/08: a parcela do carnê (Pix Automático) é
     // liquidada e aparece SÓ no extrato — não vem em /api/v1/charge e o webhook
@@ -720,9 +822,17 @@ Deno.serve(async (req) => {
     // casa por CPF/e-mail/telefone. Nesses casos casamos pelo MANDATO: valor
     // igual ao esperado e vencimento previsto perto da data do pagamento, num
     // mandato ativo que não tem pagamento registrado no ciclo.
-    const extratoSince = new Date(now.getTime() - 10 * 86400000).toISOString();
+    // Janela padrão de 30 dias: com 10 dias, pagamentos de ciclo antigos (pagos
+    // por familiar, sem webhook) ficavam para trás e a pessoa aparecia como
+    // inadimplente. Ajustável por `body.extrato_days`.
+    const extratoDays = Number.isFinite(Number(body.extrato_days))
+      && Number(body.extrato_days) > 0
+        ? Math.min(Number(body.extrato_days), 90)
+        : 30;
+    const extratoSince = new Date(now.getTime() - extratoDays * 86400000).toISOString();
     const onlyDigits = (v: unknown) => String(v || "").replace(/\D/g, "");
-    const tx = await wooviFetch<Record<string, any>>("/api/v1/transaction?limit=100");
+    const txLimit = extratoDays > 10 ? 300 : 100;
+    const tx = await wooviFetch<Record<string, any>>(`/api/v1/transaction?limit=${txLimit}`);
     const transactions: Record<string, any>[] = Array.isArray((tx.data as any)?.transactions)
       ? (tx.data as any).transactions
       : [];
