@@ -620,7 +620,23 @@ Deno.serve(async (req) => {
             const mandateAlive = MANDATE_ACTIVE_STATUSES.includes(String(sub.status || '').toUpperCase());
 
             // Já pagou no meio do caminho? encerra a recuperação em silêncio.
-            const installment = mandateAlive ? await findUnpaidInstallment(subscriptionId) : null;
+            // Indisponibilidade da Woovi (429/5xx) NUNCA vira conclusão: adia.
+            let installment = null as Awaited<ReturnType<typeof findUnpaidInstallment>>;
+            try {
+              installment = mandateAlive ? await findUnpaidInstallment(subscriptionId) : null;
+            } catch (e) {
+              const { WooviUnavailable } = await import('../_shared/woovi.ts');
+              if (!(e instanceof WooviUnavailable)) throw e;
+              await supabase.from('scheduled_tasks').insert({
+                user_id: task.user_id,
+                task_type: 'woovi_cycle_recycle',
+                execute_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                status: 'pending',
+                payload: { ...payload, source: 'woovi_unavailable_retry' },
+              });
+              console.warn(`⏳ woovi ${subscriptionId}: Woovi indisponível — reconferência em 1h`);
+              break;
+            }
             if (mandateAlive && !installment) {
               // Ausência de parcela não significa pagamento. Foi exatamente o
               // caso dos mandatos cujo débito do dia 8 nunca foi criado pela
@@ -750,21 +766,30 @@ Deno.serve(async (req) => {
                   console.log(`⏳ woovi ${subscriptionId}: fora da janela (${lead}d) — reagendado`);
                   break;
                 }
-                const created = await createInstallmentCobr(next.globalID, Number(sub.value_cents || 0) || undefined);
-                await logWooviAttempt(supabase, {
-                  subscriptionId,
-                  userId: sub.user_id,
-                  installmentId: next.globalID,
-                  label: 'next_cycle_cobr',
-                  ok: created.ok,
-                  status: created.ok ? 'COBR_CREATED' : `COBR_REJECTED_${created.status}`,
-                  valueCents: Number(sub.value_cents || 0),
-                  dueDate: next.dueDate,
-                  raw: created.raw,
-                });
-                console.log(
-                  `🧾 woovi ${subscriptionId}: CobR ciclo seguinte (${next.dueDate}) ok=${created.ok}`,
-                );
+                // A Woovi já criou a CobR desse ciclo: o débito está garantido.
+                // Repetir o POST devolve 400 "A parcela já tem cobr" e queima o
+                // limite de taxa da conta, cegando as outras conferências.
+                if (next.hasCobr) {
+                  console.log(`✅ woovi ${subscriptionId}: CobR de ${next.dueDate} já existe`);
+                  if (isPreventiveGuard) break;
+                } else {
+                  const created = await createInstallmentCobr(next.globalID, Number(sub.value_cents || 0) || undefined);
+                  await logWooviAttempt(supabase, {
+                    subscriptionId,
+                    userId: sub.user_id,
+                    installmentId: next.globalID,
+                    label: 'next_cycle_cobr',
+                    ok: created.ok,
+                    status: created.ok ? 'COBR_CREATED' : `COBR_REJECTED_${created.status}`,
+                    valueCents: Number(sub.value_cents || 0),
+                    dueDate: next.dueDate,
+                    raw: created.raw,
+                  });
+                  console.log(
+                    `🧾 woovi ${subscriptionId}: CobR ciclo seguinte (${next.dueDate}) ok=${created.ok}`,
+                  );
+                  if (isPreventiveGuard && created.ok) break;
+                }
                 // A oferta só entra depois do vencimento + 7 dias de retries nativos.
                 offerInDays = Math.max(1, daysUntil(next.dueDate) + 8);
               }

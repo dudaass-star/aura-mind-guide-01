@@ -180,13 +180,37 @@ export const MANDATE_ACTIVE_STATUSES = ["APROVADA", "ATIVA"];
 // Doc: https://developers.woovi.com/docs/pix-automatic/pix-automatic-cobr-manual
 // ---------------------------------------------------------------------------
 
-const INSTALLMENT_PAID_STATUSES = ["PAID", "COMPLETED", "CONFIRMED"];
+const INSTALLMENT_PAID_STATUSES = ["PAID", "COMPLETED", "CONFIRMED", "CONCLUDED"];
 
 export interface WooviInstallment {
   globalID: string;
   status: string;
   value: number | null;
   dueDate: string | null;
+  /** A parcela já tem CobR criada (não tentar criar de novo: a Woovi devolve 400). */
+  hasCobr: boolean;
+}
+
+/**
+ * A parcela da Woovi NÃO traz `dueDate`: o vencimento vem em `dateGenerateCharge`
+ * (e, quando a CobR existe, também em `cobr.dueDate`). Ler só `dueDate` fazia a
+ * auditoria concluir "sem parcela agendada" para mandatos perfeitamente em
+ * ordem — e daí sair criando CobR à toa até estourar o limite de taxa da Woovi.
+ */
+function installmentDue(i: Record<string, any>): string | null {
+  const raw = i?.dueDate || i?.dateGenerateCharge || i?.cobr?.dueDate
+    || i?.cobr?.paymentDate || null;
+  return raw ? String(raw).slice(0, 10) : null;
+}
+
+function toInstallment(i: Record<string, any>): WooviInstallment {
+  return {
+    globalID: String(i.globalID || i.id),
+    status: String(i.status || "").toUpperCase(),
+    value: Number.isFinite(Number(i.value)) ? Number(i.value) : null,
+    dueDate: installmentDue(i),
+    hasCobr: !!i?.cobr,
+  };
 }
 
 /**
@@ -212,13 +236,7 @@ export async function findUnpaidInstallment(
     .filter((i) => !!(i?.globalID || i?.id));
   if (unpaid.length === 0) return null;
   // A Woovi devolve as parcelas em ordem crescente; a última em aberto é a atual.
-  const target = unpaid[unpaid.length - 1];
-  return {
-    globalID: String(target.globalID || target.id),
-    status: String(target.status || "").toUpperCase(),
-    value: Number.isFinite(Number(target.value)) ? Number(target.value) : null,
-    dueDate: target.dueDate ? String(target.dueDate).slice(0, 10) : null,
-  };
+  return toInstallment(unpaid[unpaid.length - 1]);
 }
 
 /**
@@ -279,17 +297,13 @@ export async function findScheduledInstallment(
       : [];
   const today = brtDate();
   const scheduled = list
-    .filter((i) => ["SCHEDULED", "ACTIVE"].includes(String(i?.status || "").toUpperCase()))
+    .filter((i) => ["SCHEDULED", "ACTIVE", "CREATED", "PENDING"].includes(String(i?.status || "").toUpperCase()))
     .filter((i) => !!(i?.globalID || i?.id))
-    .filter((i) => !i?.dueDate || String(i.dueDate).slice(0, 10) >= today);
+    .map(toInstallment)
+    .filter((i) => !i.dueDate || i.dueDate >= today)
+    .sort((a, b) => String(a.dueDate || "").localeCompare(String(b.dueDate || "")));
   if (scheduled.length === 0) return null;
-  const target = scheduled[0];
-  return {
-    globalID: String(target.globalID || target.id),
-    status: String(target.status || "").toUpperCase(),
-    value: Number.isFinite(Number(target.value)) ? Number(target.value) : null,
-    dueDate: target.dueDate ? String(target.dueDate).slice(0, 10) : null,
-  };
+  return scheduled[0];
 }
 
 /** Dias corridos entre hoje (BRT) e uma data YYYY-MM-DD. */
