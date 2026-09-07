@@ -831,11 +831,28 @@ Deno.serve(async (req) => {
         : 30;
     const extratoSince = new Date(now.getTime() - extratoDays * 86400000).toISOString();
     const onlyDigits = (v: unknown) => String(v || "").replace(/\D/g, "");
-    const txLimit = extratoDays > 10 ? 300 : 100;
-    const tx = await wooviFetch<Record<string, any>>(`/api/v1/transaction?limit=${txLimit}`);
-    const transactions: Record<string, any>[] = Array.isArray((tx.data as any)?.transactions)
-      ? (tx.data as any).transactions
-      : [];
+    // A Woovi devolve no máximo 100 lançamentos por página (ela ignora limites
+    // maiores) e pagina por `skip`. Sem paginar, uma janela de 30 dias parava no
+    // 100º lançamento e pagamentos mais antigos ficavam invisíveis.
+    const TX_PAGE = 100;
+    const TX_MAX_PAGES = 6;
+    const transactions: Record<string, any>[] = [];
+    for (let page = 0; page < TX_MAX_PAGES; page++) {
+      const tx = await wooviFetch<Record<string, any>>(
+        `/api/v1/transaction?limit=${TX_PAGE}&skip=${page * TX_PAGE}`,
+      );
+      const list: Record<string, any>[] = Array.isArray((tx.data as any)?.transactions)
+        ? (tx.data as any).transactions
+        : [];
+      transactions.push(...list);
+      if (list.length < TX_PAGE) break;
+      const oldest = list
+        .map((t) => String(t?.time || t?.createdAt || ""))
+        .filter(Boolean)
+        .sort()[0];
+      if (oldest && oldest < extratoSince) break;
+      if ((tx.data as any)?.pageInfo?.hasNextPage === false) break;
+    }
 
     // Modo inspeção: devolve o extrato cru da janela (usado para vincular
     // pagamento órfão à mão, quando o pagador não é o titular).
