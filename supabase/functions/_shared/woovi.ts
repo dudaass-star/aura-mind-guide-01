@@ -297,17 +297,13 @@ export async function findScheduledInstallment(
       : [];
   const today = brtDate();
   const scheduled = list
-    .filter((i) => ["SCHEDULED", "ACTIVE"].includes(String(i?.status || "").toUpperCase()))
+    .filter((i) => ["SCHEDULED", "ACTIVE", "CREATED", "PENDING"].includes(String(i?.status || "").toUpperCase()))
     .filter((i) => !!(i?.globalID || i?.id))
-    .filter((i) => !i?.dueDate || String(i.dueDate).slice(0, 10) >= today);
+    .map(toInstallment)
+    .filter((i) => !i.dueDate || i.dueDate >= today)
+    .sort((a, b) => String(a.dueDate || "").localeCompare(String(b.dueDate || "")));
   if (scheduled.length === 0) return null;
-  const target = scheduled[0];
-  return {
-    globalID: String(target.globalID || target.id),
-    status: String(target.status || "").toUpperCase(),
-    value: Number.isFinite(Number(target.value)) ? Number(target.value) : null,
-    dueDate: target.dueDate ? String(target.dueDate).slice(0, 10) : null,
-  };
+  return scheduled[0];
 }
 
 /** Dias corridos entre hoje (BRT) e uma data YYYY-MM-DD. */
