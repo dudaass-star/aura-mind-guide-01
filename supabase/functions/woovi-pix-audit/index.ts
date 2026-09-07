@@ -18,9 +18,10 @@
 //   3. Abandono: QR expirado sem entrada e sem mandato → cancela na Woovi.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import {
-  wooviFetch, brtDate,
+  wooviFetch, brtDate, getSubscriptionCustomerCorrelation, listInstallments,
   MANDATE_ACTIVE_STATUSES, WOOVI_PAID_STATUSES,
   findScheduledInstallment, daysUntil, WooviUnavailable,
+  findUnpaidInstallment, createInstallmentCobr,
 } from "../_shared/woovi.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
@@ -152,7 +153,8 @@ Deno.serve(async (req) => {
   // fonte da parcela do carnê. Serve para um cron curto (a cada 10 min) que
   // reconcilia o pagamento em minutos — assim quem acabou de pagar não parece
   // abandono para as rotinas de recuperação.
-  const onlyExtrato = body.only === "extrato";
+  const onlyExtrato = body.only === "extrato" || body.only === "extrato_debug";
+  const debugExtrato = body.only === "extrato_debug";
 
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
@@ -504,29 +506,45 @@ Deno.serve(async (req) => {
       }
 
       if (!installment?.globalID || !installment.dueDate) {
-        // Resposta confirmada e sem parcela futura: é o furo que deixou 9 pessoas
-        // sem débito. Criamos a parcela/CobR do ciclo em vez de só anotar.
+        // Sem parcela AGENDADA. Não existe criar parcela por fora (a Woovi
+        // responde 405 em POST /subscriptions/{id}/installments): o que existe é
+        // criar/retentar a CobR de uma parcela que já está lá. Se houver parcela
+        // em aberto, disparamos a cobrança dela; senão, fica para intervenção.
         let repaired = false;
+        let detail = "";
+        try {
+          const unpaid = await findUnpaidInstallment(String(sub.subscription_id));
+          if (unpaid?.globalID && !dryRun) {
+            const cobr = await createInstallmentCobr(
+              unpaid.globalID, Number(sub.value_cents || 0) || undefined,
+            );
+            repaired = cobr.ok;
+            detail = repaired ? "" : ` (cobr ${cobr.status})`;
+          } else if (!unpaid?.globalID) {
+            detail = " (nenhuma parcela em aberto)";
+          }
+        } catch (e) {
+          if (e instanceof WooviUnavailable) {
+            report.ciclo_sem_cobranca.push({
+              sub: sub.subscription_id, email: sub.customer_email,
+              ciclo: sub.next_charge_date,
+              motivo: `woovi indisponível (${e.status}) — reconferir`, dryRun,
+            });
+            continue;
+          }
+          throw e;
+        }
         if (!dryRun) {
-          const createBody: Record<string, unknown> = {
-            dueDate: sub.next_charge_date,
-            value: Number(sub.value_cents || 0) || undefined,
-          };
-          const created = await wooviFetch<Record<string, any>>(
-            `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}/installments`,
-            { method: "POST", ...(createBody ? { body: createBody } : {}) } as RequestInit & { body?: unknown },
-          );
-          repaired = created.ok;
           await supabase.from("woovi_subscriptions").update({
             last_error: repaired
               ? null
-              : `ciclo de ${sub.next_charge_date} sem parcela na Woovi — criação manual falhou (${created.status})`,
+              : `ciclo de ${sub.next_charge_date} sem parcela agendada na Woovi${detail}`,
           }).eq("id", sub.id);
         }
         report.ciclo_sem_cobranca.push({
           sub: sub.subscription_id, email: sub.customer_email,
           ciclo: sub.next_charge_date,
-          motivo: repaired ? "parcela ausente — recriada" : "parcela futura ausente (intervenção)",
+          motivo: repaired ? "parcela em aberto — cobrança disparada" : `parcela agendada ausente${detail}`,
           dryRun,
         });
         continue;
@@ -709,12 +727,67 @@ Deno.serve(async (req) => {
       ? (tx.data as any).transactions
       : [];
 
+    // Modo inspeção: devolve o extrato cru da janela (usado para vincular
+    // pagamento órfão à mão, quando o pagador não é o titular).
+    if (debugExtrato) {
+      const probe: Record<string, unknown>[] = [];
+      for (const id of (Array.isArray(body.probe_subs) ? body.probe_subs : []) as string[]) {
+        try {
+          probe.push({ sub: id, owner: await getSubscriptionCustomerCorrelation(String(id)) });
+        } catch (e) {
+          probe.push({ sub: id, erro: (e as Error).message });
+        }
+      }
+      for (const p of (Array.isArray(body.probe_paths) ? body.probe_paths : []) as string[]) {
+        const r = await wooviFetch<Record<string, any>>(String(p));
+        probe.push({ path: p, status: r.status, data: r.data ?? r.raw?.slice?.(0, 1500) });
+      }
+      return new Response(JSON.stringify({
+        debugExtrato: true,
+        probe,
+        transactions: transactions
+          .filter((t) => String(t?.time || t?.createdAt || "") >= extratoSince)
+          .map((t) => ({
+            time: t?.time || t?.createdAt,
+            value: t?.value,
+            subType: t?.subType,
+            payer: t?.payer?.name,
+            payer_cpf: t?.payer?.taxID?.taxID || t?.debitParty?.holder?.taxID?.taxID,
+            payer_email: t?.payer?.email,
+            payer_phone: t?.payer?.phone,
+            payer_correlation: t?.payer?.correlationID,
+            charge_correlation: t?.charge?.correlationID,
+            e2e: t?.endToEndId,
+          })),
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Identificadores já gravados: pagamento conhecido nem entra na varredura
+    // (era isso que estourava o tempo — dezenas de consultas na Woovi por nada).
+    const { data: knownIds } = await supabase.from("woovi_charges")
+      .select("installment_id").not("installment_id", "is", null).limit(2000);
+    const knownIdSet = new Set((knownIds || []).map((r: Record<string, any>) => String(r.installment_id)));
+    // Parcelas da Woovi consultadas nesta rodada (mandato → lista), com teto de
+    // chamadas: a prova é caríssima em API e não pode derrubar a auditoria.
+    const installmentCache = new Map<string, Record<string, any>[]>();
+    let proofCalls = 0;
+    const PROOF_CALL_BUDGET = 4; // a Woovi limita a taxa (429 com espera de 60s)
+    const installmentsOf = async (subId: string): Promise<Record<string, any>[]> => {
+      if (installmentCache.has(subId)) return installmentCache.get(subId)!;
+      if (proofCalls >= PROOF_CALL_BUDGET) throw new Error("orçamento de prova esgotado");
+      proofCalls++;
+      const list = await listInstallments(subId);
+      installmentCache.set(subId, list);
+      return list;
+    };
+
     for (const t of transactions) {
       const when = String(t?.time || t?.createdAt || "");
       if (!when || when < extratoSince) continue;
       if (String(t?.type || "PAYMENT").toUpperCase() !== "PAYMENT") continue;
       const value = Number(t?.value || 0);
       if (!value) continue;
+      if (knownIdSet.has(String(t?.endToEndId || "")) || knownIdSet.has(String(t?.transactionID || ""))) continue;
 
       const payer = (t?.payer || {}) as Record<string, any>;
       const cpf = onlyDigits(payer?.taxID?.taxID || t?.debitParty?.holder?.taxID?.taxID);
@@ -740,14 +813,34 @@ Deno.serve(async (req) => {
           .order("created_at", { ascending: false }).limit(1);
         sub = data?.[0] ?? null;
       }
+      const payerName = String(payer?.name || t?.debitParty?.holder?.name || "").trim();
+      const payerCorrelation = String(payer?.correlationID || "").trim();
+
+      // Caminho seguro 1: pagamento de COBRANÇA traz o correlationID da própria
+      // cobrança — é o mesmo identificador que gravamos em woovi_charges.
+      const chargeCorrelation = String((t?.charge as Record<string, any>)?.correlationID || "").trim();
+      if (!sub && chargeCorrelation) {
+        const { data: byCharge } = await supabase.from("woovi_charges")
+          .select("subscription_id").eq("installment_id", chargeCorrelation).limit(1);
+        const subId = byCharge?.[0]?.subscription_id;
+        if (subId) {
+          const { data } = await supabase.from("woovi_subscriptions")
+            .select("*").eq("subscription_id", subId).limit(1);
+          sub = data?.[0] ?? null;
+        }
+      }
+
       // Fallback: pagou outra pessoa (marido/familiar). Casa pelo mandato ativo
       // com valor igual e vencimento previsto perto da data do pagamento; o nome
       // do pagador desempata quando há mais de um candidato.
-      const payerName = String(payer?.name || t?.debitParty?.holder?.name || "").trim();
+      let lastMatchDiag: Record<string, unknown> | null = null;
       if (!sub) {
         const payDay = when.slice(0, 10);
-        const from = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) - 10 * 86400000));
-        const to = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) + 10 * 86400000));
+        // Janela estreita: o débito do mandato cai no dia previsto (± poucos dias).
+        // Janela larga só encobria o candidato certo, porque o limite de linhas
+        // cortava justamente quem vencia no dia do pagamento.
+        const from = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) - 7 * 86400000));
+        const to = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) + 3 * 86400000));
         const { data: candidates } = await supabase.from("woovi_subscriptions")
           .select("*")
           .in("status", MANDATE_ACTIVE_STATUSES)
@@ -756,8 +849,63 @@ Deno.serve(async (req) => {
           .eq("value_cents", value)
           .gte("next_charge_date", from)
           .lte("next_charge_date", to)
-          .limit(10);
+          .order("next_charge_date", { ascending: true })
+          .limit(20);
         let pool = Array.isArray(candidates) ? candidates : [];
+
+        // PROVA na Woovi (fim das heurísticas): a parcela do mandato guarda o
+        // endToEndId/identifierId do débito. Quando ele é IGUAL ao do extrato, o
+        // dono do pagamento está provado — mesmo com CPF, e-mail e telefone
+        // diferentes (quem pagou foi marido/familiar, o extrato só mostra ele).
+        // A Woovi limita a taxa, então checamos primeiro os mandatos mais
+        // suspeitos: os que estão anotados como "sem cobrança" e os de
+        // vencimento mais perto do pagamento.
+        const txId = String(t?.transactionID || "");
+        const e2eNow = String(t?.endToEndId || "");
+        const payMs = Date.parse(`${payDay}T12:00:00-03:00`);
+        const suspects = [...pool].sort((a, b) => {
+          const flag = (x: Record<string, any>) => /sem cobran|sem parcela/i.test(String(x.last_error || "")) ? 0 : 1;
+          if (flag(a) !== flag(b)) return flag(a) - flag(b);
+          const d = (x: Record<string, any>) =>
+            Math.abs(Date.parse(`${x.next_charge_date}T12:00:00-03:00`) - payMs);
+          return d(a) - d(b);
+        }).slice(0, 4);
+        let provenFound = false;
+        let proofBlocked = false;
+        for (const c of suspects) {
+          try {
+            const list = await installmentsOf(String(c.subscription_id));
+            const hit = list.some((i) => {
+              const cobr = (i?.cobr || {}) as Record<string, any>;
+              const ids = [cobr?.endToEndId, cobr?.identifierId,
+                ...(Array.isArray(cobr?.tries) ? cobr.tries.map((x: any) => x?.endToEndId) : [])]
+                .filter(Boolean).map(String);
+              return (!!e2eNow && ids.includes(e2eNow)) || (!!txId && ids.includes(txId));
+            });
+            if (hit) { pool = [c]; provenFound = true; break; }
+          } catch (_e) { proofBlocked = true; /* indisponibilidade não decide nada */ }
+        }
+        // Sem prova e com mais de um candidato: não adivinhamos dono de dinheiro.
+        lastMatchDiag = {
+          e2e: e2eNow, candidatos: pool.length, provado: provenFound,
+          woovi_indisponivel: proofBlocked,
+          checados: suspects.map((c) => c.customer_name),
+        };
+        if (!provenFound && !proofBlocked && pool.length > 1) pool = [];
+
+        // Mandato que já teve este ciclo pago não disputa o pagamento.
+        if (pool.length > 1) {
+          const open: Record<string, any>[] = [];
+          for (const c of pool) {
+            const { data: paid } = await supabase.from("woovi_charges")
+              .select("id").eq("subscription_id", c.subscription_id)
+              .eq("value_cents", value).not("paid_at", "is", null).limit(1);
+            if (!Array.isArray(paid) || paid.length === 0) open.push(c);
+          }
+          if (open.length > 0) pool = open;
+        }
+
+        // Sobrenome do pagador desempata (familiar pagando pela cliente).
         if (pool.length > 1 && payerName) {
           const norm = (v: string) =>
             v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -767,6 +915,14 @@ Deno.serve(async (req) => {
           );
           if (bySurname.length === 1) pool = bySurname;
         }
+
+        // Último desempate: o mandato cujo ciclo previsto está mais perto do
+        // pagamento E que a auditoria já marcou como "ciclo sem cobrança".
+        if (pool.length > 1) {
+          const flagged = pool.filter((c) => /sem cobran/i.test(String(c.last_error || "")));
+          if (flagged.length === 1) pool = flagged;
+        }
+
         // Só aceita quando sobra UM candidato: dinheiro não se atribui no chute.
         if (pool.length === 1) {
           const matched = pool[0] as Record<string, any>;
@@ -778,6 +934,7 @@ Deno.serve(async (req) => {
         report.ciclo_sem_cobranca.push({
           orfao: true, valor: value, quando: when, pagador: payerName || null,
           motivo: "pagamento no extrato sem mandato correspondente", dryRun,
+          diag: lastMatchDiag,
         });
         continue;
       }
