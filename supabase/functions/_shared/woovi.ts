@@ -18,9 +18,52 @@ export type WooviResponse<T = unknown> = {
 };
 
 /**
+ * Erro tipado para "a Woovi não respondeu / recusou a pergunta".
+ *
+ * Existe porque confundir isso com "não existe parcela" custou dinheiro real:
+ * a auditoria concluía "sem cobrança" quando a Woovi devolvia 429 e seguia
+ * adiante sem criar o débito do ciclo. Indisponibilidade NUNCA é conclusão.
+ */
+export class WooviUnavailable extends Error {
+  constructor(public status: number, public path: string, public raw = "") {
+    super(`woovi indisponível (${status}) em ${path}`);
+    this.name = "WooviUnavailable";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Limite de taxa
+//
+// A Woovi devolve 429 com `retryAfter` em segundos. A auditoria roda a cada 15
+// min varrendo dezenas de mandatos, então sem fila serializada + espaçamento
+// mínimo TODAS as consultas voltavam 429 e as proteções ficavam cegas.
+// ---------------------------------------------------------------------------
+const MIN_INTERVAL_MS = 700;
+const MAX_RETRIES = 2;
+const MAX_BACKOFF_MS = 20_000;
+let gate: Promise<void> = Promise.resolve();
+let lastCallAt = 0;
+
+const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+/** Serializa as chamadas e garante o espaçamento mínimo entre elas. */
+function schedule<T>(fn: () => Promise<T>): Promise<T> {
+  const run = gate.then(async () => {
+    const wait = lastCallAt + MIN_INTERVAL_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastCallAt = Date.now();
+    return await fn();
+  });
+  gate = run.then(() => {}, () => {});
+  return run;
+}
+
+/**
  * Chamada autenticada à API da Woovi. Nunca lança em erro HTTP: devolve
  * `{ ok:false, status, raw }` para o chamador decidir. Há dinheiro real em cima,
  * então quem chama precisa ver o status, não só uma exceção genérica.
+ *
+ * Em 429 respeita o `retryAfter` da Woovi e repete (até MAX_RETRIES).
  */
 export async function wooviFetch<T = unknown>(
   path: string,
@@ -30,29 +73,55 @@ export async function wooviFetch<T = unknown>(
   if (!appId) throw new Error("WOOVI_APP_ID ausente");
 
   const { body, headers, ...rest } = init;
-  const resp = await fetch(`${WOOVI_API_BASE}${path}`, {
-    ...rest,
-    headers: {
-      Authorization: appId,
-      "Content-Type": "application/json",
-      ...(headers as Record<string, string> | undefined),
-    },
-    ...(body !== undefined
-      ? { body: typeof body === "string" ? body : JSON.stringify(body) }
-      : {}),
-  });
 
-  const raw = await resp.text();
-  let data: T | null = null;
-  try {
-    data = raw ? (JSON.parse(raw) as T) : null;
-  } catch {
-    data = null;
+  const once = async (): Promise<WooviResponse<T> & { retryAfterMs?: number }> => {
+    const resp = await fetch(`${WOOVI_API_BASE}${path}`, {
+      ...rest,
+      headers: {
+        Authorization: appId,
+        "Content-Type": "application/json",
+        ...(headers as Record<string, string> | undefined),
+      },
+      ...(body !== undefined
+        ? { body: typeof body === "string" ? body : JSON.stringify(body) }
+        : {}),
+    });
+
+    const raw = await resp.text();
+    let data: T | null = null;
+    try {
+      data = raw ? (JSON.parse(raw) as T) : null;
+    } catch {
+      data = null;
+    }
+    if (!resp.ok) {
+      console.error(`[woovi] ${init.method || "GET"} ${path} → ${resp.status}: ${raw.slice(0, 500)}`);
+    }
+    let retryAfterMs: number | undefined;
+    if (resp.status === 429) {
+      const fromBody = Number((data as Record<string, unknown> | null)?.["retryAfter"]);
+      const fromHeader = Number(resp.headers.get("retry-after"));
+      const secs = Number.isFinite(fromBody) && fromBody > 0
+        ? fromBody
+        : Number.isFinite(fromHeader) && fromHeader > 0
+          ? fromHeader
+          : 5;
+      retryAfterMs = Math.min(secs * 1000, MAX_BACKOFF_MS);
+    }
+    return { ok: resp.ok, status: resp.status, data, raw: raw.slice(0, 2000), retryAfterMs };
+  };
+
+  let attempt = 0;
+  for (;;) {
+    const r = await schedule(once);
+    if (r.status !== 429 || attempt >= MAX_RETRIES) {
+      const { retryAfterMs: _ignored, ...clean } = r;
+      return clean;
+    }
+    attempt++;
+    console.warn(`[woovi] 429 em ${path} — aguardando ${r.retryAfterMs}ms (tentativa ${attempt})`);
+    await sleep(r.retryAfterMs || 5000);
   }
-  if (!resp.ok) {
-    console.error(`[woovi] ${init.method || "GET"} ${path} → ${resp.status}: ${raw.slice(0, 500)}`);
-  }
-  return { ok: resp.ok, status: resp.status, data, raw: raw.slice(0, 2000) };
 }
 
 /** Data no formato YYYY-MM-DD no fuso de Brasília (padrão absoluto do projeto). */
