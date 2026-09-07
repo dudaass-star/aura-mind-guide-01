@@ -980,7 +980,10 @@ Deno.serve(async (req) => {
                 user_id: sub.user_id,
                 cycle_index: cycleIndex,
                 value_cents: valueCents,
-                due_date: charge.expiresDate ? String(charge.expiresDate).slice(0, 10) : null,
+                // Vencimento do ciclo: a CobR do PIX Automático não traz
+                // `expiresDate`; sem os fallbacks abaixo TODA mensalidade ficava
+                // sem vencimento gravado e "pagou no dia certo?" era inverificável.
+                due_date: cycleDueDate(charge, body, sub),
                 status: chargeStatus || "COMPLETED",
                 paid_at: paidAt,
                 kind: isEntryCharge ? "entry" : (cycleIndex === 0 ? "entry" : "cycle"),
