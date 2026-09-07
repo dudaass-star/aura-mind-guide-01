@@ -978,7 +978,7 @@ Deno.serve(async (req) => {
             }
 
             const { data: existing } = await supabase.from("woovi_charges")
-              .select("id, cycle_index, access_activated_at")
+              .select("id, cycle_index, access_activated_at, due_date")
               .eq("installment_id", String(chargeId)).maybeSingle();
 
             let chargeRowId = existing?.id as string | undefined;
