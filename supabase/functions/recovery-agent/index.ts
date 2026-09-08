@@ -836,6 +836,36 @@ ${modeInstructions}`;
       return new Response(JSON.stringify({ skipped: "empty_response" }), { status: 200, headers: corsHeaders });
     }
 
+    // Guarda de qualidade: em pergunta de identidade, resposta que se sustenta em
+    // memória/conveniência (nível C) sem nenhuma prova de construção nem cena
+    // concreta é a resposta que faz o lead achar que é "mais um chat". Regera UMA vez.
+    if (identityAsk) {
+      const hasSubstance = /45 minutos|logoterapia|medita|trilha|epis[óo]dio|treinad|conduz/i.test(raw);
+      const leansOnTierC = /mem[óo]ria de longo prazo|sem app|n[ãa]o precisa baixar|sem senha|assistente|chatbot|\bbot\b/i.test(raw);
+      if (!hasSubstance || leansOnTierC) {
+        console.log("[recovery-agent] identidade sem substância — regerando uma vez");
+        const retry = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: cfg.model || "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: cfg.system_prompt },
+              { role: "user", content: contextBlock },
+              { role: "assistant", content: raw },
+              { role: "user", content: `REESCREVA. A resposta acima faz o lead achar que a Aura é mais um chat genérico: ela não trouxe prova de construção nem cena concreta, ou se apoiou em conveniência/memória e em rótulo pequeno.
+Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência artificial criada, desenvolvida e treinada especificamente para acompanhamento emocional; traga 2 provas concretas do que ela faz (condução por logoterapia, encontros guiados de 45 minutos com estrutura e caminho escrito, meditação em áudio na hora, trilha semanal, iniciativa no WhatsApp); e feche com um convite concreto. PROIBIDO: "assistente", "chatbot", "bot", "ferramenta", "sistema", "programa", abrir por negação, e usar memória de longo prazo ou "não precisa baixar app" como argumento. Devolva só a mensagem final.` },
+            ],
+          }),
+        });
+        if (retry.ok) {
+          const retryJson = await retry.json();
+          const retryRaw = (retryJson?.choices?.[0]?.message?.content || "").trim();
+          if (retryRaw.length > 60) raw = retryRaw;
+        }
+      }
+    }
+
     // 9. Parse tags (cliente em modo suporte nunca recebe link de checkout)
     let sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
