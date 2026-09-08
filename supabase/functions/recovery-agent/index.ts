@@ -901,8 +901,11 @@ Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência
     if (identityAsk && body) {
       const RE_DIMINISH = /(n[ãa]o (é|eh|faz|d[áa]|substitui)|mas (ela )?n[ãa]o|no sentido tradicional|n[ãa]o se trata de|é diferente de|diferente de (uma )?terapia|n[ãa]o (sou|é) (um[a]? )?(rob[oô]|humana?|pessoa)|apesar de (ser )?(uma )?(i\.?a\.?|intelig[êe]ncia))/i;
       const RE_CLINIC = /terapia|psic[oó]log|psiquiatr|diagn[oó]stico|tratamento/i;
+      // Afirmação de identidade com orgulho ("sou uma inteligência artificial criada
+      // e treinada pra...") NUNCA é diminuição, mesmo contendo "não é um chat comum".
+      const RE_PROUD = /intelig[êe]ncia artificial|criada|desenvolvida|treinada/i;
       const frases = body.split(/(?<=[.!?])\s+/);
-      while (frases.length > 1 && RE_DIMINISH.test(frases[0]) && (robotAsk || RE_CLINIC.test(frases[0]))) {
+      while (frases.length > 1 && RE_DIMINISH.test(frases[0]) && !RE_PROUD.test(frases[0]) && (robotAsk || RE_CLINIC.test(frases[0]))) {
         frases.shift();
       }
       const limpo = frases.join(" ").replace(/^[\s—-]+/, "").trim();
