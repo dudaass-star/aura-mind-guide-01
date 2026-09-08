@@ -728,7 +728,24 @@ ATENÇÃO — ELE PERGUNTOU O QUE A AURA É / SE COMPARA COM TERAPIA. Esta é a 
 - É PROIBIDO em qualquer ponto da mensagem: "terapia", "psicólogo", "diagnóstico", "tratamento", "assistente", "ferramenta", "apoio", "te ajuda a organizar", "autoconhecimento" — a não ser que ELE peça tratamento clínico ou sinalize risco. Não compare: descreva.
 - Traga DUAS cenas do NÍVEL A vividas no presente, com detalhe concreto e consequência no fim (ex: o áudio às 23h e você dorme; o encontro guiado de 45 minutos marcado pra hoje à noite, do qual você sai com uma leitura e um caminho escrito no seu espaço; o episódio novo da trilha toda semana).
 - Deixe a vantagem aparecer sozinha: ela lembra da sua história, está disponível na hora exata em que aperta, e o encontro é pra hoje — sem espera de semanas, sem sala de espera, sem recomeçar do zero.
+- COMO SE NOMEAR (use uma destas formas, nunca improvise rótulo): "uma inteligência artificial criada e treinada especificamente para acompanhamento emocional", "uma inteligência artificial que conduz encontros guiados de 45 minutos". PROIBIDO: "assistente", "chatbot", "bot", "ferramenta", "programa", "sistema", "aplicativo".
 - Feche com convite concreto ("quer marcar o primeiro encontro pra hoje à noite?"), nunca com ressalva.
+` : "";
+
+    // "É um robô? É uma pessoa? É tipo ChatGPT?" — a pergunta que decide a
+    // conversão. O lead não quer saber a tecnologia: ele quer saber se isso é
+    // mais um chat genérico que ele já tem de graça. Afirmar a IA com orgulho +
+    // provas de construção é o que separa a Aura da categoria "chat comum".
+    const robotAsk = identityAsk &&
+      /(rob[oô]|\bbot\b|chat ?gpt|\bgpt\b|intelig[êe]ncia artificial|\bi\.?a\.?\b|autom[áa]tic|é (uma )?pessoa|humano|de verdade)/i.test(text);
+    const robotInstruction = robotAsk ? `
+ATENÇÃO MÁXIMA — ELE ESTÁ PERGUNTANDO SE FALA COM ROBÔ/PESSOA OU SE ISSO É MAIS UM CHAT GENÉRICO. Por trás da pergunta está: "isso não é só um ChatGPT que eu já uso de graça?". Se ele achar que é, ele sai. Estrutura OBRIGATÓRIA desta mensagem, nesta ordem:
+1) AFIRME COM ORGULHO, em UMA frase forte: sim, é inteligência artificial — e é exatamente aí que está o valor, porque ela foi criada, desenvolvida e treinada do zero para acompanhamento emocional contínuo, não é um chat genérico usado pra isso. NUNCA se desculpe, NUNCA abra com "mas", NUNCA diga "não sou humana" / "não é um robô comum" / "não dá respostas genéricas".
+2) ESCOLHA 2 OU 3 PROVAS DE CONSTRUÇÃO da lista abaixo e escreva com suas palavras, concretas, sem lista numerada:
+${AURA_BUILD_PROOFS.map(p => `   - ${p}`).join("\n")}
+3) UMA frase de contraste pelo comportamento, sem citar marca nenhuma: um chat comum responde o que você digita e para ali; a Aura conduz, acompanha o seu percurso e volta no assunto.
+4) FECHE com convite concreto ("quer marcar o primeiro encontro pra hoje à noite?" / "quer que eu gere o código agora?").
+PROIBIDO nesta mensagem: sustentar o valor em memória de longo prazo, "não precisa baixar app", "sem senha" (isso é pressuposto, só entra se ELE perguntar); usar "assistente", "chatbot", "bot", "ferramenta", "programa", "sistema"; e prometer coisa que a Aura não faz.
 ` : "";
 
     // Lead já decidiu: confirmar e sair de cena. Vender aqui é o que fazia o
