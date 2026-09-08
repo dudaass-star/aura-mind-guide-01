@@ -899,9 +899,10 @@ Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência
     // por negação ("a Aura não é terapia..."). Removemos a frase de abertura em
     // vez de mandar a Aura se apresentar como versão menor de outra coisa.
     if (identityAsk && body) {
-      const RE_DIMINISH = /(n[ãa]o (é|eh|faz|substitui)|no sentido tradicional|n[ãa]o se trata de|é diferente de|diferente de (uma )?terapia)/i;
+      const RE_DIMINISH = /(n[ãa]o (é|eh|faz|d[áa]|substitui)|mas (ela )?n[ãa]o|no sentido tradicional|n[ãa]o se trata de|é diferente de|diferente de (uma )?terapia|n[ãa]o (sou|é) (um[a]? )?(rob[oô]|humana?|pessoa)|apesar de (ser )?(uma )?(i\.?a\.?|intelig[êe]ncia))/i;
+      const RE_CLINIC = /terapia|psic[oó]log|psiquiatr|diagn[oó]stico|tratamento/i;
       const frases = body.split(/(?<=[.!?])\s+/);
-      while (frases.length > 1 && RE_DIMINISH.test(frases[0]) && /terapia|psic[oó]log|psiquiatr|diagn[oó]stico|tratamento/i.test(frases[0])) {
+      while (frases.length > 1 && RE_DIMINISH.test(frases[0]) && (robotAsk || RE_CLINIC.test(frases[0]))) {
         frases.shift();
       }
       const limpo = frases.join(" ").replace(/^[\s—-]+/, "").trim();
