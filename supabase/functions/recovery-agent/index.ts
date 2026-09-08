@@ -801,7 +801,7 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-${decidedInstruction}${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}${identityInstruction}${sceneInstruction}
+${decidedInstruction}${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}${identityInstruction}${robotInstruction}${sceneInstruction}
 ${modeInstructions}`;
 
 
