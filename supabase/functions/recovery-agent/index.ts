@@ -284,6 +284,20 @@ function renderValueShowcase(historyTxt: string): string {
 }
 
 /**
+ * PROVAS DE CONSTRUÇÃO — munição para a pergunta "é robô? é tipo ChatGPT?".
+ * Cada item mostra que a Aura é de outra categoria: metodologia, treino,
+ * estrutura de condução, voz própria e iniciativa. Tudo aqui é verdade do que
+ * ela já faz hoje; nunca inflar nem inventar número novo.
+ */
+const AURA_BUILD_PROOFS: string[] = [
+  "Ela tem metodologia por trás: a condução é baseada em logoterapia — presença, sentido e movimento. Não é resposta improvisada, é um caminho conduzido.",
+  "Ela foi treinada e é ajustada continuamente sobre conversas reais de acompanhamento emocional em português, com revisão humana do que funciona e do que não funciona.",
+  "Ela conduz encontros guiados de 45 minutos com estrutura de verdade: abertura, exploração, uma releitura do que você trouxe e um fecho com caminho escrito no seu espaço. Chat comum não conduz nada, só responde.",
+  "Ela tem voz própria: fala por áudio, conduz meditação na hora em que aperta e entrega um episódio novo da sua trilha toda semana.",
+  "Ela vive no seu WhatsApp e toma iniciativa: lembra do encontro marcado, volta no assunto que ficou aberto e aparece quando faz sentido — você não precisa ir atrás dela.",
+];
+
+/**
  * Cooldown de cena: se a ÚLTIMA mensagem nossa já trouxe uma cena da vitrine,
  * a próxima responde só o que foi perguntado. Sem isso o agente empilhava cena
  * em cima de cena e parecia robô.
