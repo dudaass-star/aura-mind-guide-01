@@ -284,6 +284,20 @@ function renderValueShowcase(historyTxt: string): string {
 }
 
 /**
+ * PROVAS DE CONSTRUÇÃO — munição para a pergunta "é robô? é tipo ChatGPT?".
+ * Cada item mostra que a Aura é de outra categoria: metodologia, treino,
+ * estrutura de condução, voz própria e iniciativa. Tudo aqui é verdade do que
+ * ela já faz hoje; nunca inflar nem inventar número novo.
+ */
+const AURA_BUILD_PROOFS: string[] = [
+  "Ela tem metodologia por trás: a condução é baseada em logoterapia — presença, sentido e movimento. Não é resposta improvisada, é um caminho conduzido.",
+  "Ela foi treinada e é ajustada continuamente sobre conversas reais de acompanhamento emocional em português, com revisão humana do que funciona e do que não funciona.",
+  "Ela conduz encontros guiados de 45 minutos com estrutura de verdade: abertura, exploração, uma releitura do que você trouxe e um fecho com caminho escrito no seu espaço. Chat comum não conduz nada, só responde.",
+  "Ela tem voz própria: fala por áudio, conduz meditação na hora em que aperta e entrega um episódio novo da sua trilha toda semana.",
+  "Ela vive no seu WhatsApp e toma iniciativa: lembra do encontro marcado, volta no assunto que ficou aberto e aparece quando faz sentido — você não precisa ir atrás dela.",
+];
+
+/**
  * Cooldown de cena: se a ÚLTIMA mensagem nossa já trouxe uma cena da vitrine,
  * a próxima responde só o que foi perguntado. Sem isso o agente empilhava cena
  * em cima de cena e parecia robô.
@@ -728,7 +742,24 @@ ATENÇÃO — ELE PERGUNTOU O QUE A AURA É / SE COMPARA COM TERAPIA. Esta é a 
 - É PROIBIDO em qualquer ponto da mensagem: "terapia", "psicólogo", "diagnóstico", "tratamento", "assistente", "ferramenta", "apoio", "te ajuda a organizar", "autoconhecimento" — a não ser que ELE peça tratamento clínico ou sinalize risco. Não compare: descreva.
 - Traga DUAS cenas do NÍVEL A vividas no presente, com detalhe concreto e consequência no fim (ex: o áudio às 23h e você dorme; o encontro guiado de 45 minutos marcado pra hoje à noite, do qual você sai com uma leitura e um caminho escrito no seu espaço; o episódio novo da trilha toda semana).
 - Deixe a vantagem aparecer sozinha: ela lembra da sua história, está disponível na hora exata em que aperta, e o encontro é pra hoje — sem espera de semanas, sem sala de espera, sem recomeçar do zero.
+- COMO SE NOMEAR (use uma destas formas, nunca improvise rótulo): "uma inteligência artificial criada e treinada especificamente para acompanhamento emocional", "uma inteligência artificial que conduz encontros guiados de 45 minutos". PROIBIDO: "assistente", "chatbot", "bot", "ferramenta", "programa", "sistema", "aplicativo".
 - Feche com convite concreto ("quer marcar o primeiro encontro pra hoje à noite?"), nunca com ressalva.
+` : "";
+
+    // "É um robô? É uma pessoa? É tipo ChatGPT?" — a pergunta que decide a
+    // conversão. O lead não quer saber a tecnologia: ele quer saber se isso é
+    // mais um chat genérico que ele já tem de graça. Afirmar a IA com orgulho +
+    // provas de construção é o que separa a Aura da categoria "chat comum".
+    const robotAsk = identityAsk &&
+      /(rob[oô]|\bbot\b|chat ?gpt|\bgpt\b|intelig[êe]ncia artificial|\bi\.?a\.?\b|autom[áa]tic|é (uma )?pessoa|humano|de verdade)/i.test(text);
+    const robotInstruction = robotAsk ? `
+ATENÇÃO MÁXIMA — ELE ESTÁ PERGUNTANDO SE FALA COM ROBÔ/PESSOA OU SE ISSO É MAIS UM CHAT GENÉRICO. Por trás da pergunta está: "isso não é só um ChatGPT que eu já uso de graça?". Se ele achar que é, ele sai. Estrutura OBRIGATÓRIA desta mensagem, nesta ordem:
+1) AFIRME COM ORGULHO, em UMA frase forte: sim, é inteligência artificial — e é exatamente aí que está o valor, porque ela foi criada, desenvolvida e treinada do zero para acompanhamento emocional contínuo, não é um chat genérico usado pra isso. NUNCA se desculpe, NUNCA abra com "mas", NUNCA diga "não sou humana" / "não é um robô comum" / "não dá respostas genéricas".
+2) ESCOLHA 2 OU 3 PROVAS DE CONSTRUÇÃO da lista abaixo e escreva com suas palavras, concretas, sem lista numerada:
+${AURA_BUILD_PROOFS.map(p => `   - ${p}`).join("\n")}
+3) UMA frase de contraste pelo comportamento, sem citar marca nenhuma: um chat comum responde o que você digita e para ali; a Aura conduz, acompanha o seu percurso e volta no assunto.
+4) FECHE com convite concreto ("quer marcar o primeiro encontro pra hoje à noite?" / "quer que eu gere o código agora?").
+PROIBIDO nesta mensagem: sustentar o valor em memória de longo prazo, "não precisa baixar app", "sem senha" (isso é pressuposto, só entra se ELE perguntar); usar "assistente", "chatbot", "bot", "ferramenta", "programa", "sistema"; e prometer coisa que a Aura não faz.
 ` : "";
 
     // Lead já decidiu: confirmar e sair de cena. Vender aqui é o que fazia o
@@ -770,7 +801,7 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-${decidedInstruction}${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}${identityInstruction}${sceneInstruction}
+${decidedInstruction}${blankDoubtInstruction}${shortAckInstruction}${mediaInstruction}${copiedPixInstruction}${tasterInstruction}${identityInstruction}${robotInstruction}${sceneInstruction}
 ${modeInstructions}`;
 
 
@@ -803,6 +834,36 @@ ${modeInstructions}`;
     if (!raw) {
       console.warn("[recovery-agent] empty response");
       return new Response(JSON.stringify({ skipped: "empty_response" }), { status: 200, headers: corsHeaders });
+    }
+
+    // Guarda de qualidade: em pergunta de identidade, resposta que se sustenta em
+    // memória/conveniência (nível C) sem nenhuma prova de construção nem cena
+    // concreta é a resposta que faz o lead achar que é "mais um chat". Regera UMA vez.
+    if (identityAsk) {
+      const hasSubstance = /45 minutos|logoterapia|medita|trilha|epis[óo]dio|treinad|conduz/i.test(raw);
+      const leansOnTierC = /mem[óo]ria de longo prazo|sem app|n[ãa]o precisa baixar|sem senha|assistente|chatbot|\bbot\b/i.test(raw);
+      if (!hasSubstance || leansOnTierC) {
+        console.log("[recovery-agent] identidade sem substância — regerando uma vez");
+        const retry = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: cfg.model || "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: cfg.system_prompt },
+              { role: "user", content: contextBlock },
+              { role: "assistant", content: raw },
+              { role: "user", content: `REESCREVA. A resposta acima faz o lead achar que a Aura é mais um chat genérico: ela não trouxe prova de construção nem cena concreta, ou se apoiou em conveniência/memória e em rótulo pequeno.
+Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência artificial criada, desenvolvida e treinada especificamente para acompanhamento emocional; traga 2 provas concretas do que ela faz (condução por logoterapia, encontros guiados de 45 minutos com estrutura e caminho escrito, meditação em áudio na hora, trilha semanal, iniciativa no WhatsApp); e feche com um convite concreto. PROIBIDO: "assistente", "chatbot", "bot", "ferramenta", "sistema", "programa", abrir por negação, e usar memória de longo prazo ou "não precisa baixar app" como argumento. Devolva só a mensagem final.` },
+            ],
+          }),
+        });
+        if (retry.ok) {
+          const retryJson = await retry.json();
+          const retryRaw = (retryJson?.choices?.[0]?.message?.content || "").trim();
+          if (retryRaw.length > 60) raw = retryRaw;
+        }
+      }
     }
 
     // 9. Parse tags (cliente em modo suporte nunca recebe link de checkout)
@@ -838,9 +899,13 @@ ${modeInstructions}`;
     // por negação ("a Aura não é terapia..."). Removemos a frase de abertura em
     // vez de mandar a Aura se apresentar como versão menor de outra coisa.
     if (identityAsk && body) {
-      const RE_DIMINISH = /(n[ãa]o (é|eh|faz|substitui)|no sentido tradicional|n[ãa]o se trata de|é diferente de|diferente de (uma )?terapia)/i;
+      const RE_DIMINISH = /(n[ãa]o (é|eh|faz|d[áa]|substitui)|mas (ela )?n[ãa]o|no sentido tradicional|n[ãa]o se trata de|é diferente de|diferente de (uma )?terapia|n[ãa]o (sou|é) (um[a]? )?(rob[oô]|humana?|pessoa)|apesar de (ser )?(uma )?(i\.?a\.?|intelig[êe]ncia))/i;
+      const RE_CLINIC = /terapia|psic[oó]log|psiquiatr|diagn[oó]stico|tratamento/i;
+      // Afirmação de identidade com orgulho ("sou uma inteligência artificial criada
+      // e treinada pra...") NUNCA é diminuição, mesmo contendo "não é um chat comum".
+      const RE_PROUD = /intelig[êe]ncia artificial|criada|desenvolvida|treinada/i;
       const frases = body.split(/(?<=[.!?])\s+/);
-      while (frases.length > 1 && RE_DIMINISH.test(frases[0]) && /terapia|psic[oó]log|psiquiatr|diagn[oó]stico|tratamento/i.test(frases[0])) {
+      while (frases.length > 1 && RE_DIMINISH.test(frases[0]) && !RE_PROUD.test(frases[0]) && (robotAsk || RE_CLINIC.test(frases[0]))) {
         frases.shift();
       }
       const limpo = frases.join(" ").replace(/^[\s—-]+/, "").trim();
