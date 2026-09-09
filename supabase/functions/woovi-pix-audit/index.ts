@@ -535,11 +535,16 @@ Deno.serve(async (req) => {
             detail = " (parcela já tem cobrança criada)";
             repaired = true;
           } else if (unpaid?.globalID && !dryRun) {
-            const cobr = await createInstallmentCobr(
-              unpaid.globalID, Number(sub.value_cents || 0) || undefined,
-            );
-            repaired = cobr.ok;
-            detail = repaired ? "" : ` (cobr ${cobr.status})`;
+            const win = await cycleRetryWindow(supabase, String(sub.subscription_id), unpaid.dueDate ?? null);
+            if (!win.allowed) {
+              detail = ` (retentativa bloqueada: ${win.reason})`;
+            } else {
+              const cobr = await createInstallmentCobr(
+                unpaid.globalID, Number(sub.value_cents || 0) || undefined,
+              );
+              repaired = cobr.ok;
+              detail = repaired ? "" : ` (cobr ${cobr.status})`;
+            }
           } else if (!unpaid?.globalID) {
             detail = " (nenhuma parcela em aberto)";
           }
