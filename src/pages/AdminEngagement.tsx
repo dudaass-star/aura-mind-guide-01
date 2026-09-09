@@ -539,9 +539,50 @@ export default function AdminEngagement() {
           s.email ? (completedAtByEmail.get(s.email.toLowerCase()) || 0) : 0,
           s.phone ? (completedAtByPhone.get(s.phone) || 0) : 0,
         );
+        const converted = latestCompletedAt > abandonedAt;
+
+        // Atribuição: creditar a recuperação SÓ se algum contato saiu antes do pagamento.
+        // Quem paga na primeira hora (antes do 1º e-mail e antes do WhatsApp de 15min)
+        // voltou sozinha — creditar isso à recuperação inflava o número.
+        let attributedTo: 'organic' | 'whatsapp' | 'email' | null = null;
+        let attributedStage: number | null = null;
+        let attributionNote: string | null = null;
+
+        if (converted) {
+          const ts = (v: string | null) => (v ? new Date(v).getTime() : 0);
+          const emailTouches: Array<{ at: number; stage: number }> = [
+            { at: ts(s.recovery_stage1_sent_at), stage: 1 },
+            { at: ts(s.recovery_stage2_sent_at), stage: 2 },
+            { at: ts(s.recovery_stage3_sent_at), stage: 3 },
+          ].filter(t => t.at > 0 && t.at < latestCompletedAt);
+          const waTouches: Array<{ at: number; stage: number }> = [
+            { at: ts(s.whatsapp_recovery_15min_sent_at), stage: 15 },
+            { at: ts(s.whatsapp_recovery_24h_sent_at), stage: 24 },
+          ].filter(t => t.at > 0 && t.at < latestCompletedAt);
+
+          const lastEmail = emailTouches.length ? emailTouches[emailTouches.length - 1] : null;
+          const lastWa = waTouches.length ? waTouches[waTouches.length - 1] : null;
+
+          if (!lastEmail && !lastWa) {
+            attributedTo = 'organic';
+          } else if (lastWa && (!lastEmail || lastWa.at >= lastEmail.at)) {
+            attributedTo = 'whatsapp';
+            attributedStage = lastWa.stage;
+            if (lastEmail) attributionNote = `E-mail ${lastEmail.stage}/3 também saiu antes do pagamento`;
+          } else if (lastEmail) {
+            attributedTo = 'email';
+            attributedStage = lastEmail.stage;
+            if (lastWa) attributionNote = `WhatsApp ${lastWa.stage === 15 ? '15min' : '24h'} também saiu antes do pagamento`;
+          }
+        }
+
         return {
           ...s,
-          converted: latestCompletedAt > abandonedAt,
+          converted,
+          paid_at: converted ? latestCompletedAt : null,
+          attributed_to: attributedTo,
+          attributed_stage: attributedStage,
+          attribution_note: attributionNote,
           attempt_status: attemptMap.get(s.id) || null,
         };
       });
