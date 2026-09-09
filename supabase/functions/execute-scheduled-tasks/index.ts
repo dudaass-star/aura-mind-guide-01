@@ -651,7 +651,7 @@ Deno.serve(async (req) => {
           // durante os ~21 dias de Smart Retries do Stripe.
           // ─────────────────────────────────────────────────────────────────
           case 'woovi_cycle_recycle': {
-            const { findUnpaidInstallment, retryInstallmentCobr, findScheduledInstallment, daysUntil, MANDATE_ACTIVE_STATUSES } =
+            const { findUnpaidInstallment, retryInstallmentCobr, findScheduledInstallment, daysUntil, MANDATE_ACTIVE_STATUSES, cycleRetryWindow } =
               await import('../_shared/woovi.ts');
             const subscriptionId = String(payload.subscription_id || '');
             if (!subscriptionId || !Deno.env.get('WOOVI_APP_ID')) {
