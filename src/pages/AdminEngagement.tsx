@@ -200,6 +200,14 @@ interface RecoverySession {
   recovery_stage2_sent_at: string | null;
   recovery_stage3_sent_at: string | null;
   converted: boolean;
+  /** Quando pagou (ms epoch) ou null se não voltou. */
+  paid_at: number | null;
+  /** A quem creditar o retorno: sozinha (antes de qualquer contato), WhatsApp ou e-mail. */
+  attributed_to: 'organic' | 'whatsapp' | 'email' | null;
+  /** Estágio do canal creditado: 1|2|3 para e-mail, 15|24 (h) para WhatsApp. */
+  attributed_stage: number | null;
+  /** Outro canal que também precedeu o pagamento (para tooltip). */
+  attribution_note: string | null;
   attempt_status: string | null;
   whatsapp_recovery_15min_sent_at: string | null;
   whatsapp_recovery_24h_sent_at: string | null;
