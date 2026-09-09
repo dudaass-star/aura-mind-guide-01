@@ -250,9 +250,61 @@ export async function findUnpaidInstallment(
   return unpaid[0];
 }
 
+// ---------------------------------------------------------------------------
+// Janela de retentativa de um ciclo vencido.
+//
+// A autorização do cliente pode ficar viva por meses, mas cada nova tentativa
+// vira notificação no app do banco — e notificar todo dia por um ciclo antigo
+// desgasta e aumenta o risco de cancelamento. Regra: não retentar o mesmo
+// vencimento depois de 60 dias, e nunca com intervalo menor que 3 dias.
+// ---------------------------------------------------------------------------
+const CYCLE_RETRY_MAX_AGE_DAYS = 60;
+const CYCLE_RETRY_MIN_GAP_DAYS = 3;
 
-/**
- * Nova tentativa de débito na mesma parcela (mesmo mandato, sem novo scan).
+export async function cycleRetryWindow(
+  supabase: any,
+  subscriptionId: string,
+  dueDate: string | null,
+): Promise<{ allowed: boolean; reason?: string; retryAt?: string }> {
+  const today = brtDate();
+  if (dueDate) {
+    const age = Math.round(
+      (Date.parse(`${today}T12:00:00-03:00`) - Date.parse(`${dueDate}T12:00:00-03:00`)) /
+        86400000,
+    );
+    if (age > CYCLE_RETRY_MAX_AGE_DAYS) {
+      return {
+        allowed: false,
+        reason: `vencimento ${dueDate} tem ${age} dias (> ${CYCLE_RETRY_MAX_AGE_DAYS})`,
+      };
+    }
+  }
+
+  const { data: last } = await supabase
+    .from("woovi_charges")
+    .select("created_at")
+    .eq("subscription_id", subscriptionId)
+    .eq("due_date", dueDate)
+    .in("status", ["RETRY_REQUESTED", "COBR_CREATED", "COBR_ALREADY_EXISTS"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (Array.isArray(last) && last[0]?.created_at) {
+    const ageHours = (Date.now() - Date.parse(String(last[0].created_at))) / 3600000;
+    if (ageHours < CYCLE_RETRY_MIN_GAP_DAYS * 24) {
+      const retryAt = new Date(
+        Date.parse(String(last[0].created_at)) + CYCLE_RETRY_MIN_GAP_DAYS * 86400000,
+      ).toISOString();
+      return {
+        allowed: false,
+        reason: `última tentativa há ${Math.round(ageHours)}h`,
+        retryAt,
+      };
+    }
+  }
+
+  return { allowed: true };
+}
  * `valueCents` permite retentar com valor menor — é assim que o desconto de
  * retenção entra no trilho PIX, onde não existe cupom.
  */
