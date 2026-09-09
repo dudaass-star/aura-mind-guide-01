@@ -1049,6 +1049,15 @@ Deno.serve(async (req) => {
               ...(isTrial && { trial_started_at: new Date().toISOString(), trial_phase: 'listening' }),
               ...(isConverting && { converted_at: new Date().toISOString() }),
               ...(planExpiresAt && { plan_expires_at: planExpiresAt }),
+              // Assinatura no cartão manda no perfil daqui pra frente, mesmo
+              // quando o cliente veio do PIX pelo checkout comum (sem passar
+              // pelo botão oficial de troca de meio de pagamento).
+              ...(sessionMode === 'subscription' && {
+                card_gateway: 'stripe',
+                billing_cycle: customerBilling,
+                payment_failed_at: null,
+                pix_consent_lost_at: null,
+              }),
             })
             .eq('id', existingProfile.id);
 
