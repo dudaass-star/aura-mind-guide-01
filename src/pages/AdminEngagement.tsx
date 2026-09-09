@@ -2022,11 +2022,14 @@ export default function AdminEngagement() {
                           </div>
                           <p className="text-xs text-muted-foreground">
                             <Mail className="inline h-3 w-3 mr-1" />
-                            <strong>E-mail:</strong> {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
+                            <strong>E-mail:</strong> {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             <MessageCircle className="inline h-3 w-3 mr-1 text-emerald-600" />
-                            <strong>WhatsApp:</strong> {whatsappStats.stage1} em 15min · {whatsappStats.stage2} em 24h · {whatsappStats.unique} únicos · {whatsappStats.converted} converteram · {whatsappStats.skipped} pulados · {whatsappStats.errors} erros de entrega
+                            <strong>WhatsApp:</strong> {whatsappStats.stage1} em 15min · {whatsappStats.stage2} em 24h · {whatsappStats.unique} únicos · {whatsappStats.converted} recuperadas pelo WhatsApp · {whatsappStats.skipped} pulados · {whatsappStats.errors} erros de entrega
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            <strong>Resultado:</strong> {recoverySessions.filter(s => s.converted && s.attributed_to !== 'organic').length} recuperadas (pagaram depois de algum contato) · {recoverySessions.filter(s => s.attributed_to === 'organic').length} voltaram sozinhas (pagaram antes de qualquer contato sair) · {recoverySessions.filter(s => !s.converted).length} não voltaram
                           </p>
                           <p className="text-[11px] text-muted-foreground/80 mt-1">
                             Cadências: e-mail = 3 estágios (1h / 25h / 97h) · WhatsApp = 2 estágios (15min / 24h). "Pulado" é a trava de segurança (telefone já contatado, cliente ativo, já pagou), não falha de envio.
