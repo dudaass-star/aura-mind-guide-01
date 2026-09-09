@@ -22,6 +22,7 @@ import {
   MANDATE_ACTIVE_STATUSES, WOOVI_PAID_STATUSES,
   findScheduledInstallment, daysUntil, WooviUnavailable,
   findUnpaidInstallment, createInstallmentCobr, normalizeMandateStatus,
+  cycleRetryWindow,
 } from "../_shared/woovi.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
