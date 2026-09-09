@@ -32,7 +32,7 @@ As correções da semana funcionaram: das 3 marcas de "parcela errada" (2027), n
 Duas frestas pequenas, nenhuma causando prejuízo hoje:
 
 1. **Entradas sem dono registrado.** 115 pagamentos de entrada foram gravados sem o vínculo com o cliente (só com o mandato). A regra que impede acesso maior do que o pago procura por cliente, então nesses casos ela simplesmente não roda — hoje sem efeito prático, mas é um ponto cego.
-2. **Cobranças antigas (21/08 a 30/08).** Cinco pessoas estão há 2–3 semanas sem pagar. Vale decidir se seguimos tentando o débito indefinidamente ou se, passado um limite, o caso vira só recuperação por conversa.
+2. **Cobranças antigas (21/08 a 30/08).** Cinco pessoas estão há 2–3 semanas sem pagar. Enquanto a autorização estiver viva, dá para tentar o débito indefinidamente — o teto é nossa escolha. A sugestão é tentar com folga entre tentativas até 30 dias após o vencimento e, depois disso, o caso vira só recuperação por conversa (a régua já existente), para não virar notificação diária no banco do cliente.
 
 ## Proposta (curta)
 
