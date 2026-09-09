@@ -1065,6 +1065,55 @@ Deno.serve(async (req) => {
             console.error('❌ Error updating profile:', updateError);
           } else {
             console.log('✅ Profile updated with plan:', customerPlan, planExpiresAt ? `expires: ${planExpiresAt}` : '');
+
+            // Cliente que vinha do PIX Automático e assinou no cartão pelo
+            // checkout comum: encerra o mandato Woovi e tira das filas de
+            // cobrança/recuperação do PIX. Best-effort — nunca bloqueia.
+            if (sessionMode === 'subscription') {
+              try {
+                const { data: mandates } = await supabase
+                  .from('woovi_subscriptions')
+                  .select('id, subscription_id')
+                  .eq('user_id', existingProfile.id)
+                  .in('status', ['APROVADA', 'ATIVA', 'AGUARDANDO'])
+                  .is('replaced_by_subscription_id', null);
+
+                for (const m of mandates || []) {
+                  await supabase.from('woovi_subscriptions').update({
+                    status: 'CANCELADA',
+                    replaced_by_subscription_id: `stripe:${session.subscription || session.id}`,
+                    last_error: 'migrado para cartão (stripe, checkout comum)',
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', m.id);
+
+                  if (m.subscription_id) {
+                    try {
+                      const appId = Deno.env.get('WOOVI_APP_ID') || '';
+                      const res = await fetch(
+                        `https://api.woovi.com/api/v1/subscriptions/${encodeURIComponent(m.subscription_id)}/cancel`,
+                        { method: 'PUT', headers: { Authorization: appId, 'Content-Type': 'application/json' } },
+                      );
+                      console.log(`🧾 Mandato Woovi ${m.subscription_id} cancelado: ${res.status}`);
+                    } catch (wErr) {
+                      console.warn('⚠️ Falha cancelando mandato na Woovi (não bloqueia):', wErr);
+                    }
+                  }
+                }
+
+                const { data: killedTasks } = await supabase
+                  .from('scheduled_tasks')
+                  .update({ status: 'cancelled', executed_at: new Date().toISOString() })
+                  .eq('user_id', existingProfile.user_id)
+                  .eq('status', 'pending')
+                  .like('task_type', 'woovi_%')
+                  .select('id');
+                if ((mandates?.length || 0) > 0 || (killedTasks?.length || 0) > 0) {
+                  console.log(`🔁 PIX desligado após assinatura no cartão — mandatos: ${mandates?.length || 0}, tarefas: ${killedTasks?.length || 0}`);
+                }
+              } catch (pixErr) {
+                console.warn('⚠️ Limpeza do trilho PIX falhou (não bloqueia):', pixErr);
+              }
+            }
             // Limpa sessões órfãs do plano anterior (scheduled sem started_at)
             // para evitar que o agente reative fantasmas após a troca de plano.
             try {
