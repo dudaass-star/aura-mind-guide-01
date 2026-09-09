@@ -305,8 +305,8 @@ export async function cycleRetryWindow(
     }
   }
 
-  return { allowed: true };
-}
+
+/**
  * `valueCents` permite retentar com valor menor — é assim que o desconto de
  * retenção entra no trilho PIX, onde não existe cupom.
  */
