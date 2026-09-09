@@ -29,4 +29,4 @@ Ou seja: o dinheiro entrou certo, o acesso dela é que está mal registrado.
 - No mesmo webhook, calcular `plan_expires_at` para `sessionMode === 'subscription'` a partir do `billing` (31/92/184/366 dias ou fim do período da assinatura), não só para pagamento avulso.
 - `_shared/woovi-access.ts` já ignora perfis com `card_gateway` diferente de `woovi`; com a correção acima ela sai do escopo do cap.
 - Correção pontual da Cristiane via migração de dados (perfil `ef894fb2-…` e mandato Woovi `2a5ca8d0-…`).
-- Varredura: perfis `card_gateway = 'woovi'` (ou nulo) com assinatura Stripe ativa no mesmo e-mail/telefone.
+
