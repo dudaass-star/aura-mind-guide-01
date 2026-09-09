@@ -20,4 +20,6 @@
 - [Cena condicional, nunca hipotética](mem://features/recovery/cena-condicional-sem-hipotese) — Cena do nível A só com gancho e cooldown de 1 mensagem; lead que já decidiu recebe 2 frases; "imagina/pensa no dia em que" proibido e removido
 
 - [Prova do mandato por E2E (Woovi)](mem://features/payments/woovi-prova-do-mandato-por-e2e) — Pagamento do extrato só é atribuído por endToEndId da parcela; janela -7/+3, teto de chamadas e 405 em criar parcela
+- [Parcela vencida correta (Woovi)](mem://features/payments/woovi-parcela-vencida-correta) — Cobrar sempre a parcela vencida mais antiga; teto de 11 dias na reconferência; painel diário de débito mensal
+
 - [Semântica do painel de recuperação](mem://features/admin/recovery-panel-semantics) — recovery_sent é flag de bloqueio PIX; datas de estágio também gravadas em pulos; enviado só com attempt *_sent
