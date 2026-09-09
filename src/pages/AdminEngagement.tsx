@@ -2068,6 +2068,10 @@ export default function AdminEngagement() {
                                   ? <Badge variant="destructive" className="text-[10px]"><AlertCircle className="h-3 w-3 mr-1" />{s.recovery_last_error?.substring(0, 30) || 'Falhou'}</Badge>
                                   : attemptStatus === 'skipped' || attemptStatus === 'skipped_active_customer'
                                   ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem email'}</Badge>
+                                  // Sem registro de tentativa: as próprias datas da sessão dizem o que saiu.
+                                  // "Legado" fica só para linhas sem data nenhuma.
+                                  : emailStage
+                                  ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />{emailStage}/3 enviados</Badge>
                                   : <Badge variant="secondary" className="text-[10px]">Legado</Badge>;
                                 // "skipped: motivo" não é erro — o estágio mais recente preenchido foi pulado.
                                 const waSkipped = (s.whatsapp_recovery_last_error || '').startsWith('skipped:');
