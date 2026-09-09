@@ -392,8 +392,19 @@ async function activateAccess(
     const phoneRaw = (sub.customer_phone as string) || "";
     const phone = phoneRaw ? normalizeBrazilianPhone(phoneRaw) : "";
 
+    // Mandato substituído (troca de plano no PIX ou migração pro cartão) não
+    // manda mais no perfil: evento atrasado dele não pode reescrever gateway
+    // nem validade de quem já está em outro trilho.
+    if (sub.replaced_by_subscription_id) {
+      console.warn(
+        `[webhook-woovi] mandato ${sub.subscription_id} está substituído por ` +
+        `${sub.replaced_by_subscription_id} — pagamento registrado, perfil intacto`,
+      );
+      return true;
+    }
+
     const now = new Date();
-    const profileCols = "id, user_id, plan, status, plan_expires_at, phone, email, name";
+    const profileCols = "id, user_id, plan, status, plan_expires_at, phone, email, name, card_gateway";
     let profile: Record<string, any> | null = null;
     if (sub.user_id) {
       const { data: byId } = await supabase
