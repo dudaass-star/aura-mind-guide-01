@@ -32,17 +32,17 @@ As correções da semana funcionaram: das 3 marcas de "parcela errada" (2027), n
 Duas frestas pequenas, nenhuma causando prejuízo hoje:
 
 1. **Entradas sem dono registrado.** 115 pagamentos de entrada foram gravados sem o vínculo com o cliente (só com o mandato). A regra que impede acesso maior do que o pago procura por cliente, então nesses casos ela simplesmente não roda — hoje sem efeito prático, mas é um ponto cego.
-2. **Cobranças antigas (21/08 a 30/08).** Cinco pessoas estão há 2–3 semanas sem pagar. Enquanto a autorização estiver viva, dá para tentar o débito indefinidamente — o teto é nossa escolha. A sugestão é tentar com folga entre tentativas até 30 dias após o vencimento e, depois disso, o caso vira só recuperação por conversa (a régua já existente), para não virar notificação diária no banco do cliente.
+2. **Cobranças antigas (21/08 a 30/08).** Cinco pessoas estão há 2–3 semanas sem pagar. Enquanto a autorização estiver viva, dá para tentar o débito indefinidamente — o teto é nossa escolha. A sugestão é tentar com folga entre tentativas até 60 dias após o vencimento e, depois disso, o caso vira só recuperação por conversa (a régua já existente), para não virar notificação diária no banco do cliente.
 
 ## Proposta (curta)
 
 1. Preencher o dono dos pagamentos de entrada antigos e passar a gravar sempre esse vínculo, para a regra de acesso enxergar todo mundo.
-2. Teto de tentativa de débito por ciclo: 30 dias após o vencimento, com intervalo mínimo de 3 dias entre tentativas (evita encher o app do banco do cliente). Passado o teto, sai da fila de débito e fica só na régua de recuperação.
+2. Teto de tentativa de débito por ciclo: 60 dias após o vencimento, com intervalo mínimo de 3 dias entre tentativas (evita encher o app do banco do cliente). Passado o teto, sai da fila de débito e fica só na régua de recuperação.
 3. Amanhã, depois da reconferência, uma nova leitura desses 9 para confirmar quantos pagaram — sem mexer em código.
 
 ## Detalhes técnicos
 
 - Verificação feita em `woovi_subscriptions` (vivos: `ATIVA`/`APROVADA`, `entry_paid_at` não nulo, sem `replaced_by_subscription_id`) cruzada com `woovi_charges` (`kind='cycle'`, `paid_at`) e `scheduled_tasks` (`woovi_retry_confirm`, `woovi_recovery_offer/final`).
 - Item 1: backfill de `woovi_charges.user_id` a partir de `woovi_subscriptions.user_id` via `subscription_id`, e gravação do campo em `webhook-woovi` no evento de entrada paga. `_shared/woovi-access.ts` passa a aceitar também o vínculo por mandato.
-- Item 2: em `woovi-pix-audit` e `execute-scheduled-tasks`, não recriar/reconfirmar ordem de ciclo com vencimento acima de 30 dias e impor intervalo mínimo de 3 dias entre tentativas do mesmo ciclo; passado o teto, só a régua de recuperação e a CobR do ciclo seguinte.
+- Item 2: em `woovi-pix-audit` e `execute-scheduled-tasks`, não recriar/reconfirmar ordem de ciclo com vencimento acima de 60 dias e impor intervalo mínimo de 3 dias entre tentativas do mesmo ciclo; passado o teto, só a régua de recuperação e a CobR do ciclo seguinte.
 - Sem migração de schema além do backfill; redeploy de `webhook-woovi`, `woovi-pix-audit` e `execute-scheduled-tasks`.
