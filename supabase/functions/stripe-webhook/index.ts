@@ -1020,6 +1020,10 @@ Deno.serve(async (req) => {
               ...(isTrial && { trial_started_at: new Date().toISOString(), trial_phase: 'listening' }),
               ...(instanceId && { whatsapp_instance_id: instanceId }),
               ...(planExpiresAt && { plan_expires_at: planExpiresAt }),
+              ...(sessionMode === 'subscription' && {
+                card_gateway: 'stripe',
+                billing_cycle: customerBilling,
+              }),
             });
 
           if (insertError) {
