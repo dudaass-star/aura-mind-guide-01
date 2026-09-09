@@ -961,12 +961,26 @@ Deno.serve(async (req) => {
       const formattedPhone = normalizeBrazilianPhone(cleanPhone);
       const today = new Date().toISOString().split('T')[0];
 
+      // Ciclo contratado (vem do checkout). Usado para validade do acesso.
+      const CYCLE_DAYS: Record<string, number> = {
+        monthly: 31, quarterly: 92, semiannual: 184, yearly: 366,
+      };
+      const customerBilling = session.metadata?.billing || 'monthly';
+
       let planExpiresAt: string | null = null;
       if (isBoletoPayment || sessionMode === 'payment') {
         const expirationDate = new Date();
         expirationDate.setFullYear(expirationDate.getFullYear() + 1);
         planExpiresAt = expirationDate.toISOString();
         console.log(`📅 One-time payment — plan expires at: ${planExpiresAt}`);
+      } else if (sessionMode === 'subscription') {
+        // Caso Cristiane (09/09/2026): assinatura anual paga no cartão não
+        // mexia em plan_expires_at, e o perfil seguia com a validade herdada do
+        // PIX antigo (2 meses em vez de 1 ano). Validade passa a acompanhar o
+        // ciclo efetivamente pago.
+        const days = CYCLE_DAYS[customerBilling] ?? 31;
+        planExpiresAt = new Date(Date.now() + days * 86400000).toISOString();
+        console.log(`📅 Subscription (${customerBilling}) — plan expires at: ${planExpiresAt}`);
       }
 
       // Check if profile already exists using resolver for better matching
