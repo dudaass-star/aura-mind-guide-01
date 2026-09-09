@@ -200,6 +200,14 @@ interface RecoverySession {
   recovery_stage2_sent_at: string | null;
   recovery_stage3_sent_at: string | null;
   converted: boolean;
+  /** Quando pagou (ms epoch) ou null se não voltou. */
+  paid_at: number | null;
+  /** A quem creditar o retorno: sozinha (antes de qualquer contato), WhatsApp ou e-mail. */
+  attributed_to: 'organic' | 'whatsapp' | 'email' | null;
+  /** Estágio do canal creditado: 1|2|3 para e-mail, 15|24 (h) para WhatsApp. */
+  attributed_stage: number | null;
+  /** Outro canal que também precedeu o pagamento (para tooltip). */
+  attribution_note: string | null;
   attempt_status: string | null;
   whatsapp_recovery_15min_sent_at: string | null;
   whatsapp_recovery_24h_sent_at: string | null;
@@ -531,9 +539,50 @@ export default function AdminEngagement() {
           s.email ? (completedAtByEmail.get(s.email.toLowerCase()) || 0) : 0,
           s.phone ? (completedAtByPhone.get(s.phone) || 0) : 0,
         );
+        const converted = latestCompletedAt > abandonedAt;
+
+        // Atribuição: creditar a recuperação SÓ se algum contato saiu antes do pagamento.
+        // Quem paga na primeira hora (antes do 1º e-mail e antes do WhatsApp de 15min)
+        // voltou sozinha — creditar isso à recuperação inflava o número.
+        let attributedTo: 'organic' | 'whatsapp' | 'email' | null = null;
+        let attributedStage: number | null = null;
+        let attributionNote: string | null = null;
+
+        if (converted) {
+          const ts = (v: string | null) => (v ? new Date(v).getTime() : 0);
+          const emailTouches: Array<{ at: number; stage: number }> = [
+            { at: ts(s.recovery_stage1_sent_at), stage: 1 },
+            { at: ts(s.recovery_stage2_sent_at), stage: 2 },
+            { at: ts(s.recovery_stage3_sent_at), stage: 3 },
+          ].filter(t => t.at > 0 && t.at < latestCompletedAt);
+          const waTouches: Array<{ at: number; stage: number }> = [
+            { at: ts(s.whatsapp_recovery_15min_sent_at), stage: 15 },
+            { at: ts(s.whatsapp_recovery_24h_sent_at), stage: 24 },
+          ].filter(t => t.at > 0 && t.at < latestCompletedAt);
+
+          const lastEmail = emailTouches.length ? emailTouches[emailTouches.length - 1] : null;
+          const lastWa = waTouches.length ? waTouches[waTouches.length - 1] : null;
+
+          if (!lastEmail && !lastWa) {
+            attributedTo = 'organic';
+          } else if (lastWa && (!lastEmail || lastWa.at >= lastEmail.at)) {
+            attributedTo = 'whatsapp';
+            attributedStage = lastWa.stage;
+            if (lastEmail) attributionNote = `E-mail ${lastEmail.stage}/3 também saiu antes do pagamento`;
+          } else if (lastEmail) {
+            attributedTo = 'email';
+            attributedStage = lastEmail.stage;
+            if (lastWa) attributionNote = `WhatsApp ${lastWa.stage === 15 ? '15min' : '24h'} também saiu antes do pagamento`;
+          }
+        }
+
         return {
           ...s,
-          converted: latestCompletedAt > abandonedAt,
+          converted,
+          paid_at: converted ? latestCompletedAt : null,
+          attributed_to: attributedTo,
+          attributed_stage: attributedStage,
+          attribution_note: attributionNote,
           attempt_status: attemptMap.get(s.id) || null,
         };
       });
@@ -1973,11 +2022,14 @@ export default function AdminEngagement() {
                           </div>
                           <p className="text-xs text-muted-foreground">
                             <Mail className="inline h-3 w-3 mr-1" />
-                            <strong>E-mail:</strong> {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
+                            <strong>E-mail:</strong> {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             <MessageCircle className="inline h-3 w-3 mr-1 text-emerald-600" />
-                            <strong>WhatsApp:</strong> {whatsappStats.stage1} em 15min · {whatsappStats.stage2} em 24h · {whatsappStats.unique} únicos · {whatsappStats.converted} converteram · {whatsappStats.skipped} pulados · {whatsappStats.errors} erros de entrega
+                            <strong>WhatsApp:</strong> {whatsappStats.stage1} em 15min · {whatsappStats.stage2} em 24h · {whatsappStats.unique} únicos · {whatsappStats.converted} recuperadas pelo WhatsApp · {whatsappStats.skipped} pulados · {whatsappStats.errors} erros de entrega
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            <strong>Resultado:</strong> {recoverySessions.filter(s => s.converted && s.attributed_to !== 'organic').length} recuperadas (pagaram depois de algum contato) · {recoverySessions.filter(s => s.attributed_to === 'organic').length} voltaram sozinhas (pagaram antes de qualquer contato sair) · {recoverySessions.filter(s => !s.converted).length} não voltaram
                           </p>
                           <p className="text-[11px] text-muted-foreground/80 mt-1">
                             Cadências: e-mail = 3 estágios (1h / 25h / 97h) · WhatsApp = 2 estágios (15min / 24h). "Pulado" é a trava de segurança (telefone já contatado, cliente ativo, já pagou), não falha de envio.
@@ -2019,6 +2071,10 @@ export default function AdminEngagement() {
                                   ? <Badge variant="destructive" className="text-[10px]"><AlertCircle className="h-3 w-3 mr-1" />{s.recovery_last_error?.substring(0, 30) || 'Falhou'}</Badge>
                                   : attemptStatus === 'skipped' || attemptStatus === 'skipped_active_customer'
                                   ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem email'}</Badge>
+                                  // Sem registro de tentativa: as próprias datas da sessão dizem o que saiu.
+                                  // "Legado" fica só para linhas sem data nenhuma.
+                                  : emailStage
+                                  ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />{emailStage}/3 enviados</Badge>
                                   : <Badge variant="secondary" className="text-[10px]">Legado</Badge>;
                                 // "skipped: motivo" não é erro — o estágio mais recente preenchido foi pulado.
                                 const waSkipped = (s.whatsapp_recovery_last_error || '').startsWith('skipped:');
@@ -2070,10 +2126,22 @@ export default function AdminEngagement() {
                                       </div>
                                     </TableCell>
                                     <TableCell>
-                                      {s.converted ? (
-                                        <Badge className="bg-green-600 text-white"><CheckCircle2 className="h-3 w-3 mr-1" />Converteu</Badge>
-                                      ) : (
+                                      {!s.converted ? (
                                         <Badge variant="secondary"><AlertCircle className="h-3 w-3 mr-1" />Não voltou</Badge>
+                                      ) : s.attributed_to === 'organic' ? (
+                                        <Badge variant="outline" className="text-[10px]" title="Pagou antes de qualquer contato de recuperação sair">
+                                          Voltou sozinha
+                                        </Badge>
+                                      ) : s.attributed_to === 'whatsapp' ? (
+                                        <Badge className="bg-green-600 text-white text-[10px]" title={s.attribution_note || undefined}>
+                                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                                          Recuperada · WhatsApp {s.attributed_stage === 15 ? '15min' : '24h'}
+                                        </Badge>
+                                      ) : (
+                                        <Badge className="bg-green-600 text-white text-[10px]" title={s.attribution_note || undefined}>
+                                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                                          Recuperada · E-mail {s.attributed_stage}/3
+                                        </Badge>
                                       )}
                                     </TableCell>
                                   </TableRow>
