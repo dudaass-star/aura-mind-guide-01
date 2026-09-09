@@ -9,13 +9,39 @@
  *
  * Regra: validade = último pagamento registrado em `woovi_charges`
  *   • entrada (semanal de teste) → +8 dias
- *   • mensalidade (ciclo)        → +31 dias
+ *   • mensalidade (ciclo)        → janela do CICLO contratado
+ *       mensal 31 · trimestral 92 · semestral 184 · anual 366
  * Só ENCURTA. Nunca estende acesso, nunca corta quem tem mensalidade em dia, e
  * nunca mexe em perfil sem nenhum pagamento registrado (outro trilho pode ser o
  * dono da validade).
+ *
+ * Caso real (Cris Silveiira, 09/09/2026): trimestral pago em 20/08 estava com
+ * acesso até 20/02/2027 — o dobro do pago — porque a janela de ciclo era fixa em
+ * 31 dias e não distinguia trimestral/semestral/anual.
+ *
+ * Quem migrou de meio de pagamento fica FORA desta regra: se o cliente passou
+ * pro cartão, quem manda na validade é a fatura da Stripe, e aplicar o teto do
+ * último PIX cortaria o acesso de um cliente em dia.
  */
 export const ENTRY_ACCESS_DAYS = 8;
 export const CYCLE_ACCESS_DAYS = 31;
+
+/** Dias de acesso comprados por um pagamento de ciclo, por período contratado. */
+export const CYCLE_DAYS_BY_PERIOD: Record<string, number> = {
+  monthly: 31,
+  mensal: 31,
+  quarterly: 92,
+  trimestral: 92,
+  semiannual: 184,
+  semestral: 184,
+  yearly: 366,
+  anual: 366,
+};
+
+export function cycleAccessDays(billingPeriod: string | null | undefined): number {
+  const key = String(billingPeriod || "monthly").toLowerCase();
+  return CYCLE_DAYS_BY_PERIOD[key] ?? CYCLE_ACCESS_DAYS;
+}
 
 export async function enforceWooviAccessCap(
   supabase: any,
@@ -34,15 +60,22 @@ export async function enforceWooviAccessCap(
   const last = Array.isArray(paid) ? paid[0] : null;
   if (!last?.paid_at) return { capped: false, reason: "nenhum pagamento registrado" };
 
-  const days = String(last.kind) === "cycle" ? CYCLE_ACCESS_DAYS : ENTRY_ACCESS_DAYS;
-  const until = new Date(Date.parse(String(last.paid_at)) + days * 86400000);
-
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, plan_expires_at")
+    .select("id, plan_expires_at, card_gateway, billing_cycle")
     .eq("id", userId)
     .maybeSingle();
   if (!profile) return { capped: false, reason: "perfil não encontrado" };
+
+  // Cliente que saiu do PIX (migrou pro cartão, por exemplo) não é regido aqui.
+  if (profile.card_gateway && String(profile.card_gateway) !== "woovi") {
+    return { capped: false, reason: `outro gateway (${profile.card_gateway})` };
+  }
+
+  const days = String(last.kind) === "cycle"
+    ? cycleAccessDays(profile.billing_cycle)
+    : ENTRY_ACCESS_DAYS;
+  const until = new Date(Date.parse(String(last.paid_at)) + days * 86400000);
 
   const current = profile.plan_expires_at ? Date.parse(String(profile.plan_expires_at)) : 0;
   // Só encurta. Acesso mais curto que o pago segue como está (pode vir de

@@ -454,6 +454,108 @@ Deno.serve(async (req) => {
         console.warn('⚠️ Duplicate-subscription safety net failed (non-blocking):', dupErr);
       }
 
+      // ========== MIGRAÇÃO PIX AUTOMÁTICO → CARTÃO ==========
+      // Sessão criada por `switch-to-card`. Aqui o cartão JÁ existe: só agora o
+      // mandato PIX pode morrer. Nunca o contrário — cancelar antes deixaria o
+      // cliente sem cobrança nenhuma se ele abandonasse o checkout.
+      // Não é venda nova: sem boas-vindas, sem Purchase no Meta/GA4.
+      if (session.metadata?.migration_from) {
+        const migUserId = session.metadata?.migration_user_id || '';
+        const migPlan = session.metadata?.plan || 'essencial';
+        const migBilling = session.metadata?.billing || 'monthly';
+        console.log('🔁 Migração de meio de pagamento detectada', {
+          from: session.metadata.migration_from, userId: migUserId, plan: migPlan, billing: migBilling,
+        });
+        try {
+          const { data: migProfile } = await supabase
+            .from('profiles')
+            .select('id, user_id, plan_expires_at')
+            .eq('user_id', migUserId)
+            .maybeSingle();
+
+          // 1) Mandato Woovi vivo → marca como substituído ANTES de chamar a
+          // Woovi. É essa marca que tira o mandato de todas as filas de
+          // cobrança/recuperação; a chamada remota é best-effort.
+          if (migProfile?.id) {
+            const { data: mandates } = await supabase
+              .from('woovi_subscriptions')
+              .select('id, subscription_id, status')
+              .eq('user_id', migProfile.id)
+              .in('status', ['APROVADA', 'ATIVA', 'AGUARDANDO'])
+              .is('replaced_by_subscription_id', null);
+
+            for (const m of mandates || []) {
+              await supabase.from('woovi_subscriptions').update({
+                status: 'CANCELADA',
+                replaced_by_subscription_id: `stripe:${session.subscription || session.id}`,
+                last_error: 'migrado para cartão (stripe)',
+                updated_at: new Date().toISOString(),
+              }).eq('id', m.id);
+
+              // Encerra tarefas de cobrança/recuperação pendentes desse mandato.
+              await supabase
+                .from('scheduled_tasks')
+                .update({ status: 'cancelled', executed_at: new Date().toISOString() })
+                .eq('user_id', migProfile.user_id)
+                .eq('status', 'pending')
+                .like('task_type', 'woovi_%');
+
+              if (m.subscription_id) {
+                try {
+                  const appId = Deno.env.get('WOOVI_APP_ID') || '';
+                  const res = await fetch(
+                    `https://api.woovi.com/api/v1/subscriptions/${encodeURIComponent(m.subscription_id)}/cancel`,
+                    { method: 'PUT', headers: { Authorization: appId, 'Content-Type': 'application/json' } },
+                  );
+                  console.log(`🧾 Mandato Woovi ${m.subscription_id} cancelado na Woovi: ${res.status}`);
+                } catch (wErr) {
+                  // Já está fora das filas locais; a varredura diária retenta.
+                  console.warn('⚠️ Falha cancelando mandato na Woovi (não bloqueia):', wErr);
+                }
+              }
+            }
+          }
+
+          // 2) Perfil passa a ser cartão. Acesso e validade NÃO mudam aqui:
+          // quem estende é a fatura paga (invoice.paid).
+          if (migProfile?.id) {
+            await supabase.from('profiles').update({
+              card_gateway: 'stripe',
+              plan: migPlan,
+              billing_cycle: migBilling,
+              status: 'active',
+              payment_failed_at: null,
+              updated_at: new Date().toISOString(),
+            }).eq('id', migProfile.id);
+          }
+
+          try {
+            await supabase.from('retention_events').insert({
+              user_id: migUserId || null,
+              phone: (session.metadata?.phone || '').replace(/\D/g, '') || null,
+              origin: 'payment_method_migration',
+              action: 'migrated_pix_to_card',
+              gateway: 'stripe',
+              metadata: {
+                from: session.metadata.migration_from,
+                session_id: session.id,
+                subscription_id: session.subscription || null,
+                plan: migPlan,
+                billing: migBilling,
+              },
+            });
+          } catch (_) { /* auditoria best-effort */ }
+        } catch (migErr) {
+          console.error('❌ Erro na migração de meio de pagamento:', migErr);
+        }
+
+        return new Response(JSON.stringify({ received: true, migrated: true }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+
+
       // ========== TRIAL VALIDATION LEGADO (R$ X charge — fluxo antigo, mantido para compat) ==========
       if (session.metadata?.trial_validation === 'true' && session.mode === 'payment') {
         console.log('🔐 Trial validation flow detected');

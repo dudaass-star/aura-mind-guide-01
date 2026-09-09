@@ -34,7 +34,7 @@ interface Props {
   /** Tier de retenção ativo (lite/base). Se houver, nenhum plano cheio é "atual". */
   currentTier?: string | null;
   /** Gateway ativo — roteia para a edge function correta e ajusta copy. */
-  paymentGateway: "stripe-card" | "asaas-pix" | "asaas-card" | "inter-pix";
+  paymentGateway: "stripe-card" | "asaas-pix" | "asaas-card" | "inter-pix" | "woovi-pix";
 }
 
 export function ChangePlanDialog({
@@ -61,21 +61,26 @@ export function ChangePlanDialog({
   const queryClient = useQueryClient();
 
   const isInter = paymentGateway === "inter-pix";
+  // PIX Automático da Woovi: mesma natureza do Inter (mandato Bacen com valor
+  // fixo). Sem entrar aqui, o retorno com QR era descartado e a troca morria
+  // num toast de "plano atualizado" que não tinha acontecido (caso Cris, 09/09).
+  const isWoovi = paymentGateway === "woovi-pix";
+  const isPixAutomatico = isInter || isWoovi;
   const isAsaas = paymentGateway === "asaas-pix" || paymentGateway === "asaas-card";
   const isPix = paymentGateway === "asaas-pix";
   const isAsaasCard = paymentGateway === "asaas-card";
   // Mostra tela de sucesso com próxima cobrança em qualquer fluxo Asaas
   // (PIX e cartão recorrente Asaas reusam a mesma edge com retorno idêntico).
-  const showsNextCharge = isAsaas || isInter;
-  const copyDescription = isInter
+  const showsNextCharge = isAsaas || isPixAutomatico;
+  const copyDescription = isPixAutomatico
     ? "No PIX Automático o valor autorizado é fixo: para trocar, você escaneia um QR novo uma única vez."
     : isPix
     ? "A troca vale a partir da próxima cobrança PIX. Hoje não rola cobrança nenhuma."
     : isAsaasCard
       ? "A troca vale a partir da próxima cobrança no seu cartão. Hoje não rola cobrança nenhuma."
       : "A diferença é cobrada (ou creditada) hoje no cartão já cadastrado.";
-  const copyConfirm = isInter
-    ? "Vou encerrar o débito automático atual e gerar um QR novo com o valor do plano escolhido. Seu acesso atual não muda."
+  const copyConfirm = isPixAutomatico
+    ? "Vou gerar um QR novo com o valor do plano escolhido. Depois que você autorizar no banco, o débito antigo é encerrado — seu acesso atual não muda."
     : isPix
     ? "Sua próxima cobrança PIX já vem com o novo valor. Nada é cobrado agora."
     : isAsaasCard

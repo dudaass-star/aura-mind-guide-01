@@ -164,6 +164,36 @@ const UserPortal = () => {
   // Trilho PIX Automático pela Woovi (jornada composta, mandato Bacen).
   const isWooviPix = (profile as any)?.card_gateway === "woovi";
 
+  // PIX Automático (Woovi) → cartão. O período já pago é respeitado: a primeira
+  // cobrança no cartão só acontece na renovação, e o débito PIX é encerrado
+  // apenas depois que o cartão é confirmado.
+  const handleSwitchToCard = async () => {
+    if (portalLoading) return;
+    setPortalLoading(true);
+    toast({
+      title: "Abrindo o pagamento no cartão…",
+      description: "Nada é cobrado agora: seu período já pago continua valendo.",
+    });
+    try {
+      const { data, error } = await supabasePortal.functions.invoke("switch-to-card", {
+        body: { userId },
+      });
+      if (error) throw error;
+      if (!data?.url) throw new Error("Link não recebido");
+      window.location.href = data.url;
+    } catch (err: any) {
+      const msg =
+        err?.context?.error || err?.message || "Não foi possível abrir agora. Tente novamente em instantes.";
+      toast({
+        title: "Ops",
+        description: typeof msg === "string" ? msg : "Não foi possível abrir agora.",
+        variant: "destructive",
+      });
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
   const handleOpenBillingPortal = async () => {
     if (portalLoading) return;
     // PIX Automático Bacen (Inter): não existe cartão para atualizar. O que
@@ -176,13 +206,10 @@ const UserPortal = () => {
       });
       return;
     }
-    // PIX Automático Woovi: idem Inter — o que resolve é reautorizar o mandato.
+    // PIX Automático Woovi: não existe cartão salvo — o caminho real é migrar
+    // pro cartão (fluxo abaixo), preservando o período já pago.
     if (isWooviPix) {
-      toast({
-        title: "Você paga via PIX Automático",
-        description:
-          "Não há cartão para atualizar. Se a renovação parou, mandamos um QR novo pra reautorizar o débito no seu banco — ou fale com o suporte.",
-      });
+      void handleSwitchToCard();
       return;
     }
     // PIX Asaas recorrente: cartão não se aplica. Explica e oferece suporte.
@@ -305,7 +332,13 @@ const UserPortal = () => {
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-accent transition-colors font-['Nunito'] mb-3 disabled:opacity-60"
           >
             {portalLoading ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
-            <span>{portalLoading ? "Abrindo…" : "Atualizar forma de pagamento"}</span>
+            <span>
+              {portalLoading
+                ? "Abrindo…"
+                : isWooviPix
+                  ? "Passar a pagar no cartão"
+                  : "Atualizar forma de pagamento"}
+            </span>
           </button>
           <button
             onClick={() => setChangePlanOpen(true)}
@@ -349,6 +382,8 @@ const UserPortal = () => {
           paymentGateway={
             isInterPix
               ? "inter-pix"
+              : isWooviPix
+              ? "woovi-pix"
               : isAsaasPix
               ? "asaas-pix"
               : (profile as any)?.card_gateway === "asaas"
