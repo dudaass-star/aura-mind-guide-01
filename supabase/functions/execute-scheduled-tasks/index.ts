@@ -636,7 +636,9 @@ Deno.serve(async (req) => {
           }
 
           // ─────────────────────────────────────────────────────────────────
-          // Recuperação silenciosa do PIX Automático (Woovi) — ~37 dias
+          // Recuperação silenciosa do PIX Automático (Woovi) — até 60 dias do
+          // vencimento, com no mínimo 3 dias entre tentativas. Depois disso,
+          // a régua de conversa e o ciclo seguinte assumem a recuperação.
           //
           // Ciclo não pago não gera aviso nem corte. O Bacen só deixa criar a
           // CobR de 2 a 10 dias ANTES do vencimento (a Woovi cria no 4º dia
