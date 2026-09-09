@@ -2123,10 +2123,22 @@ export default function AdminEngagement() {
                                       </div>
                                     </TableCell>
                                     <TableCell>
-                                      {s.converted ? (
-                                        <Badge className="bg-green-600 text-white"><CheckCircle2 className="h-3 w-3 mr-1" />Converteu</Badge>
-                                      ) : (
+                                      {!s.converted ? (
                                         <Badge variant="secondary"><AlertCircle className="h-3 w-3 mr-1" />Não voltou</Badge>
+                                      ) : s.attributed_to === 'organic' ? (
+                                        <Badge variant="outline" className="text-[10px]" title="Pagou antes de qualquer contato de recuperação sair">
+                                          Voltou sozinha
+                                        </Badge>
+                                      ) : s.attributed_to === 'whatsapp' ? (
+                                        <Badge className="bg-green-600 text-white text-[10px]" title={s.attribution_note || undefined}>
+                                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                                          Recuperada · WhatsApp {s.attributed_stage === 15 ? '15min' : '24h'}
+                                        </Badge>
+                                      ) : (
+                                        <Badge className="bg-green-600 text-white text-[10px]" title={s.attribution_note || undefined}>
+                                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                                          Recuperada · E-mail {s.attributed_stage}/3
+                                        </Badge>
                                       )}
                                     </TableCell>
                                   </TableRow>
