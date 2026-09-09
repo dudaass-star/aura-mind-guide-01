@@ -51,6 +51,17 @@ async function logWooviAttempt(
 }
 
 /**
+ * A Woovi recusa com 400 "A parcela já tem cobr" quando a ordem de débito JÁ
+ * existe no banco do cliente. Isso não é falha: é débito em andamento. Tratar
+ * como recusa (era o que acontecia) tirava o cliente do radar — ele ficava sem
+ * veredito, sem régua e sem cobrança, com o acesso liberado.
+ */
+function cobrAlreadyExists(raw: string | null | undefined): boolean {
+  return /j[áa]\s*tem\s*cobr/i.test(String(raw || ''));
+}
+
+
+/**
  * Toda tentativa pedida à Woovi precisa de VEREDITO. Sem esta reconferência o
  * mandato ficava eternamente marcado como "RETRY_REQUESTED": nem pago, nem
  * recusado, nem em recuperação — parado, sem ninguém agir.
