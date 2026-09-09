@@ -1739,9 +1739,12 @@ export default function AdminEngagement() {
           </TabsContent>
 
           <TabsContent value="trial" className="mt-3 space-y-4">
+            <PixAutomaticoDiaPanel />
+
             <CheckoutFunnelPanel />
 
             <LandingEngagementPanel />
+
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
