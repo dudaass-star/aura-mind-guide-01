@@ -2129,16 +2129,16 @@ export default function AdminEngagement() {
                                           <Badge className="bg-emerald-600 text-white text-[10px] w-fit">24h ✓</Badge>
                                         )}
                                         {waSkipped && (
-                                          <Badge variant="secondary" className="text-[10px] w-fit" title={s.whatsapp_recovery_last_error || undefined}>
-                                            {skipLabel(s.whatsapp_recovery_last_error)}
+                                          <Badge variant="secondary" className="text-[10px] w-fit" title={s.wa_skip_reason || undefined}>
+                                            {skipLabel(s.wa_skip_reason)}
                                           </Badge>
                                         )}
                                         {waError && (
-                                          <Badge variant="destructive" className="text-[10px] w-fit" title={s.whatsapp_recovery_last_error}>
+                                          <Badge variant="destructive" className="text-[10px] w-fit" title={s.wa_error || undefined}>
                                             <AlertCircle className="h-3 w-3 mr-1" />Erro
                                           </Badge>
                                         )}
-                                        {!show15min && !show24h && !s.whatsapp_recovery_last_error && (
+                                        {!show15min && !show24h && !waSkipped && !waError && (
                                           <span className="text-xs text-muted-foreground">—</span>
                                         )}
                                       </div>
@@ -2169,7 +2169,7 @@ export default function AdminEngagement() {
                           </Table>
                           {recoverySessions.length > 5 && (
                             <Button variant="ghost" size="sm" className="w-full mt-2 text-xs" onClick={() => setShowAllRecovery(!showAllRecovery)}>
-                              {showAllRecovery ? 'Mostrar menos' : `Ver todos (${recoverySessions.length})`}
+                              {showAllRecovery ? 'Mostrar menos' : `Ver mais (${recoverySessions.length} no total — mostra até 100)`}
                             </Button>
                           )}
                         </CardContent>
