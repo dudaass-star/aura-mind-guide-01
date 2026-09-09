@@ -168,7 +168,7 @@ export const WOOVI_PAID_STATUSES = [
 export const MANDATE_ACTIVE_STATUSES = ["APROVADA", "ATIVA"];
 
 // ---------------------------------------------------------------------------
-// Reciclagem de parcela (recuperação silenciosa de ~30 dias)
+// Reciclagem de parcela (recuperação silenciosa de até 60 dias)
 //
 // O Bacen permite criar/retentar a cobrança recorrente (CobR) de uma parcela
 // entre 2 e 10 dias antes do vencimento, e a Woovi expõe isso em:
