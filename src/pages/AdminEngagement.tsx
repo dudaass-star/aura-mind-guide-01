@@ -2084,36 +2084,22 @@ export default function AdminEngagement() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {(showAllRecovery ? recoverySessions : recoverySessions.slice(0, 5)).map((s) => {
+                              {(showAllRecovery ? recoverySessions.slice(0, 100) : recoverySessions.slice(0, 5)).map((s) => {
                                 const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação' };
                                 const maskedEmail = s.email ? `${s.email.substring(0, 3)}***@${s.email.split('@')[1] || ''}` : '—';
-                                const attemptStatus = s.attempt_status;
-                                // Estágio real do fluxo de 3 e-mails: stage_1_sent / stage_2_sent / stage_3_sent.
-                                const stageMatch = attemptStatus?.match(/^stage_(\d)_(sent|failed|skipped)$/);
-                                const emailStage = s.recovery_stage3_sent_at ? 3 : s.recovery_stage2_sent_at ? 2 : s.recovery_stage1_sent_at ? 1 : null;
-                                const sendBadge = stageMatch && stageMatch[2] === 'sent'
-                                  ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />{emailStage ?? stageMatch[1]}/3 enviados</Badge>
-                                  : stageMatch && stageMatch[2] === 'failed'
-                                  ? <Badge variant="destructive" className="text-[10px]" title={s.recovery_last_error || undefined}><AlertCircle className="h-3 w-3 mr-1" />Falhou no {stageMatch[1]}º</Badge>
-                                  : stageMatch && stageMatch[2] === 'skipped'
-                                  ? <Badge variant="outline" className="text-[10px]" title={s.recovery_last_error || undefined}>{skipLabel(s.recovery_last_error)}</Badge>
-                                  : attemptStatus === 'api_accepted'
-                                  ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Enviado</Badge>
-                                  : attemptStatus === 'failed' || attemptStatus === 'error'
-                                  ? <Badge variant="destructive" className="text-[10px]"><AlertCircle className="h-3 w-3 mr-1" />{s.recovery_last_error?.substring(0, 30) || 'Falhou'}</Badge>
-                                  : attemptStatus === 'skipped' || attemptStatus === 'skipped_active_customer'
-                                  ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem email'}</Badge>
-                                  // Sem registro de tentativa: as próprias datas da sessão dizem o que saiu.
-                                  // "Legado" fica só para linhas sem data nenhuma.
-                                  : emailStage
-                                  ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />{emailStage}/3 enviados</Badge>
-                                  : <Badge variant="secondary" className="text-[10px]">Legado</Badge>;
-                                // "skipped: motivo" não é erro — o estágio mais recente preenchido foi pulado.
-                                const waSkipped = (s.whatsapp_recovery_last_error || '').startsWith('skipped:');
-                                const waError = s.whatsapp_recovery_last_error && !waSkipped;
-                                const show24h = !!s.whatsapp_recovery_24h_sent_at && !(waSkipped && !!s.whatsapp_recovery_24h_sent_at);
-                                const show15min = !!s.whatsapp_recovery_15min_sent_at
-                                  && !(waSkipped && !s.whatsapp_recovery_24h_sent_at);
+                                // Enviado ≠ pulado: só é verde quando o e-mail saiu de verdade.
+                                const sendBadge = s.email_sent_stage
+                                  ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />{s.email_sent_stage}/3 enviados</Badge>
+                                  : s.email_failed_stage
+                                  ? <Badge variant="destructive" className="text-[10px]" title={s.recovery_last_error || undefined}><AlertCircle className="h-3 w-3 mr-1" />Falhou no {s.email_failed_stage}º</Badge>
+                                  : s.email_skip_reason
+                                  ? <Badge variant="outline" className="text-[10px]" title={s.email_skip_reason}>{skipLabel(s.email_skip_reason)}</Badge>
+                                  : <span className="text-xs text-muted-foreground">—</span>;
+                                const show15min = !!s.wa_sent_15min_at;
+                                const show24h = !!s.wa_sent_24h_at;
+                                const waSkipped = !!s.wa_skip_reason;
+                                const waError = !!s.wa_error;
+
                                 return (
                                   <TableRow key={s.id}>
                                     <TableCell className="font-medium">{s.name || '—'}</TableCell>
