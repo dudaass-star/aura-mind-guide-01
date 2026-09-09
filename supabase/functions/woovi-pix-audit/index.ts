@@ -730,6 +730,19 @@ Deno.serve(async (req) => {
         WOOVI_PAID_STATUSES.includes(String(c?.status || "").toUpperCase())
       );
       if (!anyPaid) {
+        // Ciclo vencido sem pagamento não pode conviver com acesso liberado
+        // além do que o cliente pagou (caso real: entrada de teste paga, plano
+        // anual de acesso liberado por engano na reconciliação).
+        if (!dryRun) {
+          const { enforceWooviAccessCap } = await import("../_shared/woovi-access.ts");
+          const cap = await enforceWooviAccessCap(supabase, sub.user_id);
+          if (cap.capped) {
+            report.cobertura.push({
+              sub: sub.subscription_id, email: sub.customer_email,
+              acesso_alinhado_ate: cap.until,
+            });
+          }
+        }
         const { data: pending } = await supabase.from("scheduled_tasks")
           .select("id")
           .in("task_type", [
