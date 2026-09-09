@@ -1150,7 +1150,7 @@ Deno.serve(async (req) => {
             }
             await supabase
               .from('woovi_subscriptions')
-              .update({ status: 'CANCELADA', last_error: 'recuperação de 30 dias esgotada' })
+              .update({ status: 'CANCELADA', last_error: 'recuperação de 60 dias esgotada' })
               .eq('subscription_id', subscriptionId);
             await supabase
               .from('profiles')
