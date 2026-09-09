@@ -21,7 +21,7 @@ Ou seja: o dinheiro entrou certo, o acesso dela é que está mal registrado.
 1. Corrigir o cadastro da Cristiane: meio de pagamento = cartão, plano Essencial anual, acesso válido até 09/09/2027, e encerrar em definitivo o registro do débito PIX antigo.
 2. Fechar o furo para os próximos: quando alguém que estava no PIX paga uma assinatura nova no cartão pelo checkout comum, o sistema deve fazer o mesmo que faz na troca oficial — passar o cadastro para cartão, desligar o débito PIX e tirar essa pessoa das filas de cobrança e recuperação do PIX.
 3. Passar a registrar a validade do acesso também nas assinaturas por cartão, conforme o ciclo pago (mensal, trimestral, semestral ou anual), em vez de deixar o campo intocado.
-4. Rodar uma varredura para achar outros clientes na mesma situação (pagando no cartão, mas registrados como PIX) e corrigir.
+
 
 ## Detalhes técnicos
 
