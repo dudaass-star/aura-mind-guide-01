@@ -701,7 +701,23 @@ Deno.serve(async (req) => {
                   payload: { ...payload, next_due_date: next.dueDate, source: 'missing_cycle_recovery' },
                 });
                 console.warn(`⚠️ woovi ${subscriptionId}: ciclo ausente; próxima CobR (${next.dueDate}) garantida`);
+                // A parcela seguinte pode estar a MESES de distância (a Woovi já
+                // devolveu vencimento em 2027 para ciclo de setembro). Nesse caso
+                // o ciclo vencido ficaria sem cobrança e sem ninguém olhando até
+                // lá: mantemos a régua de recuperação normal, 8 dias depois do
+                // vencimento, como em qualquer ciclo não pago.
+                if (lead > 12) {
+                  await supabase.from('scheduled_tasks').insert({
+                    user_id: task.user_id,
+                    task_type: 'woovi_recovery_offer',
+                    execute_at: new Date(Date.now() + 8 * 24 * 3600 * 1000).toISOString(),
+                    status: 'pending',
+                    payload: { ...payload, offer_step: 1, source: 'missing_cycle_far_next' },
+                  });
+                  console.warn(`⚠️ woovi ${subscriptionId}: próxima parcela em ${lead}d — régua aberta em 8d`);
+                }
               } else {
+
                 await supabase.from('woovi_subscriptions')
                   .update({ last_error: 'mandato ativo sem parcela atual ou futura na Woovi' })
                   .eq('subscription_id', subscriptionId);
