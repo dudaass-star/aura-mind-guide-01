@@ -280,12 +280,14 @@ export async function cycleRetryWindow(
     }
   }
 
-  const { data: last } = await supabase
+  let lastQuery = supabase
     .from("woovi_charges")
     .select("created_at")
     .eq("subscription_id", subscriptionId)
-    .eq("due_date", dueDate)
-    .in("status", ["RETRY_REQUESTED", "COBR_CREATED", "COBR_ALREADY_EXISTS"])
+    .in("status", ["RETRY_REQUESTED", "COBR_CREATED", "COBR_ALREADY_EXISTS"]);
+  if (dueDate) lastQuery = lastQuery.eq("due_date", dueDate);
+  else lastQuery = lastQuery.is("due_date", null);
+  const { data: last } = await lastQuery
     .order("created_at", { ascending: false })
     .limit(1);
 
