@@ -476,112 +476,130 @@ export default function AdminEngagement() {
 
   const fetchRecoverySessions = async () => {
     try {
-      // Contagem bruta de tentativas (sem dedup) — todas as sessões com recovery_sent=true
-      const { count: rawCount } = await supabase
-        .from('checkout_sessions')
-        .select('id', { count: 'exact', head: true })
-        .eq('recovery_sent', true);
+      // 1) Universo: só sessões com atividade REAL de recuperação.
+      //    A flag `recovery_sent` NÃO entra: ela também é usada pelos fluxos de
+      //    PIX apenas para BLOQUEAR o carrinho abandonado, o que enchia a tabela
+      //    de checkouts PIX pagos que nunca receberam nada.
+      const sessions = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('checkout_sessions')
+          .select('id, name, phone, email, plan, created_at, status, recovery_last_error, recovery_stage1_sent_at, recovery_stage2_sent_at, recovery_stage3_sent_at, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at, whatsapp_recovery_last_error')
+          .or(RECOVERY_ACTIVITY_FILTER)
+          .order('created_at', { ascending: false })
+          .range(from, to),
+      );
 
-      // Contagem de tentativas aceitas pela API (status do último attempt)
-      const { count: acceptedCount } = await supabase
-        .from('checkout_recovery_attempts')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'api_accepted');
+      // 2) Tentativas relevantes: distinguem ENVIADO de PULADO/FALHOU.
+      const attempts = await fetchAllPages<{ checkout_session_id: string; status: string }>((from, to) =>
+        supabase
+          .from('checkout_recovery_attempts')
+          .select('checkout_session_id, status')
+          .in('status', RELEVANT_ATTEMPT_STATUSES)
+          .range(from, to),
+      );
 
-      setRecoveryStats({ raw: rawCount || 0, accepted: acceptedCount || 0 });
+      const statusesBySession = new Map<string, Set<string>>();
+      for (const a of attempts) {
+        if (!a.checkout_session_id || !a.status) continue;
+        let set = statusesBySession.get(a.checkout_session_id);
+        if (!set) {
+          set = new Set<string>();
+          statusesBySession.set(a.checkout_session_id, set);
+        }
+        set.add(a.status);
+      }
 
-      // Contagens de recuperação via WhatsApp (campos próprios em checkout_sessions)
-      // "Pulado" (skipped: ...) NÃO é erro: é a trava de segurança do fluxo.
-      // Erro = falha técnica de entrega de verdade.
-      const [
-        { count: waStage1Count },
-        { count: waStage2Count },
-        { count: waErrorsCount },
-        { count: waSkippedCount },
-      ] = await Promise.all([
-        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_15min_sent_at', 'is', null),
-        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_24h_sent_at', 'is', null),
-        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true })
-          .not('whatsapp_recovery_last_error', 'is', null)
-          .not('whatsapp_recovery_last_error', 'like', 'skipped:%'),
-        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true })
-          .like('whatsapp_recovery_last_error', 'skipped:%'),
-      ]);
+      // 3) Quem pagou (todos os checkouts concluídos), por e-mail e por telefone.
+      const completed = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('checkout_sessions')
+          .select('email, phone, completed_at, created_at')
+          .eq('status', 'completed')
+          .range(from, to),
+      );
 
-      const { data: abandoned, error } = await supabase
-        .from('checkout_sessions')
-        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count, recovery_stage1_sent_at, recovery_stage2_sent_at, recovery_stage3_sent_at, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at, whatsapp_recovery_last_error')
-        .or('recovery_sent.eq.true,whatsapp_recovery_15min_sent_at.not.is.null,whatsapp_recovery_24h_sent_at.not.is.null,whatsapp_recovery_last_error.not.is.null')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-
-      // Check which emails/phones later completed a checkout
-      const emails = (abandoned || []).filter(s => s.email).map(s => s.email!);
-      const phones = (abandoned || []).map(s => s.phone);
-      const { data: completedByEmail } = emails.length > 0
-        ? await supabase.from('checkout_sessions').select('email, completed_at, created_at').eq('status', 'completed').in('email', emails)
-        : { data: [] };
-      const { data: completedByPhone } = await supabase
-        .from('checkout_sessions').select('phone, completed_at, created_at').eq('status', 'completed').in('phone', phones);
-
-      const completedEmails = new Set((completedByEmail || []).map(c => c.email?.toLowerCase()));
-      const completedPhones = new Set((completedByPhone || []).map(c => c.phone));
-
-      // Mapa email/telefone -> timestamp mais recente de conclusão (para validar
-      // se a conversão veio DEPOIS do WhatsApp ser disparado).
       const completedAtByEmail = new Map<string, number>();
-      for (const c of (completedByEmail || [])) {
-        if (!c.email) continue;
-        const ts = new Date(c.completed_at || c.created_at).getTime();
-        const key = c.email.toLowerCase();
-        const prev = completedAtByEmail.get(key) || 0;
-        if (ts > prev) completedAtByEmail.set(key, ts);
-      }
       const completedAtByPhone = new Map<string, number>();
-      for (const c of (completedByPhone || [])) {
-        if (!c.phone) continue;
+      for (const c of completed) {
         const ts = new Date(c.completed_at || c.created_at).getTime();
-        const prev = completedAtByPhone.get(c.phone) || 0;
-        if (ts > prev) completedAtByPhone.set(c.phone, ts);
-      }
-
-      // Fetch latest attempt status for each session
-      const sessionIds = (abandoned || []).map(s => s.id);
-      const { data: attempts } = await supabase
-        .from('checkout_recovery_attempts')
-        .select('checkout_session_id, status')
-        .in('checkout_session_id', sessionIds)
-        .order('created_at', { ascending: false });
-
-      const attemptMap = new Map<string, string>();
-      if (attempts) {
-        for (const a of attempts) {
-          // Ignora tentativas de WhatsApp (wa_*): esta coluna é do fluxo de e-mail.
-          if (a.status?.startsWith('wa_')) continue;
-          if (!attemptMap.has(a.checkout_session_id)) {
-            attemptMap.set(a.checkout_session_id, a.status);
-          }
+        if (c.email) {
+          const key = c.email.toLowerCase();
+          if (ts > (completedAtByEmail.get(key) || 0)) completedAtByEmail.set(key, ts);
+        }
+        if (c.phone) {
+          if (ts > (completedAtByPhone.get(c.phone) || 0)) completedAtByPhone.set(c.phone, ts);
         }
       }
 
-      // Deduplicate by email (primary) or phone (fallback)
-      const byKey = new Map<string, typeof abandoned[number]>();
-      for (const s of (abandoned || [])) {
-        const key = s.email?.toLowerCase() || s.phone;
+      // 4) Dedup por e-mail (ou telefone), mantendo a sessão mais recente.
+      const byKey = new Map<string, any>();
+      for (const s of sessions) {
+        const key = s.email?.toLowerCase() || s.phone || s.id;
         const existing = byKey.get(key);
-        if (!existing || new Date(s.created_at) > new Date(existing.created_at)) {
-          byKey.set(key, s);
-        }
+        if (!existing || new Date(s.created_at) > new Date(existing.created_at)) byKey.set(key, s);
       }
       const uniqueSessions = Array.from(byKey.values());
 
+      const ts = (v: string | null) => (v ? new Date(v).getTime() : 0);
+
       const enriched = uniqueSessions.map(s => {
-        // Só conta como "Converteu" se existe um checkout completed
-        // ESTRITAMENTE POSTERIOR ao abandono desta linha. Sem essa checagem,
-        // ex-clientes que pagaram no passado e abandonaram uma nova tentativa
-        // herdam o badge "Converteu" indevidamente.
+        const st = statusesBySession.get(s.id) || new Set<string>();
+        const hasEmailAttempt = ['stage_1', 'stage_2', 'stage_3'].some(p =>
+          st.has(`${p}_sent`) || st.has(`${p}_failed`) || st.has(`${p}_skipped`)
+        ) || st.has('api_accepted') || st.has('failed') || st.has('skipped')
+          || st.has('skipped_active_customer') || st.has('skipped_duplicate');
+        const hasWaAttempt = Array.from(st).some(x => x.startsWith('wa_'));
+
+        // ── E-mail: pulo não é envio ──────────────────────────────────────────
+        const emailSkipReason =
+          st.has('stage_1_skipped') || st.has('stage_2_skipped') || st.has('stage_3_skipped')
+            || st.has('skipped_active_customer') || st.has('skipped_duplicate') || st.has('skipped')
+            || (s.recovery_last_error || '').startsWith('skipped:')
+            ? (s.recovery_last_error || 'skipped: —')
+            : null;
+
+        const emailDates: Array<string | null> = [
+          s.recovery_stage1_sent_at, s.recovery_stage2_sent_at, s.recovery_stage3_sent_at,
+        ];
+        const emailSentAt: Array<{ at: number; stage: number }> = [];
+        let emailFailedStage: number | null = null;
+        for (let i = 0; i < 3; i++) {
+          const stage = i + 1;
+          const date = emailDates[i];
+          if (st.has(`stage_${stage}_failed`)) emailFailedStage = stage;
+          if (!date) continue;
+          const sentByLog = st.has(`stage_${stage}_sent`) || st.has('api_accepted');
+          // Legado (sem log de tentativa nenhum): a própria data é o registro,
+          // desde que a sessão não esteja marcada como pulada.
+          const legacySent = !hasEmailAttempt && !emailSkipReason;
+          const skippedThisStage = st.has(`stage_${stage}_skipped`) || st.has(`stage_${stage}_failed`);
+          if ((sentByLog || legacySent) && !skippedThisStage) {
+            emailSentAt.push({ at: ts(date), stage });
+          }
+        }
+        const emailSentStage = emailSentAt.length ? emailSentAt[emailSentAt.length - 1].stage : null;
+
+        // ── WhatsApp: mesma regra ─────────────────────────────────────────────
+        const waSkipReason =
+          st.has('wa_stage_1_skipped') || st.has('wa_stage_2_skipped')
+            || (s.whatsapp_recovery_last_error || '').startsWith('skipped:')
+            ? (s.whatsapp_recovery_last_error || 'skipped: —')
+            : null;
+        const waError = s.whatsapp_recovery_last_error && !(s.whatsapp_recovery_last_error as string).startsWith('skipped:')
+          ? (s.whatsapp_recovery_last_error as string)
+          : null;
+
+        const waLegacySent = !hasWaAttempt && !waSkipReason;
+        const waSent15 = s.whatsapp_recovery_15min_sent_at
+          && (st.has('wa_stage_1_sent') || waLegacySent)
+          && !st.has('wa_stage_1_skipped')
+          ? (s.whatsapp_recovery_15min_sent_at as string) : null;
+        const waSent24 = s.whatsapp_recovery_24h_sent_at
+          && (st.has('wa_stage_2_sent') || waLegacySent)
+          && !st.has('wa_stage_2_skipped')
+          ? (s.whatsapp_recovery_24h_sent_at as string) : null;
+
+        // ── Conversão e atribuição ────────────────────────────────────────────
         const abandonedAt = new Date(s.created_at).getTime();
         const latestCompletedAt = Math.max(
           s.email ? (completedAtByEmail.get(s.email.toLowerCase()) || 0) : 0,
@@ -589,23 +607,15 @@ export default function AdminEngagement() {
         );
         const converted = latestCompletedAt > abandonedAt;
 
-        // Atribuição: creditar a recuperação SÓ se algum contato saiu antes do pagamento.
-        // Quem paga na primeira hora (antes do 1º e-mail e antes do WhatsApp de 15min)
-        // voltou sozinha — creditar isso à recuperação inflava o número.
         let attributedTo: 'organic' | 'whatsapp' | 'email' | null = null;
         let attributedStage: number | null = null;
         let attributionNote: string | null = null;
 
         if (converted) {
-          const ts = (v: string | null) => (v ? new Date(v).getTime() : 0);
-          const emailTouches: Array<{ at: number; stage: number }> = [
-            { at: ts(s.recovery_stage1_sent_at), stage: 1 },
-            { at: ts(s.recovery_stage2_sent_at), stage: 2 },
-            { at: ts(s.recovery_stage3_sent_at), stage: 3 },
-          ].filter(t => t.at > 0 && t.at < latestCompletedAt);
-          const waTouches: Array<{ at: number; stage: number }> = [
-            { at: ts(s.whatsapp_recovery_15min_sent_at), stage: 15 },
-            { at: ts(s.whatsapp_recovery_24h_sent_at), stage: 24 },
+          const emailTouches = emailSentAt.filter(t => t.at > 0 && t.at < latestCompletedAt);
+          const waTouches = [
+            { at: ts(waSent15), stage: 15 },
+            { at: ts(waSent24), stage: 24 },
           ].filter(t => t.at > 0 && t.at < latestCompletedAt);
 
           const lastEmail = emailTouches.length ? emailTouches[emailTouches.length - 1] : null;
@@ -631,75 +641,48 @@ export default function AdminEngagement() {
           attributed_to: attributedTo,
           attributed_stage: attributedStage,
           attribution_note: attributionNote,
-          attempt_status: attemptMap.get(s.id) || null,
+          email_sent_stage: emailSentStage,
+          email_failed_stage: emailSentStage ? null : emailFailedStage,
+          email_skip_reason: emailSentStage ? null : emailSkipReason,
+          wa_sent_15min_at: waSent15,
+          wa_sent_24h_at: waSent24,
+          wa_skip_reason: (waSent15 || waSent24) ? null : waSkipReason,
+          wa_error: waError,
+          _email_sends: emailSentAt.length,
         };
-      });
+      }) as unknown as (RecoverySession & { _email_sends: number })[];
+
       setRecoverySessions(enriched as RecoverySession[]);
 
-      // Stats WhatsApp: únicos = sessões com algum estágio enviado;
-      // converted = pagaram ESTRITAMENTE DEPOIS do primeiro envio WhatsApp.
-      // IMPORTANTE: calculamos `converted` sobre o UNIVERSO COMPLETO de sessões WA
-      // (não só sobre o .limit(50) de abandoned usado para popular a tabela de detalhes).
-      // Sem isso, conversões antigas não entram na contagem do card.
-      const { data: allWaSessions } = await supabase
-        .from('checkout_sessions')
-        .select('email, phone, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at')
-        .or('whatsapp_recovery_15min_sent_at.not.is.null,whatsapp_recovery_24h_sent_at.not.is.null');
-
-      const waList = allWaSessions || [];
-      const waEmails = waList.filter(s => s.email).map(s => s.email!.toLowerCase());
-      const waPhones = waList.map(s => s.phone).filter(Boolean);
-
-      const [{ data: waCompletedByEmail }, { data: waCompletedByPhone }] = await Promise.all([
-        waEmails.length > 0
-          ? supabase.from('checkout_sessions').select('email, completed_at, created_at').eq('status', 'completed').in('email', waEmails)
-          : Promise.resolve({ data: [] as any[] }),
-        waPhones.length > 0
-          ? supabase.from('checkout_sessions').select('phone, completed_at, created_at').eq('status', 'completed').in('phone', waPhones)
-          : Promise.resolve({ data: [] as any[] }),
-      ]);
-
-      const waCompletedAtByEmail = new Map<string, number>();
-      for (const c of (waCompletedByEmail || [])) {
-        if (!c.email) continue;
-        const ts = new Date(c.completed_at || c.created_at).getTime();
-        const key = c.email.toLowerCase();
-        const prev = waCompletedAtByEmail.get(key) || 0;
-        if (ts > prev) waCompletedAtByEmail.set(key, ts);
-      }
-      const waCompletedAtByPhone = new Map<string, number>();
-      for (const c of (waCompletedByPhone || [])) {
-        if (!c.phone) continue;
-        const ts = new Date(c.completed_at || c.created_at).getTime();
-        const prev = waCompletedAtByPhone.get(c.phone) || 0;
-        if (ts > prev) waCompletedAtByPhone.set(c.phone, ts);
-      }
-
-      const waConverted = waList.filter(s => {
-        const sentTimes = [s.whatsapp_recovery_15min_sent_at, s.whatsapp_recovery_24h_sent_at]
-          .filter(Boolean)
-          .map(t => new Date(t as string).getTime());
-        if (sentTimes.length === 0) return false;
-        const firstSentAt = Math.min(...sentTimes);
-        const completedAt = Math.max(
-          s.email ? (waCompletedAtByEmail.get(s.email.toLowerCase()) || 0) : 0,
-          s.phone ? (waCompletedAtByPhone.get(s.phone) || 0) : 0,
-        );
-        return completedAt > firstSentAt;
-      }).length;
+      // 5) Contadores — todos sobre o MESMO universo (as sessões acima).
+      setRecoveryStats({
+        emailsSent: enriched.reduce((acc, s) => acc + (s._email_sends || 0), 0),
+        emailPeople: enriched.filter(s => s.email_sent_stage).length,
+        emailSkipped: enriched.filter(s => s.email_skip_reason).length,
+        emailFailed: enriched.filter(s => s.email_failed_stage).length,
+      });
 
       setWhatsappStats({
-        stage1: waStage1Count || 0,
-        stage2: waStage2Count || 0,
-        errors: waErrorsCount || 0,
-        skipped: waSkippedCount || 0,
-        unique: waList.length,
-        converted: waConverted,
+        stage1: enriched.filter(s => s.wa_sent_15min_at).length,
+        stage2: enriched.filter(s => s.wa_sent_24h_at).length,
+        skipped: enriched.filter(s => s.wa_skip_reason).length,
+        errors: enriched.filter(s => s.wa_error).length,
+        unique: enriched.filter(s => s.wa_sent_15min_at || s.wa_sent_24h_at).length,
+        converted: enriched.filter(s => s.attributed_to === 'whatsapp').length,
+      });
+
+      setResultStats({
+        recovered: enriched.filter(s => s.attributed_to === 'whatsapp' || s.attributed_to === 'email').length,
+        byEmail: enriched.filter(s => s.attributed_to === 'email').length,
+        byWhatsapp: enriched.filter(s => s.attributed_to === 'whatsapp').length,
+        organic: enriched.filter(s => s.attributed_to === 'organic').length,
+        notReturned: enriched.filter(s => !s.converted).length,
       });
     } catch (err) {
       console.error('Error fetching recovery sessions:', err);
     }
   };
+
 
   const fetchDunningAttempts = async () => {
     try {
