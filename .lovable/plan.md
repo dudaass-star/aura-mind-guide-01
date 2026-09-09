@@ -37,7 +37,7 @@ Duas frestas pequenas, nenhuma causando prejuízo hoje:
 ## Proposta (curta)
 
 1. Preencher o dono dos pagamentos de entrada antigos e passar a gravar sempre esse vínculo, para a regra de acesso enxergar todo mundo.
-2. Definir um teto para tentativa de débito do mesmo ciclo (sugestão: 15 dias após o vencimento); depois disso o cliente sai da fila de débito e fica só na régua de recuperação.
+2. Teto de tentativa de débito por ciclo: 30 dias após o vencimento, com intervalo mínimo de 3 dias entre tentativas (evita encher o app do banco do cliente). Passado o teto, sai da fila de débito e fica só na régua de recuperação.
 3. Amanhã, depois da reconferência, uma nova leitura desses 9 para confirmar quantos pagaram — sem mexer em código.
 
 ## Detalhes técnicos
