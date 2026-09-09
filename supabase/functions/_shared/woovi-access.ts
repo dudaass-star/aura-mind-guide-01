@@ -49,15 +49,37 @@ export async function enforceWooviAccessCap(
 ): Promise<{ capped: boolean; until?: string; reason?: string }> {
   if (!userId) return { capped: false, reason: "sem user_id" };
 
-  const { data: paid } = await supabase
-    .from("woovi_charges")
-    .select("kind, paid_at, due_date, status")
-    .eq("user_id", userId)
-    .not("paid_at", "is", null)
-    .order("paid_at", { ascending: false })
-    .limit(1);
+  async function latestPaidCharge(filter: { column: string; value: string | string[] }): Promise<Record<string, any> | null> {
+    let query = supabase
+      .from("woovi_charges")
+      .select("kind, paid_at, due_date, status")
+      .not("paid_at", "is", null)
+      .order("paid_at", { ascending: false })
+      .limit(1);
+    if (Array.isArray(filter.value)) {
+      query = query.in(filter.column, filter.value);
+    } else {
+      query = query.eq(filter.column, filter.value);
+    }
+    const { data } = await query;
+    return Array.isArray(data) ? data[0] : null;
+  }
 
-  const last = Array.isArray(paid) ? paid[0] : null;
+  let last = await latestPaidCharge({ column: "user_id", value: userId });
+
+  // Fallback: cobranças cujo vínculo com o cliente ainda não foi preenchido.
+  if (!last?.paid_at) {
+    const { data: subs } = await supabase
+      .from("woovi_subscriptions")
+      .select("subscription_id")
+      .eq("user_id", userId)
+      .not("subscription_id", "is", null);
+    const ids = (subs || []).map((s: any) => s.subscription_id).filter(Boolean);
+    if (ids.length > 0) {
+      last = await latestPaidCharge({ column: "subscription_id", value: ids });
+    }
+  }
+
   if (!last?.paid_at) return { capped: false, reason: "nenhum pagamento registrado" };
 
   const { data: profile } = await supabase

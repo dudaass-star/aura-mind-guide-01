@@ -22,6 +22,7 @@ import {
   MANDATE_ACTIVE_STATUSES, WOOVI_PAID_STATUSES,
   findScheduledInstallment, daysUntil, WooviUnavailable,
   findUnpaidInstallment, createInstallmentCobr, normalizeMandateStatus,
+  cycleRetryWindow,
 } from "../_shared/woovi.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
@@ -534,11 +535,16 @@ Deno.serve(async (req) => {
             detail = " (parcela já tem cobrança criada)";
             repaired = true;
           } else if (unpaid?.globalID && !dryRun) {
-            const cobr = await createInstallmentCobr(
-              unpaid.globalID, Number(sub.value_cents || 0) || undefined,
-            );
-            repaired = cobr.ok;
-            detail = repaired ? "" : ` (cobr ${cobr.status})`;
+            const win = await cycleRetryWindow(supabase, String(sub.subscription_id), unpaid.dueDate ?? null);
+            if (!win.allowed) {
+              detail = ` (retentativa bloqueada: ${win.reason})`;
+            } else {
+              const cobr = await createInstallmentCobr(
+                unpaid.globalID, Number(sub.value_cents || 0) || undefined,
+              );
+              repaired = cobr.ok;
+              detail = repaired ? "" : ` (cobr ${cobr.status})`;
+            }
           } else if (!unpaid?.globalID) {
             detail = " (nenhuma parcela em aberto)";
           }
