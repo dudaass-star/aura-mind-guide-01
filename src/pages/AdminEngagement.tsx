@@ -192,10 +192,7 @@ interface RecoverySession {
   plan: string | null;
   created_at: string;
   status: string;
-  recovery_sent: boolean;
-  recovery_sent_at: string | null;
   recovery_last_error: string | null;
-  recovery_attempts_count: number;
   recovery_stage1_sent_at: string | null;
   recovery_stage2_sent_at: string | null;
   recovery_stage3_sent_at: string | null;
@@ -208,11 +205,62 @@ interface RecoverySession {
   attributed_stage: number | null;
   /** Outro canal que também precedeu o pagamento (para tooltip). */
   attribution_note: string | null;
-  attempt_status: string | null;
+  /** Maior estágio de e-mail EFETIVAMENTE enviado (1..3) ou null. */
+  email_sent_stage: number | null;
+  /** Estágio de e-mail que falhou tecnicamente, se houver. */
+  email_failed_stage: number | null;
+  /** Motivo bruto do pulo de e-mail ("skipped: ...") ou null. */
+  email_skip_reason: string | null;
+  /** Datas de WhatsApp que representam envio real (pulos ficam fora). */
+  wa_sent_15min_at: string | null;
+  wa_sent_24h_at: string | null;
+  wa_skip_reason: string | null;
+  wa_error: string | null;
   whatsapp_recovery_15min_sent_at: string | null;
   whatsapp_recovery_24h_sent_at: string | null;
   whatsapp_recovery_last_error: string | null;
 }
+
+/** Só entra no painel quem realmente esteve na recuperação (data de envio, pulo ou erro). */
+const RECOVERY_ACTIVITY_FILTER = [
+  'recovery_stage1_sent_at.not.is.null',
+  'recovery_stage2_sent_at.not.is.null',
+  'recovery_stage3_sent_at.not.is.null',
+  'whatsapp_recovery_15min_sent_at.not.is.null',
+  'whatsapp_recovery_24h_sent_at.not.is.null',
+  'whatsapp_recovery_last_error.not.is.null',
+].join(',');
+
+/**
+ * Status de tentativa relevantes para o painel. Ficam de fora os
+ * `wa_stage_2_failed` (dezenas de milhares de linhas de retentativa) — falha de
+ * WhatsApp já vem por `whatsapp_recovery_last_error`.
+ */
+const RELEVANT_ATTEMPT_STATUSES = [
+  'stage_1_sent', 'stage_2_sent', 'stage_3_sent',
+  'stage_1_failed', 'stage_2_failed', 'stage_3_failed',
+  'stage_1_skipped', 'stage_2_skipped', 'stage_3_skipped',
+  'api_accepted', 'failed', 'skipped', 'skipped_active_customer', 'skipped_duplicate',
+  'wa_stage_1_sent', 'wa_stage_2_sent', 'wa_stage_1_skipped', 'wa_stage_2_skipped',
+];
+
+const PAGE_SIZE = 1000;
+
+/** Lê todas as páginas de uma consulta (PostgREST corta em 1000 linhas). */
+async function fetchAllPages<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let page = 0; page < 40; page++) {
+    const { data, error } = await build(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = (data || []) as T[];
+    out.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return out;
+}
+
 
 // Traduz "skipped: <motivo>" da recuperação (e-mail e WhatsApp) para linguagem de negócio.
 // Pular NÃO é erro: é a trava de segurança do fluxo.
