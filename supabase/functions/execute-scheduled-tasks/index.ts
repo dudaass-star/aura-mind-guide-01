@@ -997,6 +997,13 @@ Deno.serve(async (req) => {
                   last_error: `tentativa ${payload.label || 'cobr'} de ${payload.due_date || 's/ data'} sem pagamento confirmado`,
                 })
                 .eq('id', sub.id);
+              // Mensalidade não paga não pode conviver com acesso liberado além
+              // do que o cliente pagou.
+              const { enforceWooviAccessCap } = await import('../_shared/woovi-access.ts');
+              const cap = await enforceWooviAccessCap(supabase, sub.user_id ?? task.user_id);
+              if (cap.capped) {
+                console.log(`🔒 woovi ${subscriptionId}: acesso alinhado ao pago (até ${cap.until})`);
+              }
               const { data: pending } = await supabase.from('scheduled_tasks')
                 .select('id')
                 .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final'])
