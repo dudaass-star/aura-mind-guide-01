@@ -342,8 +342,9 @@ export default function AdminEngagement() {
   const [dateFrom, setDateFrom] = useState<Date>(new Date());
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
-  const [recoveryStats, setRecoveryStats] = useState<{ raw: number; accepted: number }>({ raw: 0, accepted: 0 });
+  const [recoveryStats, setRecoveryStats] = useState<{ emailsSent: number; emailPeople: number; emailSkipped: number; emailFailed: number }>({ emailsSent: 0, emailPeople: 0, emailSkipped: 0, emailFailed: 0 });
   const [whatsappStats, setWhatsappStats] = useState<{ stage1: number; stage2: number; errors: number; skipped: number; unique: number; converted: number }>({ stage1: 0, stage2: 0, errors: 0, skipped: 0, unique: 0, converted: 0 });
+  const [resultStats, setResultStats] = useState<{ recovered: number; byEmail: number; byWhatsapp: number; organic: number; notReturned: number }>({ recovered: 0, byEmail: 0, byWhatsapp: 0, organic: 0, notReturned: 0 });
   const [dunningAttempts, setDunningAttempts] = useState<DunningAttempt[]>([]);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [dunningOpen, setDunningOpen] = useState(false);
