@@ -44,5 +44,5 @@ Duas frestas pequenas, nenhuma causando prejuízo hoje:
 
 - Verificação feita em `woovi_subscriptions` (vivos: `ATIVA`/`APROVADA`, `entry_paid_at` não nulo, sem `replaced_by_subscription_id`) cruzada com `woovi_charges` (`kind='cycle'`, `paid_at`) e `scheduled_tasks` (`woovi_retry_confirm`, `woovi_recovery_offer/final`).
 - Item 1: backfill de `woovi_charges.user_id` a partir de `woovi_subscriptions.user_id` via `subscription_id`, e gravação do campo em `webhook-woovi` no evento de entrada paga. `_shared/woovi-access.ts` passa a aceitar também o vínculo por mandato.
-- Item 2: em `woovi-pix-audit` e `execute-scheduled-tasks`, não recriar/reconfirmar ordem de ciclo com vencimento acima de 15 dias; nesse caso só garantir a régua de recuperação e a CobR do ciclo seguinte.
+- Item 2: em `woovi-pix-audit` e `execute-scheduled-tasks`, não recriar/reconfirmar ordem de ciclo com vencimento acima de 30 dias e impor intervalo mínimo de 3 dias entre tentativas do mesmo ciclo; passado o teto, só a régua de recuperação e a CobR do ciclo seguinte.
 - Sem migração de schema além do backfill; redeploy de `webhook-woovi`, `woovi-pix-audit` e `execute-scheduled-tasks`.
