@@ -367,7 +367,7 @@ export default function AdminEngagement() {
     fbc: number;
     fbp: number;
   } | null>(null);
-  const hasRecoveryActivity = recoverySessions.length > 0 || recoveryStats.raw > 0 || recoveryStats.accepted > 0 || whatsappStats.stage1 > 0 || whatsappStats.stage2 > 0 || whatsappStats.errors > 0 || whatsappStats.skipped > 0;
+  const hasRecoveryActivity = recoverySessions.length > 0 || recoveryStats.emailsSent > 0 || whatsappStats.stage1 > 0 || whatsappStats.stage2 > 0 || whatsappStats.errors > 0 || whatsappStats.skipped > 0;
 
   // Cronômetro do botão "Atualizar" para feedback visual durante esperas longas.
   useEffect(() => {
@@ -2054,17 +2054,17 @@ export default function AdminEngagement() {
                           </div>
                           <p className="text-xs text-muted-foreground">
                             <Mail className="inline h-3 w-3 mr-1" />
-                            <strong>E-mail:</strong> {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API
+                            <strong>E-mail:</strong> {recoveryStats.emailsSent} e-mails enviados · {recoveryStats.emailPeople} pessoas · {recoveryStats.emailSkipped} pulados · {recoveryStats.emailFailed} falhas
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             <MessageCircle className="inline h-3 w-3 mr-1 text-emerald-600" />
-                            <strong>WhatsApp:</strong> {whatsappStats.stage1} em 15min · {whatsappStats.stage2} em 24h · {whatsappStats.unique} únicos · {whatsappStats.converted} recuperadas pelo WhatsApp · {whatsappStats.skipped} pulados · {whatsappStats.errors} erros de entrega
+                            <strong>WhatsApp:</strong> {whatsappStats.stage1} enviados em 15min · {whatsappStats.stage2} enviados em 24h · {whatsappStats.unique} pessoas · {whatsappStats.skipped} pulados · {whatsappStats.errors} erros de entrega
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            <strong>Resultado:</strong> {recoverySessions.filter(s => s.converted && s.attributed_to !== 'organic').length} recuperadas (pagaram depois de algum contato) · {recoverySessions.filter(s => s.attributed_to === 'organic').length} voltaram sozinhas (pagaram antes de qualquer contato sair) · {recoverySessions.filter(s => !s.converted).length} não voltaram
+                            <strong>Resultado ({recoverySessions.length} pessoas na recuperação):</strong> {resultStats.recovered} recuperadas ({resultStats.byWhatsapp} WhatsApp / {resultStats.byEmail} e-mail) · {resultStats.organic} voltaram sozinhas · {resultStats.notReturned} não voltaram
                           </p>
                           <p className="text-[11px] text-muted-foreground/80 mt-1">
-                            Cadências: e-mail = 3 estágios (1h / 25h / 97h) · WhatsApp = 2 estágios (15min / 24h). "Pulado" é a trava de segurança (telefone já contatado, cliente ativo, já pagou), não falha de envio.
+                            Recuperada = pagou depois de um contato que saiu. Voltou sozinha = pagou antes de qualquer contato. Pulado = trava de segurança (cliente ativo, já pagou, cap de telefone), não falha de envio. Cadências: e-mail = 3 estágios (1h / 25h / 97h) · WhatsApp = 2 estágios (15min / 24h). Só entram aqui pessoas que realmente receberam ou tiveram contato tentado.
                           </p>
                         </CardHeader>
                       </CollapsibleTrigger>
