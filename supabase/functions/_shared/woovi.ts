@@ -214,10 +214,17 @@ function toInstallment(i: Record<string, any>): WooviInstallment {
 }
 
 /**
- * Parcela mais recente do mandato que ainda NÃO foi paga (a que precisa de nova
- * tentativa). Devolve `null` só quando a Woovi respondeu e nada está em aberto.
- * Se a Woovi não respondeu, LANÇA `WooviUnavailable` — silêncio dela não pode
- * virar conclusão nossa.
+ * Parcela VENCIDA (ou vencendo hoje) do mandato que ainda não foi paga — a que
+ * realmente precisa de nova tentativa. Devolve `null` quando a Woovi respondeu e
+ * nada está vencido em aberto; se a Woovi não respondeu, LANÇA `WooviUnavailable`
+ * — silêncio dela não pode virar conclusão nossa.
+ *
+ * Antes esta função pegava a ÚLTIMA parcela em aberto da fila, que é a mais
+ * DISTANTE no futuro (o mandato tem parcelas agendadas por meses). Resultado
+ * real: a retentativa do ciclo de 09/09 foi disparada contra uma parcela de
+ * janeiro de 2027 e a reconferência ficou agendada para 2027 — o mês corrente
+ * nunca foi cobrado. Agora escolhemos sempre a mais ANTIGA em aberto com
+ * vencimento até hoje (parcela sem data conhecida entra como corrente).
  */
 export async function findUnpaidInstallment(
   subscriptionId: string,
@@ -231,13 +238,18 @@ export async function findUnpaidInstallment(
     : Array.isArray(raw)
       ? (raw as unknown as Record<string, any>[])
       : [];
+  const today = brtDate();
   const unpaid = list
     .filter((i) => !INSTALLMENT_PAID_STATUSES.includes(String(i?.status || "").toUpperCase()))
-    .filter((i) => !!(i?.globalID || i?.id));
+    .filter((i) => !!(i?.globalID || i?.id))
+    .map(toInstallment)
+    // Parcela futura não está em atraso: cobrá-la aqui é cobrar o mês errado.
+    .filter((i) => !i.dueDate || i.dueDate <= today)
+    .sort((a, b) => String(a.dueDate || "").localeCompare(String(b.dueDate || "")));
   if (unpaid.length === 0) return null;
-  // A Woovi devolve as parcelas em ordem crescente; a última em aberto é a atual.
-  return toInstallment(unpaid[unpaid.length - 1]);
+  return unpaid[0];
 }
+
 
 /**
  * Nova tentativa de débito na mesma parcela (mesmo mandato, sem novo scan).

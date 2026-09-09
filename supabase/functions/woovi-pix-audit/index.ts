@@ -569,8 +569,10 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      if (!installment.dueDate) continue;
       const lead = daysUntil(installment.dueDate);
       if (lead < 5 || lead > 10) continue;
+
       const { data: existing } = await supabase.from("scheduled_tasks")
         .select("id")
         .eq("task_type", "woovi_next_cycle_cobr")
