@@ -654,9 +654,11 @@ Deno.serve(async (req) => {
     //   • cobrança existe e está paga na Woovi → replay (fonte única é o webhook);
     //   • cobrança não existe na Woovi → registra a lacuna pra intervenção
     //     (não forçamos criação: cobrança fora do mandato é dinheiro sem contrato).
+    const SUB_COLS =
+      "id, user_id, subscription_id, customer_email, next_charge_date, start_date, value_cents, status, last_error";
     const { data: dueSubs } = await supabase
       .from("woovi_subscriptions")
-      .select("id, user_id, subscription_id, customer_email, next_charge_date, value_cents, status, last_error")
+      .select(SUB_COLS)
       .in("status", MANDATE_ACTIVE_STATUSES)
       .is("replaced_by_subscription_id", null)
       .not("subscription_id", "is", null)
@@ -664,7 +666,44 @@ Deno.serve(async (req) => {
       .lte("next_charge_date", today)
       .limit(200);
 
-    for (const sub of (onlyExtrato ? [] : dueSubs) || []) {
+    // Mandato nativo (troca de plano / retenção) não tem entrada: a 1ª parcela é
+    // já a mensalidade e o `next_charge_date` aponta pro ciclo SEGUINTE. Caso
+    // real: parcela 1 com CobR criada há 5 dias, nunca paga, e ninguém olhando
+    // porque o vencimento gravado era do mês seguinte. Aqui entram todos os
+    // mandatos vivos que começaram há mais de 1 dia e nunca tiveram nenhuma
+    // cobrança paga.
+    const { data: neverPaidSubs } = await supabase
+      .from("woovi_subscriptions")
+      .select(SUB_COLS)
+      .in("status", MANDATE_ACTIVE_STATUSES)
+      .is("replaced_by_subscription_id", null)
+      .is("entry_paid_at", null)
+      .not("subscription_id", "is", null)
+      .lte("start_date", new Date(Date.now() - 86400000).toISOString().slice(0, 10))
+      .limit(100);
+
+    const seenSubs = new Set<string>();
+    const dueQueue: Record<string, any>[] = [];
+    for (const s of [...(dueSubs || []), ...(neverPaidSubs || [])]) {
+      const key = String(s.subscription_id);
+      if (seenSubs.has(key)) continue;
+      // Nunca pagou nada: o ciclo a auditar é o começo do mandato, não a data
+      // do próximo débito.
+      const hasPaid = await supabase
+        .from("woovi_charges")
+        .select("id", { count: "exact", head: true })
+        .eq("subscription_id", key)
+        .not("paid_at", "is", null);
+      if ((hasPaid.count || 0) === 0) {
+        s.next_charge_date = String(s.start_date || s.next_charge_date || today).slice(0, 10);
+      } else if (!s.next_charge_date || String(s.next_charge_date) > today) {
+        continue; // ciclo ainda não venceu
+      }
+      seenSubs.add(key);
+      dueQueue.push(s);
+    }
+
+    for (const sub of (onlyExtrato ? [] : dueQueue) || []) {
       const r = await wooviFetch<Record<string, any>>(
         `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
       );
@@ -730,6 +769,19 @@ Deno.serve(async (req) => {
         WOOVI_PAID_STATUSES.includes(String(c?.status || "").toUpperCase())
       );
       if (!anyPaid) {
+        // Ciclo vencido sem pagamento não pode conviver com acesso liberado
+        // além do que o cliente pagou (caso real: entrada de teste paga, plano
+        // anual de acesso liberado por engano na reconciliação).
+        if (!dryRun) {
+          const { enforceWooviAccessCap } = await import("../_shared/woovi-access.ts");
+          const cap = await enforceWooviAccessCap(supabase, sub.user_id);
+          if (cap.capped) {
+            report.cobertura.push({
+              sub: sub.subscription_id, email: sub.customer_email,
+              acesso_alinhado_ate: cap.until,
+            });
+          }
+        }
         const { data: pending } = await supabase.from("scheduled_tasks")
           .select("id")
           .in("task_type", [

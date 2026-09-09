@@ -51,6 +51,17 @@ async function logWooviAttempt(
 }
 
 /**
+ * A Woovi recusa com 400 "A parcela já tem cobr" quando a ordem de débito JÁ
+ * existe no banco do cliente. Isso não é falha: é débito em andamento. Tratar
+ * como recusa (era o que acontecia) tirava o cliente do radar — ele ficava sem
+ * veredito, sem régua e sem cobrança, com o acesso liberado.
+ */
+function cobrAlreadyExists(raw: string | null | undefined): boolean {
+  return /j[áa]\s*tem\s*cobr/i.test(String(raw || ''));
+}
+
+
+/**
  * Toda tentativa pedida à Woovi precisa de VEREDITO. Sem esta reconferência o
  * mandato ficava eternamente marcado como "RETRY_REQUESTED": nem pago, nem
  * recusado, nem em recuperação — parado, sem ninguém agir.
@@ -737,21 +748,27 @@ Deno.serve(async (req) => {
               // UMA tentativa oportunista enquanto a CobR do ciclo ainda está
               // viva. Recusa por janela é esperada — só logamos.
               const retry = await retryInstallmentCobr(installment.globalID);
+              const alreadyCobr = !retry.ok && cobrAlreadyExists(retry.raw);
               await logWooviAttempt(supabase, {
                 subscriptionId,
                 userId: sub.user_id,
                 installmentId: installment.globalID,
                 label: 'cycle_retry',
-                ok: retry.ok,
-                status: retry.ok ? 'RETRY_REQUESTED' : `RETRY_REJECTED_${retry.status}`,
+                ok: retry.ok || alreadyCobr,
+                status: retry.ok
+                  ? 'RETRY_REQUESTED'
+                  : alreadyCobr
+                    ? 'COBR_ALREADY_EXISTS'
+                    : `RETRY_REJECTED_${retry.status}`,
                 valueCents: Number(sub.value_cents || 0),
                 dueDate: installment.dueDate,
                 raw: retry.raw,
               });
               console.log(
-                `🔁 woovi retry único sub=${subscriptionId} parcela=${installment.globalID} ok=${retry.ok}`,
+                `🔁 woovi retry único sub=${subscriptionId} parcela=${installment.globalID} ok=${retry.ok} cobr_existente=${alreadyCobr}`,
               );
-              if (retry.ok) {
+              // Ordem aceita OU já existente: as duas precisam de veredito.
+              if (retry.ok || alreadyCobr) {
                 await scheduleWooviRetryConfirm(supabase, {
                   userId: task.user_id, subscriptionId,
                   installmentId: installment.globalID, label: 'cycle_retry',
@@ -840,31 +857,43 @@ Deno.serve(async (req) => {
                 // limite de taxa da conta, cegando as outras conferências.
                 if (next.hasCobr) {
                   console.log(`✅ woovi ${subscriptionId}: CobR de ${next.dueDate} já existe`);
+                  // Ordem existente também precisa de veredito: sem isso, ciclo
+                  // com CobR criada e não paga não voltava para ninguém olhar.
+                  await scheduleWooviRetryConfirm(supabase, {
+                    userId: task.user_id, subscriptionId,
+                    installmentId: next.globalID, label: 'next_cycle_cobr',
+                    dueDate: next.dueDate,
+                  });
                   if (isPreventiveGuard) break;
                 } else {
                   const created = await createInstallmentCobr(next.globalID, Number(sub.value_cents || 0) || undefined);
+                  const alreadyCobr = !created.ok && cobrAlreadyExists(created.raw);
                   await logWooviAttempt(supabase, {
                     subscriptionId,
                     userId: sub.user_id,
                     installmentId: next.globalID,
                     label: 'next_cycle_cobr',
-                    ok: created.ok,
-                    status: created.ok ? 'COBR_CREATED' : `COBR_REJECTED_${created.status}`,
+                    ok: created.ok || alreadyCobr,
+                    status: created.ok
+                      ? 'COBR_CREATED'
+                      : alreadyCobr
+                        ? 'COBR_ALREADY_EXISTS'
+                        : `COBR_REJECTED_${created.status}`,
                     valueCents: Number(sub.value_cents || 0),
                     dueDate: next.dueDate,
                     raw: created.raw,
                   });
                   console.log(
-                    `🧾 woovi ${subscriptionId}: CobR ciclo seguinte (${next.dueDate}) ok=${created.ok}`,
+                    `🧾 woovi ${subscriptionId}: CobR ciclo seguinte (${next.dueDate}) ok=${created.ok} cobr_existente=${alreadyCobr}`,
                   );
-                  if (created.ok) {
+                  if (created.ok || alreadyCobr) {
                     await scheduleWooviRetryConfirm(supabase, {
                       userId: task.user_id, subscriptionId,
                       installmentId: next.globalID, label: 'next_cycle_cobr',
                       dueDate: next.dueDate,
                     });
                   }
-                  if (isPreventiveGuard && created.ok) break;
+                  if (isPreventiveGuard && (created.ok || alreadyCobr)) break;
                 }
                 // A oferta só entra depois do vencimento + 7 dias de retries nativos.
                 offerInDays = Math.max(1, daysUntil(next.dueDate) + 8);
@@ -968,6 +997,13 @@ Deno.serve(async (req) => {
                   last_error: `tentativa ${payload.label || 'cobr'} de ${payload.due_date || 's/ data'} sem pagamento confirmado`,
                 })
                 .eq('id', sub.id);
+              // Mensalidade não paga não pode conviver com acesso liberado além
+              // do que o cliente pagou.
+              const { enforceWooviAccessCap } = await import('../_shared/woovi-access.ts');
+              const cap = await enforceWooviAccessCap(supabase, sub.user_id ?? task.user_id);
+              if (cap.capped) {
+                console.log(`🔒 woovi ${subscriptionId}: acesso alinhado ao pago (até ${cap.until})`);
+              }
               const { data: pending } = await supabase.from('scheduled_tasks')
                 .select('id')
                 .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final'])
