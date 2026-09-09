@@ -940,7 +940,7 @@ Deno.serve(async (req) => {
           // deixava o mandato preso em "RETRY_REQUESTED", fora da régua.
           // ─────────────────────────────────────────────────────────────────
           case 'woovi_retry_confirm': {
-            const { findUnpaidInstallment, listInstallments, WooviUnavailable, MANDATE_ACTIVE_STATUSES } =
+            const { findUnpaidInstallment, listInstallments, WooviUnavailable, MANDATE_ACTIVE_STATUSES, cycleRetryWindow } =
               await import('../_shared/woovi.ts');
             const subscriptionId = String(payload.subscription_id || '');
             const installmentId = String(payload.installment_id || '');
