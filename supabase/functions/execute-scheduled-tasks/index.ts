@@ -748,21 +748,27 @@ Deno.serve(async (req) => {
               // UMA tentativa oportunista enquanto a CobR do ciclo ainda está
               // viva. Recusa por janela é esperada — só logamos.
               const retry = await retryInstallmentCobr(installment.globalID);
+              const alreadyCobr = !retry.ok && cobrAlreadyExists(retry.raw);
               await logWooviAttempt(supabase, {
                 subscriptionId,
                 userId: sub.user_id,
                 installmentId: installment.globalID,
                 label: 'cycle_retry',
-                ok: retry.ok,
-                status: retry.ok ? 'RETRY_REQUESTED' : `RETRY_REJECTED_${retry.status}`,
+                ok: retry.ok || alreadyCobr,
+                status: retry.ok
+                  ? 'RETRY_REQUESTED'
+                  : alreadyCobr
+                    ? 'COBR_ALREADY_EXISTS'
+                    : `RETRY_REJECTED_${retry.status}`,
                 valueCents: Number(sub.value_cents || 0),
                 dueDate: installment.dueDate,
                 raw: retry.raw,
               });
               console.log(
-                `🔁 woovi retry único sub=${subscriptionId} parcela=${installment.globalID} ok=${retry.ok}`,
+                `🔁 woovi retry único sub=${subscriptionId} parcela=${installment.globalID} ok=${retry.ok} cobr_existente=${alreadyCobr}`,
               );
-              if (retry.ok) {
+              // Ordem aceita OU já existente: as duas precisam de veredito.
+              if (retry.ok || alreadyCobr) {
                 await scheduleWooviRetryConfirm(supabase, {
                   userId: task.user_id, subscriptionId,
                   installmentId: installment.globalID, label: 'cycle_retry',
