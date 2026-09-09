@@ -1011,17 +1011,35 @@ Deno.serve(async (req) => {
               if (cap.capped) {
                 console.log(`🔒 woovi ${subscriptionId}: acesso alinhado ao pago (até ${cap.until})`);
               }
+
+              // Teto de retentativas: passado 60 dias ou muito recente, não
+              // forçamos novo débito agora — só a régua de recuperação.
+              const win = await cycleRetryWindow(supabase, subscriptionId, (payload.due_date as string | null) ?? null);
               const { data: pending } = await supabase.from('scheduled_tasks')
                 .select('id')
                 .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final'])
                 .eq('status', 'pending')
                 .contains('payload', { subscription_id: subscriptionId })
                 .limit(1);
-              if (!Array.isArray(pending) || pending.length === 0) {
+              if (Array.isArray(pending) && pending.length > 0) break;
+
+              if (!win.allowed && !win.retryAt) {
+                await supabase.from('scheduled_tasks').insert({
+                  user_id: task.user_id,
+                  task_type: 'woovi_recovery_offer',
+                  execute_at: new Date(Date.now() + 60 * 1000).toISOString(),
+                  status: 'pending',
+                  payload: { ...payload, offer_step: 1, source: 'retry_confirm_expired' },
+                });
+                console.warn(`🛑 woovi_retry_confirm ${subscriptionId}: ciclo expirado — vai pra oferta`);
+              } else {
+                const nextAt = win.retryAt
+                  ? win.retryAt
+                  : new Date(Date.now() + 60 * 1000).toISOString();
                 await supabase.from('scheduled_tasks').insert({
                   user_id: task.user_id,
                   task_type: 'woovi_cycle_recycle',
-                  execute_at: new Date(Date.now() + 60 * 1000).toISOString(),
+                  execute_at: nextAt,
                   status: 'pending',
                   payload: {
                     provider: 'woovi',
@@ -1031,7 +1049,7 @@ Deno.serve(async (req) => {
                     source: 'retry_confirm_unpaid',
                   },
                 });
-                console.warn(`🔁 woovi_retry_confirm ${subscriptionId}: sem pagamento — cadência reaberta`);
+                console.warn(`🔁 woovi_retry_confirm ${subscriptionId}: sem pagamento — cadência reaberta${win.retryAt ? ` em ${win.retryAt}` : ''}`);
               }
             }
             break;
