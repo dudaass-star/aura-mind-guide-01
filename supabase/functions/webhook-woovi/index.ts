@@ -1117,6 +1117,70 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- 4) Disputa (MED / chargeback) -------------------------------------
+    // Numa disputa MED quem julga é o Banco Central e o silêncio conta contra
+    // nós: sem evidência o valor volta E fica registro de fraude na conta, que
+    // repetido desabilita a conta Woovi. Então gravamos e disparamos a defesa
+    // automática no mesmo instante, sem etapa manual.
+    const dispute = (body.dispute || body.med || {}) as Record<string, any>;
+    const disputeId = dispute.id || dispute.globalID || dispute.disputeId || null;
+    const isDisputeEvent = !!disputeId
+      || event.toUpperCase().includes("DISPUTE")
+      || event.toUpperCase().includes("MED");
+
+    if (isDisputeEvent && disputeId) {
+      const disputeStatus = String(dispute.status || "").toUpperCase();
+      const key = `dispute:${disputeId}:${disputeStatus || "new"}`;
+      if (await claimEvent(supabase, key, "dispute", body)) {
+        try {
+          const endToEndId = dispute.endToEndId || dispute.endToEndID || charge.endToEndId || null;
+          const valueCents = Number(dispute.value ?? dispute.amount ?? charge.value ?? 0) || null;
+
+          const { data: existing } = await supabase.from("woovi_disputes")
+            .select("id, evidence_sent_at").eq("dispute_id", String(disputeId)).maybeSingle();
+
+          if (existing) {
+            await supabase.from("woovi_disputes").update({
+              status: disputeStatus || null,
+              ...(endToEndId ? { end_to_end_id: String(endToEndId) } : {}),
+              raw_payload: body,
+              // Fecho de disputa: guarda o resultado para o painel.
+              ...(["WON", "LOST", "CLOSED", "REFUNDED", "CANCELED"].includes(disputeStatus)
+                ? { resolution: disputeStatus, resolved_at: new Date().toISOString() }
+                : {}),
+            }).eq("id", existing.id);
+          } else {
+            await supabase.from("woovi_disputes").insert({
+              dispute_id: String(disputeId),
+              dispute_type: String(dispute.type || "MED").toUpperCase(),
+              status: disputeStatus || null,
+              end_to_end_id: endToEndId ? String(endToEndId) : null,
+              value_cents: valueCents,
+              customer_name: dispute.payer?.name || dispute.customer?.name || null,
+              dispute_reason: dispute.reason || dispute.description || null,
+              raw_payload: body,
+            });
+          }
+
+          // Só defende disputa ainda aberta e sem evidência enviada.
+          const openStatus = !["WON", "LOST", "CLOSED", "REFUNDED", "CANCELED"].includes(disputeStatus);
+          if (openStatus && !existing?.evidence_sent_at) {
+            const { error: invokeErr } = await supabase.functions.invoke("woovi-dispute-defense", {
+              body: { disputeId: String(disputeId) },
+            });
+            if (invokeErr) {
+              console.error("[webhook-woovi] falha ao disparar defesa:", invokeErr.message);
+            }
+          }
+          await finishEvent(supabase, key);
+        } catch (e) {
+          await failEvent(supabase, key, (e as Error)?.message || "erro na disputa");
+          throw e;
+        }
+      }
+    }
+
+
     return new Response(JSON.stringify({ received: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
