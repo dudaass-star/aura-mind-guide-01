@@ -156,6 +156,11 @@ Deno.serve(async (req) => {
   // abandono para as rotinas de recuperação.
   const onlyExtrato = body.only === "extrato" || body.only === "extrato_debug";
   const debugExtrato = body.only === "extrato_debug";
+  // Modo rápido (`{ only: "mandatos" }`): roda SÓ a varredura 4 (status real do
+  // mandato na Woovi), restrita a quem está "vivo" aqui sem aprovação real.
+  // É o reparo dos mandatos que pagaram a entrada mas nunca autorizaram.
+  const onlyMandatos = body.only === "mandatos";
+  const skipVarreduras = onlyExtrato || onlyMandatos;
 
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
@@ -180,7 +185,7 @@ Deno.serve(async (req) => {
       .is("replaced_by_subscription_id", null)
       .limit(300);
 
-    for (const sub of (onlyExtrato ? [] : composed) || []) {
+    for (const sub of (skipVarreduras ? [] : composed) || []) {
       const created = String(sub.created_at || "");
       if (created > graceBefore) continue;
       const approved = MANDATE_ACTIVE_STATUSES.includes(String(sub.status));
@@ -359,7 +364,7 @@ Deno.serve(async (req) => {
       .is("paid_at", null)
       .gte("created_at", new Date(now.getTime() - 45 * 86400000).toISOString())
       .limit(200);
-    for (const c of (onlyExtrato ? [] : openCharges) || []) {
+    for (const c of (skipVarreduras ? [] : openCharges) || []) {
       const r = await wooviFetch<Record<string, any>>(
         `/api/v1/charge/${encodeURIComponent(String(c.installment_id))}`,
       );
@@ -384,13 +389,14 @@ Deno.serve(async (req) => {
     // muda o status do mandato e nenhum ciclo é mais debitado. Sem esta
     // varredura o usuário simplesmente para de pagar em silêncio.
     const REVOKED = ["CANCELADA", "REJEITADA", "EXPIRADA", "CANCELLED", "REJECTED", "EXPIRED"];
-    const { data: liveSubs } = await supabase
+    let liveQuery = supabase
       .from("woovi_subscriptions")
       .select("id, user_id, subscription_id, customer_phone, customer_email, status, plan, value_cents, reauth_notified_at, mandate_approved_at")
       .in("status", MANDATE_ACTIVE_STATUSES)
       .is("replaced_by_subscription_id", null)
-      .not("subscription_id", "is", null)
-      .limit(300);
+      .not("subscription_id", "is", null);
+    if (onlyMandatos) liveQuery = liveQuery.is("mandate_approved_at", null);
+    const { data: liveSubs } = await liveQuery.limit(300);
 
     for (const sub of (onlyExtrato ? [] : liveSubs) || []) {
       const r = await wooviFetch<Record<string, any>>(
@@ -551,7 +557,7 @@ Deno.serve(async (req) => {
       .order("next_charge_date", { ascending: true })
       .limit(25);
 
-    for (const sub of (onlyExtrato ? [] : upcomingSubs) || []) {
+    for (const sub of (skipVarreduras ? [] : upcomingSubs) || []) {
       let installment: Awaited<ReturnType<typeof findScheduledInstallment>> = null;
       try {
         installment = await findScheduledInstallment(String(sub.subscription_id));
@@ -681,7 +687,7 @@ Deno.serve(async (req) => {
     // aqui. Isso é risco de débito dobrado e polui o "ciclo sem cobrança" com
     // mandatos que ninguém usa mais. Mantemos o mais recente e aposentamos os
     // anteriores (cancelando também na Woovi).
-    if (!onlyExtrato) {
+    if (!skipVarreduras) {
       const { data: liveAll } = await supabase
         .from("woovi_subscriptions")
         .select("id, user_id, subscription_id, customer_email, created_at, mandate_approved_at, entry_paid_at")
@@ -776,7 +782,7 @@ Deno.serve(async (req) => {
       dueQueue.push(s);
     }
 
-    for (const sub of (onlyExtrato ? [] : dueQueue) || []) {
+    for (const sub of (skipVarreduras ? [] : dueQueue) || []) {
       const r = await wooviFetch<Record<string, any>>(
         `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
       );
@@ -907,7 +913,7 @@ Deno.serve(async (req) => {
       && Number(body.coverage_batch) >= 0
         ? Number(body.coverage_batch)
         : 8;
-    if (!onlyExtrato && coverageBatch > 0) {
+    if (!skipVarreduras && coverageBatch > 0) {
       const { count: liveCount } = await supabase
         .from("woovi_subscriptions")
         .select("id", { count: "exact", head: true })
@@ -999,7 +1005,7 @@ Deno.serve(async (req) => {
     // mensalidade ficou gravada sem `due_date` — dava para saber que pagou, não
     // se pagou no dia certo. Aqui perguntamos a data à própria Woovi, em lotes
     // pequenos para não queimar o limite de taxa.
-    if (!onlyExtrato) {
+    if (!skipVarreduras) {
       const { data: noDue } = await supabase
         .from("woovi_charges")
         .select("id, subscription_id, installment_id, value_cents, paid_at")
