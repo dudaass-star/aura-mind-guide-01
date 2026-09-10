@@ -122,6 +122,9 @@ const PHONELESS_TASK_TYPES = new Set([
   // Encerramento também é técnico: cancela o mandato e fecha o perfil, sem
   // falar com o cliente. Sem isso um perfil sem telefone deixava o mandato vivo.
   'woovi_recovery_final',
+  // Lembrete do código do encontro de R$ 6,90: é tarefa de LEAD, não de
+  // usuário — o telefone vem da oferta (payload), não do perfil.
+  'taster_code_reminder',
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
