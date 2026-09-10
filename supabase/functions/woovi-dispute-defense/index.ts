@@ -350,6 +350,57 @@ async function processDispute(supabase: any, dispute: any) {
   return { dispute_id: dispute.dispute_id, sent: result.ok, detail: result.detail };
 }
 
+// ---------------------------------------------------------------------------
+// Sincronização: puxa as disputas da Woovi e registra as que não chegaram por
+// webhook (disputa aberta antes de existir o handler não tem reenvio).
+// ---------------------------------------------------------------------------
+async function syncDisputes(supabase: any): Promise<{ found: number; created: number; raw?: string }> {
+  const attempts = ["/api/v1/dispute", "/api/v1/disputes"];
+  for (const path of attempts) {
+    const r = await wooviFetch<Record<string, any>>(path);
+    if (!r.ok) {
+      log("sync falhou", { path, status: r.status });
+      continue;
+    }
+    const raw = r.data as Record<string, any> | null;
+    const list: Record<string, any>[] = Array.isArray(raw?.disputes)
+      ? raw!.disputes
+      : Array.isArray(raw?.dispute)
+        ? raw!.dispute
+        : Array.isArray(raw)
+          ? (raw as unknown as Record<string, any>[])
+          : [];
+    let created = 0;
+    for (const d of list) {
+      const id = d.id || d.globalID || d.disputeId;
+      if (!id) continue;
+      const { data: existing } = await supabase.from("woovi_disputes")
+        .select("id").eq("dispute_id", String(id)).maybeSingle();
+      if (existing) {
+        await supabase.from("woovi_disputes").update({
+          status: String(d.status || "").toUpperCase() || null,
+          raw_payload: d,
+        }).eq("id", existing.id);
+        continue;
+      }
+      await supabase.from("woovi_disputes").insert({
+        dispute_id: String(id),
+        dispute_type: String(d.type || "MED").toUpperCase(),
+        status: String(d.status || "").toUpperCase() || null,
+        end_to_end_id: d.endToEndId || d.endToEndID || null,
+        value_cents: Number(d.value ?? d.amount ?? 0) || null,
+        customer_name: d.payer?.name || d.customer?.name || null,
+        dispute_reason: d.reason || d.description || null,
+        raw_payload: d,
+      });
+      created++;
+    }
+    log("sync ok", { path, found: list.length, created });
+    return { found: list.length, created };
+  }
+  return { found: 0, created: 0, raw: "nenhum endpoint de listagem de disputa respondeu" };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
