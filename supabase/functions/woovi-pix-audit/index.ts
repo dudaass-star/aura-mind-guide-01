@@ -410,31 +410,38 @@ Deno.serve(async (req) => {
         `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
       );
       await new Promise((res) => setTimeout(res, 250));
-      if (onlyMandatos) {
-        report.reautorizacao.push({
-          diagnostico: "consulta woovi",
-          sub: sub.subscription_id,
-          ok: r.ok, http: r.status,
-          remoteStatus: String(
-            ((r.data as Record<string, any>)?.subscription || r.data || {})?.status || "",
-          ).toUpperCase() || null,
-          pixRecurring: r.ok && r.data
-            ? (((r.data as Record<string, any>)?.subscription || r.data) as Record<string, any>)?.pixRecurring ?? null
-            : null,
-        });
-      }
       if (!r.ok || !r.data) continue;
       const remote = ((r.data as Record<string, any>)?.subscription || r.data) as Record<string, any>;
       const remoteStatus = String(remote?.status || "").toUpperCase();
 
-      // Mandato "vivo" aqui mas sem aprovação real na Woovi: não existe débito
-      // possível. Caso real: cliente pagou a entrada, não concluiu a
+      // O status real do MANDATO fica em `subscription.pixRecurring.status` —
+      // o status de topo da assinatura fica ACTIVE mesmo sem autorização do
+      // pagador. Caso real: cliente pagou a entrada, não concluiu a
       // autorização no banco, e o cadastro ficou "ATIVA" — cada ciclo batia em
-      // erro 400 na criação da cobrança. Aqui o status passa a refletir o que
-      // a Woovi diz e o mandato sai da régua de débito.
+      // erro 400 na criação da cobrança.
       if (!sub.mandate_approved_at) {
-        const honest = normalizeMandateStatus(remoteStatus, "AGUARDANDO");
-        if (honest !== "APROVADA") {
+        const pixStatus = String(remote?.pixRecurring?.status || "").toUpperCase();
+        if (pixStatus === "APPROVED") {
+          // Mandato aprovado na Woovi mas o webhook nunca gravou aqui:
+          // backfill do carimbo para o mandato voltar à régua de débito.
+          if (!dryRun) {
+            await supabase.from("woovi_subscriptions").update({
+              mandate_approved_at: new Date().toISOString(),
+              last_error: null,
+            }).eq("id", sub.id);
+          }
+          report.status_sincronizado.push({
+            sub: sub.subscription_id, email: sub.customer_email,
+            acao: "mandate_approved_at backfill (pixRecurring APPROVED)", dryRun,
+          });
+          continue;
+        }
+        const honest = pixStatus === "EXPIRED" || pixStatus === "REJECTED" || pixStatus === "REJEITADA"
+          ? "REJEITADA"
+          : pixStatus === "CANCELLED" || pixStatus === "CANCELADA"
+            ? "CANCELADA"
+            : "AGUARDANDO";
+        if (true) {
           if (!dryRun) {
             await supabase.from("woovi_subscriptions").update({
               status: honest,
