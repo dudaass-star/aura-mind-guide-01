@@ -479,7 +479,7 @@ Deno.serve(async (req) => {
       }).eq("phone", phone);
       console.log("[recovery-agent] cota resetada (conversa reaberta)");
     }
-    if (replyCount >= cfg.max_auto_replies) {
+    if (!previewMode && replyCount >= cfg.max_auto_replies) {
       await supabase.from("recovery_conversations").update({
         needs_human: true, auto_paused_reason: "limit_reached", updated_at: new Date().toISOString(),
       }).eq("phone", phone);
