@@ -42,8 +42,9 @@ export default function AdminWhatsappRecovery() {
         </div>
       </header>
 
-      <div className="container mx-auto p-4">
-        <RecoveryInbox heightClass="h-[calc(100vh-150px)]" />
+      <div className="container mx-auto p-4 space-y-4">
+        <TasterFunnelPanel />
+        <RecoveryInbox heightClass="h-[calc(100vh-380px)]" />
       </div>
     </div>
   );
