@@ -278,15 +278,25 @@ async function uploadToStorage(
   return { url: signed.data.signedUrl };
 }
 
+// A doc mostra o corpo como o próprio documento; contas antigas aceitam a forma
+// { documents: [...] }. Tentamos a documentada e caímos na alternativa em 400/422
+// para não perder o prazo da disputa por causa de formato.
 async function sendEvidence(
   disputeId: string,
   doc: Record<string, string>,
 ): Promise<{ ok: boolean; detail: string }> {
-  const r = await wooviFetch(`/api/v1/dispute/${encodeURIComponent(disputeId)}/evidence`, {
-    method: "POST",
-    body: { documents: [doc] },
-  } as RequestInit & { body?: unknown });
-  return { ok: r.ok, detail: r.ok ? "enviada" : `${r.status}: ${r.raw.slice(0, 200)}` };
+  const path = `/api/v1/dispute/${encodeURIComponent(disputeId)}/evidence`;
+  const first = await wooviFetch(path, { method: "POST", body: doc } as RequestInit & { body?: unknown });
+  if (first.ok) return { ok: true, detail: "enviada" };
+  if (first.status === 400 || first.status === 422) {
+    const alt = await wooviFetch(path, {
+      method: "POST",
+      body: { documents: [doc] },
+    } as RequestInit & { body?: unknown });
+    if (alt.ok) return { ok: true, detail: "enviada (formato alternativo)" };
+    return { ok: false, detail: `${first.status}: ${first.raw.slice(0, 150)} | alt ${alt.status}: ${alt.raw.slice(0, 150)}` };
+  }
+  return { ok: false, detail: `${first.status}: ${first.raw.slice(0, 200)}` };
 }
 
 async function processDispute(supabase: any, dispute: any) {
@@ -296,9 +306,6 @@ async function processDispute(supabase: any, dispute: any) {
   const base = {
     defense_decision: dossier.decision,
     defense_summary: dossier.summary,
-    user_id: (dossier.summary as any).profile_id
-      ? dispute.user_id
-      : dispute.user_id,
     profile_id: (dossier.summary as any).profile_id || dispute.profile_id,
     customer_name: (dossier.summary as any).customer_name || dispute.customer_name,
     evidence_attempts: (dispute.evidence_attempts || 0) + 1,
