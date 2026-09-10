@@ -636,7 +636,7 @@ Deno.serve(async (req) => {
       if (okToGenerate) {
         const res = await handleTasterAccept(
           supabase, phone, checkout,
-          tasterIntent === "button" ? "porta_b" : "porta_a",
+          tasterIntent === "button" ? "porta_b" : (tasterIntent === "single_request" ? "porta_c" : "porta_a"),
         );
         if (res.handled && res.body) {
           const sendT = await sendTwilioFreeText(phone, res.body);
