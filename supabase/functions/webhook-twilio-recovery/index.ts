@@ -106,30 +106,58 @@ Deno.serve(async (req) => {
             // para o primeiro degrau de oferta (templates comprovadamente
             // entregáveis), pra não deixar o ciclo silencioso.
             const templateMissing = String(errorCode) === "63027";
-            const retryAt = new Date();
-            if (!templateMissing) {
-              retryAt.setUTCDate(retryAt.getUTCDate() + 1);
-              retryAt.setUTCHours(12, 0, 0, 0);
+
+            // Falha PERMANENTE do destinatário: número não tem WhatsApp, número
+            // inválido ou bloqueio do próprio destino. Reenviar amanhã só repete
+            // a falha — e repetia todo dia às 12h UTC indefinidamente (casos
+            // reais: 5545998224650, 55859923022, 55199716791, semanas de
+            // tentativas diárias). Sem retry: fica só o e-mail.
+            const PERMANENT_CODES = ["63024", "63003", "63005", "63013", "21211", "21614", "21610", "63032"];
+            const permanent = PERMANENT_CODES.includes(String(errorCode));
+
+            // Teto para as falhas temporárias: 3 tentativas por telefone/ciclo.
+            let exhausted = false;
+            if (!permanent && !templateMissing) {
+              const { count } = await supabaseCb
+                .from("dunning_attempts")
+                .select("id", { count: "exact", head: true })
+                .eq("profile_user_id", att.profile_user_id)
+                .eq("error_stage", "twilio_delivery_failed")
+                .gte("created_at", new Date(Date.now() - 30 * 86400000).toISOString());
+              exhausted = (count ?? 0) >= 3;
             }
-            const nextAttempt = templateMissing
-              ? Math.max(att.attempt_number || 1, 3) // 3 = primeiro degrau após os 2 avisos
-              : (att.attempt_number || 1);
-            await supabaseCb.from("scheduled_tasks").insert({
-              user_id: att.profile_user_id,
-              task_type: "dunning_offer_whatsapp",
-              execute_at: retryAt.toISOString(),
-              status: "pending",
-              payload: {
-                event_id: `retry-${messageSid}`,
-                provider: att.provider || "stripe",
-                invoice_id: att.invoice_id,
-                subscription_id: att.subscription_id,
-                payment_id: att.payment_id,
-                customer_id: att.customer_id,
-                attempt_number: nextAttempt,
-                retry_of_sid: messageSid,
-              },
-            });
+
+            if (permanent || exhausted) {
+              console.warn(
+                `🛑 [recovery-webhook] sem retry para sid=${messageSid} (code=${errorCode}, ${permanent ? "falha permanente do número" : "3 falhas no período"})`,
+              );
+            } else {
+              const retryAt = new Date();
+              if (!templateMissing) {
+                retryAt.setUTCDate(retryAt.getUTCDate() + 1);
+                retryAt.setUTCHours(12, 0, 0, 0);
+              }
+              const nextAttempt = templateMissing
+                ? Math.max(att.attempt_number || 1, 3) // 3 = primeiro degrau após os 2 avisos
+                : (att.attempt_number || 1);
+              await supabaseCb.from("scheduled_tasks").insert({
+                user_id: att.profile_user_id,
+                task_type: "dunning_offer_whatsapp",
+                execute_at: retryAt.toISOString(),
+                status: "pending",
+                payload: {
+                  event_id: `retry-${messageSid}`,
+                  provider: att.provider || "stripe",
+                  invoice_id: att.invoice_id,
+                  subscription_id: att.subscription_id,
+                  payment_id: att.payment_id,
+                  customer_id: att.customer_id,
+                  attempt_number: nextAttempt,
+                  retry_of_sid: messageSid,
+                },
+              });
+            }
+
 
             // 2) E-mail imediato como canal secundário.
             const { data: prof } = await supabaseCb

@@ -135,6 +135,102 @@ async function notify(supabase: Supa, sub: Record<string, any>, text: string): P
   }
 }
 
+/** profiles.user_id (uid de auth) a partir de woovi_subscriptions.user_id (profiles.id). */
+async function resolveAuthUid(
+  supabase: Supa,
+  sub: Record<string, any>,
+): Promise<{ authUid: string | null; planExpiresAt: string | null; status: string | null }> {
+  let row: Record<string, any> | null = null;
+  if (sub.user_id) {
+    const { data } = await supabase.from("profiles")
+      .select("user_id, status, plan_expires_at").eq("id", sub.user_id).maybeSingle();
+    row = data ?? null;
+  }
+  if (!row && sub.customer_phone) {
+    const phone = normalizeBrazilianPhone(String(sub.customer_phone));
+    if (phone) {
+      const { data } = await supabase.from("profiles")
+        .select("user_id, status, plan_expires_at").eq("phone", phone).maybeSingle();
+      row = data ?? null;
+    }
+  }
+  return {
+    authUid: (row?.user_id as string) || null,
+    planExpiresAt: (row?.plan_expires_at as string) || null,
+    status: (row?.status as string) || null,
+  };
+}
+
+/** Acesso acaba em 2 dias ou menos (ou já acabou)? Então a conversa é urgente. */
+function accessEndsSoon(planExpiresAt: string | null): boolean {
+  if (!planExpiresAt) return false;
+  const t = Date.parse(planExpiresAt);
+  if (!Number.isFinite(t)) return false;
+  return t <= Date.now() + 2 * 86400000;
+}
+
+/** Mandato morto não tem o que cobrar: encerra a régua de ciclo pendente. */
+async function cancelCycleTasks(supabase: Supa, subscriptionId: string): Promise<void> {
+  await supabase.from("scheduled_tasks")
+    .update({ status: "canceled", executed_at: new Date().toISOString() })
+    .in("task_type", ["woovi_cycle_recycle", "woovi_next_cycle_cobr", "woovi_retry_confirm"])
+    .eq("status", "pending")
+    .contains("payload", { subscription_id: subscriptionId });
+}
+
+/**
+ * Abre (ou antecipa) o pedido de nova autorização.
+ *
+ * Caso real (Marcia, 10/09/2026): a autorização morreu depois de a cobrança já
+ * ter entrado na régua, então existia uma conversa pendente agendada para 19/09
+ * — depois de o acesso dela cair em 11/09. O dedupe simples via "já tem tarefa
+ * pendente" engolia o pedido urgente. Agora, quando o acesso está a ≤ 2 dias,
+ * a tarefa distante é ANTECIPADA em vez de bloquear a criação.
+ */
+async function openReauthOffer(
+  supabase: Supa,
+  opts: { authUid: string | null; subscriptionId: string; source: string; urgent: boolean },
+): Promise<string> {
+  const { authUid, subscriptionId, source, urgent } = opts;
+  if (!authUid || !subscriptionId) return "sem_perfil";
+
+  const { data: pending } = await supabase.from("scheduled_tasks")
+    .select("id, execute_at")
+    .in("task_type", ["woovi_recovery_offer", "woovi_recovery_final"])
+    .eq("status", "pending")
+    .contains("payload", { subscription_id: subscriptionId })
+    .order("execute_at", { ascending: true })
+    .limit(1);
+
+  const first = Array.isArray(pending) ? pending[0] : null;
+  if (first) {
+    if (!urgent) return "ja_pendente";
+    const soonEnough = Date.parse(String(first.execute_at)) <= Date.now() + 2 * 3600 * 1000;
+    if (soonEnough) return "ja_pendente";
+    await supabase.from("scheduled_tasks")
+      .update({ execute_at: new Date(Date.now() + 60 * 1000).toISOString() })
+      .eq("id", first.id);
+    return "antecipada";
+  }
+
+  await supabase.from("scheduled_tasks").insert({
+    user_id: authUid,
+    task_type: "woovi_recovery_offer",
+    execute_at: new Date(Date.now() + 60 * 1000).toISOString(),
+    status: "pending",
+    payload: {
+      provider: "woovi",
+      subscription_id: subscriptionId,
+      offer_step: 1,
+      source,
+      urgent,
+    },
+  });
+  return "criada";
+}
+
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -436,71 +532,46 @@ Deno.serve(async (req) => {
             ? "CANCELADA"
             : "AGUARDANDO";
         {
+          const { authUid: authUserId, planExpiresAt } = await resolveAuthUid(supabase, sub);
+          const urgent = accessEndsSoon(planExpiresAt);
+          let acao = "dryRun";
           if (!dryRun) {
             await supabase.from("woovi_subscriptions").update({
               status: honest,
               last_error: `mandato sem aprovação na Woovi (pixRecurring: ${pixStatus || "sem status"}) — débito suspenso`,
             }).eq("id", sub.id);
-            await supabase.from("scheduled_tasks")
-              .update({ status: "canceled", executed_at: new Date().toISOString() })
-              .in("task_type", ["woovi_cycle_recycle", "woovi_next_cycle_cobr"])
-              .eq("status", "pending")
-              .contains("payload", { subscription_id: sub.subscription_id });
+            await cancelCycleTasks(supabase, String(sub.subscription_id));
 
             // Sem aprovação (pendente, expirado ou recusado): vai para a
             // conversa de recuperação (concluir/reautorizar ou pagar de outra
-            // forma), com dedupe para não repetir a oferta a cada rodada.
-            {
-              let authUserId: string | null = null;
-              if (sub.user_id) {
-                const { data: p } = await supabase.from("profiles")
-                  .select("user_id").eq("id", sub.user_id).maybeSingle();
-                authUserId = (p?.user_id as string) || null;
-              }
-              if (authUserId) {
-                const { data: pending } = await supabase.from("scheduled_tasks")
-                  .select("id")
-                  .in("task_type", ["woovi_recovery_offer", "woovi_recovery_final"])
-                  .eq("status", "pending")
-                  .contains("payload", { subscription_id: sub.subscription_id })
-                  .limit(1);
-                if (!pending?.length) {
-                  await supabase.from("scheduled_tasks").insert({
-                    user_id: authUserId,
-                    task_type: "woovi_recovery_offer",
-                    execute_at: new Date(Date.now() + 60 * 1000).toISOString(),
-                    status: "pending",
-                    payload: {
-                      provider: "woovi",
-                      subscription_id: sub.subscription_id,
-                      offer_step: 1,
-                      source: "mandate_not_approved",
-                    },
-                  });
-                }
-              }
+            // forma). Com acesso acabando, a conversa distante é antecipada.
+            acao = await openReauthOffer(supabase, {
+              authUid: authUserId,
+              subscriptionId: String(sub.subscription_id),
+              source: "mandate_not_approved",
+              urgent,
+            });
+            if (acao === "criada" || acao === "antecipada") {
+              await supabase.from("woovi_subscriptions")
+                .update({ reauth_notified_at: new Date().toISOString() })
+                .eq("id", sub.id);
             }
           }
           report.reautorizacao.push({
             sub: sub.subscription_id, email: sub.customer_email,
-            remoteStatus, pixRecurringStatus: pixStatus, honestStatus: honest, mandateApproved: false, dryRun,
+            remoteStatus, pixRecurringStatus: pixStatus, honestStatus: honest,
+            mandateApproved: false, urgente: urgent, acao, dryRun,
           });
           continue;
         }
+
       }
       if (!REVOKED.includes(remoteStatus)) continue;
 
       // Cancelamento pedido no nosso portal já marca o profile — não é churn silencioso.
-      let profileStatus: string | null = null;
-      let authUid: string | null = null;
-      if (sub.user_id) {
-        // ATENÇÃO: woovi_subscriptions.user_id guarda o ID DA LINHA de profiles
-        // (é assim que o webhook-woovi grava), não o uid de autenticação.
-        const { data: p } = await supabase
-          .from("profiles").select("user_id, status").eq("id", sub.user_id).maybeSingle();
-        profileStatus = (p?.status as string) || null;
-        authUid = (p?.user_id as string) || null;
-      }
+      // ATENÇÃO: woovi_subscriptions.user_id guarda o ID DA LINHA de profiles
+      // (é assim que o webhook-woovi grava), não o uid de autenticação.
+      const { authUid, status: profileStatus } = await resolveAuthUid(supabase, sub);
       const userStillActive = ["active", "trial", "trialing", "past_due"].includes(String(profileStatus));
 
       if (!dryRun) {
@@ -552,6 +623,57 @@ Deno.serve(async (req) => {
         remoteStatus, userStillActive, sent, dryRun,
       });
     }
+
+    // ---- 4b) Recusados/cancelados que nunca foram avisados ------------------
+    // Caso real (Rosane, 10/09/2026): o mandato foi aprovado e depois recusado
+    // pelo banco. Assim que o status local virou REJEITADA, a varredura 4 (que
+    // só olha mandato VIVO) parou de enxergá-la — ela saiu do radar antes de
+    // receber qualquer pedido de nova autorização. Havia 209 assinaturas
+    // inativas com `reauth_notified_at` nulo, ou seja: nunca avisadas.
+    //
+    // Aqui pegamos só quem pagou de verdade (entrada ou parcela) nos últimos 30
+    // dias e ainda não foi avisado — sem reabrir conversa com quem nunca entrou.
+    const reauthSince = new Date(now.getTime() - 30 * 86400000).toISOString();
+    const { data: deadSubs, error: deadErr } = await supabase
+      .from("woovi_subscriptions")
+      .select("id, user_id, subscription_id, customer_phone, customer_email, status, entry_paid_at, mandate_approved_at, reauth_notified_at, created_at")
+      .in("status", ["REJEITADA", "CANCELADA", "EXPIRADA"])
+      .is("replaced_by_subscription_id", null)
+      .not("subscription_id", "is", null)
+      .is("reauth_notified_at", null)
+      .not("entry_paid_at", "is", null)
+      .gte("entry_paid_at", reauthSince)
+      .order("entry_paid_at", { ascending: false })
+      .limit(100);
+    if (deadErr) report.erros.push({ etapa: "mandatos_mortos_sem_aviso", erro: String(deadErr.message || deadErr) });
+
+    for (const sub of (skipVarreduras ? [] : deadSubs) || []) {
+      const { authUid: deadUid, planExpiresAt, status: pstatus } = await resolveAuthUid(supabase, sub);
+      // Quem já pediu cancelamento no portal não é abordado de novo.
+      if (String(pstatus) === "canceled_by_user") continue;
+      const urgent = accessEndsSoon(planExpiresAt);
+      let acao = "dryRun";
+      if (!dryRun) {
+        await cancelCycleTasks(supabase, String(sub.subscription_id));
+        acao = await openReauthOffer(supabase, {
+          authUid: deadUid,
+          subscriptionId: String(sub.subscription_id),
+          source: "mandate_revoked_backfill",
+          urgent,
+        });
+        if (acao === "criada" || acao === "antecipada") {
+          await supabase.from("woovi_subscriptions")
+            .update({ reauth_notified_at: new Date().toISOString() })
+            .eq("id", sub.id);
+        }
+      }
+      report.reautorizacao.push({
+        sub: sub.subscription_id, email: sub.customer_email,
+        statusLocal: sub.status, origem: "backfill", urgente: urgent, acao, dryRun,
+      });
+    }
+
+
 
     // ---- 5) Garantia preventiva e backstop de ciclo ------------------------
     // A Woovi deveria criar a CobR automaticamente quatro dias antes do débito,
