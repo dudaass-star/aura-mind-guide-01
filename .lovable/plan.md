@@ -26,6 +26,14 @@ Um dossiê curto e objetivo, sempre com os mesmos quatro pilares:
 
 Regra de conduta: quando o cliente de fato não usou o serviço e o valor é baixo, não brigamos — devolvemos e encerramos. Brigar em caso perdido é o que suja a conta.
 
+## Sim: totalmente automático
+
+O fluxo roda sem nenhuma ação sua. A Woovi avisa a abertura da disputa por webhook, o sistema identifica o cliente pela transação, monta o dossiê e envia a evidência pela API em segundos. Você só olha o painel se quiser acompanhar.
+
+Duas coisas dependem da Woovi (pedido único ao suporte deles, se ainda não estiver liberado): o escopo `FILE_POST` na chave de API e a permissão de enviar evidência por arquivo. Se não liberarem, o envio continua automático por link do arquivo hospedado por nós.
+
+O único caso que fica manual por escolha é quando o cliente realmente não usou o serviço: aí o painel avisa para devolvermos o valor em vez de defender.
+
 ## O que vai ser construído
 
 1. **Detecção automática da disputa.** Passar a receber e guardar os avisos de disputa da Woovi (abertura, evidência recebida, resolução), ligando cada disputa ao cliente pelo identificador da transação que já guardamos.
