@@ -268,16 +268,44 @@ const RE_TASTER_BUTTON =
 const RE_SHORT_ACCEPT = /^\s*(sim|quero|bora|vamos|manda|fechado|topo|pode mandar|manda o c[oó]digo|quero sim)\s*[.!]?\s*$/i;
 
 /**
- * `button` = clique/pedido explícito. `short_accept` = "quero/bora" solto, que
- * só vale se a oferta já tiver saído nas mensagens anteriores.
+ * Pedido de "só uma vez, sem autorizar nada": é exatamente o encontro avulso de
+ * R$ 6,90, mesmo sem o lead conhecer esse nome. Antes isso não acionava nada e o
+ * agente respondia explicando PIX Automático (caso Maria, 10/09).
  */
-export function classifyTasterIntent(text: string): "button" | "short_accept" | null {
+const RE_SINGLE_NO_MANDATE = new RegExp(
+  [
+    "pix (normal|comum|simples|avulso|[uú]nico)",
+    "(n[ãa]o|nao) (quero|queria|vou|posso|pretendo) (deixar )?(autoriza|autorizar|autorizado|d[eé]bito autom|cobran[çc]a autom|recorr|mensalidade|assinar|assinatura)",
+    "sem (autorizar|autoriza[çc][ãa]o|d[eé]bito autom|cobran[çc]a autom|recorr|assinatura|compromisso de m[êe]s)",
+    "(pagar|paga|pago|quero pagar|s[oó] pagar) (s[oó]|somente|apenas) ?(a de |as de )?(hoje|hj|essa|esta|uma vez|uma [uú]nica vez|um dia|1 vez)",
+    "(s[oó]|somente|apenas) (os |o |r\\$ ?)?6[,.]90",
+    "6[,.]90 (s[oó]|somente|apenas|avulso|[uú]nico|uma vez)",
+    "(quero|queria|posso) (s[oó] |somente |apenas )?(testar|experimentar|provar|ver como [eé]) (antes|primeiro|uma vez|s[oó] uma vez)",
+    "uma sess[aã]o (s[oó]|avulsa|[uú]nica)",
+    "(n[ãa]o|nao) quero (plano|mensalidade|assinatura|me comprometer)",
+  ].join("|"),
+  "i",
+);
+
+/** O pedido é forte o suficiente para gerar o código na hora? */
+export function wantsSingleSessionNow(text: string): boolean {
+  return RE_SINGLE_NO_MANDATE.test((text || "").trim());
+}
+
+/**
+ * `button` = clique/pedido explícito. `single_request` = pedido de pagamento
+ * único / sem autorização (gera na hora). `short_accept` = "quero/bora" solto,
+ * que só vale se a oferta já tiver saído nas mensagens anteriores.
+ */
+export function classifyTasterIntent(text: string): "button" | "single_request" | "short_accept" | null {
   const t = (text || "").trim();
   if (!t) return null;
   if (RE_TASTER_BUTTON.test(t)) return "button";
+  if (RE_SINGLE_NO_MANDATE.test(t)) return "single_request";
   if (RE_SHORT_ACCEPT.test(t)) return "short_accept";
   return null;
 }
+
 
 /**
  * A oferta do encontro avulso já saiu para este telefone?
