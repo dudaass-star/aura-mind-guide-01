@@ -66,7 +66,7 @@ export default function PaymentDunningPanel() {
     setLoading(true);
     try {
       const since = new Date(Date.now() - Number(periodo) * 86_400_000).toISOString();
-      let query = (supabase.from("dunning_attempts") as any)
+      let query = supabase.from("dunning_attempts")
         .select("id, profile_user_id, phone_resolved, phone_raw, provider, channel, attempt_number, offer_tier, offer_accepted, whatsapp_sent, delivery_status, error_stage, error_message, created_at")
         .gte("created_at", since)
         .order("created_at", { ascending: false })
