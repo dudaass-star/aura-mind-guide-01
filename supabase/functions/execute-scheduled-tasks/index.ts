@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber, getPhoneVariations } from "../_shared/zapi-client.ts";
 import { sendMessage, sendAudio, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { sendDunningWhatsApp } from "../_shared/dunning-whatsapp.ts";
@@ -122,6 +122,9 @@ const PHONELESS_TASK_TYPES = new Set([
   // Encerramento também é técnico: cancela o mandato e fecha o perfil, sem
   // falar com o cliente. Sem isso um perfil sem telefone deixava o mandato vivo.
   'woovi_recovery_final',
+  // Lembrete do código do encontro de R$ 6,90: é tarefa de LEAD, não de
+  // usuário — o telefone vem da oferta (payload), não do perfil.
+  'taster_code_reminder',
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1252,6 +1255,83 @@ Deno.serve(async (req) => {
             console.log(
               `📨 dunning_pix_followup #${payload.attempt ?? 1} tier=${pixRes.tier} sent=${pixRes.sent} skipped=${pixRes.skipped ?? '-'}`,
             );
+            break;
+          }
+
+          // Lembrete do código do encontro de R$ 6,90 (2 toques: 45min e manhã
+          // seguinte). Lê a oferta do payload; se já pagou, não envia nada.
+          case 'taster_code_reminder': {
+            const offerId = payload.offer_id;
+            if (!offerId) { console.warn('⚠️ taster_code_reminder sem offer_id'); break; }
+
+            const { data: offer } = await supabase
+              .from('taster_offers')
+              .select('id, phone_normalized, name, paid_at, public_token')
+              .eq('id', offerId)
+              .maybeSingle();
+            if (!offer || offer.paid_at) {
+              console.log(`✅ taster_code_reminder ${payload.step}: já pago ou oferta inexistente — nada a enviar`);
+              break;
+            }
+
+            // Janela de 24h da Meta: só existe texto livre se o lead falou
+            // recentemente. Sem inbound nas últimas 20h a Twilio recusaria o
+            // envio (63016) — nesse caso cancelamos, sem retry e sem ruído.
+            const phoneVars = getPhoneVariations(String(offer.phone_normalized || payload.phone || ''));
+            const { data: lastIn } = await supabase
+              .from('recovery_messages')
+              .select('created_at')
+              .eq('direction', 'in')
+              .in('phone', phoneVars)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const lastInAt = lastIn?.created_at ? new Date(lastIn.created_at).getTime() : 0;
+            if (lastInAt < Date.now() - 20 * 60 * 60 * 1000) {
+              console.log(`✅ taster_code_reminder ${payload.step}: janela de 24h fechada — cancelando toque`);
+              await supabase.from('scheduled_tasks')
+                .update({ status: 'canceled', executed_at: new Date().toISOString() })
+                .eq('id', task.id);
+              continue;
+            }
+
+            const firstName = String(offer.name || '').trim().split(/\s+/)[0] || null;
+            const pageUrl = offer.public_token
+              ? `https://olaaura.com.br/pix/${offer.public_token}`
+              : null;
+            const text = payload.step === '45min'
+              ? `${firstName ? firstName + ', o' : 'O'} código do encontro guiado de 45 minutos continua valendo aqui — R$ 6,90, PIX comum, sem autorizar nada automático.${pageUrl ? `\n\n${pageUrl}` : ''}\n\nSe tiver ficado alguma dúvida, é só me falar.`
+              : `Bom dia${firstName ? ', ' + firstName : ''}. O código de R$ 6,90 do seu encontro guiado ainda vale — um encontro só, com 48h pra fazer, e depois você decide com calma se continua.${pageUrl ? `\n\n${pageUrl}` : ''}`;
+
+            const sid = Deno.env.get('TWILIO_RECOVERY_ACCOUNT_SID');
+            const token = Deno.env.get('TWILIO_RECOVERY_AUTH_TOKEN');
+            const from = Deno.env.get('TWILIO_RECOVERY_FROM');
+            if (!sid || !token || !from) throw new Error('twilio_recovery_secrets_missing');
+            const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: new URLSearchParams({
+                To: `whatsapp:+${phoneVars[0]}`,
+                From: from.startsWith('whatsapp:') ? from : `whatsapp:${from}`,
+                Body: text,
+              }),
+            });
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(json?.message || `HTTP ${resp.status}`);
+
+            // Registra no histórico da conversa pra o agente ver a própria fala.
+            await supabase.from('recovery_messages').insert({
+              phone: phoneVars[0],
+              direction: 'out',
+              body: text,
+              message_sid: json?.sid || null,
+              sent_by_admin: false,
+              metadata: { track: 'taster_reminder', step: payload.step, offer_id: offerId },
+            });
+            console.log(`✅ taster_code_reminder ${payload.step} enviado (${json?.sid || '-'})`);
             break;
           }
 

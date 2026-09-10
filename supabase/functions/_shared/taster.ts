@@ -337,10 +337,72 @@ export async function createTasterCharge(
       .is("taster_paid_at", null);
   } catch { /* perfil pode não existir ainda — normal */ }
 
+  // Lembretes do código: 45 min depois e, se ainda não pagou, na manhã seguinte.
+  // Sem isso o lead que não pagou na hora esfriava em silêncio (7 de 8 códigos).
+  if (offer?.id) {
+    try {
+      await scheduleTasterReminders(supabase, String(offer.id), phone);
+    } catch (e) {
+      console.error("[taster] falha agendando lembretes:", e);
+    }
+  }
+
   return {
     ok: true, copyPaste: brCode, correlationId, offerId: offer?.id,
     publicToken: token, pageUrl: tasterPageUrl(token),
   };
+}
+
+/**
+ * Agenda os dois toques do código de R$ 6,90. A execução (execute-scheduled-tasks,
+ * tipo `taster_code_reminder`) lê a oferta e cancela na hora se já estiver paga.
+ * Dedup por offer_id + etapa: a mesma oferta nunca agenda o mesmo toque duas vezes.
+ */
+export async function scheduleTasterReminders(
+  supabase: Supa,
+  offerId: string,
+  phone: string,
+): Promise<void> {
+  // Segundo toque: 09h da manhã seguinte em BRT (12h UTC), nunca de madrugada.
+  const nextMorning = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  nextMorning.setUTCHours(12, 0, 0, 0);
+
+  const steps: Array<{ step: string; at: Date }> = [
+    { step: "45min", at: new Date(Date.now() + 45 * 60 * 1000) },
+    { step: "manha_seguinte", at: nextMorning },
+  ];
+
+  const { data: existing } = await supabase
+    .from("scheduled_tasks")
+    .select("payload")
+    .eq("task_type", "taster_code_reminder")
+    .eq("status", "pending")
+    .contains("payload", { offer_id: offerId });
+  const scheduled = new Set((existing || []).map((t: any) => t?.payload?.step));
+
+  for (const s of steps) {
+    if (scheduled.has(s.step)) continue;
+    await supabase.from("scheduled_tasks").insert({
+      // Tarefa de lead: nem sempre existe usuário/perfil. O executor trata
+      // `taster_code_reminder` como tarefa sem telefone de perfil (PHONELESS) e
+      // lê o telefone da própria oferta.
+      user_id: offerId,
+      task_type: "taster_code_reminder",
+      execute_at: s.at.toISOString(),
+      status: "pending",
+      payload: { offer_id: offerId, phone, step: s.step },
+    });
+  }
+}
+
+/** Cancela os lembretes pendentes de uma oferta (chamado quando o PIX cai). */
+export async function cancelTasterReminders(supabase: Supa, offerId: string): Promise<void> {
+  await supabase
+    .from("scheduled_tasks")
+    .update({ status: "canceled", executed_at: new Date().toISOString() })
+    .eq("task_type", "taster_code_reminder")
+    .eq("status", "pending")
+    .contains("payload", { offer_id: offerId });
 }
 
 /**

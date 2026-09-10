@@ -121,18 +121,16 @@ const COPY_STAGE_DEFS: Omit<StageConfig, "contentSid">[] = [
     track: "copiou",
   },
   {
-    // Porta B do encontro avulso de R$ 6,90: quem copiou o código, recebeu as
-    // duas mensagens do trilho e NÃO respondeu nada. Última carta, ~24h depois
-    // do m2, e só para quem o backend considera elegível.
+    // Porta B do encontro avulso de R$ 6,90: quem tentou no PIX, recebeu as
+    // duas mensagens do trilho e não fechou. Sai ~6h depois do checkout (ainda
+    // no mesmo dia), e só para quem o backend considera elegível.
     stage: 5,
     label: "copiou_taster",
-    // 48h depois do checkout, e depois do genérico de 24h ter saído. Ancorado em
-    // `created_at` e no estágio genérico de propósito: o rastro `pix_copied_at`
-    // só existe em build publicado com a marcação de cópia, e a Porta B não pode
-    // depender disso pra existir.
-    minAgeMinutes: 48 * 60,
+    // Âncora na régua do PIX (m2 de 2h), não mais no genérico de 24h: antes o
+    // convite ficava preso atrás dele e só saía ~48h depois, num lead frio.
+    minAgeMinutes: 6 * 60,
     sentColumn: "wa_copiou_taster_sent_at",
-    prevSentColumn: "whatsapp_recovery_24h_sent_at",
+    prevSentColumn: "wa_copiou_2h_sent_at",
     utmCampaign: "wa_copiou_taster",
     respectsQuietHours: true,
     ageColumn: "created_at",
@@ -1146,8 +1144,10 @@ async function processCopyStage(
       if (fails >= MAX_STAGE_FAILURES) reason = `max_failures_${fails}`;
     }
 
-    // Porta B: só silenciosos e só elegíveis. Quem já respondeu recebe a oferta
-    // dentro da conversa (Porta A), nunca por template.
+    // Porta B: só silenciosos RECENTES e só elegíveis. Quem respondeu nas
+    // últimas 24h recebe a oferta dentro da conversa (Porta A), nunca por
+    // template. Conversa fria (>24h sem inbound) volta a receber o convite —
+    // antes QUALQUER resposta antiga descartava o lead para sempre.
     if (!reason && cfg.label === "copiou_taster") {
       const { data: convRow } = await supabase
         .from("recovery_conversations")
@@ -1156,7 +1156,19 @@ async function processCopyStage(
         .not("last_inbound_at", "is", null)
         .limit(1)
         .maybeSingle();
-      if (convRow) reason = "lead_respondeu_usa_porta_a";
+      const lastInboundAt = convRow?.last_inbound_at ? new Date(convRow.last_inbound_at).getTime() : 0;
+      if (lastInboundAt > Date.now() - 24 * 60 * 60 * 1000) {
+        reason = "lead_respondeu_usa_porta_a";
+      } else {
+        // Já existe oferta de encontro para esse telefone → o convite já saiu.
+        const { data: existingOffer } = await supabase
+          .from("taster_offers")
+          .select("id")
+          .in("phone_normalized", phoneVars)
+          .limit(1)
+          .maybeSingle();
+        if (existingOffer) reason = "taster_oferta_ja_existe";
+      }
       if (!reason) {
         const elig = await checkTasterEligibility(supabase, {
           phone: session.phone,

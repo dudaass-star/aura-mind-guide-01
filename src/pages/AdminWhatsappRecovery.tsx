@@ -5,6 +5,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import RecoveryInbox from '@/components/admin/RecoveryInbox';
+import TasterFunnelPanel from '@/components/admin/TasterFunnelPanel';
 import { useEffect } from 'react';
 
 /**
@@ -41,8 +42,9 @@ export default function AdminWhatsappRecovery() {
         </div>
       </header>
 
-      <div className="container mx-auto p-4">
-        <RecoveryInbox heightClass="h-[calc(100vh-150px)]" />
+      <div className="container mx-auto p-4 space-y-4">
+        <TasterFunnelPanel />
+        <RecoveryInbox heightClass="h-[calc(100vh-380px)]" />
       </div>
     </div>
   );

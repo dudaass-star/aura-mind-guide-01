@@ -19,7 +19,7 @@ import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
 import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
-import { isTasterCorrelationId, TASTER_WINDOW_HOURS } from "../_shared/taster.ts";
+import { isTasterCorrelationId, TASTER_WINDOW_HOURS, cancelTasterReminders } from "../_shared/taster.ts";
 import {
   wooviFetch, brtDate,
   WOOVI_APPROVED_STATUSES as APPROVED_STATUSES,
@@ -294,6 +294,13 @@ async function activateTaster(
     expires_at: expires,
     metadata: { ...(offer.metadata || {}), payer_bank: extractPayerBank(args.body) },
   }).eq("id", offer.id);
+
+  // PIX caiu: cancela os lembretes pendentes do código na hora.
+  try {
+    await cancelTasterReminders(supabase, String(offer.id));
+  } catch (e) {
+    console.error("[webhook-woovi] falha cancelando lembretes do taster:", e);
+  }
 
   const orParts: string[] = [];
   if (email) orParts.push(`email.eq.${email}`);
