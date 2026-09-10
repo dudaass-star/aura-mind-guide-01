@@ -63,11 +63,15 @@ e 2 avisos finais estão na fila, todos agendados. A régua está rodando.
 
 ## Detalhes técnicos
 
-- Marcia Dias: `woovi_subscriptions.subscription_id` com `mandate_approved_at IS NULL` e
-  `status = 'ATIVA'`; `woovi_charges` do ciclo 10/09 em `COBR_REJECTED_400` /
-  `RETRY_REJECTED_400`. Consultar `/api/v1/subscriptions/{globalID}`, aplicar
-  `normalizeMandateStatus`, e — sem aprovação — cancelar as tarefas de débito
-  (`woovi_next_cycle_cobr`, `woovi_retry_confirm`) e abrir `woovi_recovery_offer`.
+- Marcia Dias e os 7 irmãos: `woovi_subscriptions` com `status IN ('ATIVA','APROVADA')`
+  e `mandate_approved_at IS NULL`. Consultar `/api/v1/subscriptions/{globalID}` de cada
+  um, aplicar `normalizeMandateStatus`, e — sem aprovação — cancelar as tarefas de
+  débito (`woovi_next_cycle_cobr`, `woovi_retry_confirm`) e abrir `woovi_recovery_offer`.
+- Recorte das trilhas: sessão única em `taster_offers` (`paid_at` pago,
+  `converted_subscription_at` conversão), entrada de assinatura em
+  `woovi_charges.kind='entry'`; mandatos sem habilitação = `REJEITADA` com
+  `mandate_approved_at IS NULL`, desabilitados = `REJEITADA`/`CANCELADA` com aprovação
+  prévia.
 - Guarda no criador de ciclo (`woovi-pix-audit` / `_shared/woovi.ts`): não emitir CobR
   quando `mandate_approved_at IS NULL`; registrar motivo em `last_error` e rotear para
   recuperação.
