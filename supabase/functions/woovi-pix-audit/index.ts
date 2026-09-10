@@ -730,6 +730,7 @@ Deno.serve(async (req) => {
       .in("status", MANDATE_ACTIVE_STATUSES)
       .is("replaced_by_subscription_id", null)
       .not("subscription_id", "is", null)
+      .not("mandate_approved_at", "is", null)
       .not("next_charge_date", "is", null)
       .lte("next_charge_date", today)
       .limit(200);
@@ -747,6 +748,7 @@ Deno.serve(async (req) => {
       .is("replaced_by_subscription_id", null)
       .is("entry_paid_at", null)
       .not("subscription_id", "is", null)
+      .not("mandate_approved_at", "is", null)
       .lte("start_date", new Date(Date.now() - 86400000).toISOString().slice(0, 10))
       .limit(100);
 
