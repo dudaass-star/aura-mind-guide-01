@@ -441,11 +441,11 @@ Deno.serve(async (req) => {
           : pixStatus === "CANCELLED" || pixStatus === "CANCELADA"
             ? "CANCELADA"
             : "AGUARDANDO";
-        if (true) {
+        {
           if (!dryRun) {
             await supabase.from("woovi_subscriptions").update({
               status: honest,
-              last_error: `mandato sem aprovação na Woovi (${remoteStatus || "sem status"}) — débito suspenso`,
+              last_error: `mandato sem aprovação na Woovi (pixRecurring: ${pixStatus || "sem status"}) — débito suspenso`,
             }).eq("id", sub.id);
             await supabase.from("scheduled_tasks")
               .update({ status: "canceled", executed_at: new Date().toISOString() })
@@ -453,10 +453,10 @@ Deno.serve(async (req) => {
               .eq("status", "pending")
               .contains("payload", { subscription_id: sub.subscription_id });
 
-            // Recusado/cancelado sem nunca aprovar: vai para a conversa de
-            // recuperação (reautorizar ou pagar de outra forma), com dedupe
-            // para não repetir a oferta a cada rodada da auditoria.
-            if (REVOKED.includes(honest)) {
+            // Sem aprovação (pendente, expirado ou recusado): vai para a
+            // conversa de recuperação (concluir/reautorizar ou pagar de outra
+            // forma), com dedupe para não repetir a oferta a cada rodada.
+            {
               let authUserId: string | null = null;
               if (sub.user_id) {
                 const { data: p } = await supabase.from("profiles")
