@@ -26,3 +26,5 @@
 - [Defesa automática de disputa Woovi](mem://features/payments/woovi-disputa-defesa-automatica) — Escopos liberados; evidência só no formato { documents: [...] }; defende com consentimento + uso; REJECTED = ganhamos
 
 - [Pedido de sessão avulsa reconhecido](mem://features/recovery/pedido-de-sessao-avulsa-reconhecido) — "pix normal / só 6,90 / pagar só hoje / testar antes" gera o encontro de R$ 6,90 na hora; guarda contra chamar isso de semana/plano; KB separa os dois 6,90
+
+- [Toque de Cuidado](mem://style/toque-de-cuidado) — Lembretes e follow-ups abrem com pergunta genuína; sem preço/condições/link colado; oferta só sob pedido

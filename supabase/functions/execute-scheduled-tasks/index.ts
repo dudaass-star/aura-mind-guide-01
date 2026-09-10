@@ -1296,12 +1296,12 @@ Deno.serve(async (req) => {
             }
 
             const firstName = String(offer.name || '').trim().split(/\s+/)[0] || null;
-            const pageUrl = offer.public_token
-              ? `https://olaaura.com.br/pix/${offer.public_token}`
-              : null;
+            // Toque de Cuidado: check-in humano. Abre com pergunta genuína, uma
+            // só, curta. Nada de preço, condições ou link colado — se a pessoa
+            // disser que travou, o recovery-agent reenvia o link na conversa.
             const text = payload.step === '45min'
-              ? `${firstName ? firstName + ', o' : 'O'} código do encontro guiado de 45 minutos continua valendo aqui — R$ 6,90, PIX comum, sem autorizar nada automático.${pageUrl ? `\n\n${pageUrl}` : ''}\n\nSe tiver ficado alguma dúvida, é só me falar.`
-              : `Bom dia${firstName ? ', ' + firstName : ''}. O código de R$ 6,90 do seu encontro guiado ainda vale — um encontro só, com 48h pra fazer, e depois você decide com calma se continua.${pageUrl ? `\n\n${pageUrl}` : ''}`;
+              ? `Oi${firstName ? ', ' + firstName : ''}. Deu certo aí? Conseguiu fazer o PIX ou travou alguma coisa?`
+              : `Bom dia${firstName ? ', ' + firstName : ''}. Fiquei pensando em você aqui. Deu pra experimentar a sessão guiada? Se tiver ficado alguma dúvida, me fala que eu resolvo.`;
 
             const sid = Deno.env.get('TWILIO_RECOVERY_ACCOUNT_SID');
             const token = Deno.env.get('TWILIO_RECOVERY_AUTH_TOKEN');
