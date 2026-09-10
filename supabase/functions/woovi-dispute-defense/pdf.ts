@@ -20,11 +20,26 @@ const PAGE_H = 842;
 const MARGIN = 56;
 const MAX_CHARS = 92; // quebra conservadora para 9-10pt
 
+// Pontuação tipográfica que existe no WinAnsi mas fora do latin-1 puro: sem
+// este mapa travessão e aspas curvas viravam "?" no documento.
+const WIN_ANSI: Record<number, number> = {
+  0x2013: 0x96, // –
+  0x2014: 0x97, // —
+  0x2018: 0x91,
+  0x2019: 0x92,
+  0x201c: 0x93,
+  0x201d: 0x94,
+  0x2022: 0x95, // •
+  0x2026: 0x85, // …
+  0x20ac: 0x80,
+  0x2122: 0x99,
+};
+
 function latin1(s: string): Uint8Array {
   const out = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
-    out[i] = c <= 0xff ? c : 0x3f; // "?"
+    out[i] = c <= 0xff ? c : (WIN_ANSI[c] ?? 0x3f);
   }
   return out;
 }
