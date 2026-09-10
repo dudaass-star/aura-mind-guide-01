@@ -1,0 +1,1 @@
+COMMENT ON COLUMN public.dunning_attempts.delivery_status IS 'Último status real recebido do provedor: delivered, read, failed ou undelivered';
