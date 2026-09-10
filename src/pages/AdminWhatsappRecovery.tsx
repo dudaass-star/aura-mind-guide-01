@@ -5,6 +5,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import RecoveryInbox from '@/components/admin/RecoveryInbox';
+import TasterFunnelPanel from '@/components/admin/TasterFunnelPanel';
 import { useEffect } from 'react';
 
 /**
