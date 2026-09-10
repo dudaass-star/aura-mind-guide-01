@@ -1743,6 +1743,8 @@ export default function AdminEngagement() {
           <TabsContent value="trial" className="mt-3 space-y-4">
             <PixAutomaticoDiaPanel />
 
+            <DisputasPixPanel />
+
             <CheckoutFunnelPanel />
 
             <LandingEngagementPanel />
