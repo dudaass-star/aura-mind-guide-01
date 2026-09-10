@@ -798,6 +798,7 @@ export type Database = {
           created_at: string
           customer_id: string | null
           days_past_due: number | null
+          delivery_status: string | null
           error_message: string | null
           error_stage: string | null
           event_id: string
@@ -824,6 +825,7 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           days_past_due?: number | null
+          delivery_status?: string | null
           error_message?: string | null
           error_stage?: string | null
           event_id: string
@@ -850,6 +852,7 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           days_past_due?: number | null
+          delivery_status?: string | null
           error_message?: string | null
           error_stage?: string | null
           event_id?: string
