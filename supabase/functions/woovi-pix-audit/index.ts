@@ -386,7 +386,7 @@ Deno.serve(async (req) => {
     const REVOKED = ["CANCELADA", "REJEITADA", "EXPIRADA", "CANCELLED", "REJECTED", "EXPIRED"];
     const { data: liveSubs } = await supabase
       .from("woovi_subscriptions")
-      .select("id, user_id, subscription_id, customer_phone, customer_email, status, plan, value_cents, reauth_notified_at")
+      .select("id, user_id, subscription_id, customer_phone, customer_email, status, plan, value_cents, reauth_notified_at, mandate_approved_at")
       .in("status", MANDATE_ACTIVE_STATUSES)
       .is("replaced_by_subscription_id", null)
       .not("subscription_id", "is", null)
@@ -400,6 +400,67 @@ Deno.serve(async (req) => {
       if (!r.ok || !r.data) continue;
       const remote = ((r.data as Record<string, any>)?.subscription || r.data) as Record<string, any>;
       const remoteStatus = String(remote?.status || "").toUpperCase();
+
+      // Mandato "vivo" aqui mas sem aprovação real na Woovi: não existe débito
+      // possível. Caso real: cliente pagou a entrada, não concluiu a
+      // autorização no banco, e o cadastro ficou "ATIVA" — cada ciclo batia em
+      // erro 400 na criação da cobrança. Aqui o status passa a refletir o que
+      // a Woovi diz e o mandato sai da régua de débito.
+      if (!sub.mandate_approved_at) {
+        const honest = normalizeMandateStatus(remoteStatus, "AGUARDANDO");
+        if (honest !== "APROVADA") {
+          if (!dryRun) {
+            await supabase.from("woovi_subscriptions").update({
+              status: honest,
+              last_error: `mandato sem aprovação na Woovi (${remoteStatus || "sem status"}) — débito suspenso`,
+            }).eq("id", sub.id);
+            await supabase.from("scheduled_tasks")
+              .update({ status: "canceled", executed_at: new Date().toISOString() })
+              .in("task_type", ["woovi_cycle_recycle", "woovi_next_cycle_cobr"])
+              .eq("status", "pending")
+              .contains("payload", { subscription_id: sub.subscription_id });
+
+            // Recusado/cancelado sem nunca aprovar: vai para a conversa de
+            // recuperação (reautorizar ou pagar de outra forma), com dedupe
+            // para não repetir a oferta a cada rodada da auditoria.
+            if (REVOKED.includes(honest)) {
+              let authUserId: string | null = null;
+              if (sub.user_id) {
+                const { data: p } = await supabase.from("profiles")
+                  .select("user_id").eq("id", sub.user_id).maybeSingle();
+                authUserId = (p?.user_id as string) || null;
+              }
+              if (authUserId) {
+                const { data: pending } = await supabase.from("scheduled_tasks")
+                  .select("id")
+                  .in("task_type", ["woovi_recovery_offer", "woovi_recovery_final"])
+                  .eq("status", "pending")
+                  .contains("payload", { subscription_id: sub.subscription_id })
+                  .limit(1);
+                if (!pending?.length) {
+                  await supabase.from("scheduled_tasks").insert({
+                    user_id: authUserId,
+                    task_type: "woovi_recovery_offer",
+                    execute_at: new Date(Date.now() + 60 * 1000).toISOString(),
+                    status: "pending",
+                    payload: {
+                      provider: "woovi",
+                      subscription_id: sub.subscription_id,
+                      offer_step: 1,
+                      source: "mandate_not_approved",
+                    },
+                  });
+                }
+              }
+            }
+          }
+          report.reautorizacao.push({
+            sub: sub.subscription_id, email: sub.customer_email,
+            remoteStatus, honestStatus: honest, mandateApproved: false, dryRun,
+          });
+          continue;
+        }
+      }
       if (!REVOKED.includes(remoteStatus)) continue;
 
       // Cancelamento pedido no nosso portal já marca o profile — não é churn silencioso.
@@ -483,6 +544,7 @@ Deno.serve(async (req) => {
       .in("status", MANDATE_ACTIVE_STATUSES)
       .is("replaced_by_subscription_id", null)
       .not("subscription_id", "is", null)
+      .not("mandate_approved_at", "is", null)
       .not("next_charge_date", "is", null)
       .gte("next_charge_date", today)
       .lte("next_charge_date", tenDaysAhead)
