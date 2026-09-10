@@ -145,6 +145,18 @@ function isDecided(text: string): boolean {
   return RE_DECIDED.test(t);
 }
 
+/**
+ * Diferencia uma solicitação real de suporte de uma confirmação curta.
+ * A cota limita insistência comercial; nunca pode silenciar uma pergunta
+ * feita pela própria pessoa sobre plano, pagamento, acesso ou funcionamento.
+ */
+function isSupportRequest(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized || isShortGreeting(normalized)) return false;
+  return normalized.includes("?") ||
+    /\b(como|quando|onde|qual|quais|quanto|quantas?|por que|porque|posso|consigo|terei|tenho|tem|ter[aá]|pagar|cobran[çc]a|plano|sess[aã]o|sess[oõ]es|acesso|cancel|pix|cart[aã]o|valor|pre[çc]o|funciona|d[úu]vida|erro|problema)\b/i.test(normalized);
+}
+
 
 function isQuietHourBRT(start: number, end: number): boolean {
   // BRT = UTC-3
@@ -320,16 +332,16 @@ function sceneUsedRecently(historyAsc: { direction: string; body?: string | null
  * Antes isso derrubava a execução (`skip: active_user`) e o cliente ficava sem
  * resposta nenhuma — agora só muda o modo do agente para SUPORTE.
  */
-async function getCustomer(supabase: any, phone: string): Promise<{ status: string; name: string | null } | null> {
+async function getCustomer(supabase: any, phone: string): Promise<{ status: string; name: string | null; plan: string | null } | null> {
   const variations = getPhoneVariations(phone);
   const { data } = await supabase
     .from("profiles")
-    .select("id, status, name")
+    .select("id, status, name, plan")
     .in("phone", variations)
     .in("status", ["active", "trial", "canceling", "past_due"])
     .limit(1)
     .maybeSingle();
-  return data ? { status: data.status, name: data.name ?? null } : null;
+  return data ? { status: data.status, name: data.name ?? null, plan: data.plan ?? null } : null;
 }
 
 async function sendTwilioFreeText(phone: string, text: string): Promise<{ ok: boolean; sid?: string; error?: string }> {
@@ -406,6 +418,22 @@ Deno.serve(async (req) => {
 
     // 2. Já é cliente? Não cala mais — muda para modo SUPORTE (sem venda, sem link).
     const customer = await getCustomer(supabase, phone);
+    let planSupportFacts = "";
+    if (customer) {
+      const { data: plans } = await supabase
+        .from("plan_configs")
+        .select("plan_id, name, price_monthly_cents, sessions_per_month, session_duration_minutes")
+        .order("price_monthly_cents", { ascending: true });
+      if (plans?.length) {
+        planSupportFacts = plans.map((plan: {
+          plan_id: string;
+          name: string;
+          price_monthly_cents: number;
+          sessions_per_month: number;
+          session_duration_minutes: number;
+        }) => `- ${plan.name}: R$ ${(plan.price_monthly_cents / 100).toFixed(2).replace(".", ",")}/mês, ${plan.sessions_per_month} encontro(s) guiado(s) de ${plan.session_duration_minutes} minutos por mês.`).join("\n");
+      }
+    }
 
     // 3. Quiet hours: só vale para iniciativa NOSSA. Quem escreveu pra nós agora
     //    (reativo a um contato nosso das últimas 24h, ou com o PIX na mão) é
@@ -511,12 +539,21 @@ Deno.serve(async (req) => {
       }).eq("phone", phone);
       console.log("[recovery-agent] cota resetada (conversa reaberta)");
     }
-    if (!previewMode && !tasterFastPath && replyCount >= cfg.max_auto_replies) {
+    const supportRequest = isSupportRequest(text);
+    const cappedSupport = !customer && replyCount >= cfg.max_auto_replies && supportRequest;
+    if (!previewMode && !customer && !tasterFastPath && replyCount >= cfg.max_auto_replies && !supportRequest) {
       await supabase.from("recovery_conversations").update({
         needs_human: true, auto_paused_reason: "limit_reached", updated_at: new Date().toISOString(),
       }).eq("phone", phone);
-      console.log("[recovery-agent] limit_reached");
+      console.log("[recovery-agent] limit_reached (sem solicitação de suporte)");
       return new Response(JSON.stringify({ skipped: "limit_reached" }), { status: 200, headers: corsHeaders });
+    }
+
+    if (!previewMode && customer && conv?.auto_paused_reason === "limit_reached") {
+      await supabase.from("recovery_conversations").update({
+        needs_human: false, auto_paused_reason: null, updated_at: new Date().toISOString(),
+      }).eq("phone", phone);
+      console.log("[recovery-agent] limit_reached removido: cliente em modo suporte");
     }
 
     // 5. Mensagem só com anexo: descreve o anexo em vez de sumir.
@@ -716,10 +753,15 @@ Deno.serve(async (req) => {
     const supportBlock = customer ? `
 MODO SUPORTE (IMPORTANTE): esta pessoa JÁ É CLIENTE (status: ${customer.status}). NÃO venda, NÃO ofereça plano, NÃO mande link de checkout, NÃO mostre vitrine de valor.
 Responda a dúvida dela de forma direta e resolutiva usando a base de conhecimento (cobrança, acesso, como usar, cancelamento).
+- Plano atual cadastrado: ${customer.plan || "não identificado"}.
+${planSupportFacts ? `PLANOS VIGENTES (fonte oficial):\n${planSupportFacts}` : ""}
+- O encontro avulso de R$ 6,90 é uma experiência única para quem ainda não é cliente. NÃO diga que ele pode ser comprado como sessão extra por um assinante. Se a pessoa quiser mais encontros mensais, explique qual plano vigente inclui essa quantidade, sem pressionar a troca.
 - Acesso e histórico: olaaura.com.br/meu-espaco (login sem senha, pelo email/telefone do cadastro).
 - A conversa com a Aura acontece no WhatsApp oficial dela, não neste número.
 - Cancelamento: pelo site, em 1 minuto, sem precisar falar com ninguém.
 - Se for caso de cobrança específica que você não tem como conferir, oriente o email ${SUPPORT_EMAIL} e emita [ESCALAR_HUMANO].
+` : cappedSupport ? `
+MODO SUPORTE APÓS COTA (IMPORTANTE): esta pessoa fez uma pergunta real depois do limite comercial. Responda SOMENTE o que ela perguntou, de forma direta e curta. NÃO venda, NÃO ofereça plano ou encontro avulso, NÃO mande link de checkout, NÃO mostre vitrine de valor e NÃO faça nova pergunta comercial.
 ` : "";
 
     const modeInstructions = customer
@@ -1031,7 +1073,9 @@ Reescreva em no máximo 3 frases: os R$ 6,90 são UM encontro guiado de 45 minut
     // Mensagem que fala de R$ 6,90 (encontro avulso) nunca termina em link de
     // assinatura: são coisas diferentes e o link só confunde.
     const menciona690 = /6,90/.test(body);
-    if (menciona690) sendLink = false;
+    if (menciona690 || customer || cappedSupport) sendLink = false;
+
+    if (customer || cappedSupport) offerTaster = false;
 
     if (!sendLink && !customer && body.includes(CHECKOUT_URL)) {
       body = body.split(CHECKOUT_URL).join("").replace(/\n{3,}/g, "\n\n").trim();
@@ -1075,8 +1119,8 @@ Reescreva em no máximo 3 frases: os R$ 6,90 são UM encontro guiado de 45 minut
     });
 
     const newCount = replyCount + 1;
-    const shouldPause = stop || escalate || newCount >= cfg.max_auto_replies;
-    const pauseReason = stop ? "lead_declined" : (escalate ? "escalated_email" : (newCount >= cfg.max_auto_replies ? "limit_reached" : null));
+    const shouldPause = stop || escalate || (!customer && newCount >= cfg.max_auto_replies);
+    const pauseReason = stop ? "lead_declined" : (escalate ? "escalated_email" : (!customer && newCount >= cfg.max_auto_replies ? "limit_reached" : null));
 
     await supabase.from("recovery_conversations").upsert({
       phone,
