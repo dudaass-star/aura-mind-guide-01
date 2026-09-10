@@ -639,7 +639,10 @@ Deno.serve(async (req) => {
 
       if (!installment.dueDate) continue;
       const lead = daysUntil(installment.dueDate);
-      if (lead < 5 || lead > 10) continue;
+      // Ordem criada na manhã do próprio vencimento executa na janela do dia
+      // seguinte (foi o caso dos débitos de 09/09 pagos só em 10/09). A guarda
+      // passa a agir até D-2: fora isso, o backstop de ciclo vencido assume.
+      if (lead < 2 || lead > 10) continue;
 
       const { data: existing } = await supabase.from("scheduled_tasks")
         .select("id")
