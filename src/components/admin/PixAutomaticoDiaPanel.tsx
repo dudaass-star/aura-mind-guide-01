@@ -148,7 +148,7 @@ export default function PixAutomaticoDiaPanel() {
         };
         row.venceram += 1;
         const sit = situacaoDe(s);
-        if (sit.key === "pago") {
+        if (sit.key === "pago" || sit.key === "pago_janela") {
           row.pagos += 1;
           row.valorPago += sit.valor;
         } else if (sit.key === "aguardando") row.aguardando += 1;
@@ -187,6 +187,7 @@ export default function PixAutomaticoDiaPanel() {
 
   const badge = (situacao: string) => {
     if (situacao === "Pago") return <Badge className="bg-emerald-600 text-white text-[10px]">Pago</Badge>;
+    if (situacao === "Pago na janela seguinte") return <Badge variant="outline" className="border-emerald-600 text-emerald-700 text-[10px]">Pago na janela seguinte</Badge>;
     if (situacao === "Aguardando veredito") return <Badge variant="secondary" className="text-[10px]">Aguardando veredito</Badge>;
     if (situacao === "Autorização negada") return <Badge variant="outline" className="text-[10px]">Autorização negada</Badge>;
     return <Badge variant="destructive" className="text-[10px]">Sem cobrança</Badge>;
