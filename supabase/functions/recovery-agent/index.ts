@@ -461,25 +461,57 @@ Deno.serve(async (req) => {
       .select("phone, auto_reply_count, needs_human, auto_paused_reason, checkout_session_id, name, last_inbound_at")
       .eq("phone", phone).maybeSingle();
 
-    // Pausas definitivas: só quando o próprio lead pediu para parar / falar com humano.
-    const HARD_PAUSES = ["user_requested_human", "lead_declined", "escalated_email"];
+    // Pedido de experimentar (clique do template / "quero a sessão avulsa") fura
+    // QUALQUER pausa criada por nós — nunca deixamos alguém pedindo pra entrar sem resposta.
+    // Só pedido explícito de parar / recusa continua sendo respeitado.
+    const tasterFastPath = !previewMode && (!!classifyTasterIntent(text) || wantsSingleSessionNow(text));
+
+    // Pausas definitivas: só quando o próprio lead pediu para parar / recusou.
+    const HARD_PAUSES = ["user_requested_human", "lead_declined"];
     if (conv?.needs_human && HARD_PAUSES.includes(conv?.auto_paused_reason || "")) {
       console.log(`[recovery-agent] pausa definitiva (${conv?.auto_paused_reason})`);
       return new Response(JSON.stringify({ skipped: conv?.auto_paused_reason }), { status: 200, headers: corsHeaders });
     }
 
+    // Pausa por pergunta fora da base (escalada pro e-mail) tem VALIDADE: vale só
+    // pro assunto do momento. Se a pessoa voltar depois, o agente atende de novo.
+    const ESCALATION_TTL_MS = 6 * 3600 * 1000;
+    const lastBotReply = conv?.last_bot_reply_at ? new Date(conv.last_bot_reply_at).getTime() : 0;
+    if (conv?.needs_human && conv?.auto_paused_reason === "escalated_email" && !tasterFastPath) {
+      if (lastBotReply > 0 && Date.now() - lastBotReply < ESCALATION_TTL_MS) {
+        console.log("[recovery-agent] pausa temporária (escalated_email, dentro da janela)");
+        return new Response(JSON.stringify({ skipped: "escalated_email" }), { status: 200, headers: corsHeaders });
+      }
+      console.log("[recovery-agent] escalated_email expirado → volta a atender");
+      await supabase.from("recovery_conversations").update({
+        needs_human: false, auto_paused_reason: null,
+      }).eq("phone", phone);
+    }
+
     // Cota de respostas: zera quando o lead reabre a conversa depois de 48h.
+    // ATENÇÃO: recovery_conversations.last_inbound_at já foi sobrescrito pelo
+    // webhook com a mensagem que acabou de chegar. O sinal de reabertura é o
+    // inbound ANTERIOR (ou a nossa última resposta).
     let replyCount = conv?.auto_reply_count ?? 0;
-    const lastIn = conv?.last_inbound_at ? new Date(conv.last_inbound_at).getTime() : 0;
-    const reopened = lastIn > 0 && Date.now() - lastIn > 48 * 3600 * 1000;
-    if (reopened && replyCount > 0) {
+    const { data: prevIn } = await supabase
+      .from("recovery_messages")
+      .select("created_at")
+      .eq("phone", phone).eq("direction", "in")
+      .order("created_at", { ascending: false })
+      .range(1, 1).maybeSingle();
+    const prevContact = Math.max(
+      prevIn?.created_at ? new Date(prevIn.created_at).getTime() : 0,
+      lastBotReply,
+    );
+    const reopened = prevContact > 0 && Date.now() - prevContact > 48 * 3600 * 1000;
+    if (reopened && (replyCount > 0 || conv?.needs_human)) {
       replyCount = 0;
       await supabase.from("recovery_conversations").update({
         auto_reply_count: 0, needs_human: false, auto_paused_reason: null,
       }).eq("phone", phone);
       console.log("[recovery-agent] cota resetada (conversa reaberta)");
     }
-    if (!previewMode && replyCount >= cfg.max_auto_replies) {
+    if (!previewMode && !tasterFastPath && replyCount >= cfg.max_auto_replies) {
       await supabase.from("recovery_conversations").update({
         needs_human: true, auto_paused_reason: "limit_reached", updated_at: new Date().toISOString(),
       }).eq("phone", phone);
