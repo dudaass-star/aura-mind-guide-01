@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, CreditCard, RefreshCw, Send, Users } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertCircle, CheckCircle2, CreditCard, MessageSquare, RefreshCw, Send, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
