@@ -216,6 +216,18 @@ export default function AdminMessages() {
     fetchConversation(user.user_id);
   };
 
+  // Abertura direta via link (?user=<user_id>) vindo do painel de cobranças
+  useEffect(() => {
+    const target = searchParams.get('user');
+    if (!target || selectedUser || users.length === 0) return;
+    const found = users.find((u) => u.user_id === target);
+    if (found) {
+      setActiveTab('oficial');
+      handleSelectUser(found);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [users, searchParams, selectedUser]);
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedUser) return;
     setSendingMessage(true);
