@@ -17,7 +17,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
-import { classifyPixButton, handlePixButton, classifyTasterIntent, handleTasterAccept, tasterOfferAlreadySent, isBlankDoubt, phoneMatchList } from "./pix-buttons.ts";
+import { classifyPixButton, handlePixButton, classifyTasterIntent, wantsSingleSessionNow, handleTasterAccept, tasterOfferAlreadySent, isBlankDoubt, phoneMatchList } from "./pix-buttons.ts";
 import { isTasterTestPhone } from "../_shared/taster.ts";
 
 const corsHeaders = {
@@ -479,7 +479,7 @@ Deno.serve(async (req) => {
       }).eq("phone", phone);
       console.log("[recovery-agent] cota resetada (conversa reaberta)");
     }
-    if (replyCount >= cfg.max_auto_replies) {
+    if (!previewMode && replyCount >= cfg.max_auto_replies) {
       await supabase.from("recovery_conversations").update({
         needs_human: true, auto_paused_reason: "limit_reached", updated_at: new Date().toISOString(),
       }).eq("phone", phone);
@@ -622,14 +622,21 @@ Deno.serve(async (req) => {
     // a ponta com a própria conta. Não afeta nenhum outro número.
     const tasterTestBypass = await isTasterTestPhone(supabase, phone);
 
-    // Aceite: clique do template (Porta B) ou "quero/bora" depois de a oferta ter saído.
-    const tasterIntent = classifyTasterIntent(text);
+    // Pedido de pagamento único / sem autorização = pedido do encontro avulso,
+    // mesmo sem o lead saber esse nome. Vale a mensagem atual e tudo que ele
+    // escreveu desde a nossa última resposta.
+    const singleSessionAsk = wantsSingleSessionNow(text) || unanswered.some(t => wantsSingleSessionNow(t));
+
+    // Aceite: clique do template (Porta B), pedido de sessão única (Porta C) ou
+    // "quero/bora" depois de a oferta ter saído.
+    const tasterIntent = classifyTasterIntent(text) || (singleSessionAsk ? "single_request" : null);
     if (!previewMode && (!customer || tasterTestBypass) && tasterEligible && tasterIntent) {
-      const okToGenerate = tasterIntent === "button" || await tasterOfferAlreadySent(supabase, phone);
+      const okToGenerate = tasterIntent === "button" || tasterIntent === "single_request" ||
+        await tasterOfferAlreadySent(supabase, phone);
       if (okToGenerate) {
         const res = await handleTasterAccept(
           supabase, phone, checkout,
-          tasterIntent === "button" ? "porta_b" : "porta_a",
+          tasterIntent === "button" ? "porta_b" : (tasterIntent === "single_request" ? "porta_c" : "porta_a"),
         );
         if (res.handled && res.body) {
           const sendT = await sendTwilioFreeText(phone, res.body);
@@ -720,12 +727,20 @@ CONTEXTO DECISIVO: esta pessoa COPIOU o código PIX e não concluiu — ela já 
     // Carta na manga: encontro guiado avulso de R$ 6,90, PIX comum, sem autorizar
     // débito automático. Só existe pra quem travou exatamente nessa objeção —
     // e só quando o backend já disse que a pessoa é elegível.
-    const tasterInstruction = (!blankDoubt && !decided && (!customer || tasterTestBypass) && tasterEligible) ? `
+    const tasterAllowed = !blankDoubt && !decided && (!customer || tasterTestBypass) && tasterEligible;
+    const tasterInstruction = tasterAllowed ? (singleSessionAsk ? `
+OBRIGATÓRIO NESTA MENSAGEM — ELE PEDIU EXATAMENTE O ENCONTRO AVULSO: ele disse que quer pagar uma vez só, sem autorizar débito automático (ou pediu "PIX normal", "só os R$ 6,90", "só a de hoje", "quero testar antes"). Existe isso e é o que você vai oferecer AGORA: um encontro guiado de 45 minutos por R$ 6,90, num PIX comum de copia e cola, SEM autorizar nada automático e SEM virar assinatura — um encontro só, com 48h pra fazer, e depois ele decide com calma se escolhe um plano.
+- PROIBIDO nesta mensagem: explicar PIX Automático, autorização no banco, "8º dia", mensalidade de R$ 29,90, "primeira semana", plano, assinatura ou 7 dias. Ele já disse que NÃO quer isso; insistir é o que faz ele sair.
+- NUNCA chame o encontro de R$ 6,90 de "semana", "plano" ou "assinatura": é um pagamento único, um encontro só.
+- Máximo 3 frases: reconheça em poucas palavras, descreva o encontro em cena e pergunte se pode mandar o código de R$ 6,90.
+- NUNCA gere ou invente código: termine a mensagem com [OFERECER_TASTER] e o sistema gera.
+` : `
 CARTA NA MANGA (use SÓ se a trava for autorização de cobrança automática, medo de recorrência, "não quero deixar autorizado", "quero testar antes" ou preço): existe um encontro guiado de 45 minutos AVULSO por R$ 6,90, num PIX comum de copia e cola, SEM autorizar nada automático e SEM virar assinatura. É um encontro só, com 48h pra fazer, e depois a pessoa decide com calma se escolhe um plano.
 ATENÇÃO — NÃO CONFUNDA: o encontro de R$ 6,90 NÃO é "a primeira semana do Essencial" nem "experimentar o plano por uma semana". A semana é assinatura com autorização no banco; o encontro é um pagamento único, um encontro só. Nunca descreva o encontro como plano, semana ou assinatura.
 Regras: ofereça no máximo UMA vez; descreva em cena ("um encontro de 45 minutos, marcado pra hoje à noite se você quiser"); NUNCA gere ou invente código PIX — quem gera é o sistema; É PROIBIDO prometer envio ("te mando o código", "gero o QR agora") sem terminar a mensagem com [OFERECER_TASTER]; NÃO ofereça se a trava for outra (dúvida técnica, erro do banco, comparação com terapia). Se for oferecer, termine com [OFERECER_TASTER] em vez de [ENVIAR_LINK] e feche perguntando se quer que você mande o código de R$ 6,90.
 
-` : "";
+`) : "";
+
 
     const blankDoubtInstruction = blankDoubt ? `
 ATENÇÃO — ELE DISSE QUE TEM UMA DÚVIDA MAS NÃO DISSE QUAL: sua ÚNICA tarefa nesta mensagem é perguntar qual é a dúvida. UMA frase curta, no tom de quem está ali do lado ("claro, ${nameTxt} — qual ficou?" / "manda a dúvida que eu te respondo agora"). PROIBIDO: adivinhar o assunto, explicar PIX Automático, citar valores, mostrar cena de valor, mandar link, oferecer encontro avulso, listar qualquer coisa. NÃO emita nenhuma tag.
@@ -870,7 +885,10 @@ Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência
     let sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
     const stop = /\[STOP\]/i.test(raw);
-    let offerTaster = (!customer || tasterTestBypass) && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
+    // Quando o lead pediu o pagamento único e é elegível, a oferta não depende do
+    // modelo lembrar do marcador: o sistema liga a geração do código.
+    let offerTaster = (!customer || tasterTestBypass) && tasterEligible &&
+      (/\[OFERECER_TASTER\]/i.test(raw) || (tasterAllowed && singleSessionAsk));
     let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP|OFERECER_TASTER)\]/gi, "").trim();
     if (customer) body = body.replace(new RegExp(CHECKOUT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "").trim();
 
@@ -948,6 +966,35 @@ Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência
         : `${limpo} Quer que eu gere o encontro guiado de R$ 6,90 agora?`.trim();
       console.log("[recovery-agent] promessa de código sem geração removida");
     }
+
+    // Trava anti-confusão: existem dois R$ 6,90 (o encontro avulso e a 1ª semana
+    // do plano). Quando o lead pediu o pagamento único, chamar isso de "semana",
+    // "plano" ou "assinatura" é o erro que fez a Maria achar que ia autorizar
+    // débito automático. Reescreve UMA vez antes de sair.
+    const RE_TASTER_CONFUSION = /6[,.]90[^.!?\n]{0,80}(1[ªa]?\s*semana|primeira semana|semana|plano|assinatura|7 dias|sete dias|mensalidade|autoriza)/i;
+    if (body && (singleSessionAsk || offerTaster) && RE_TASTER_CONFUSION.test(body)) {
+      console.log("[recovery-agent] R$ 6,90 descrito como semana/plano — regerando uma vez");
+      const fix = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: cfg.model || "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: cfg.system_prompt },
+            { role: "user", content: contextBlock },
+            { role: "assistant", content: body },
+            { role: "user", content: `REESCREVA. A mensagem acima chamou os R$ 6,90 de semana/plano/assinatura ou falou de autorização — e ele pediu justamente o contrário: pagar UMA vez, sem autorizar nada.
+Reescreva em no máximo 3 frases: os R$ 6,90 são UM encontro guiado de 45 minutos, pagamento único num PIX comum de copia e cola, sem autorizar débito automático, sem virar assinatura, com 48h pra marcar; depois ele decide com calma se escolhe um plano. PROIBIDO: "semana", "plano", "assinatura", "7 dias", "mensalidade", "R$ 29,90", "autorização", "8º dia", link de checkout. Feche perguntando se pode mandar o código de R$ 6,90. Devolva só a mensagem final, sem tags.` },
+          ],
+        }),
+      });
+      if (fix.ok) {
+        const fixJson = await fix.json();
+        const fixed = (fixJson?.choices?.[0]?.message?.content || "").replace(/\[[A-Z_]+\]/g, "").trim();
+        if (fixed.length > 60 && !RE_TASTER_CONFUSION.test(fixed)) body = fixed;
+      }
+    }
+
 
     // Mensagem que fala de R$ 6,90 (encontro avulso) nunca termina em link de
     // assinatura: são coisas diferentes e o link só confunde.
