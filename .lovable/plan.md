@@ -45,8 +45,16 @@ e 2 avisos finais estão na fila, todos agendados. A régua está rodando.
    aprovação, parar de tentar débito nela e mandá-la para a régua de recuperação por
    conversa (autorizar de novo ou pagar de outra forma), em vez de bater no erro 400.
 2. **Rótulo honesto de status**: mandato que nunca foi aprovado não deve ficar como
-   "ATIVA". Alinhar o status com o que a Woovi diz, para que os painéis e as contagens
-   parem de misturar quem pode ser cobrado com quem não pode.
+   "ATIVA". Hoje são 8 nesse estado — e 4 deles com mensal já vencida ou a vencer
+   sendo tentada à toa (Carlos, Renato Vito, Marcia Dias, VANESSA Silva); outros 4
+   (Mariana Oliveira, Cleide, Gleicy, Vanessa Scian) nem entrada pagaram. Alinhar o
+   status com o que a Woovi diz, para que os painéis e as contagens parem de misturar
+   quem pode ser cobrado com quem não pode.
+5. **Separação visível das duas trilhas de R$ 6,90**: sessão única (Taster — 1 paga até
+   hoje, Sandra Macedo) e entrada de assinatura com PIX Automático são coisas
+   diferentes; garantir no painel/relatórios que as duas trilhas aparecem separadas,
+   junto com o recorte de mandatos recusados/sem aprovação (148 recusados sem nunca
+   aprovar, 19 aprovados que caíram, 9 aguardando).
 3. **Horário da criação da ordem**: passar a criar a ordem do ciclo com pelo menos um dia
    de antecedência (e não na manhã do próprio vencimento), para o débito executar no dia
    do vencimento em vez de cair na madrugada seguinte.
