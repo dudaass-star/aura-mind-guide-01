@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CheckoutFunnelPanel from '@/components/admin/CheckoutFunnelPanel';
 import LandingEngagementPanel from '@/components/admin/LandingEngagementPanel';
 import PixAutomaticoDiaPanel from '@/components/admin/PixAutomaticoDiaPanel';
+import DisputasPixPanel from '@/components/admin/DisputasPixPanel';
 
 import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard, Mail, ChevronDown, MessageCircle, Heart } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -1742,6 +1743,8 @@ export default function AdminEngagement() {
 
           <TabsContent value="trial" className="mt-3 space-y-4">
             <PixAutomaticoDiaPanel />
+
+            <DisputasPixPanel />
 
             <CheckoutFunnelPanel />
 

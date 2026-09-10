@@ -3884,6 +3884,89 @@ export type Database = {
           },
         ]
       }
+      woovi_disputes: {
+        Row: {
+          charge_id: string | null
+          created_at: string
+          customer_name: string | null
+          defense_decision: string | null
+          defense_summary: Json | null
+          dispute_id: string
+          dispute_reason: string | null
+          dispute_type: string
+          end_to_end_id: string | null
+          evidence_attempts: number
+          evidence_error: string | null
+          evidence_sent_at: string | null
+          id: string
+          profile_id: string | null
+          raw_payload: Json | null
+          resolution: string | null
+          resolved_at: string | null
+          status: string | null
+          subscription_id: string | null
+          updated_at: string
+          user_id: string | null
+          value_cents: number | null
+        }
+        Insert: {
+          charge_id?: string | null
+          created_at?: string
+          customer_name?: string | null
+          defense_decision?: string | null
+          defense_summary?: Json | null
+          dispute_id: string
+          dispute_reason?: string | null
+          dispute_type?: string
+          end_to_end_id?: string | null
+          evidence_attempts?: number
+          evidence_error?: string | null
+          evidence_sent_at?: string | null
+          id?: string
+          profile_id?: string | null
+          raw_payload?: Json | null
+          resolution?: string | null
+          resolved_at?: string | null
+          status?: string | null
+          subscription_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+          value_cents?: number | null
+        }
+        Update: {
+          charge_id?: string | null
+          created_at?: string
+          customer_name?: string | null
+          defense_decision?: string | null
+          defense_summary?: Json | null
+          dispute_id?: string
+          dispute_reason?: string | null
+          dispute_type?: string
+          end_to_end_id?: string | null
+          evidence_attempts?: number
+          evidence_error?: string | null
+          evidence_sent_at?: string | null
+          id?: string
+          profile_id?: string | null
+          raw_payload?: Json | null
+          resolution?: string | null
+          resolved_at?: string | null
+          status?: string | null
+          subscription_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+          value_cents?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "woovi_disputes_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "woovi_charges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       woovi_subscriptions: {
         Row: {
           access_granted_at: string | null
