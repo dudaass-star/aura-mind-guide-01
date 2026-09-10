@@ -17,7 +17,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
-import { classifyPixButton, handlePixButton, classifyTasterIntent, handleTasterAccept, tasterOfferAlreadySent, isBlankDoubt, phoneMatchList } from "./pix-buttons.ts";
+import { classifyPixButton, handlePixButton, classifyTasterIntent, wantsSingleSessionNow, handleTasterAccept, tasterOfferAlreadySent, isBlankDoubt, phoneMatchList } from "./pix-buttons.ts";
 import { isTasterTestPhone } from "../_shared/taster.ts";
 
 const corsHeaders = {
@@ -622,10 +622,17 @@ Deno.serve(async (req) => {
     // a ponta com a própria conta. Não afeta nenhum outro número.
     const tasterTestBypass = await isTasterTestPhone(supabase, phone);
 
-    // Aceite: clique do template (Porta B) ou "quero/bora" depois de a oferta ter saído.
-    const tasterIntent = classifyTasterIntent(text);
+    // Pedido de pagamento único / sem autorização = pedido do encontro avulso,
+    // mesmo sem o lead saber esse nome. Vale a mensagem atual e tudo que ele
+    // escreveu desde a nossa última resposta.
+    const singleSessionAsk = wantsSingleSessionNow(text) || unanswered.some(t => wantsSingleSessionNow(t));
+
+    // Aceite: clique do template (Porta B), pedido de sessão única (Porta C) ou
+    // "quero/bora" depois de a oferta ter saído.
+    const tasterIntent = classifyTasterIntent(text) || (singleSessionAsk ? "single_request" : null);
     if (!previewMode && (!customer || tasterTestBypass) && tasterEligible && tasterIntent) {
-      const okToGenerate = tasterIntent === "button" || await tasterOfferAlreadySent(supabase, phone);
+      const okToGenerate = tasterIntent === "button" || tasterIntent === "single_request" ||
+        await tasterOfferAlreadySent(supabase, phone);
       if (okToGenerate) {
         const res = await handleTasterAccept(
           supabase, phone, checkout,
