@@ -145,6 +145,18 @@ function isDecided(text: string): boolean {
   return RE_DECIDED.test(t);
 }
 
+/**
+ * Diferencia uma solicitação real de suporte de uma confirmação curta.
+ * A cota limita insistência comercial; nunca pode silenciar uma pergunta
+ * feita pela própria pessoa sobre plano, pagamento, acesso ou funcionamento.
+ */
+function isSupportRequest(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized || isShortGreeting(normalized)) return false;
+  return normalized.includes("?") ||
+    /\b(como|quando|onde|qual|quais|quanto|quantas?|por que|porque|posso|consigo|terei|tenho|tem|ter[aá]|pagar|cobran[çc]a|plano|sess[aã]o|sess[oõ]es|acesso|cancel|pix|cart[aã]o|valor|pre[çc]o|funciona|d[úu]vida|erro|problema)\b/i.test(normalized);
+}
+
 
 function isQuietHourBRT(start: number, end: number): boolean {
   // BRT = UTC-3
@@ -511,12 +523,21 @@ Deno.serve(async (req) => {
       }).eq("phone", phone);
       console.log("[recovery-agent] cota resetada (conversa reaberta)");
     }
-    if (!previewMode && !tasterFastPath && replyCount >= cfg.max_auto_replies) {
+    const supportRequest = isSupportRequest(text);
+    const cappedSupport = !customer && replyCount >= cfg.max_auto_replies && supportRequest;
+    if (!previewMode && !customer && !tasterFastPath && replyCount >= cfg.max_auto_replies && !supportRequest) {
       await supabase.from("recovery_conversations").update({
         needs_human: true, auto_paused_reason: "limit_reached", updated_at: new Date().toISOString(),
       }).eq("phone", phone);
-      console.log("[recovery-agent] limit_reached");
+      console.log("[recovery-agent] limit_reached (sem solicitação de suporte)");
       return new Response(JSON.stringify({ skipped: "limit_reached" }), { status: 200, headers: corsHeaders });
+    }
+
+    if (!previewMode && customer && conv?.auto_paused_reason === "limit_reached") {
+      await supabase.from("recovery_conversations").update({
+        needs_human: false, auto_paused_reason: null, updated_at: new Date().toISOString(),
+      }).eq("phone", phone);
+      console.log("[recovery-agent] limit_reached removido: cliente em modo suporte");
     }
 
     // 5. Mensagem só com anexo: descreve o anexo em vez de sumir.
@@ -720,6 +741,8 @@ Responda a dúvida dela de forma direta e resolutiva usando a base de conhecimen
 - A conversa com a Aura acontece no WhatsApp oficial dela, não neste número.
 - Cancelamento: pelo site, em 1 minuto, sem precisar falar com ninguém.
 - Se for caso de cobrança específica que você não tem como conferir, oriente o email ${SUPPORT_EMAIL} e emita [ESCALAR_HUMANO].
+` : cappedSupport ? `
+MODO SUPORTE APÓS COTA (IMPORTANTE): esta pessoa fez uma pergunta real depois do limite comercial. Responda SOMENTE o que ela perguntou, de forma direta e curta. NÃO venda, NÃO ofereça plano ou encontro avulso, NÃO mande link de checkout, NÃO mostre vitrine de valor e NÃO faça nova pergunta comercial.
 ` : "";
 
     const modeInstructions = customer
@@ -1031,7 +1054,9 @@ Reescreva em no máximo 3 frases: os R$ 6,90 são UM encontro guiado de 45 minut
     // Mensagem que fala de R$ 6,90 (encontro avulso) nunca termina em link de
     // assinatura: são coisas diferentes e o link só confunde.
     const menciona690 = /6,90/.test(body);
-    if (menciona690) sendLink = false;
+    if (menciona690 || customer || cappedSupport) sendLink = false;
+
+    if (customer || cappedSupport) offerTaster = false;
 
     if (!sendLink && !customer && body.includes(CHECKOUT_URL)) {
       body = body.split(CHECKOUT_URL).join("").replace(/\n{3,}/g, "\n\n").trim();
@@ -1075,8 +1100,8 @@ Reescreva em no máximo 3 frases: os R$ 6,90 são UM encontro guiado de 45 minut
     });
 
     const newCount = replyCount + 1;
-    const shouldPause = stop || escalate || newCount >= cfg.max_auto_replies;
-    const pauseReason = stop ? "lead_declined" : (escalate ? "escalated_email" : (newCount >= cfg.max_auto_replies ? "limit_reached" : null));
+    const shouldPause = stop || escalate || (!customer && newCount >= cfg.max_auto_replies);
+    const pauseReason = stop ? "lead_declined" : (escalate ? "escalated_email" : (!customer && newCount >= cfg.max_auto_replies ? "limit_reached" : null));
 
     await supabase.from("recovery_conversations").upsert({
       phone,
