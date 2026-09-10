@@ -885,7 +885,10 @@ Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência
     let sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
     const stop = /\[STOP\]/i.test(raw);
-    let offerTaster = (!customer || tasterTestBypass) && tasterEligible && /\[OFERECER_TASTER\]/i.test(raw);
+    // Quando o lead pediu o pagamento único e é elegível, a oferta não depende do
+    // modelo lembrar do marcador: o sistema liga a geração do código.
+    let offerTaster = (!customer || tasterTestBypass) && tasterEligible &&
+      (/\[OFERECER_TASTER\]/i.test(raw) || (tasterAllowed && singleSessionAsk));
     let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP|OFERECER_TASTER)\]/gi, "").trim();
     if (customer) body = body.replace(new RegExp(CHECKOUT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "").trim();
 
