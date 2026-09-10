@@ -967,6 +967,35 @@ Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência
       console.log("[recovery-agent] promessa de código sem geração removida");
     }
 
+    // Trava anti-confusão: existem dois R$ 6,90 (o encontro avulso e a 1ª semana
+    // do plano). Quando o lead pediu o pagamento único, chamar isso de "semana",
+    // "plano" ou "assinatura" é o erro que fez a Maria achar que ia autorizar
+    // débito automático. Reescreve UMA vez antes de sair.
+    const RE_TASTER_CONFUSION = /6[,.]90[^.!?\n]{0,80}(1[ªa]?\s*semana|primeira semana|semana|plano|assinatura|7 dias|sete dias|mensalidade|autoriza)/i;
+    if (body && (singleSessionAsk || offerTaster) && RE_TASTER_CONFUSION.test(body)) {
+      console.log("[recovery-agent] R$ 6,90 descrito como semana/plano — regerando uma vez");
+      const fix = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: cfg.model || "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: cfg.system_prompt },
+            { role: "user", content: contextBlock },
+            { role: "assistant", content: body },
+            { role: "user", content: `REESCREVA. A mensagem acima chamou os R$ 6,90 de semana/plano/assinatura ou falou de autorização — e ele pediu justamente o contrário: pagar UMA vez, sem autorizar nada.
+Reescreva em no máximo 3 frases: os R$ 6,90 são UM encontro guiado de 45 minutos, pagamento único num PIX comum de copia e cola, sem autorizar débito automático, sem virar assinatura, com 48h pra marcar; depois ele decide com calma se escolhe um plano. PROIBIDO: "semana", "plano", "assinatura", "7 dias", "mensalidade", "R$ 29,90", "autorização", "8º dia", link de checkout. Feche perguntando se pode mandar o código de R$ 6,90. Devolva só a mensagem final, sem tags.` },
+          ],
+        }),
+      });
+      if (fix.ok) {
+        const fixJson = await fix.json();
+        const fixed = (fixJson?.choices?.[0]?.message?.content || "").replace(/\[[A-Z_]+\]/g, "").trim();
+        if (fixed.length > 60 && !RE_TASTER_CONFUSION.test(fixed)) body = fixed;
+      }
+    }
+
+
     // Mensagem que fala de R$ 6,90 (encontro avulso) nunca termina em link de
     // assinatura: são coisas diferentes e o link só confunde.
     const menciona690 = /6,90/.test(body);
