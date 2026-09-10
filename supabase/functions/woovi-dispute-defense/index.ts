@@ -414,6 +414,21 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({} as Record<string, any>));
     const only = body.disputeId ? String(body.disputeId) : null;
     const force = body.force === true;
+    const dryRun = body.dryRun === true;
+
+    // Sem disputa específica: varre a Woovi antes, para pegar o que não veio por
+    // webhook. Com disputa específica o webhook já gravou.
+    let sync: unknown = null;
+    if (!only) sync = await syncDisputes(supabase);
+
+    if (dryRun) {
+      const { data: rows } = await supabase.from("woovi_disputes")
+        .select("dispute_id,status,end_to_end_id,value_cents,evidence_sent_at,defense_decision,evidence_error")
+        .order("created_at", { ascending: false }).limit(20);
+      return new Response(JSON.stringify({ ok: true, dryRun: true, sync, disputes: rows || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     let q = supabase.from("woovi_disputes").select("*");
     if (only) q = q.eq("dispute_id", only);
