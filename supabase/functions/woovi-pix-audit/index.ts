@@ -410,6 +410,17 @@ Deno.serve(async (req) => {
         `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
       );
       await new Promise((res) => setTimeout(res, 250));
+      if (onlyMandatos) {
+        report.reautorizacao.push({
+          diagnostico: "consulta woovi",
+          sub: sub.subscription_id,
+          ok: r.ok, http: r.status,
+          remoteStatus: String(
+            ((r.data as Record<string, any>)?.subscription || r.data || {})?.status || "",
+          ).toUpperCase() || null,
+          raw: r.ok ? null : String(r.raw || "").slice(0, 200),
+        });
+      }
       if (!r.ok || !r.data) continue;
       const remote = ((r.data as Record<string, any>)?.subscription || r.data) as Record<string, any>;
       const remoteStatus = String(remote?.status || "").toUpperCase();
