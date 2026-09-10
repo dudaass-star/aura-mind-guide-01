@@ -111,7 +111,16 @@ export default function PixAutomaticoDiaPanel() {
         const mine = (bySub.get(String(s.subscription_id)) || [])
           .filter((c) => !c.due_date || c.due_date >= due);
         const pago = mine.find((c) => c.paid_at);
-        if (pago) return { key: "pago", valor: Number(pago.value_cents || 0) };
+        if (pago) {
+          // Débito executado na madrugada seguinte ao vencimento não é falha:
+          // a ordem foi criada depois da janela do dia e a Woovi liquidou no
+          // próximo. Marcamos para não parecer atraso do cliente.
+          const paidDay = new Date(Date.parse(String(pago.paid_at)) - 3 * 3600 * 1000)
+            .toISOString().slice(0, 10);
+          const diffDias = Math.round((Date.parse(paidDay) - Date.parse(due)) / 86400000);
+          if (diffDias === 1) return { key: "pago_janela", valor: Number(pago.value_cents || 0) };
+          return { key: "pago", valor: Number(pago.value_cents || 0) };
+        }
         if (DEAD_AUTH.includes(String(s.status || "").toUpperCase())) {
           return { key: "negado", valor: 0 };
         }
@@ -139,7 +148,7 @@ export default function PixAutomaticoDiaPanel() {
         };
         row.venceram += 1;
         const sit = situacaoDe(s);
-        if (sit.key === "pago") {
+        if (sit.key === "pago" || sit.key === "pago_janela") {
           row.pagos += 1;
           row.valorPago += sit.valor;
         } else if (sit.key === "aguardando") row.aguardando += 1;
@@ -152,6 +161,7 @@ export default function PixAutomaticoDiaPanel() {
 
       const labels: Record<string, string> = {
         pago: "Pago",
+        pago_janela: "Pago na janela seguinte",
         aguardando: "Aguardando veredito",
         sem_tentativa: "Sem cobrança",
         negado: "Autorização negada",
@@ -177,6 +187,7 @@ export default function PixAutomaticoDiaPanel() {
 
   const badge = (situacao: string) => {
     if (situacao === "Pago") return <Badge className="bg-emerald-600 text-white text-[10px]">Pago</Badge>;
+    if (situacao === "Pago na janela seguinte") return <Badge variant="outline" className="border-emerald-600 text-emerald-700 text-[10px]">Pago na janela seguinte</Badge>;
     if (situacao === "Aguardando veredito") return <Badge variant="secondary" className="text-[10px]">Aguardando veredito</Badge>;
     if (situacao === "Autorização negada") return <Badge variant="outline" className="text-[10px]">Autorização negada</Badge>;
     return <Badge variant="destructive" className="text-[10px]">Sem cobrança</Badge>;
