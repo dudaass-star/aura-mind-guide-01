@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION public.has_role(uuid, public.app_role) IS 'Helper de RLS: execução autenticada é intencional e necessária; acesso público anônimo revogado';
