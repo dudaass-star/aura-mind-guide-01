@@ -7,5 +7,5 @@
 - [x] Painel separado de disparos de cobrança com filtros, pessoas distintas, status de entrega e ofertas aceitas
 
 Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separado da recuperação de checkout e retorno real de entrega ativado.
-- [ ] Remover silêncio do recovery-agent ao atingir limite, preservando pausas explícitas
+- [x] Remover silêncio do recovery-agent ao atingir limite, preservando pausas explícitas
 - [ ] Validar suporte a cliente ativo após 8 respostas e responder a pergunta pendente
