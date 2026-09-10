@@ -418,7 +418,10 @@ Deno.serve(async (req) => {
           remoteStatus: String(
             ((r.data as Record<string, any>)?.subscription || r.data || {})?.status || "",
           ).toUpperCase() || null,
-          raw: r.ok ? null : String(r.raw || "").slice(0, 200),
+          campos: r.ok && r.data
+            ? Object.keys(((r.data as Record<string, any>)?.subscription || r.data) as Record<string, any>)
+            : null,
+          raw: String(r.raw || "").slice(0, 400),
         });
       }
       if (!r.ok || !r.data) continue;
