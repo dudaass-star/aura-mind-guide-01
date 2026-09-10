@@ -136,7 +136,7 @@ export default function PaymentDunningPanel() {
 
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Pessoa</TableHead><TableHead>Origem</TableHead><TableHead>Canal</TableHead><TableHead>Degrau</TableHead><TableHead>Situação</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Pessoa</TableHead><TableHead>Origem</TableHead><TableHead>Canal</TableHead><TableHead>Degrau</TableHead><TableHead>Situação</TableHead><TableHead>Conversa</TableHead></TableRow></TableHeader>
             <TableBody>
               {rows.slice(0, 100).map((row) => {
                 const phone = row.phone_resolved || row.phone_raw;
@@ -148,9 +148,14 @@ export default function PaymentDunningPanel() {
                   <TableCell className="text-xs">{row.channel === "email" ? "E-mail" : "WhatsApp"}</TableCell>
                   <TableCell className="text-xs">{OFFER_LABELS[row.offer_tier || ""] || (row.attempt_number ? `${row.attempt_number}º aviso` : "Aviso")}</TableCell>
                   <TableCell className="text-xs"><StatusBadge row={row} />{row.offer_accepted && <Badge variant="outline" className="ml-1 text-[10px]">Aceita</Badge>}{row.error_message && <p className="mt-1 max-w-[220px] truncate text-[10px] text-muted-foreground" title={row.error_message}>{row.error_message}</p>}</TableCell>
+                  <TableCell className="text-xs">
+                    {row.profile_user_id
+                      ? <Button asChild variant="outline" size="sm" className="h-7 gap-1 px-2 text-[11px]"><Link to={`/admin/mensagens?user=${row.profile_user_id}`}><MessageSquare className="h-3 w-3" />Abrir</Link></Button>
+                      : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
                 </TableRow>;
               })}
-              {!loading && rows.length === 0 && <TableRow><TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">Nenhum disparo no período.</TableCell></TableRow>}
+              {!loading && rows.length === 0 && <TableRow><TableCell colSpan={7} className="py-6 text-center text-sm text-muted-foreground">Nenhum disparo no período.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
