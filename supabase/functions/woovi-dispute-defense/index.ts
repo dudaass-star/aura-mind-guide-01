@@ -416,6 +416,21 @@ Deno.serve(async (req) => {
     const force = body.force === true;
     const dryRun = body.dryRun === true;
 
+    // Diagnóstico de permissões da chave Woovi: sem escopo não há defesa.
+    if (body.probe === true) {
+      const list = await wooviFetch("/api/v1/dispute");
+      const up = await uploadToWoovi(buildPdf([{ text: "teste de permissao" }]), `probe-${Date.now()}`);
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          dispute_get_list: { status: list.status, raw: list.raw.slice(0, 200) },
+          file_upload: up,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+
     // Sem disputa específica: varre a Woovi antes, para pegar o que não veio por
     // webhook. Com disputa específica o webhook já gravou.
     let sync: unknown = null;
