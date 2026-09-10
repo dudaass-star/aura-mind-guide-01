@@ -396,7 +396,14 @@ Deno.serve(async (req) => {
       .is("replaced_by_subscription_id", null)
       .not("subscription_id", "is", null);
     if (onlyMandatos) liveQuery = liveQuery.is("mandate_approved_at", null);
-    const { data: liveSubs } = await liveQuery.limit(300);
+    const { data: liveSubs, error: liveErr } = await liveQuery.limit(300);
+    if (onlyMandatos) {
+      report.reautorizacao.push({
+        diagnostico: "varredura mandatos",
+        encontrados: liveSubs?.length ?? 0,
+        erro: liveErr ? String(liveErr.message || liveErr) : null,
+      });
+    }
 
     for (const sub of (onlyExtrato ? [] : liveSubs) || []) {
       const r = await wooviFetch<Record<string, any>>(
