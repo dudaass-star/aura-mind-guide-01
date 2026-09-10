@@ -23,3 +23,4 @@
 - [Parcela vencida correta (Woovi)](mem://features/payments/woovi-parcela-vencida-correta) — Cobrar sempre a parcela vencida mais antiga; teto de 11 dias na reconferência; painel diário de débito mensal
 
 - [Semântica do painel de recuperação](mem://features/admin/recovery-panel-semantics) — recovery_sent é flag de bloqueio PIX; datas de estágio também gravadas em pulos; enviado só com attempt *_sent
+- [Defesa automática de disputa Woovi](mem://features/payments/woovi-disputa-defesa-automatica) — Escopos liberados; evidência só no formato { documents: [...] }; defende com consentimento + uso; REJECTED = ganhamos
