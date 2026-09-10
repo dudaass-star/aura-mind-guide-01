@@ -24,3 +24,5 @@
 
 - [Semântica do painel de recuperação](mem://features/admin/recovery-panel-semantics) — recovery_sent é flag de bloqueio PIX; datas de estágio também gravadas em pulos; enviado só com attempt *_sent
 - [Defesa automática de disputa Woovi](mem://features/payments/woovi-disputa-defesa-automatica) — Escopos liberados; evidência só no formato { documents: [...] }; defende com consentimento + uso; REJECTED = ganhamos
+
+- [Pedido de sessão avulsa reconhecido](mem://features/recovery/pedido-de-sessao-avulsa-reconhecido) — "pix normal / só 6,90 / pagar só hoje / testar antes" gera o encontro de R$ 6,90 na hora; guarda contra chamar isso de semana/plano; KB separa os dois 6,90
