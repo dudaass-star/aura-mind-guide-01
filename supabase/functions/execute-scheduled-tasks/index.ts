@@ -830,12 +830,40 @@ Deno.serve(async (req) => {
 
             const { data: sub } = await supabase
               .from('woovi_subscriptions')
-              .select('id, user_id, subscription_id, status, value_cents')
+              .select('id, user_id, subscription_id, status, value_cents, mandate_approved_at')
               .eq('subscription_id', subscriptionId)
               .maybeSingle();
             if (!sub) break;
 
             const mandateAlive = MANDATE_ACTIVE_STATUSES.includes(String(sub.status || '').toUpperCase());
+
+            // Mandato sem aprovação real na Woovi: nenhuma cobrança vai sair
+            // (a criação da CobR bate em 400). Em vez de tentar à toa, suspende
+            // a régua de débito e abre a conversa de recuperação — deduplicada
+            // para não repetir a oferta a cada tarefa.
+            if (mandateAlive && !sub.mandate_approved_at) {
+              await supabase.from('woovi_subscriptions')
+                .update({ last_error: 'mandato sem aprovação — débito suspenso até reautorização' })
+                .eq('subscription_id', subscriptionId);
+              const { data: offerPendente } = await supabase
+                .from('scheduled_tasks')
+                .select('id')
+                .in('task_type', ['woovi_recovery_offer', 'woovi_recovery_final'])
+                .eq('status', 'pending')
+                .contains('payload', { subscription_id: subscriptionId })
+                .limit(1);
+              if (!offerPendente?.length) {
+                await supabase.from('scheduled_tasks').insert({
+                  user_id: task.user_id,
+                  task_type: 'woovi_recovery_offer',
+                  execute_at: new Date(Date.now() + 60 * 1000).toISOString(),
+                  status: 'pending',
+                  payload: { ...payload, offer_step: 1, source: 'mandate_not_approved' },
+                });
+              }
+              console.warn(`⚠️ woovi ${subscriptionId}: mandato sem aprovação — régua de débito suspensa, oferta aberta`);
+              break;
+            }
             const isPreventiveGuard = ['pre_due_guard', 'missing_cycle_recovery']
               .includes(String(payload.source || ''));
             if (mandateAlive && !isPreventiveGuard && !(await findUnpaidInstallment(subscriptionId))) {
