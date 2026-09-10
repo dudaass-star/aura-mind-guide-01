@@ -430,6 +430,23 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Dossiê sob demanda (para conferência ou anexo manual enquanto a chave
+    // Woovi não tem escopo): devolve o PDF em base64, sem enviar nada.
+    if (body.endToEndId && body.previewOnly === true) {
+      const dossier = await buildDossier(supabase, {
+        end_to_end_id: String(body.endToEndId),
+        value_cents: body.valueCents ?? null,
+        dispute_id: "preview",
+      });
+      const pdf = buildPdf(dossier.lines);
+      let bin = "";
+      for (const b of pdf) bin += String.fromCharCode(b);
+      return new Response(
+        JSON.stringify({ ok: true, decision: dossier.decision, reason: dossier.reason, summary: dossier.summary, pdf_base64: btoa(bin) }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
 
     // Sem disputa específica: varre a Woovi antes, para pegar o que não veio por
     // webhook. Com disputa específica o webhook já gravou.
