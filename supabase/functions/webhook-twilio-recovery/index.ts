@@ -95,6 +95,7 @@ Deno.serve(async (req) => {
             .from("dunning_attempts")
             .update({
               whatsapp_sent: false,
+               delivery_status: messageStatus,
               error_stage: "twilio_delivery_failed",
               error_message: `${messageStatus} (ErrorCode ${errorCode})`,
             })
@@ -190,7 +191,7 @@ Deno.serve(async (req) => {
       } else if (messageStatus === "delivered" || messageStatus === "read") {
         await supabaseCb
           .from("dunning_attempts")
-          .update({ whatsapp_sent: true, error_stage: null, error_message: null })
+          .update({ delivery_status: messageStatus, whatsapp_sent: true, error_stage: null, error_message: null })
           .eq("message_sid", messageSid);
       }
       return new Response("", { status: 200, headers: { ...corsHeaders, "Content-Type": "text/plain" } });

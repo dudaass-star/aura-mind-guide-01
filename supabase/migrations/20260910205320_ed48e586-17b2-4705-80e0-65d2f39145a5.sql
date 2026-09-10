@@ -1,0 +1,1 @@
+COMMENT ON TABLE public.dunning_attempts IS 'Histórico administrativo dos contatos da régua de cobrança';

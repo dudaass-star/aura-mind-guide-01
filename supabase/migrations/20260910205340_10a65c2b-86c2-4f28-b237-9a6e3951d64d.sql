@@ -1,0 +1,1 @@
+COMMENT ON COLUMN public.dunning_attempts.delivery_status IS 'Último retorno de entrega do provedor de WhatsApp';

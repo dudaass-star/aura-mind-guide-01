@@ -9,6 +9,7 @@ import CheckoutFunnelPanel from '@/components/admin/CheckoutFunnelPanel';
 import LandingEngagementPanel from '@/components/admin/LandingEngagementPanel';
 import PixAutomaticoDiaPanel from '@/components/admin/PixAutomaticoDiaPanel';
 import DisputasPixPanel from '@/components/admin/DisputasPixPanel';
+import PaymentDunningPanel from '@/components/admin/PaymentDunningPanel';
 
 import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard, Mail, ChevronDown, MessageCircle, Heart } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -293,21 +294,6 @@ const skipLabel = (raw: string | null | undefined): string => {
   return SKIP_LABELS[reason] || (reason ? `Pulado: ${reason}` : 'Pulado');
 };
 
-interface DunningAttempt {
-  id: string;
-  event_id: string;
-  customer_id: string;
-  invoice_id: string | null;
-  phone_raw: string | null;
-  phone_resolved: string | null;
-  profile_found: boolean;
-  link_generated: boolean;
-  whatsapp_sent: boolean;
-  error_stage: string | null;
-  error_message: string | null;
-  created_at: string;
-}
-
 interface ChurnDiagnosis {
   windowDays: number;
   totalCanceledInWindow: number;
@@ -348,11 +334,8 @@ export default function AdminEngagement() {
   const [recoveryStats, setRecoveryStats] = useState<{ emailsSent: number; emailPeople: number; emailSkipped: number; emailFailed: number }>({ emailsSent: 0, emailPeople: 0, emailSkipped: 0, emailFailed: 0 });
   const [whatsappStats, setWhatsappStats] = useState<{ stage1: number; stage2: number; errors: number; skipped: number; unique: number; converted: number }>({ stage1: 0, stage2: 0, errors: 0, skipped: 0, unique: 0, converted: 0 });
   const [resultStats, setResultStats] = useState<{ recovered: number; byEmail: number; byWhatsapp: number; organic: number; notReturned: number }>({ recovered: 0, byEmail: 0, byWhatsapp: 0, organic: 0, notReturned: 0 });
-  const [dunningAttempts, setDunningAttempts] = useState<DunningAttempt[]>([]);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
-  const [dunningOpen, setDunningOpen] = useState(false);
   const [showAllRecovery, setShowAllRecovery] = useState(false);
-  const [showAllDunning, setShowAllDunning] = useState(false);
   const [retentionStats, setRetentionStats] = useState<{
     offered: number;
     accepted: number;
@@ -688,25 +671,9 @@ export default function AdminEngagement() {
   };
 
 
-  const fetchDunningAttempts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('dunning_attempts')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      setDunningAttempts((data || []) as unknown as DunningAttempt[]);
-    } catch (err) {
-      console.error('Error fetching dunning attempts:', err);
-    }
-  };
-
   useEffect(() => {
     if (isAdmin) {
       fetchRecoverySessions();
-      fetchDunningAttempts();
     }
   }, [isAdmin]);
 
@@ -1744,6 +1711,8 @@ export default function AdminEngagement() {
           <TabsContent value="trial" className="mt-3 space-y-4">
             <PixAutomaticoDiaPanel />
 
+            <PaymentDunningPanel />
+
             <DisputasPixPanel />
 
             <CheckoutFunnelPanel />
@@ -2186,93 +2155,7 @@ export default function AdminEngagement() {
                   </Collapsible>
                 )}
 
-                {/* 7. Tentativas de Dunning (colapsável) */}
-                <Collapsible open={dunningOpen} onOpenChange={setDunningOpen}>
-                  <Card>
-                    <CollapsibleTrigger asChild>
-                      <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-base font-semibold flex items-center gap-2">
-                            <CreditCard className="h-4 w-4" />
-                            Tentativas de Dunning (Pagamento Falhou)
-                          </CardTitle>
-                          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${dunningOpen ? 'rotate-180' : ''}`} />
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {dunningAttempts.length} tentativas registradas — {dunningAttempts.filter(d => d.whatsapp_sent).length} emails enviados, {dunningAttempts.filter(d => !d.profile_found).length} sem perfil
-                        </p>
-                      </CardHeader>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <CardContent>
-                        {dunningAttempts.length === 0 ? (
-                          <p className="text-sm text-muted-foreground text-center py-4">Nenhuma tentativa de dunning registrada ainda.</p>
-                        ) : (
-                          <>
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Data</TableHead>
-                                  <TableHead>Telefone</TableHead>
-                                  <TableHead>Perfil</TableHead>
-                                  <TableHead>Link</TableHead>
-                                  <TableHead>Email</TableHead>
-                                  <TableHead>Erro</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {(showAllDunning ? dunningAttempts : dunningAttempts.slice(0, 5)).map((d) => {
-                                  const maskedPhone = d.phone_resolved ? `${d.phone_resolved.substring(0, 6)}***` : d.phone_raw ? `${d.phone_raw.substring(0, 6)}***` : '—';
-                                  return (
-                                    <TableRow key={d.id}>
-                                      <TableCell className="text-xs">{format(new Date(d.created_at), 'dd/MM HH:mm')}</TableCell>
-                                      <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
-                                      <TableCell>
-                                        {d.profile_found ? (
-                                          <Badge className="bg-green-600 text-white text-xs">Sim</Badge>
-                                        ) : (
-                                          <Badge variant="destructive" className="text-xs">Não</Badge>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        {d.link_generated ? (
-                                          <Badge className="bg-green-600 text-white text-xs">✓</Badge>
-                                        ) : (
-                                          <Badge variant="secondary" className="text-xs">—</Badge>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        {d.whatsapp_sent ? (
-                                          <Badge className="bg-green-600 text-white text-xs"><Mail className="h-3 w-3 mr-1" />Enviado</Badge>
-                                        ) : (
-                                          <Badge variant="secondary" className="text-xs">Não</Badge>
-                                        )}
-                                      </TableCell>
-                                      <TableCell className="text-xs max-w-[200px] truncate" title={d.error_message || ''}>
-                                        {d.error_stage ? (
-                                          <span className="text-destructive">{d.error_stage}</span>
-                                        ) : (
-                                          <span className="text-muted-foreground">—</span>
-                                        )}
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
-                            {dunningAttempts.length > 5 && (
-                              <Button variant="ghost" size="sm" className="w-full mt-2 text-xs" onClick={() => setShowAllDunning(!showAllDunning)}>
-                                {showAllDunning ? 'Mostrar menos' : `Ver todos (${dunningAttempts.length})`}
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </CardContent>
-                    </CollapsibleContent>
-                  </Card>
-                </Collapsible>
-
-                {/* 8. Botão Reativar */}
+                {/* 7. Botão Reativar */}
                 <Card>
                   <CardContent className="flex items-center justify-between py-4">
                     <div>
