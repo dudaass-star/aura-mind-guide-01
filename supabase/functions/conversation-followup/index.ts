@@ -196,7 +196,7 @@ ${tone}
 IMPORTANTE: Se o campo CUIDADO do contexto indicar situação muito sensível (crise, ideação suicida, luto recente, trauma) ou que o usuário precisa de espaço, retorne exatamente a palavra SKIP (sem aspas, sem mais nada).
 
 Caso contrário, gere UMA mensagem curta (1-2 frases, máximo 100 caracteres) que:
-- Faça referência ESPECÍFICA ao tema (ex: se o tema era "filha Bella", pergunte sobre a Bella)
+- Faça referência ESPECÍFICA somente ao tema e aos nomes presentes no contexto individual recebido; sem nome confirmado, não use nome
 - Adapte o TOM da mensagem ao tom emocional indicado no contexto
 - NÃO seja genérica como "tudo bem?" ou "como você está?"
 - Use linguagem informal brasileira

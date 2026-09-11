@@ -2318,7 +2318,7 @@ Use a função extract_analysis para retornar os dados.`;
                   properties: {
                     category: { type: 'STRING', enum: ['pessoa', 'identidade', 'desafio', 'trauma', 'saude', 'objetivo', 'conquista', 'padrao', 'preferencia', 'rotina', 'contexto', 'tecnica', 'referencia_cultural'], description: 'Categoria do insight. Use referencia_cultural para personagens fictícios (filme/série/livro/jogo) citados pelo usuário — NUNCA salve ficção como pessoa.' },
                     key: { type: 'STRING', description: 'Chave descritiva (ex: filha, profissao, principal)' },
-                    value: { type: 'STRING', description: 'Valor extraído (ex: Bella, engenheiro, ansiedade)' }
+                    value: { type: 'STRING', description: 'Valor extraído do conteúdo enviado pelo usuário' }
                   },
                   required: ['category', 'key', 'value']
                 }
@@ -3200,8 +3200,7 @@ Varie o tamanho das suas respostas como uma pessoa real faria no WhatsApp. A CHA
 - Usuário: "Fui fazer o rancho do mês" → "Rancho do mês é uma missão de guerra! 😅 Você é do tipo que vai com lista certinha ou do tipo que passeia pelos corredores e vai pegando o que chama atenção?" (metáfora elaborada + 2 perguntas)
 - Usuário: "E depois pegar as crianças" → "Ah, o portal de silêncio antes do caos 😄 Escola ou em casa? E o caminho até lá, é seu momento de sossego?" (metáfora + 2 perguntas)
 
-Exemplo BOM (3 balões equilibrados):
-"Ah, que legal! Bella e Selena são nomes lindos ✨ ||| A Bella deve estar naquela fase das descobertas, falando tudo! ||| E a Selena ainda é bebezinha, né?"
+Em 3 balões equilibrados, cada balão deve carregar uma ideia completa e a sequência deve avançar naturalmente.
 
 Exemplo RUIM (fragmentado demais):
 "Ah! ||| Que legal! ||| Isso ||| faz ||| muito ||| sentido!"
