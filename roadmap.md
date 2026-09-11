@@ -9,3 +9,5 @@
 Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separado da recuperação de checkout e retorno real de entrega ativado.
 - [x] Remover silêncio do recovery-agent ao atingir limite, preservando pausas explícitas
 - [x] Validar suporte a cliente ativo após 8 respostas e responder a pergunta pendente
+- [x] Remover cirurgicamente dados pessoais reais das três orientações globais contaminadas
+- [x] Limpar somente a memória incorreta de Ana e validar o isolamento entre usuários
