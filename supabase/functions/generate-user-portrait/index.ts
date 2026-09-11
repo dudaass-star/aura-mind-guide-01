@@ -45,7 +45,7 @@ REGRAS DUROS:
 - Cada item de o_que_te_move/padroes/preferencias deve ser UMA FRASE inteira humana, sem rótulo-chave artificial
 - Máx 4 itens por seção. Menos é mais.
 - Se não tem sinal pra uma seção, devolve array vazio. Não invente.
-- "intro": 1 frase curta (até 140 char) sintetizando quem é a pessoa hoje. Ex: "Eduardo, pai da Bella e da Selena, em transição de hábitos e procurando mais liberdade no dia a dia."
+- "intro": 1 frase curta (até 140 char) sintetizando quem é a pessoa hoje, usando somente fatos presentes nos dados recebidos.
 - "pessoas": SÓ relações humanas reais da vida do usuário (família, parceira, filhos, amigos, colegas, terapeuta humano).
   * NUNCA inclua: "Aura", "aura", "mentor" (referência à própria IA), "terapeuta" (quando se referir à Aura), "coach", "assistente", "IA", "bot".
   * A "nota" deve ser um TRAÇO RELACIONAL ESTÁVEL (papel, dinâmica recorrente, característica duradoura). Ex bom: "parceira de longa data, com quem ele evita falar de planos". Ex RUIM: "ficou brava com o débito automático" (evento isolado, fofoca de um dia).
@@ -57,7 +57,7 @@ REGRAS DUROS:
 SCHEMA (retorne SÓ JSON válido):
 {
   "intro": "string",
-  "pessoas": [{"label":"Filhas","names":["Bella","Selena"],"nota":"(opcional)"}],
+  "pessoas": [{"label":"string","names":["string"],"nota":"string opcional"}],
   "o_que_te_move": ["frase 1", "frase 2"],
   "padroes": ["frase 1"],
   "preferencias": ["frase 1"],
