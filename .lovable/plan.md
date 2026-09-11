@@ -5,53 +5,62 @@ Impedir que exemplos internos, respostas da própria Aura ou qualquer dado não 
 
 ## Ajustes
 
-### 1. Remover exatamente os dados reais das orientações compartilhadas
+### 1. Remover exemplos de falas prontas e dados reais das orientações compartilhadas
 
-Foram confirmados três pontos. As mudanças serão limitadas a eles e a eventuais ocorrências equivalentes encontradas na varredura final.
+Esses exemplos **não estão em sessões de usuários**. Estão em três orientações globais executadas para qualquer pessoa:
 
-#### 1.1 Conversa principal da Aura
-Hoje existe um exemplo global de resposta considerada boa:
+#### 1.1 Agente principal da Aura — texto global de comportamento
+Local confirmado: bloco global da Aura, seção **“Ritmo natural de conversa (fora de sessão)”**, dentro do subtítulo **“Exemplo bom (3 balões equilibrados)”**.
+
+Sai integralmente, sem substituição por outra frase:
 
 > “Ah, que legal! Bella e Selena são nomes lindos ✨ | A Bella deve estar naquela fase das descobertas, falando tudo! | E a Selena ainda é bebezinha, né?”
 
-Esse texto sai integralmente. Ele será substituído por um exemplo sem nome, idade ou característica pessoal:
+A regra será mantida apenas como princípio abstrato: variar naturalmente a quantidade de mensagens, manter cada mensagem completa e não fragmentar frases. Nenhuma fala pronta substituirá o exemplo.
 
-> “Ah, que legal! Que fase gostosa de acompanhar ✨ | Deve ter muita descoberta acontecendo por aí, né?”
+Além desse trecho, o mesmo texto global contém diversas outras falas-modelo nas seções:
+- reação proporcional e acolhimento;
+- limites para assuntos profissionais;
+- personalidade e calor humano;
+- linguagem brasileira e conectivos;
+- ritmo curto e direto;
+- segurança e emergência;
+- fases de presença, sentido e movimento;
+- direção e fechamento;
+- abertura, exploração e encerramento de sessões;
+- memória de longo prazo.
 
-O objetivo de ensinar ritmo e divisão em mensagens continua igual; somente os dados pessoais e as suposições sobre crianças são removidos.
+Essas falas literais também serão removidas. Cada uma será convertida somente na intenção que precisa orientar a Aura, sem fornecer uma frase para copiar. Exemplos de mensagens do **usuário** podem permanecer apenas quando necessários para reconhecer uma intenção; exemplos de respostas da **Aura** sairão.
 
 #### 1.2 Geração do retrato pessoal
-Hoje há dois exemplos com dados do Eduardo:
+Local confirmado: orientação global da função que monta o retrato exibido no portal.
+
+Saem integralmente:
 
 > `Eduardo, pai da Bella e da Selena, em transição de hábitos e procurando mais liberdade no dia a dia.`
 
-Será substituído por:
-
-> `Pessoa dedicada à família, em transição de hábitos e buscando mais liberdade no dia a dia.`
-
-E o exemplo estrutural:
-
 > `"pessoas": [{"label":"Filhas","names":["Bella","Selena"],"nota":"(opcional)"}]`
 
-Será substituído por um exemplo sem conteúdo pessoal reutilizável:
-
-> `"pessoas": [{"label":"Relação confirmada","names":[],"nota":"descrição baseada somente nos dados fornecidos"}]`
-
-O formato do retrato permanece; apenas os valores de cliente usados como demonstração deixam de existir.
+Não haverá frase substituta. A primeira vira apenas uma regra de estrutura e limite de tamanho. No esquema técnico, os valores serão descritos pelos tipos esperados, sem nomes ou relações preenchidas.
 
 #### 1.3 Acompanhamento automático
-Hoje a orientação contém:
+Local confirmado: orientação global que gera a mensagem enviada após uma conversa interrompida.
+
+Sai integralmente:
 
 > `se o tema era "filha Bella", pergunte sobre a Bella`
 
-Será substituída por:
+Fica apenas a regra: usar exclusivamente o tema e os nomes que estiverem no contexto individual recebido; sem nome confirmado, não usar nome.
 
-> `faça referência somente ao tema e aos nomes presentes no contexto individual recebido; se nenhum nome estiver presente, não use nome`
+#### 1.4 O que permanece
+- Exemplos de entrada do usuário usados somente para reconhecer intenção, risco ou comando.
+- Formatos técnicos obrigatórios, como tags de agendamento, pois não são frases para a Aura repetir livremente.
+- Regras de método, personalidade, segurança, ritmo e funcionamento, reescritas sem respostas prontas.
 
-#### 1.4 Varredura final
-- Procurar outros nomes ou fatos reais usados como exemplos nas orientações compartilhadas das funções de conversa.
-- Para cada ocorrência, remover o dado real e manter apenas a finalidade comportamental do exemplo.
-- Não alterar regras de personalidade, metodologia, ritmo ou funcionamento que não contenham dados pessoais.
+#### 1.5 Varredura final
+- Auditar todas as orientações compartilhadas das funções que conversam com usuários.
+- Remover qualquer dado real de cliente e qualquer fala pronta atribuída à Aura.
+- Preservar somente regras comportamentais, exemplos de entrada indispensáveis e contratos técnicos.
 
 ### 2. Impedir que a Aura grave a própria invenção como memória
 - Para informações da categoria “pessoa”, aceitar nomes somente quando estiverem presentes em fala do usuário.
