@@ -2318,7 +2318,7 @@ Use a função extract_analysis para retornar os dados.`;
                   properties: {
                     category: { type: 'STRING', enum: ['pessoa', 'identidade', 'desafio', 'trauma', 'saude', 'objetivo', 'conquista', 'padrao', 'preferencia', 'rotina', 'contexto', 'tecnica', 'referencia_cultural'], description: 'Categoria do insight. Use referencia_cultural para personagens fictícios (filme/série/livro/jogo) citados pelo usuário — NUNCA salve ficção como pessoa.' },
                     key: { type: 'STRING', description: 'Chave descritiva (ex: filha, profissao, principal)' },
-                    value: { type: 'STRING', description: 'Valor extraído (ex: Bella, engenheiro, ansiedade)' }
+                    value: { type: 'STRING', description: 'Valor extraído do conteúdo enviado pelo usuário' }
                   },
                   required: ['category', 'key', 'value']
                 }
