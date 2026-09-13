@@ -37,6 +37,7 @@ Explicar por que algumas parcelas aparecem como `PAID/CONCLUDED` na área de ass
 
 1. Confirmar o recibo oficial dos seis casos restantes e montar uma relação única dos nove `endToEndId`, datas, valores e assinaturas.
 2. Consultar o histórico completo de entradas, saques, transferências, estornos e devoluções no mesmo período para excluir movimentação automática do saldo.
+   - Incluir bloqueios, devoluções e disputas MED: um Pix pode ter recibo válido e depois ter o valor bloqueado ou devolvido.
 3. Conferir se todos os recibos e assinaturas pertencem exatamente à mesma conta Woovi consultada no saldo e no extrato.
 4. Abrir um chamado financeiro urgente na Woovi com os nove comprovantes, pedindo a localização contábil de cada `endToEndId` e o crédito dos valores ausentes.
 5. Exigir da Woovi, para cada caso, uma resposta objetiva: conta creditada, data do crédito, lançamento no extrato, eventual retirada/devolução ou motivo da retenção.
