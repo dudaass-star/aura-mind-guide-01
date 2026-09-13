@@ -4,10 +4,10 @@
 
 - As cobranças **estão sendo criadas na Woovi**. O problema não é uma desativação geral do PIX Automático nem falta de autorização dos clientes analisados.
 - Nos dados locais, as coortes de entrada de R$ 6,90 estão assim:
-  - **04/09:** 14 entradas e 10 mandatos válidos. Dos 5 que apareciam sem mensalidade no controle local, **2 já foram pagos na Woovi** (Iara e Ingrid), **2 têm nova tentativa solicitada** (Andreia e Francisco) e **1 teve falta de saldo confirmada** (Rosih). Portanto, não faltam cinco recebimentos: faltam reconhecer dois pagamentos e acompanhar três não pagos.
-  - **05/09:** 11 entradas e 9 mandatos válidos. Dos 9 que apareciam sem mensalidade localmente, **7 já foram pagos na Woovi** (Erica, Juliana, Kelli, Lara, Monica, Nilzete e Renata) e **2 têm nova tentativa solicitada** (Daiane e Keli). Portanto, a Woovi recebeu sete; nossa base não os consolidou.
+  - **04/09:** 14 entradas e 10 mandatos válidos. Dos 5 que apareciam sem mensalidade no controle local, **2 parcelas estão marcadas como pagas na área de assinaturas da Woovi, mas não aparecem no extrato financeiro** (Iara e Ingrid), **2 têm nova tentativa solicitada** (Andreia e Francisco) e **1 teve falta de saldo confirmada** (Rosih).
+  - **05/09:** 11 entradas e 9 mandatos válidos. Dos 9 que apareciam sem mensalidade localmente, **7 parcelas estão marcadas como pagas na área de assinaturas da Woovi, mas não aparecem no extrato financeiro** (Erica, Juliana, Kelli, Lara, Monica, Nilzete e Renata) e **2 têm nova tentativa solicitada** (Daiane e Keli).
   - **06/09:** 5 entradas, 4 mandatos válidos, 2 mensalidades reconhecidas e 3 ainda em acompanhamento.
-- A consulta direta à Woovi comprovou que **9 pagamentos de R$ 29,90 das coortes de 04/09 e 05/09 foram efetivamente liquidados, mas não reconhecidos localmente**. Isso explica por que o painel interno indicava ausência mesmo havendo recebimento na Woovi.
+- Há uma divergência dentro da própria Woovi: as nove parcelas têm `PAID/CONCLUDED`, data de pagamento e identificador bancário na API de assinaturas, mas o extrato financeiro da mesma API retorna apenas quatro mensalidades de R$ 29,90 nos últimos 12 dias. Portanto, **ainda não é seguro considerar as nove como dinheiro recebido**. É preciso conciliar cada identificador bancário com uma transação financeira antes de reconhecer receita ou liberar acesso.
 - Entre os realmente não pagos, há dois estados comprovados:
   - **Rosih:** tentativa rejeitada por `EXPR`, que na documentação da Woovi significa falta de saldo na conta do pagador;
   - **Andreia, Francisco, Daiane e Keli:** nova tentativa `REQUESTED`, já encaminhada ao banco para execução na janela seguinte.
@@ -22,7 +22,8 @@
 
 2. **Usar a assinatura e suas parcelas como fonte principal**
    - Para cada mandato vencido, consultar a lista real de parcelas da assinatura.
-   - Registrar imediatamente parcelas `COMPLETED/CONCLUDED/PAID`, mesmo quando o webhook não chegou.
+   - Usar `COMPLETED/CONCLUDED/PAID` como sinal operacional de que o banco concluiu a tentativa, mas só reconhecer financeiramente após localizar o mesmo identificador bancário no extrato ou receber confirmação inequívoca da Woovi.
+   - Colocar parcelas pagas sem transação correspondente em estado explícito de `divergência Woovi`, sem nova cobrança e sem contabilizá-las como receita.
    - Atualizar o próximo vencimento e encerrar tarefas de recuperação quando o pagamento já estiver confirmado.
 
 3. **Classificar corretamente cada cliente**
@@ -40,7 +41,8 @@
 
 5. **Reconciliar as coortes afetadas**
    - Reprocessar 04/09, 05/09 e 06/09 após a correção.
-   - Importar os pagamentos já concluídos na Woovi.
+   - Conciliar os nove `PAID/CONCLUDED` com o extrato pelo `endToEndId`, valor e data; importar somente os que tiverem transação financeira correspondente.
+   - Gerar a relação objetiva dos casos ainda divergentes para cobrança técnica à Woovi, sem repetir débito no cliente.
    - Deixar em acompanhamento apenas quem realmente não pagou ou ainda aguarda resposta bancária.
 
 ## Validação final
