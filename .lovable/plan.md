@@ -4,13 +4,13 @@
 
 - As cobranças **estão sendo criadas na Woovi**. O problema não é uma desativação geral do PIX Automático nem falta de autorização dos clientes analisados.
 - Nos dados locais, as coortes de entrada de R$ 6,90 estão assim:
-  - **04/09:** 14 entradas, 10 mandatos válidos, 5 mensalidades reconhecidas localmente e 5 sem pagamento reconhecido.
-  - **05/09:** 11 entradas, 9 mandatos válidos e nenhuma mensalidade reconhecida localmente.
-  - **06/09:** 5 entradas, 4 mandatos válidos, 2 mensalidades reconhecidas e 3 ainda sem pagamento reconhecido.
-- A consulta direta à Woovi comprovou que parte do que aparece como “sem pagamento” internamente **já foi paga na Woovi**. Entre os casos inspecionados, Iara, Ingrid, Erica, Juliana, Kelli e Lara já apresentam parcela `COMPLETED/CONCLUDED` na Woovi, mas ainda não foram consolidadas corretamente na base local.
+  - **04/09:** 14 entradas e 10 mandatos válidos. Dos 5 que apareciam sem mensalidade no controle local, **2 já foram pagos na Woovi** (Iara e Ingrid), **2 têm nova tentativa solicitada** (Andreia e Francisco) e **1 teve falta de saldo confirmada** (Rosih). Portanto, não faltam cinco recebimentos: faltam reconhecer dois pagamentos e acompanhar três não pagos.
+  - **05/09:** 11 entradas e 9 mandatos válidos. Dos 9 que apareciam sem mensalidade localmente, **7 já foram pagos na Woovi** (Erica, Juliana, Kelli, Lara, Monica, Nilzete e Renata) e **2 têm nova tentativa solicitada** (Daiane e Keli). Portanto, a Woovi recebeu sete; nossa base não os consolidou.
+  - **06/09:** 5 entradas, 4 mandatos válidos, 2 mensalidades reconhecidas e 3 ainda em acompanhamento.
+- A consulta direta à Woovi comprovou que **9 pagamentos de R$ 29,90 das coortes de 04/09 e 05/09 foram efetivamente liquidados, mas não reconhecidos localmente**. Isso explica por que o painel interno indicava ausência mesmo havendo recebimento na Woovi.
 - Entre os realmente não pagos, há dois estados comprovados:
-  - tentativa rejeitada por `EXPR`, que na documentação da Woovi significa **falta de saldo na conta do pagador**;
-  - nova tentativa `REQUESTED`, já encaminhada ao banco para execução na janela seguinte.
+  - **Rosih:** tentativa rejeitada por `EXPR`, que na documentação da Woovi significa falta de saldo na conta do pagador;
+  - **Andreia, Francisco, Daiane e Keli:** nova tentativa `REQUESTED`, já encaminhada ao banco para execução na janela seguinte.
 - A causa técnica local também foi confirmada: a auditoria tenta consultar como cobrança real os registros internos de tentativa, cujo identificador possui sufixos como `:cycle_retry:` e `:next_cycle_cobr:`. A Woovi responde repetidamente **“Cobrança não encontrada”**. Isso desperdiça chamadas, causa demora/limite de taxa e impede que a reconciliação alcance todos os clientes dentro da execução.
 - Os agendamentos estão ativos: auditoria completa a cada 15 minutos e leitura do extrato a cada 10 minutos. O problema está na forma de reconciliar e classificar os resultados, não na ausência dessas rotinas.
 
@@ -45,7 +45,7 @@
 
 ## Validação final
 
-- Comparar, cliente por cliente, entrada, mandato, parcela, tentativa bancária, pagamento, próximo ciclo e acesso.
+- Comparar, cliente por cliente, entrada, mandato, parcela, tentativa bancária, pagamento, próximo ciclo e acesso, começando pelos 5 casos de 04/09 e 9 casos de 05/09 já classificados acima.
 - Confirmar que nenhuma parcela paga permanece como pendente.
 - Confirmar que nenhum cliente com tentativa em andamento recebe cobrança duplicada.
 - Confirmar que erros “Cobrança não encontrada” deixaram de ser gerados pelos IDs sintéticos.
