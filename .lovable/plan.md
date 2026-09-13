@@ -1,61 +1,33 @@
-# Correção do acompanhamento das mensalidades PIX Woovi
+# Investigação da divergência no extrato Woovi
 
-## Diagnóstico confirmado agora
+## Objetivo
 
-- As cobranças **estão sendo criadas na Woovi**. O problema não é uma desativação geral do PIX Automático nem falta de autorização dos clientes analisados.
-- Nos dados locais, as coortes de entrada de R$ 6,90 estão assim:
-  - **04/09:** 14 entradas e 10 mandatos válidos. Dos 5 que apareciam sem mensalidade no controle local, **2 parcelas estão marcadas como pagas na área de assinaturas da Woovi, mas não aparecem no extrato financeiro** (Iara e Ingrid), **2 têm nova tentativa solicitada** (Andreia e Francisco) e **1 teve falta de saldo confirmada** (Rosih).
-  - **05/09:** 11 entradas e 9 mandatos válidos. Dos 9 que apareciam sem mensalidade localmente, **7 parcelas estão marcadas como pagas na área de assinaturas da Woovi, mas não aparecem no extrato financeiro** (Erica, Juliana, Kelli, Lara, Monica, Nilzete e Renata) e **2 têm nova tentativa solicitada** (Daiane e Keli).
-  - **06/09:** 5 entradas, 4 mandatos válidos, 2 mensalidades reconhecidas e 3 ainda em acompanhamento.
-- Há uma divergência dentro da própria Woovi: as nove parcelas têm `PAID/CONCLUDED`, data de pagamento e identificador bancário na API de assinaturas, mas o extrato financeiro da mesma API retorna apenas quatro mensalidades de R$ 29,90 nos últimos 12 dias. Portanto, **ainda não é seguro considerar as nove como dinheiro recebido**. É preciso conciliar cada identificador bancário com uma transação financeira antes de reconhecer receita ou liberar acesso.
-- Entre os realmente não pagos, há dois estados comprovados:
-  - **Rosih:** tentativa rejeitada por `EXPR`, que na documentação da Woovi significa falta de saldo na conta do pagador;
-  - **Andreia, Francisco, Daiane e Keli:** nova tentativa `REQUESTED`, já encaminhada ao banco para execução na janela seguinte.
-- A causa técnica local também foi confirmada: a auditoria tenta consultar como cobrança real os registros internos de tentativa, cujo identificador possui sufixos como `:cycle_retry:` e `:next_cycle_cobr:`. A Woovi responde repetidamente **“Cobrança não encontrada”**. Isso desperdiça chamadas, causa demora/limite de taxa e impede que a reconciliação alcance todos os clientes dentro da execução.
-- Os agendamentos estão ativos: auditoria completa a cada 15 minutos e leitura do extrato a cada 10 minutos. O problema está na forma de reconciliar e classificar os resultados, não na ausência dessas rotinas.
+Explicar por que algumas parcelas aparecem como `PAID/CONCLUDED` na área de assinaturas da Woovi, mas seus valores não aparecem nas entradas do extrato. Nenhuma cobrança, mensagem ou alteração será executada.
 
-## O que será corrigido
+## Fatos já confirmados
 
-1. **Separar tentativa interna de cobrança real**
-   - A auditoria deixará de consultar na Woovi os registros `recovery_attempt` com identificador sintético.
-   - Somente IDs reais de parcela/cobrança serão enviados aos endpoints de consulta.
+- A consulta que indicou “pago” leu as parcelas de cada assinatura, não o extrato financeiro.
+- Nove parcelas de R$ 29,90 das coortes de 04/09 e 05/09 apresentam `PAID/CONCLUDED`, data de pagamento e `endToEndId` na área de assinaturas.
+- O extrato financeiro da Woovi retorna somente quatro entradas de R$ 29,90 nos últimos 12 dias; essas nove não foram localizadas ali.
+- A consulta individual dos identificadores dessas cobranças retorna “Cobrança não encontrada”.
+- A rota oficial de recibos da Woovi foi consultada com o `endToEndId` de três dessas parcelas e retornou, nos três casos, o comprovante Pix em PDF. Isso comprova que houve liquidação bancária; a ausência nas “Entradas” está no extrato/painel da Woovi, não no pagamento.
+- A consulta individual em `/charge/{identifierId}` não é válida para essas parcelas recorrentes: cobrança avulsa e parcela de assinatura são recursos diferentes na Woovi.
 
-2. **Usar a assinatura e suas parcelas como fonte principal**
-   - Para cada mandato vencido, consultar a lista real de parcelas da assinatura.
-   - Usar `COMPLETED/CONCLUDED/PAID` como sinal operacional de que o banco concluiu a tentativa, mas só reconhecer financeiramente após localizar o mesmo identificador bancário no extrato ou receber confirmação inequívoca da Woovi.
-   - Colocar parcelas pagas sem transação correspondente em estado explícito de `divergência Woovi`, sem nova cobrança e sem contabilizá-las como receita.
-   - Atualizar o próximo vencimento e encerrar tarefas de recuperação quando o pagamento já estiver confirmado.
+## Verificação somente leitura
 
-3. **Classificar corretamente cada cliente**
-   - `pago na Woovi e ainda não sincronizado`;
-   - `rejeitado por falta de saldo (EXPR)`;
-   - `rejeitado por outro código bancário`;
-   - `nova tentativa solicitada, aguardando banco`;
-   - `sem parcela ou cobrança real`;
-   - `Woovi indisponível/limite de taxa, aguardando nova leitura`.
+1. Confirmar os recibos oficiais dos seis casos restantes pelo `endToEndId`.
+2. Comparar os nove recibos com as entradas exibidas no painel e no endpoint de transações.
+3. Verificar qual identificador deve ser usado para localizar a transação: `endToEndId`, `identifierId`, `installmentId` ou `correlationID`.
+4. Conferir se o extrato possui filtro de período, paginação, fuso, tipo de transação ou atraso de disponibilização que esconda essas entradas.
+5. Separar cada um dos nove casos em:
+   - recibo confirmado e entrada visível;
+   - recibo confirmado, mas entrada ausente;
+   - pagamento estornado/devolvido.
+6. Entregar a causa comprovada e, se a divergência for da Woovi, a relação de identificadores e evidências para abertura de chamado técnico.
 
-4. **Preservar a régua sem duplicar débitos**
-   - Nunca criar nova cobrança quando a parcela já possui uma CobR ativa ou uma tentativa `REQUESTED`.
-   - Manter as novas tentativas permitidas pela Woovi e o teto de recuperação já definido, sem antecipar cobranças fora da janela permitida.
-   - Só iniciar comunicação de falha após um veredito real; não tratar atraso de sincronização como inadimplência.
+## Limites
 
-5. **Reconciliar as coortes afetadas**
-   - Reprocessar 04/09, 05/09 e 06/09 após a correção.
-   - Conciliar os nove `PAID/CONCLUDED` com o extrato pelo `endToEndId`, valor e data; importar somente os que tiverem transação financeira correspondente.
-   - Gerar a relação objetiva dos casos ainda divergentes para cobrança técnica à Woovi, sem repetir débito no cliente.
-   - Deixar em acompanhamento apenas quem realmente não pagou ou ainda aguarda resposta bancária.
-
-## Validação final
-
-- Comparar, cliente por cliente, entrada, mandato, parcela, tentativa bancária, pagamento, próximo ciclo e acesso, começando pelos 5 casos de 04/09 e 9 casos de 05/09 já classificados acima.
-- Confirmar que nenhuma parcela paga permanece como pendente.
-- Confirmar que nenhum cliente com tentativa em andamento recebe cobrança duplicada.
-- Confirmar que erros “Cobrança não encontrada” deixaram de ser gerados pelos IDs sintéticos.
-- Entregar o quadro final das três coortes com totais reais: pagos, falta de saldo, aguardando banco, outras recusas e pendências técnicas.
-
-## Arquivos envolvidos
-
-- `supabase/functions/woovi-pix-audit/index.ts`
-- `supabase/functions/execute-scheduled-tasks/index.ts`
-- `supabase/functions/_shared/woovi.ts`
-- Testes específicos do fluxo de cobrança e reconciliação Woovi
+- Não alterar o sistema.
+- Não disparar ou repetir cobranças.
+- Não enviar mensagens aos clientes.
+- Não contabilizar como receita qualquer parcela sem transação correspondente no extrato.
