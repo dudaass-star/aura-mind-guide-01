@@ -233,7 +233,9 @@ export async function handlePixButton(
   }
 
   try {
+    const internalKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const { data, error } = await supabase.functions.invoke("criar-pix-recorrente-woovi", {
+      headers: internalKey ? { "x-internal-recovery-key": internalKey } : undefined,
       body: {
         mode: "recovery_replace",
         plan,
@@ -265,7 +267,7 @@ export async function handlePixButton(
     console.error("[recovery-agent] falha ao gerar PIX novo:", (e as Error)?.message);
     return {
       handled: true,
-      body: "O banco recusou a geração agora — isso costuma ser instabilidade do PIX Automático e passa em minutos. Me responde aqui em uns 10 minutos que eu gero de novo pra você, ou entra em olaaura.com.br/v2/checkout que o código sai na tela.",
+      body: "Não consegui gerar o novo código agora. Já deixei registrado para tentarmos novamente, sem cancelar o código anterior antes da hora.",
       metadata: { pix_button: intent, resolution: "generation_failed" },
     };
   }

@@ -267,7 +267,8 @@ Deno.serve(async (req) => {
     const isRecoveryReplace = mode === "recovery_replace";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const authorization = req.headers.get("authorization") || "";
-    if (isRecoveryReplace && authorization !== `Bearer ${serviceRoleKey}`) {
+    const internalRecoveryKey = req.headers.get("x-internal-recovery-key") || "";
+    if (isRecoveryReplace && authorization !== `Bearer ${serviceRoleKey}` && internalRecoveryKey !== serviceRoleKey) {
       return json({ error: "Operação interna não autorizada" }, 403);
     }
     const reauthToken = body.token;
