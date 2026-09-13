@@ -20,9 +20,20 @@ import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-cli
 // deno-lint-ignore no-explicit-any
 type Supa = any;
 
-export type PixButtonIntent = "new_code" | "already_paid" | "conversational" | null;
+export type PixButtonIntent = "replace_code" | "resend_code" | "already_paid" | "conversational" | null;
 
-const RE_NEW_CODE = /(gerar novo c[oó]digo|tive um erro|c[oó]digo (n[aã]o|nao) funciona|expirou)/i;
+const RE_REPLACE_CODE = new RegExp([
+  "(ger(ar|a|e|ou|ando)|mand(ar|a|e)|envi(ar|a|e)|quero|preciso|pode)[^.!?\\n]{0,35}(novo|outro)[^.!?\\n]{0,20}(c[oó]digo|pix|qr)",
+  "(novo|outro)[^.!?\\n]{0,20}(c[oó]digo|pix|qr)",
+  "tive um erro|deu erro|dando erro|mensagem de erro",
+  "apresent(a|ou|ando)[^.!?\\n]{0,20}erro",
+  "erro (na chave|no c[oó]digo|no pix)",
+  "c[oó]digo (inv[aá]lido|incorreto|com erro|n[aã]o funciona)",
+  "banco (recusou|rejeitou)|n[aã]o (funcionou|aceitou)|expirou",
+].join("|"), "i");
+const RE_RESEND_CODE = /(n[aã]o (chegou|recebi|veio)|cad[eê]|manda de novo|reenvia(r)?)[^.!?\n]{0,35}(o |meu )?(c[oó]digo|pix|qr)|(c[oó]digo|pix|qr)[^.!?\n]{0,35}(n[aã]o (chegou|recebi|veio)|cad[eê])/i;
+const RE_SHORT_CODE_ACCEPT = /^\s*(sim|quero|pode|pode sim|por favor|manda|manda sim|gera|gera sim|ok|bora)\s*[.!]?\s*$/i;
+const RE_PREVIOUS_CODE_OFFER = /(quer|posso|vou|estou|j[aá])[^.!?\n]{0,50}(ger(ar|ando|e)|mand(ar|ando|e)|envi(ar|ando|e))[^.!?\n]{0,35}(novo|outro)?[^.!?\n]{0,15}(c[oó]digo|pix|qr)/i;
 const RE_ALREADY_PAID = /^\s*(j[aá] paguei|paguei|j[aá] pagou)\s*[.!]?\s*$/i;
 const RE_DOUBT = /(ficou uma d[uú]vida|tenho uma d[uú]vida|vou pagar agora)/i;
 
@@ -61,10 +72,12 @@ export function phoneMatchList(phone: string): string[] {
 }
 
 /** Classifica o texto do clique. `null` = não é clique de botão do trilho. */
-export function classifyPixButton(text: string): PixButtonIntent {
+export function classifyPixButton(text: string, recentOutbound = ""): PixButtonIntent {
   const t = (text || "").trim();
   if (!t) return null;
-  if (RE_NEW_CODE.test(t)) return "new_code";
+  if (RE_RESEND_CODE.test(t)) return "resend_code";
+  if (RE_REPLACE_CODE.test(t)) return "replace_code";
+  if (RE_SHORT_CODE_ACCEPT.test(t) && RE_PREVIOUS_CODE_OFFER.test(recentOutbound)) return "replace_code";
   if (RE_ALREADY_PAID.test(t)) return "already_paid";
   if (RE_DOUBT.test(t)) return "conversational";
   return null;
@@ -182,9 +195,10 @@ export async function handlePixButton(
     };
   }
 
-  // 2. Código novo. Trava de 1 por hora.
+  // 2. "Não chegou": reenvia o código que já existe. Erro no banco: nunca
+  // reaproveita o mesmo BR Code recusado; segue para substituição real abaixo.
   const recent = await recentCodeSent(supabase, phone);
-  if (recent) {
+  if (intent === "resend_code" && recent) {
     return {
       handled: true,
       body: `Esse é o código que te mandei agora, ainda válido — cola no PIX copia e cola do app do banco:\n\n${recent}\n\nSe der erro na hora de confirmar, me diz qual banco você está usando que eu te ajudo.`,
@@ -194,7 +208,7 @@ export async function handlePixButton(
 
   const sub = await findLatestSubscription(supabase, phone, email);
   const valid = qrStillValid(sub);
-  if (valid) {
+  if (intent === "resend_code" && valid) {
     return {
       handled: true,
       body: `Seu código continua valendo — é só colar no PIX copia e cola do app do banco:\n\n${valid}\n\nAssim que entrar, a Aura te chama no WhatsApp e a gente já marca seu primeiro encontro guiado pra hoje se você quiser.`,
@@ -202,7 +216,8 @@ export async function handlePixButton(
     };
   }
 
-  // 3. QR expirado: gera outro reusando os dados do cadastro anterior.
+  // 3. QR ausente/expirado ou recusado pelo banco: gera outro usando os dados
+  // do cadastro anterior. O gerador substitui a tentativa antiga de forma atômica.
   const plan = (checkout?.plan || sub?.plan || "") as string;
   const billing = (checkout?.billing || sub?.billing_period || "monthly") as string;
   const name = (checkout?.name || sub?.customer_name || "Cliente") as string;
@@ -220,13 +235,14 @@ export async function handlePixButton(
   try {
     const { data, error } = await supabase.functions.invoke("criar-pix-recorrente-woovi", {
       body: {
-        mode: "checkout",
+        mode: "recovery_replace",
         plan,
         billing,
         name,
         email: mail,
         phone,
         cpf,
+        previousSubscriptionId: sub?.subscription_id ? String(sub.subscription_id) : "",
         requestKey: `recovery_btn_${normalizeBrazilianPhone(phone)}_${Math.floor(Date.now() / 3600000)}`,
       },
     });
