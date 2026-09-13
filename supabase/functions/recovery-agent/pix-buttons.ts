@@ -22,7 +22,15 @@ type Supa = any;
 
 export type PixButtonIntent = "replace_code" | "resend_code" | "already_paid" | "conversational" | null;
 
-const RE_REPLACE_CODE = /(ger(ar|a|e|ou|ando)|mand(ar|a|e)|envi(ar|a|e)|quero|preciso|pode)[^.!?\n]{0,35}(novo|outro)[^.!?\n]{0,20}(c[oó]digo|pix|qr)|(novo|outro)[^.!?\n]{0,20}(c[oó]digo|pix|qr)|tive um erro|deu erro|dando erro|mensagem de erro|apresent(a|ou|ando)[^.!?\n]{0,20}erro|erro (na chave|no c[oó]digo|no pix)|c[oó]digo (inv[aá]lido|incorreto|com erro|n[aã]o funciona)|banco (recusou|rejeitou)|n[aã]o (funcionou|aceitou)|expirou)/i;
+const RE_REPLACE_CODE = new RegExp([
+  "(ger(ar|a|e|ou|ando)|mand(ar|a|e)|envi(ar|a|e)|quero|preciso|pode)[^.!?\\n]{0,35}(novo|outro)[^.!?\\n]{0,20}(c[oó]digo|pix|qr)",
+  "(novo|outro)[^.!?\\n]{0,20}(c[oó]digo|pix|qr)",
+  "tive um erro|deu erro|dando erro|mensagem de erro",
+  "apresent(a|ou|ando)[^.!?\\n]{0,20}erro",
+  "erro (na chave|no c[oó]digo|no pix)",
+  "c[oó]digo (inv[aá]lido|incorreto|com erro|n[aã]o funciona)",
+  "banco (recusou|rejeitou)|n[aã]o (funcionou|aceitou)|expirou",
+].join("|"), "i");
 const RE_RESEND_CODE = /(n[aã]o (chegou|recebi|veio)|cad[eê]|manda de novo|reenvia(r)?)[^.!?\n]{0,35}(o |meu )?(c[oó]digo|pix|qr)|(c[oó]digo|pix|qr)[^.!?\n]{0,35}(n[aã]o (chegou|recebi|veio)|cad[eê])/i;
 const RE_SHORT_CODE_ACCEPT = /^\s*(sim|quero|pode|pode sim|por favor|manda|manda sim|gera|gera sim|ok|bora)\s*[.!]?\s*$/i;
 const RE_PREVIOUS_CODE_OFFER = /(quer|posso|vou|estou|j[aá])[^.!?\n]{0,50}(ger(ar|ando|e)|mand(ar|ando|e)|envi(ar|ando|e))[^.!?\n]{0,35}(novo|outro)?[^.!?\n]{0,15}(c[oó]digo|pix|qr)/i;
