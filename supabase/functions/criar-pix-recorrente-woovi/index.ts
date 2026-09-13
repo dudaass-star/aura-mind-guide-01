@@ -264,6 +264,12 @@ Deno.serve(async (req) => {
     // o webhook recupera daqui para o Purchase não perder atribuição.
     void saveMetaIdentity(supabase, { email, phone, fbp, fbc, source: "criar-pix-recorrente-woovi" });
     const mode = body.mode || "checkout";
+    const isRecoveryReplace = mode === "recovery_replace";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const authorization = req.headers.get("authorization") || "";
+    if (isRecoveryReplace && authorization !== `Bearer ${serviceRoleKey}`) {
+      return json({ error: "Operação interna não autorizada" }, 403);
+    }
     const reauthToken = body.token;
     // `offer` é uma reautorização com valor de retenção (30% off ou Lite): o
     // cliente ganha um QR NOVO, então pode pagar de outra conta — a atual é
@@ -277,6 +283,40 @@ Deno.serve(async (req) => {
       : isReauth && reauthToken
         ? `${mode}:${reauthToken}:${offerTier ?? ""}`
         : null;
+
+    // ---- Substituição interna: código composto recusado pelo banco ------------
+    let recoveryPrevious: Record<string, any> | null = null;
+    if (isRecoveryReplace) {
+      const previousId = body.previousSubscriptionId;
+      if (!previousId) return json({ error: "Tentativa anterior ausente" }, 400);
+      const { data: previous } = await supabase
+        .from("woovi_subscriptions")
+        .select("*")
+        .eq("subscription_id", previousId)
+        .is("replaced_by_subscription_id", null)
+        .maybeSingle();
+      if (!previous || previous.creation_status !== "completed") {
+        return json({ error: "Tentativa anterior não encontrada" }, 404);
+      }
+      if (previous.entry_paid_at || previous.mandate_approved_at || previous.access_granted_at ||
+          MANDATE_ACTIVE_STATUSES.includes(String(previous.status))) {
+        return json({ blocked: true, code: "ALREADY_COMMITTED" }, 409);
+      }
+      const previousPhone = cleanDigits(String(previous.customer_phone || ""));
+      const requestedPhone = cleanDigits(phone || "");
+      const previousEmail = String(previous.customer_email || "").trim().toLowerCase();
+      const requestedEmail = String(email || "").trim().toLowerCase();
+      const sameContact = (previousPhone && requestedPhone && previousPhone.slice(-8) === requestedPhone.slice(-8)) ||
+        (previousEmail && requestedEmail && previousEmail === requestedEmail);
+      if (!sameContact) return json({ error: "Tentativa anterior não pertence ao contato" }, 403);
+      recoveryPrevious = previous;
+      plan = plan || previous.plan || "";
+      billing = billing || previous.billing_period || "monthly";
+      name = name || previous.customer_name || "Cliente";
+      email = email || previous.customer_email || "";
+      phone = phone || previous.customer_phone || "";
+      cpf = cpf || previous.customer_cpf || "";
+    }
 
     // ---- Reautorização: mandato revogado pelo cliente no app do banco --------
     let reauthUserId: string | null = null;
@@ -338,7 +378,9 @@ Deno.serve(async (req) => {
     }
 
     const trialCents = TRIAL_PRICES[plan] ?? null;
-    const withTrial = mode === "checkout" && billing === "monthly" && !returning && !!trialCents;
+    const withTrial = billing === "monthly" && !!trialCents && (
+      (mode === "checkout" && !returning) || (isRecoveryReplace && recoveryPrevious?.is_trial === true)
+    );
     const entryCents = withTrial ? (trialCents as number) : amountCents;
 
     // Clique repetido / retomada de página reaproveitam o mesmo mandato enquanto
@@ -653,6 +695,41 @@ Deno.serve(async (req) => {
       console.log(`[criar-pix-recorrente-woovi] reautorização: ${previousSubscriptionId} → ${subscriptionId}`);
     }
 
+    if (isRecoveryReplace && recoveryPrevious?.subscription_id) {
+      const oldSubscriptionId = String(recoveryPrevious.subscription_id);
+      const cancelOld = await wooviFetch(
+        `/api/v1/subscriptions/${encodeURIComponent(oldSubscriptionId)}/cancel`,
+        { method: "PUT" },
+      );
+      const oldEntryId = recoveryPrevious.entry_charge_correlation_id
+        ? String(recoveryPrevious.entry_charge_correlation_id)
+        : "";
+      const deleteOldEntry = oldEntryId
+        ? await wooviFetch(`/api/v1/charge/${encodeURIComponent(oldEntryId)}`, { method: "DELETE" })
+        : { ok: true, status: 204, data: null, raw: "" };
+
+      if (!cancelOld.ok || (!deleteOldEntry.ok && deleteOldEntry.status !== 404)) {
+        await wooviFetch(`/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, { method: "PUT" }).catch(() => {});
+        if (cobCorrelationId) {
+          await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});
+        }
+        await supabase.from("woovi_subscriptions").update({
+          creation_status: "compensated",
+          status: "FALHA_SUBSTITUICAO",
+          last_error: `não foi possível encerrar tentativa anterior: mandato=${cancelOld.status}, entrada=${deleteOldEntry.status}`,
+        }).eq("id", attemptId);
+        return json({ error: "Não foi possível substituir o código anterior com segurança" }, 502);
+      }
+
+      await supabase.from("woovi_subscriptions").update({
+        replaced_by_subscription_id: subscriptionId,
+        status: "CANCELADA",
+        pix_status: "CANCELED",
+        last_error: "Substituída após relato de erro do código no banco",
+      }).eq("id", recoveryPrevious.id);
+      console.log(`[criar-pix-recorrente-woovi] recuperação substituiu ${oldSubscriptionId} → ${subscriptionId}`);
+    }
+
     return json({
       authorizationId: subscriptionId,
       checkoutSessionId,
@@ -675,6 +752,7 @@ Deno.serve(async (req) => {
       plan,
       billing,
       reauthorize: isReauth,
+      recoveryReplace: isRecoveryReplace,
       offerTier,
     });
   } catch (error) {

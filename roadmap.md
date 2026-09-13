@@ -11,3 +11,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Validar suporte a cliente ativo após 8 respostas e responder a pergunta pendente
 - [x] Remover cirurgicamente dados pessoais reais das três orientações globais contaminadas
 - [x] Limpar somente a memória incorreta de Ana e validar o isolamento entre usuários
+- [ ] Corrigir reenvio e regeneração do PIX recorrente no agente de recuperação, sem misturar com Taster

@@ -647,8 +647,13 @@ Deno.serve(async (req) => {
     }
 
     // 6b. Clique de quick reply do trilho "copiou o código PIX": resolve na hora.
-    const pixIntent = classifyPixButton(text);
-    if (!previewMode && (pixIntent === "new_code" || pixIntent === "already_paid")) {
+    const recentOutboundForPix = historyAsc
+      .filter(m => m.direction === "out")
+      .slice(-2)
+      .map(m => m.body || "")
+      .join("\n");
+    const pixIntent = classifyPixButton(text, recentOutboundForPix);
+    if (!previewMode && (pixIntent === "replace_code" || pixIntent === "resend_code" || pixIntent === "already_paid")) {
       const res = await handlePixButton(supabase, pixIntent, phone, checkout);
       if (res.handled && res.body) {
         const sendBtn = await sendTwilioFreeText(phone, res.body);
@@ -1029,15 +1034,15 @@ Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência
     }
 
     // Rede de segurança: promessa de pagamento que o sistema NÃO vai cumprir.
-    // O modelo escreveu "te mando o código de R$ 6,90 agora" sem emitir a tag,
-    // então nenhum código é gerado e a pessoa fica esperando (caso Lúcia).
+    // Pedidos de PIX recorrente são resolvidos deterministicamente antes do LLM;
+    // aqui nunca desviamos uma falha técnica para o encontro avulso.
     const RE_PROMISE_CODE = /(mando|te mando|envio|gero|vou gerar|vou mandar)[^.!?\n]{0,40}(c[oó]digo|qr\s*code)/i;
     if (body && !offerTaster && RE_PROMISE_CODE.test(body)) {
       const frases = body.split(/(?<=[.!?])\s+/).filter((f) => !RE_PROMISE_CODE.test(f));
       const limpo = frases.join(" ").replace(/\n{3,}/g, "\n\n").trim();
       body = limpo.length > 40
         ? limpo
-        : `${limpo} Quer que eu gere o encontro guiado de R$ 6,90 agora?`.trim();
+        : `${limpo} Me confirma se você quer que eu gere outro código do PIX da assinatura.`.trim();
       console.log("[recovery-agent] promessa de código sem geração removida");
     }
 
