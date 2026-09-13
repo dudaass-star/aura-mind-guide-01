@@ -293,10 +293,40 @@ Deno.serve(async (req) => {
         .from("woovi_subscriptions")
         .select("*")
         .eq("subscription_id", previousId)
-        .is("replaced_by_subscription_id", null)
         .maybeSingle();
       if (!previous || previous.creation_status !== "completed") {
         return json({ error: "Tentativa anterior não encontrada" }, 404);
+      }
+      if (previous.replaced_by_subscription_id) {
+        const { data: replacement } = await supabase
+          .from("woovi_subscriptions")
+          .select("subscription_id, plan, billing_period, is_trial, trial_value_cents, value_cents, qr_payload, qr_encoded_image, qr_expires_at, next_charge_date")
+          .eq("subscription_id", previous.replaced_by_subscription_id)
+          .eq("creation_status", "completed")
+          .maybeSingle();
+        if (replacement?.qr_payload && replacement?.qr_expires_at &&
+            new Date(replacement.qr_expires_at).getTime() > Date.now()) {
+          return json({
+            authorizationId: replacement.subscription_id,
+            amount: (replacement.is_trial ? replacement.trial_value_cents : replacement.value_cents) / 100,
+            recurringAmount: replacement.value_cents / 100,
+            trial: replacement.is_trial,
+            trialMode: replacement.is_trial ? "paid" : "none",
+            trialDays: 0,
+            authorizationOnly: false,
+            firstRecurringChargeDate: replacement.next_charge_date,
+            qrCodeImage: replacement.qr_encoded_image,
+            copyPaste: replacement.qr_payload,
+            expiresAt: replacement.qr_expires_at,
+            pixAutomatic: true,
+            gateway: "woovi",
+            plan: replacement.plan,
+            billing: replacement.billing_period,
+            recoveryReplace: true,
+            reused: true,
+          });
+        }
+        return json({ error: "A tentativa anterior já foi substituída" }, 409);
       }
       if (previous.entry_paid_at || previous.mandate_approved_at || previous.access_granted_at ||
           MANDATE_ACTIVE_STATUSES.includes(String(previous.status))) {
