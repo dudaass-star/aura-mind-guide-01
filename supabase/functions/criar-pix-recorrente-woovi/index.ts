@@ -708,7 +708,7 @@ Deno.serve(async (req) => {
     // O id volta pro checkout para o trilho "copiou o código PIX" poder marcar
     // pix_copied_at nesta linha (o evento de funil é anônimo e não serve pra isso).
     let checkoutSessionId: string | null = null;
-    if (!isReauth) {
+    if (!isReauth && !isRecoveryReplace) {
       const { data: funnelRow, error: funnelErr } = await supabase.from("checkout_sessions").insert({
         phone: phoneClean || "sem-telefone", email: emailClean, name, plan, billing,
         payment_method: "pix_auto", status: "created", recovery_sent: true,

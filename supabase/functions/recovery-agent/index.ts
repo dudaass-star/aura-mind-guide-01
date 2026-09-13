@@ -1038,7 +1038,7 @@ Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência
     // aqui nunca desviamos uma falha técnica para o encontro avulso.
     const RE_PROMISE_CODE = /(mando|te mando|envio|gero|vou gerar|vou mandar)[^.!?\n]{0,40}(c[oó]digo|qr\s*code)/i;
     if (body && !offerTaster && RE_PROMISE_CODE.test(body)) {
-      const frases = body.split(/(?<=[.!?])\s+/).filter((f) => !RE_PROMISE_CODE.test(f));
+      const frases = body.split(/(?<=[.!?])\s+/).filter((f: string) => !RE_PROMISE_CODE.test(f));
       const limpo = frases.join(" ").replace(/\n{3,}/g, "\n\n").trim();
       body = limpo.length > 40
         ? limpo
