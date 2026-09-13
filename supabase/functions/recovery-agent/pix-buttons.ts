@@ -24,7 +24,7 @@ export type PixButtonIntent = "replace_code" | "resend_code" | "already_paid" | 
 
 const RE_REPLACE_CODE = /(ger(ar|a|e|ou|ando)|mand(ar|a|e)|envi(ar|a|e)|quero|preciso|pode)[^.!?\n]{0,35}(novo|outro)[^.!?\n]{0,20}(c[oó]digo|pix|qr)|((novo|outro)[^.!?\n]{0,20}(c[oó]digo|pix|qr))|tive um erro|deu erro|dando erro|apresent(a|ou|ando) erro|erro (na chave|no c[oó]digo|no pix)|c[oó]digo (inv[aá]lido|incorreto|com erro|n[aã]o funciona)|banco (recusou|rejeitou)|n[aã]o (funcionou|aceitou)|expirou/i;
 const RE_RESEND_CODE = /(n[aã]o (chegou|recebi|veio)|cad[eê]|manda de novo|reenvia(r)?)[^.!?\n]{0,35}(o |meu )?(c[oó]digo|pix|qr)|(c[oó]digo|pix|qr)[^.!?\n]{0,35}(n[aã]o (chegou|recebi|veio)|cad[eê])/i;
-const RE_SHORT_ACCEPT = /^\s*(sim|quero|pode|pode sim|por favor|manda|manda sim|gera|gera sim|ok|bora)\s*[.!]?\s*$/i;
+const RE_SHORT_CODE_ACCEPT = /^\s*(sim|quero|pode|pode sim|por favor|manda|manda sim|gera|gera sim|ok|bora)\s*[.!]?\s*$/i;
 const RE_PREVIOUS_CODE_OFFER = /(quer|posso|vou|estou|j[aá])[^.!?\n]{0,50}(ger(ar|ando)|mand(ar|ando)|envi(ar|ando))[^.!?\n]{0,35}(novo|outro)?[^.!?\n]{0,15}(c[oó]digo|pix|qr)/i;
 const RE_ALREADY_PAID = /^\s*(j[aá] paguei|paguei|j[aá] pagou)\s*[.!]?\s*$/i;
 const RE_DOUBT = /(ficou uma d[uú]vida|tenho uma d[uú]vida|vou pagar agora)/i;
@@ -69,7 +69,7 @@ export function classifyPixButton(text: string, recentOutbound = ""): PixButtonI
   if (!t) return null;
   if (RE_RESEND_CODE.test(t)) return "resend_code";
   if (RE_REPLACE_CODE.test(t)) return "replace_code";
-  if (RE_SHORT_ACCEPT.test(t) && RE_PREVIOUS_CODE_OFFER.test(recentOutbound)) return "replace_code";
+  if (RE_SHORT_CODE_ACCEPT.test(t) && RE_PREVIOUS_CODE_OFFER.test(recentOutbound)) return "replace_code";
   if (RE_ALREADY_PAID.test(t)) return "already_paid";
   if (RE_DOUBT.test(t)) return "conversational";
   return null;
