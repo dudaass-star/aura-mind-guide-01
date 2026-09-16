@@ -620,7 +620,12 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "lite_token_missing" }), { status: 200, headers: corsHeaders });
       }
 
-      const firstName = (conv?.name || "").trim().split(/\s+/)[0] || "";
+      const { data: liteProfile } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("user_id", liteAttempt?.profile_user_id)
+        .maybeSingle();
+      const firstName = (liteProfile?.name || conv?.name || "").trim().split(/\s+/)[0] || "";
       const greeting = firstName ? `Claro, ${firstName}.` : "Claro.";
       const liteLink = `https://olaaura.com.br/cancelar?t=${tokenRow.token}&offer=lite`;
       const liteBody = `${greeting} O plano Lite fica por R$ 19,90 por mês e mantém sua conversa com a Aura. Você pode ativar por aqui:\n\n${liteLink}`;
