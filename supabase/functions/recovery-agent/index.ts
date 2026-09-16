@@ -432,7 +432,8 @@ Deno.serve(async (req) => {
     // 3. Quiet hours: só vale para iniciativa NOSSA. Quem escreveu pra nós agora
     //    (reativo a um contato nosso das últimas 24h, ou com o PIX na mão) é
     //    respondido na hora — está acordado, no banco, decidindo a compra.
-    if (isQuietHourBRT(cfg.silent_hours_start, cfg.silent_hours_end)) {
+    // Prévia nunca entra em fila nem altera estado por horário silencioso.
+    if (!previewMode && isQuietHourBRT(cfg.silent_hours_start, cfg.silent_hours_end)) {
       let reactive = false;
       try {
         const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
