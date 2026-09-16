@@ -8,7 +8,7 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-const RE_EXPLICIT_STOP = /(para|pare|parem|parar|cancele|cancelar|remove|remover|exclua|excluir|tira|tirar).{0,35}(mensage|whatsapp|contato|numero|lista)|descadastr|sair da lista|nao (me )?(mande|envie|chame|procure|contate)|nao quero (mais )?(receber|mensagem|contato)/i;
+const RE_EXPLICIT_STOP = /(para|pare|parem|parar|cancele|cancelar|remove|remova|remover|exclua|excluir|tira|tirar).{0,35}(mensage|whatsapp|contato|numero|lista)|descadastr|sair da lista|nao (me )?(mande|envie|chame|procure|contate)|nao quero (mais )?(receber|mensagem|contato)/i;
 
 const RE_HUMAN_REQUEST = /\b(atendente|humano|pessoa de verdade)\b/i;
 
