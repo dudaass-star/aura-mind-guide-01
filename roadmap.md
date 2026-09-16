@@ -12,3 +12,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Remover cirurgicamente dados pessoais reais das três orientações globais contaminadas
 - [x] Limpar somente a memória incorreta de Ana e validar o isolamento entre usuários
 - [x] Corrigir reenvio e regeneração do PIX recorrente no agente de recuperação, sem misturar com Taster
+- [x] Separar objeção comercial de opt-out e reconhecer aceite contextual do Lite após oferta entregue

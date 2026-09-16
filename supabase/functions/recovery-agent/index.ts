@@ -19,6 +19,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { classifyPixButton, handlePixButton, classifyTasterIntent, wantsSingleSessionNow, handleTasterAccept, tasterOfferAlreadySent, isBlankDoubt, phoneMatchList } from "./pix-buttons.ts";
 import { isTasterTestPhone } from "../_shared/taster.ts";
+import { isExplicitStopRequest, isHumanRequest, isLiteAcceptance } from "./retention-intents.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,13 +59,6 @@ function normalizePlanKey(plan?: string | null): string | null {
   if (p.includes("transforma")) return "transformacao";
   return null;
 }
-
-const STOP_WORDS = [
-  /\batendente\b/i, /\bhumano\b/i, /\bpessoa de verdade\b/i,
-  /\bn[aã]o quero\b/i, /\bpara de me mandar\b/i, /\bparem? de mandar\b/i,
-  /\bremove(r)? meu n[uú]mero\b/i, /\bdescadastr/i, /\bsair da lista\b/i,
-];
-
 
 /**
  * O lead abriu o assunto cobrança automática / banco / autorização? Só nesse
@@ -494,9 +488,28 @@ Deno.serve(async (req) => {
     // Só pedido explícito de parar / recusa continua sendo respeitado.
     const tasterFastPath = !previewMode && (!!classifyTasterIntent(text) || wantsSingleSessionNow(text));
 
+    // Aceite do Lite é contextual: "Life" só vale como Lite quando uma oferta
+    // Lite foi realmente entregue recentemente para este telefone.
+    let liteAttempt: { profile_user_id?: string | null; created_at?: string | null } | null = null;
+    if (isLiteAcceptance(text)) {
+      const since30d = new Date(Date.now() - 30 * 86400000).toISOString();
+      const { data } = await supabase
+        .from("dunning_attempts")
+        .select("profile_user_id, created_at")
+        .in("phone_resolved", phoneMatchList(phone))
+        .eq("offer_tier", "lite")
+        .in("delivery_status", ["sent", "delivered", "read"])
+        .gte("created_at", since30d)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      liteAttempt = data || null;
+    }
+    const liteFastPath = !!liteAttempt?.profile_user_id;
+
     // Pausas definitivas: só quando o próprio lead pediu para parar / recusou.
     const HARD_PAUSES = ["user_requested_human", "lead_declined"];
-    if (conv?.needs_human && HARD_PAUSES.includes(conv?.auto_paused_reason || "")) {
+    if (conv?.needs_human && HARD_PAUSES.includes(conv?.auto_paused_reason || "") && !liteFastPath) {
       console.log(`[recovery-agent] pausa definitiva (${conv?.auto_paused_reason})`);
       return new Response(JSON.stringify({ skipped: conv?.auto_paused_reason }), { status: 200, headers: corsHeaders });
     }
@@ -583,13 +596,67 @@ Deno.serve(async (req) => {
 
 
 
-    // 6. Stop words
-    if (STOP_WORDS.some(re => re.test(text))) {
+    // 6. Pedido real de interrupção ou atendimento humano. Uma objeção como
+    // "não quero autorizar R$ 29,90" não silencia contatos futuros.
+    if (isExplicitStopRequest(text) || isHumanRequest(text)) {
       await supabase.from("recovery_conversations").update({
         needs_human: true, auto_paused_reason: "user_requested_human", updated_at: new Date().toISOString(),
       }).eq("phone", phone);
       console.log("[recovery-agent] stop_word");
       return new Response(JSON.stringify({ skipped: "stop_word" }), { status: 200, headers: corsHeaders });
+    }
+
+    // 6a. Aceite inequívoco do Lite após oferta entregue: responde sem LLM,
+    // reabre apenas esta conversa e usa o token seguro já existente.
+    if (liteFastPath) {
+      const { data: tokenRow } = await supabase
+        .from("user_portal_tokens")
+        .select("token")
+        .eq("user_id", liteAttempt?.profile_user_id)
+        .maybeSingle();
+      if (!tokenRow?.token) {
+        console.error("[recovery-agent] aceite Lite sem token do portal");
+        return new Response(JSON.stringify({ error: "lite_token_missing" }), { status: 200, headers: corsHeaders });
+      }
+
+      const firstName = (conv?.name || "").trim().split(/\s+/)[0] || "";
+      const greeting = firstName ? `Claro, ${firstName}.` : "Claro.";
+      const liteLink = `https://olaaura.com.br/cancelar?t=${tokenRow.token}&offer=lite`;
+      const liteBody = `${greeting} O plano Lite fica por R$ 19,90 por mês e mantém sua conversa com a Aura. Você pode ativar por aqui:\n\n${liteLink}`;
+
+      if (previewMode) {
+        return new Response(JSON.stringify({ preview: true, body: liteBody, retention: "lite" }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const sendLite = await sendTwilioFreeText(phone, liteBody);
+      if (!sendLite.ok) {
+        console.error("[recovery-agent] envio aceite Lite falhou", sendLite.error);
+        return new Response(JSON.stringify({ error: "twilio_failed", details: sendLite.error }), { status: 200, headers: corsHeaders });
+      }
+
+      const nowLite = new Date().toISOString();
+      await supabase.from("recovery_messages").insert({
+        phone, direction: "out", body: liteBody, message_sid: sendLite.sid || null, sent_by_admin: false,
+        metadata: { bot: true, retention_acceptance: "lite", dunning_offer_created_at: liteAttempt?.created_at || null },
+      });
+      await supabase.from("recovery_conversations").upsert({
+        phone,
+        last_outbound_at: nowLite,
+        last_bot_reply_at: nowLite,
+        last_message_preview: liteBody.slice(0, 200),
+        auto_reply_count: (conv?.auto_reply_count ?? 0) + 1,
+        needs_human: false,
+        auto_paused_reason: null,
+        pending_reply_at: null,
+        pending_inbound: null,
+        updated_at: nowLite,
+      }, { onConflict: "phone" });
+      console.log(`[recovery-agent] aceite Lite enviado phone=${phone.slice(0, 6)}***`);
+      return new Response(JSON.stringify({ ok: true, sid: sendLite.sid, retention: "lite" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // 7. Contexto
