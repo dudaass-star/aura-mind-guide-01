@@ -480,7 +480,7 @@ Deno.serve(async (req) => {
     // 4. Conversa
     const { data: conv } = await supabase
       .from("recovery_conversations")
-      .select("phone, auto_reply_count, needs_human, auto_paused_reason, checkout_session_id, name, last_inbound_at")
+      .select("phone, auto_reply_count, needs_human, auto_paused_reason, checkout_session_id, name, last_inbound_at, last_bot_reply_at")
       .eq("phone", phone).maybeSingle();
 
     // Pedido de experimentar (clique do template / "quero a sessão avulsa") fura
