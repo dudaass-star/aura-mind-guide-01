@@ -13,3 +13,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Limpar somente a memória incorreta de Ana e validar o isolamento entre usuários
 - [x] Corrigir reenvio e regeneração do PIX recorrente no agente de recuperação, sem misturar com Taster
 - [x] Separar objeção comercial de opt-out e reconhecer aceite contextual do Lite após oferta entregue
+- [x] Evoluir a Landing V2 para vender transformação com clareza concreta sobre produto e oferta
