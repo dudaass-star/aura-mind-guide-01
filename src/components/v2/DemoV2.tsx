@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Smartphone, Play, Pause, RotateCcw } from "lucide-react";
+import { Smartphone, Play, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
 import avatarAura from "@/assets/avatar-aura.jpg";
@@ -9,7 +9,6 @@ interface Message {
   sender: "user" | "aura";
   content: string;
   time?: string;
-  isAudioOnly?: boolean;
   isFirstInSequence?: boolean;
 }
 
@@ -31,7 +30,6 @@ const messages: Message[] = [
   { sender: "user", content: "Que eu preciso parar de voltar.", time: "21:34", isFirstInSequence: true },
   { sender: "aura", content: "É. Então talvez não esteja faltando clareza.", isFirstInSequence: true },
   { sender: "aura", content: "O difícil é sustentar o que você já sabe quando a saudade vier tentar te convencer do contrário.", time: "21:34" },
-  { sender: "aura", content: "", time: "21:34", isAudioOnly: true },
 ];
 
 const TypingIndicator = () => (
@@ -44,78 +42,13 @@ const TypingIndicator = () => (
   </div>
 );
 
-const WhatsAppVoiceMessage = ({
-  isPlaying,
-  onToggle,
-  duration = "0:04",
-  currentTime = 0,
-  totalDuration = 4,
-}: {
-  isPlaying: boolean;
-  onToggle: () => void;
-  duration?: string;
-  currentTime?: number;
-  totalDuration?: number;
-}) => {
-  const waveformBars = [
-    4, 8, 5, 12, 6, 14, 8, 10, 5, 16, 12, 8, 14, 6, 10, 8, 12, 5, 14, 8,
-    6, 10, 12, 8, 5, 14, 10, 6, 12, 8, 4, 10, 8, 6, 4,
-  ];
-  const progress = (currentTime / totalDuration) * 100;
-
-  return (
-    <div className="flex items-center gap-2 mt-2 py-1">
-      <button
-        onClick={onToggle}
-        className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0 hover:bg-primary/90 transition-colors"
-        aria-label={isPlaying ? "Pausar áudio" : "Reproduzir áudio"}
-      >
-        {isPlaying ? (
-          <Pause className="w-5 h-5 text-primary-foreground" fill="currentColor" />
-        ) : (
-          <Play className="w-5 h-5 text-primary-foreground ml-0.5" fill="currentColor" />
-        )}
-      </button>
-
-      <div className="flex-1 flex flex-col gap-1">
-        <div className="flex items-center gap-[2px] h-6 relative">
-          {waveformBars.map((height, i) => {
-            const barProgress = (i / waveformBars.length) * 100;
-            const isPlayed = barProgress <= progress;
-            return (
-              <div
-                key={i}
-                className={`w-[3px] rounded-full transition-all duration-150 ${
-                  isPlayed ? "bg-primary" : "bg-muted-foreground/40"
-                } ${isPlaying && isPlayed ? "animate-waveform-pulse" : ""}`}
-                style={{ height: `${height}px`, animationDelay: `${i * 0.02}s` }}
-              />
-            );
-          })}
-        </div>
-        <span className="text-[10px] text-muted-foreground">
-          {isPlaying ? `0:0${Math.floor(currentTime)}` : duration}
-        </span>
-      </div>
-
-      <img
-        src={avatarAura}
-        alt="Aura"
-        className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-primary/20"
-      />
-    </div>
-  );
-};
-
 const DemoV2 = () => {
   const initialVisibleMessages = 3;
   const [isPlaying, setIsPlaying] = useState(false);
   const [visibleMessages, setVisibleMessages] = useState(initialVisibleMessages);
   const [isTyping, setIsTyping] = useState(false);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Auto-scroll quando novas mensagens aparecem
   useEffect(() => {
@@ -180,7 +113,6 @@ const DemoV2 = () => {
     setIsPlaying(true);
     setVisibleMessages(initialVisibleMessages);
     setIsComplete(false);
-    setIsAudioPlaying(false);
   };
 
   const handleRestart = () => {
@@ -188,35 +120,12 @@ const DemoV2 = () => {
     setIsPlaying(false);
     setIsTyping(false);
     setIsComplete(false);
-    setIsAudioPlaying(false);
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
   };
 
   const handleAdvanceConversation = () => {
     if (!isPlaying || visibleMessages >= messages.length) return;
     setIsTyping(false);
     setVisibleMessages((current) => Math.min(current + 1, messages.length));
-  };
-
-  const handleAudioToggle = () => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio(
-        "https://uhyogifgmutfmbyhzzyo.supabase.co/storage/v1/object/public/meditations/demo/aura-voice.mp3",
-      );
-      audioRef.current.onended = () => setIsAudioPlaying(false);
-    }
-    if (isAudioPlaying) {
-      audioRef.current.pause();
-      setIsAudioPlaying(false);
-    } else {
-      audioRef.current.play().catch(() => {
-        console.log("Audio file not available");
-      });
-      setIsAudioPlaying(true);
-    }
   };
 
   const showStartButton = !isPlaying && visibleMessages === initialVisibleMessages && !isComplete;
@@ -300,45 +209,28 @@ const DemoV2 = () => {
                           } animate-message-in ${!partOfSequence ? "mt-3" : ""}`}
                           style={{ animationDelay: `${index * 0.02}s` }}
                         >
-                          {message.isAudioOnly ? (
-                            <div className="bg-card border border-border/60 rounded-3xl rounded-bl-md px-3 py-2 max-w-[85%]">
-                              <WhatsAppVoiceMessage
-                                isPlaying={isAudioPlaying}
-                                onToggle={handleAudioToggle}
-                                duration="0:04"
-                                currentTime={0}
-                                totalDuration={4}
-                              />
-                              {message.time && (
-                                <p className="text-[10px] mt-1 text-muted-foreground text-right">
-                                  {message.time}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <div
-                              className={`max-w-[85%] rounded-3xl px-4 py-2.5 ${
-                                message.sender === "user"
-                                  ? "bg-secondary text-secondary-foreground rounded-br-md"
-                                  : `bg-card border border-border/60 text-card-foreground ${
-                                      partOfSequence ? "rounded-bl-sm" : "rounded-bl-md"
-                                    }`
-                              }`}
-                            >
-                              <p className="text-sm leading-relaxed">{message.content}</p>
-                              {message.time && lastInSequence && (
-                                <p
-                                  className={`text-[10px] mt-1 ${
-                                    message.sender === "user"
-                                      ? "text-secondary-foreground/70"
-                                      : "text-muted-foreground"
-                                  }`}
-                                >
-                                  {message.time}
-                                </p>
-                              )}
-                            </div>
-                          )}
+                          <div
+                            className={`max-w-[85%] rounded-3xl px-4 py-2.5 ${
+                              message.sender === "user"
+                                ? "bg-secondary text-secondary-foreground rounded-br-md"
+                                : `bg-card border border-border/60 text-card-foreground ${
+                                    partOfSequence ? "rounded-bl-sm" : "rounded-bl-md"
+                                  }`
+                            }`}
+                          >
+                            <p className="text-sm leading-relaxed">{message.content}</p>
+                            {message.time && lastInSequence && (
+                              <p
+                                className={`text-[10px] mt-1 ${
+                                  message.sender === "user"
+                                    ? "text-secondary-foreground/70"
+                                    : "text-muted-foreground"
+                                }`}
+                              >
+                                {message.time}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
