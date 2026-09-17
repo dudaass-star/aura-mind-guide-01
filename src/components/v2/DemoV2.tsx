@@ -13,31 +13,24 @@ interface Message {
   isFirstInSequence?: boolean;
 }
 
-// Mesma conversa da home padrão (Demo.tsx) — reutilizada na V2 com visual cinematográfico.
 const messages: Message[] = [
   {
     sender: "user",
-    content: "Tenho 28 anos e ainda não sei o que quero da vida. Todo mundo parece ter um caminho, menos eu.",
+    content: "Eu sei que essa relação me faz mal. Mas é só ele sumir que eu sinto falta e acabo voltando.",
     time: "21:32",
     isFirstInSequence: true,
   },
-  { sender: "aura", content: "Esse peso de \"todo mundo parece saber\" é muito real...", isFirstInSequence: true },
-  { sender: "aura", content: "...e muito injusto com você mesma" },
-  { sender: "aura", content: "Me conta: quando você diz que não sabe o que quer, é sobre trabalho? Relacionamentos? Ou é algo mais fundo?", time: "21:32" },
-  { sender: "user", content: "É tudo. Sinto que to só existindo, sabe? Não vivendo de verdade.", time: "21:33", isFirstInSequence: true },
-  { sender: "aura", content: "\"Só existindo\"...", isFirstInSequence: true },
-  { sender: "aura", content: "isso diz muito" },
-  { sender: "aura", content: "Deixa eu te perguntar uma coisa: teve algum momento recente, mesmo que pequeno, em que você sentiu que estava vivendo de verdade?" },
-  { sender: "aura", content: "Pode ser algo simples", time: "21:33" },
-  { sender: "user", content: "Semana passada eu passei a tarde toda desenhando. Nem vi o tempo passar.", time: "21:34", isFirstInSequence: true },
-  { sender: "aura", content: "Posso te devolver uma coisa que estou percebendo?", isFirstInSequence: true },
-  { sender: "aura", content: "E lembra que em março você me disse que \"nada mais te empolgava\"?" },
-  { sender: "aura", content: "Hoje você me trouxe uma tarde inteira em que o tempo sumiu." },
-  { sender: "aura", content: "Talvez a questão não seja que nada te move — talvez você tenha se afastado dos lugares onde se sente viva." },
-  { sender: "aura", content: "Isso faz sentido pra você ou estou enxergando errado?" },
-  { sender: "user", content: "Faz. Eu parei de desenhar porque achei que não levava a lugar nenhum.", time: "21:34", isFirstInSequence: true },
-  { sender: "aura", content: "Então talvez a primeira decisão não seja descobrir a vida inteira agora." , isFirstInSequence: true },
-  { sender: "aura", content: "Pode ser voltar a dar espaço ao que já te devolve presença — e observar o que essa pista abre." },
+  { sender: "aura", content: "Posso te fazer uma pergunta meio difícil?", isFirstInSequence: true },
+  { sender: "aura", content: "Quando ele volta, o que você sente primeiro? Que é amada... ou o alívio de não ter sido deixada?", time: "21:32" },
+  { sender: "user", content: "Alívio. Porque por alguns dias eu acho que agora vai ser diferente.", time: "21:33", isFirstInSequence: true },
+  { sender: "aura", content: "Então olha o que parece estar acontecendo...", isFirstInSequence: true },
+  { sender: "aura", content: "Talvez você não esteja voltando pra relação que vocês têm." },
+  { sender: "aura", content: "Talvez esteja voltando pra esperança da relação que queria que vocês tivessem." },
+  { sender: "aura", content: "E por alguns dias esse alívio parece amor. Até você começar a se perder de novo." },
+  { sender: "aura", content: "Se você parasse de tentar fazer essa história dar certo... o que já saberia que precisa fazer?", time: "21:33" },
+  { sender: "user", content: "Que eu preciso parar de voltar.", time: "21:34", isFirstInSequence: true },
+  { sender: "aura", content: "É. Então talvez não esteja faltando clareza.", isFirstInSequence: true },
+  { sender: "aura", content: "O difícil é sustentar o que você já sabe quando a saudade vier tentar te convencer do contrário.", time: "21:34" },
   { sender: "aura", content: "", time: "21:34", isAudioOnly: true },
 ];
 
@@ -115,8 +108,9 @@ const WhatsAppVoiceMessage = ({
 };
 
 const DemoV2 = () => {
+  const initialVisibleMessages = 3;
   const [isPlaying, setIsPlaying] = useState(false);
-  const [visibleMessages, setVisibleMessages] = useState(1);
+  const [visibleMessages, setVisibleMessages] = useState(initialVisibleMessages);
   const [isTyping, setIsTyping] = useState(false);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
@@ -135,9 +129,9 @@ const DemoV2 = () => {
 
   const calculateTypingDelay = (content: string): number => {
     const length = content.length;
-    if (length < 50) return Math.min(4000, 2000 + length * 40);
-    if (length < 100) return Math.min(5500, 3000 + length * 25);
-    return Math.min(6000, 4000 + length * 20);
+    if (length < 50) return Math.min(1000, 500 + length * 10);
+    if (length < 100) return Math.min(1400, 700 + length * 8);
+    return Math.min(1700, 900 + length * 7);
   };
 
   const humanizeDelay = (baseDelay: number): number => baseDelay * (0.8 + Math.random() * 0.4);
@@ -160,7 +154,7 @@ const DemoV2 = () => {
 
     if (isAuraMessage) {
       if (isFirstInSequence) {
-        const readingDelay = humanizeDelay(3000);
+        const readingDelay = humanizeDelay(700);
         const typingDuration = calculateTypingDelay(nextMessage.content);
         typingTimeout = setTimeout(() => setIsTyping(true), readingDelay);
         messageTimeout = setTimeout(() => {
@@ -168,11 +162,11 @@ const DemoV2 = () => {
           setVisibleMessages((prev) => prev + 1);
         }, readingDelay + typingDuration);
       } else {
-        const bubbleDelay = humanizeDelay(1500);
+        const bubbleDelay = humanizeDelay(550);
         messageTimeout = setTimeout(() => setVisibleMessages((prev) => prev + 1), bubbleDelay);
       }
     } else {
-      const userDelay = humanizeDelay(3000);
+      const userDelay = humanizeDelay(900);
       messageTimeout = setTimeout(() => setVisibleMessages((prev) => prev + 1), userDelay);
     }
 
@@ -184,13 +178,13 @@ const DemoV2 = () => {
 
   const handleStartConversation = () => {
     setIsPlaying(true);
-    setVisibleMessages(1);
+    setVisibleMessages(initialVisibleMessages);
     setIsComplete(false);
     setIsAudioPlaying(false);
   };
 
   const handleRestart = () => {
-    setVisibleMessages(1);
+    setVisibleMessages(initialVisibleMessages);
     setIsPlaying(false);
     setIsTyping(false);
     setIsComplete(false);
@@ -199,6 +193,12 @@ const DemoV2 = () => {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
+  };
+
+  const handleAdvanceConversation = () => {
+    if (!isPlaying || visibleMessages >= messages.length) return;
+    setIsTyping(false);
+    setVisibleMessages((current) => Math.min(current + 1, messages.length));
   };
 
   const handleAudioToggle = () => {
@@ -219,8 +219,8 @@ const DemoV2 = () => {
     }
   };
 
-  const showStartButton = !isPlaying && visibleMessages === 1 && !isComplete;
-  const showRestartButton = isComplete || (!isPlaying && visibleMessages > 1);
+  const showStartButton = !isPlaying && visibleMessages === initialVisibleMessages && !isComplete;
+  const showRestartButton = isComplete || (!isPlaying && visibleMessages > initialVisibleMessages);
 
   const isPartOfSequence = (index: number) => {
     if (index === 0) return false;
@@ -275,6 +275,16 @@ const DemoV2 = () => {
                 {/* Mensagens */}
                 <div
                   ref={messagesContainerRef}
+                  onClick={handleAdvanceConversation}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleAdvanceConversation();
+                    }
+                  }}
+                  role={isPlaying ? "button" : undefined}
+                  tabIndex={isPlaying ? 0 : undefined}
+                  aria-label={isPlaying ? "Avançar conversa" : undefined}
                   className="bg-background/60 p-4 h-[420px] overflow-y-auto scroll-smooth"
                 >
                   <div className="space-y-1">
@@ -346,7 +356,7 @@ const DemoV2 = () => {
                   {showStartButton ? (
                     <Button onClick={handleStartConversation} variant="sage" className="w-full">
                       <Play className="w-4 h-4 mr-2" />
-                      Ver conversa completa
+                      Ver o que a AURA percebeu
                     </Button>
                   ) : showRestartButton ? (
                     <Button
