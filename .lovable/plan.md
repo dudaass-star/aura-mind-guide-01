@@ -8,7 +8,7 @@ Fazer o visitante entender e sentir o diferencial da AURA em poucos segundos, an
 ### 1. Encurtar a conversa
 - Reduzir a demonstração atual de 25 para aproximadamente 9–11 balões.
 - Manter apenas quatro movimentos essenciais: contexto da pessoa, pergunta certeira, conexão inesperada e direção prática.
-- Preservar a participação da usuária depois da leitura da AURA, para mostrar que a hipótese foi confirmada — não imposta.
+- Preservar a participação da usuária depois da leitura da AURA, para mostrar como ela se reconhece e avança a partir da nova perspectiva.
 
 ### 2. Antecipar o momento “UAU”
 A conexão mais forte deixará de aparecer somente no fim. Ela chegará logo após a primeira resposta da usuária:
@@ -19,7 +19,7 @@ A conexão mais forte deixará de aparecer somente no fim. Ela chegará logo ap�
 >
 > **AURA:** “Quando você falou em sair de casa, três meses atrás, também disse que esperou ter certeza — e a certeza nunca veio. Talvez você não esteja sem direção. Talvez esteja esperando se sentir pronta antes de escolher.”
 >
-> **AURA:** “Isso toca em alguma coisa real ou estou lendo errado?”
+> **AURA:** “O que acontece dentro de você quando olha por esse ângulo?”
 >
 > **Usuária:** “Toca. Eu sempre achei que precisava parar de ter medo primeiro.”
 >
