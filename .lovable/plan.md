@@ -10,9 +10,9 @@ Trocar a promessa abstrata atual por uma chamada que una os três elementos mais
 
 ## Chamada proposta
 
-> **Uma companhia que escuta o que te trava — e ajuda você a seguir.**
+> **Uma inteligência que escuta você — e ajuda a encontrar direção para seguir.**
 
-Essa versão comunica acolhimento sem fazer a AURA parecer passiva. “O que te trava” cria identificação imediata, enquanto “ajuda você a seguir” traz direção e movimento sem prometer uma transformação garantida.
+Ela preserva a força de “uma inteligência”, apresenta escuta e acompanhamento e termina em direção e movimento. A formulação evita a repetição de “caminho” e “direção” e não afirma que a AURA sabe previamente qual caminho a pessoa “precisa” seguir.
 
 ## Texto de apoio
 
