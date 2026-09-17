@@ -5,27 +5,35 @@ Fazer o visitante entender e sentir o diferencial da AURA em poucos segundos, an
 
 ## O que será ajustado
 
-### 1. Encurtar a conversa
+### 1. Reconstruir a conversa a partir das dores reais
+- Usar como território principal **relacionamento e medo de abandono**, o grupo mais recorrente entre os temas categorizados das sessões concluídas.
+- Não adaptar a conversa atual nem falar de trabalho: criar um arco novo, emocionalmente reconhecível e fiel ao tipo de conflito que realmente chega à AURA.
 - Reduzir a demonstração atual de 25 para aproximadamente 9–11 balões.
-- Manter apenas quatro movimentos essenciais: contexto da pessoa, pergunta certeira, conexão inesperada e direção prática.
-- Preservar a participação da usuária depois da leitura da AURA, para mostrar como ela se reconhece e avança a partir da nova perspectiva.
+- Manter quatro movimentos essenciais: dor concreta, pergunta que desloca o olhar, descoberta da própria contradição e direção prática.
+- Preservar a participação da usuária depois da leitura da AURA, para que a virada aconteça dentro da conversa — não como uma conclusão unilateral.
 
-### 2. Antecipar o momento “UAU”
-A conexão mais forte deixará de aparecer somente no fim. Ela chegará logo após a primeira resposta da usuária:
+### 2. Antecipar o momento “UAU” com um arco completo
+A conexão mais forte deixará de aparecer somente no fim. A nova conversa seguirá este fluxo:
 
-> **Usuária:** “Eu vivo dizendo que quero mudar de trabalho, mas toda vez que aparece uma oportunidade eu travo.”
+> **Usuária:** “Eu sei que essa relação me faz mal. Mas quando ele some, eu sinto falta e acabo voltando.”
 >
-> **AURA:** “Posso te mostrar uma contradição que talvez esteja passando despercebida?”
+> **AURA:** “Quando ele volta, o que chega primeiro: a sensação de ser amada ou o alívio de não ter sido abandonada?”
 >
-> **AURA:** “Quando você falou em sair de casa, três meses atrás, também disse que esperou ter certeza — e a certeza nunca veio. Talvez você não esteja sem direção. Talvez esteja esperando se sentir pronta antes de escolher.”
+> **Usuária:** “Alívio. Porque por alguns dias parece que agora vai ser diferente.”
 >
-> **AURA:** “O que acontece dentro de você quando olha por esse ângulo?”
+> **AURA:** “Então talvez você não esteja voltando para a relação que existe. Está voltando para a esperança da relação que ainda queria viver.”
 >
-> **Usuária:** “Toca. Eu sempre achei que precisava parar de ter medo primeiro.”
+> **AURA:** “E cada volta alivia o medo de perdê-lo — mas te coloca de novo no lugar em que você se perde.”
 >
-> **AURA:** “Então talvez a próxima decisão não seja esperar o medo passar. É descobrir qual escolha ainda faria sentido mesmo com ele aqui.”
+> **AURA:** “Se não precisasse provar que essa história podia dar certo, o que você já saberia sobre o que precisa fazer?”
+>
+> **Usuária:** “Que eu preciso parar de voltar.”
+>
+> **AURA:** “Então não falta clareza. O que falta é sustentar a escolha quando a saudade tentar negociar com ela.”
 
-Essa versão mostra, de forma concreta: continuidade, conexão entre acontecimentos, confronto cuidadoso, hipótese aberta e direção — sem vender “memória” como diferencial isolado.
+Essa versão não depende de uma frase solta ou de a AURA perguntar se “leu errado”. O valor nasce da sequência: ela diferencia amor de alívio, revela a esperança que mantém o ciclo, conduz a própria pessoa à resposta e nomeia com firmeza onde está o desafio real.
+
+A redação final poderá ser lapidada durante a implementação para manter naturalidade e ritmo, sem mudar esse arco aprovado.
 
 ### 3. Acelerar a reprodução
 - Trocar as pausas longas, adequadas a uma conversa real, por um ritmo de demonstração.
@@ -41,7 +49,8 @@ Essa versão mostra, de forma concreta: continuidade, conexão entre acontecimen
 ### 5. Preservar o que já funciona
 - Manter o visual do WhatsApp, o áudio demonstrativo, a identidade da V2 e a adaptação para celular.
 - Não alterar preços, planos, checkout nem rastreamento.
-- Não usar diagnóstico, afirmação psicológica fechada ou promessa de resultado garantido.
+- Não usar diagnóstico, promessa de resultado garantido nem enfraquecer a leitura com pedidos de validação como “estou lendo errado?”.
+- A AURA sustenta a leitura com firmeza e abre espaço por meio de perguntas que aprofundam a descoberta da pessoa.
 
 ## Validação
 - Conferir no celular e computador se o ponto principal aparece sem rolagem confusa ou texto cortado.
