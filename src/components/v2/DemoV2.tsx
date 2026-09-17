@@ -62,10 +62,13 @@ const DemoV2 = () => {
 
   const calculateTypingDelay = (content: string): number => {
     const length = content.length;
-    if (length < 50) return Math.min(1000, 500 + length * 10);
-    if (length < 100) return Math.min(1400, 700 + length * 8);
-    return Math.min(1700, 900 + length * 7);
+    if (length < 50) return Math.min(1300, 700 + length * 12);
+    if (length < 100) return Math.min(1800, 900 + length * 10);
+    return Math.min(2200, 1100 + length * 9);
   };
+
+  const calculateReadingDelay = (content: string): number =>
+    Math.min(1800, 850 + content.length * 8);
 
   const humanizeDelay = (baseDelay: number): number => baseDelay * (0.8 + Math.random() * 0.4);
 
@@ -87,7 +90,7 @@ const DemoV2 = () => {
 
     if (isAuraMessage) {
       if (isFirstInSequence) {
-        const readingDelay = humanizeDelay(700);
+        const readingDelay = humanizeDelay(900);
         const typingDuration = calculateTypingDelay(nextMessage.content);
         typingTimeout = setTimeout(() => setIsTyping(true), readingDelay);
         messageTimeout = setTimeout(() => {
@@ -95,11 +98,11 @@ const DemoV2 = () => {
           setVisibleMessages((prev) => prev + 1);
         }, readingDelay + typingDuration);
       } else {
-        const bubbleDelay = humanizeDelay(550);
+        const bubbleDelay = humanizeDelay(calculateReadingDelay(nextMessage.content));
         messageTimeout = setTimeout(() => setVisibleMessages((prev) => prev + 1), bubbleDelay);
       }
     } else {
-      const userDelay = humanizeDelay(900);
+      const userDelay = humanizeDelay(1400);
       messageTimeout = setTimeout(() => setVisibleMessages((prev) => prev + 1), userDelay);
     }
 
