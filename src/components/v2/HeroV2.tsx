@@ -19,15 +19,15 @@ const HeroV2 = () => (
           </span>
 
           <h1 className="mt-6 font-display text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] tracking-tight">
-            Uma inteligência que acompanha
+            Uma inteligência que escuta você
             <br />
-            <span className="italic text-gradient-sage">quem você está se tornando.</span>
+            <span className="italic text-gradient-sage">e ajuda a encontrar direção para seguir.</span>
           </h1>
 
           <p className="mt-6 text-base md:text-lg text-white/70 max-w-lg leading-relaxed">
             Pelo WhatsApp, a AURA conversa com você por texto e áudio, conecta o que
             acontece na sua vida e conduz encontros guiados de 45 minutos para
-            transformar pensamentos confusos em clareza, direção e movimento.
+            transformar inseguranças e pensamentos confusos em direção e movimento.
           </p>
 
           <div className="mt-8 flex flex-col items-start gap-2">
