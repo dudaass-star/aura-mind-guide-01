@@ -12,7 +12,6 @@ const guarantees = [
   "Acesso completo a todos os recursos",
 ];
 
-// Ciclos da landing. As chaves de `checkoutBilling` seguem o contrato do /v2/checkout.
 type CycleId = "monthly" | "quarterly" | "semiannual" | "yearly";
 
 const cycles: {
@@ -35,9 +34,9 @@ const plans: {
   features: string[];
   popular: boolean;
 }[] = [
-  { id: "essencial", name: "Essencial", tag: "Pra começar", features: ["Conversas ilimitadas 24/7", "1 sessão guiada/mês (45min)", "Memória de longo prazo"], popular: false },
-  { id: "direcao", name: "Direção", tag: "Recomendado", features: ["Tudo do Essencial", "4 sessões guiadas/mês (45min)", "Resumo escrito após cada sessão"], popular: true },
-  { id: "transformacao", name: "Transformação", tag: "Pra momentos de virada", features: ["Tudo do Direção", "8 sessões guiadas/mês", "Prioridade em crise"], popular: false },
+  { id: "essencial", name: "Essencial", tag: "Pra começar", features: ["Conversas ilimitadas 24/7", "1 encontro guiado/mês (45min)", "Memória de longo prazo"], popular: false },
+  { id: "direcao", name: "Direção", tag: "Recomendado", features: ["Tudo do Essencial", "4 encontros guiados/mês (45min)", "Resumo escrito após cada encontro"], popular: true },
+  { id: "transformacao", name: "Transformação", tag: "Pra momentos de virada", features: ["Tudo do Direção", "8 encontros guiados/mês", "Prioridade em momentos difíceis"], popular: false },
 ];
 
 const PricingV2 = () => {
@@ -58,7 +57,7 @@ const PricingV2 = () => {
             <br /> hoje mesmo.
           </h2>
           <p className="mt-5 text-base text-foreground/75 max-w-md">
-            Comece a construir um percurso que ganha profundidade a cada conversa. Experimente por 7 dias por R$ 6,90. Depois, a partir de{" "}
+            7 dias para experimentar por apenas R$ 6,90. Depois, a partir de{" "}
             <span className="font-semibold text-foreground">
               {fmtBRL(perDay).replace("R$", "R$")} por dia
             </span>{" "}
@@ -84,8 +83,8 @@ const PricingV2 = () => {
             ))}
           </ul>
           <Link
-            to={checkoutHref("pricing")}
-            onClick={() => trackLandingCta("pricing", "Começar agora R$ 6,90 (v2)")}
+            to={checkoutHref("pricing", "v2")}
+            onClick={() => trackLandingCta("pricing", "Começar agora R$ 6,90 (v2)", "v2")}
           >
             <Button variant="default" size="lg" className="w-full rounded-xl bg-foreground text-background hover:bg-foreground/90">
               Começar agora por R$ 6,90
@@ -97,7 +96,6 @@ const PricingV2 = () => {
         </div>
       </div>
 
-      {/* Seletor de ciclo */}
       <div id="recursos" className="max-w-5xl mx-auto mb-8">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1.5 rounded-2xl bg-card border border-border/40">
           {cycles.map((c) => {
@@ -133,7 +131,6 @@ const PricingV2 = () => {
         </p>
       </div>
 
-      {/* Planos detalhados */}
       <div className="grid md:grid-cols-3 gap-5 max-w-5xl mx-auto">
         {plans.map((p) => {
           const monthly = PLAN_MONTHLY_EQUIVALENT[p.id][cycleId];
@@ -176,9 +173,9 @@ const PricingV2 = () => {
               ))}
             </ul>
             <Link
-              to={checkoutHref("pricing")}
+              to={checkoutHref("pricing", "v2")}
               state={{ plan: p.id, billing: cycle.checkoutBilling }}
-              onClick={() => trackLandingCta("pricing", `${p.name} ${cycle.label} (v2)`)}
+              onClick={() => trackLandingCta("pricing", `${p.name} ${cycle.label} (v2)`, "v2")}
             >
               <Button
                 variant={p.popular ? "sage" : "outline"}

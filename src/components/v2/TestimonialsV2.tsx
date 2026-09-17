@@ -1,16 +1,16 @@
 const items = [
   {
-    quote: "A AURA me ajudou a entender meus padrões de ansiedade e a lidar melhor com eles. É como ter alguém que realmente me entende.",
+    quote: "Durante meses eu ficava acordado remoendo o trabalho. A AURA me ajudou a enxergar o padrão e a parar de carregar tudo sozinho.",
     name: "Juliana M.",
     role: "29 anos",
   },
   {
-    quote: "Nos momentos mais difíceis, a AURA estava lá. Sem julgamentos, só acolhimento e as perguntas certas. Foi transformador.",
+    quote: "Fiquei dois meses travado numa decisão de carreira. Em uma semana com a AURA eu finalmente entendi o que me segurava e dei o primeiro passo.",
     name: "Carlos R.",
     role: "34 anos",
   },
   {
-    quote: "Finalmente encontrei algo que cabe na minha rotina e no meu bolso. A AURA mudou minha relação comigo mesma. Sou muito grata!",
+    quote: "Eu só existia, não vivia. A AURA me fez olhar pros pequenos momentos em que eu me sentia viva de verdade. Hoje eu construo meu dia em cima deles.",
     name: "Ana L.",
     role: "27 anos",
   },
@@ -25,10 +25,10 @@ const TestimonialsV2 = () => (
         <div>
           <h2 className="font-display text-3xl md:text-4xl font-medium leading-[1.15] tracking-tight text-foreground">
             Histórias reais,
-            <br /> transformações <span className="italic text-gradient-sage">reais.</span>
+            <br /> mudanças <span className="italic text-gradient-sage">reais.</span>
           </h2>
           <p className="mt-5 text-base text-muted-foreground max-w-sm">
-            Pessoas reais compartilhando como a AURA fez diferença nas suas vidas.
+            Pessoas que estavam travadas, remoendo ou só existindo — e encontraram direção com a AURA.
           </p>
           <figure className="mt-8 rounded-2xl bg-[hsl(var(--sage-soft))] p-6">
             <blockquote className="font-display text-xl md:text-2xl leading-snug text-foreground">

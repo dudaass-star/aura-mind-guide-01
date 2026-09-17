@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Star, Clock, Waypoints, Check } from "lucide-react";
+import { Star, Clock, Brain, Check } from "lucide-react";
 import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
-import heroImg from "@/assets/v2/hero-mulher-sofa.jpg";
+import heroImg from "@/assets/v3/hero-mulher-noite.jpg";
 
 const HeroV2 = () => (
   <section
@@ -11,29 +11,28 @@ const HeroV2 = () => (
   >
     <div className="container mx-auto px-6">
       <div className="grid md:grid-cols-2 gap-12 md:gap-8 items-center min-h-[calc(100vh-7rem)]">
-        {/* Coluna esquerda: copy */}
         <div className="relative z-10 v2-fade-up">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs md:text-sm text-white/85 backdrop-blur">
             <Check className="w-3.5 h-3.5 text-primary" />
-            Acompanhamento emocional no WhatsApp
+            Acompanhamento dia a dia no WhatsApp
           </span>
 
           <h1 className="mt-6 font-display text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] tracking-tight">
-            Uma inteligência que escuta você
+            Presente quando
             <br />
-            <span className="italic text-gradient-sage">e ajuda a encontrar direção para seguir.</span>
+            <span className="italic text-gradient-sage">você</span>&nbsp;mais precisa.
           </h1>
 
-          <p className="mt-6 text-base md:text-lg text-white/70 max-w-lg leading-relaxed">
-            Pelo WhatsApp, a AURA conversa com você por texto e áudio, conecta o que
-            acontece na sua vida e conduz encontros guiados de 45 minutos para
-            transformar inseguranças e pensamentos confusos em direção e movimento.
+          <p className="mt-6 text-base md:text-lg text-white/70 max-w-md leading-relaxed">
+            Companhia inteligente no WhatsApp para quando você está travado em decisões,
+            remoendo a mesma coisa ou sentindo que está só existindo. A AURA lembra da sua
+            história, ouve sem julgar e devolve um próximo passo real.
           </p>
 
           <div className="mt-8 flex flex-col items-start gap-2">
             <Link
-              to={checkoutHref("hero")}
-              onClick={() => trackLandingCta("hero", "Começar por R$ 6,90 (v2)")}
+              to={checkoutHref("hero", "v2")}
+              onClick={() => trackLandingCta("hero", "Começar por R$ 6,90 (v2)", "v2")}
             >
               <Button variant="sage" size="xl" className="rounded-2xl px-10 shadow-lg">
                 Começar por R$ 6,90
@@ -63,21 +62,20 @@ const HeroV2 = () => (
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Waypoints className="w-5 h-5 text-primary" />
+              <Brain className="w-5 h-5 text-primary" />
               <div>
-                <p className="font-display text-base text-white">Conexões</p>
-                <p className="text-xs text-white/55">entre o que você vive</p>
+                <p className="font-display text-base text-white">Memória</p>
+                <p className="text-xs text-white/55">do seu percurso</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Coluna direita: foto + bolha */}
         <div className="relative md:h-[640px] -mx-6 md:mx-0 overflow-hidden md:rounded-l-3xl">
           <div className="relative h-[420px] md:h-full md:absolute md:inset-0">
             <img
               src={heroImg}
-              alt="Mulher conversando com a Aura no celular à noite"
+              alt="Mulher no sofá à noite olhando o celular"
               className="absolute inset-0 w-full h-full object-cover md:rounded-l-3xl"
               width={1280}
               height={1280}
@@ -85,16 +83,14 @@ const HeroV2 = () => (
             />
             <div className="absolute inset-0 bg-gradient-to-r from-[hsl(220_35%_10%)] via-transparent to-transparent md:bg-gradient-to-r md:from-[hsl(220_35%_10%)] md:via-[hsl(220_35%_10%/0.2)] md:to-transparent" />
 
-            {/* Bolha de chat */}
             <div className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 w-[230px] md:w-[240px] v2-fade-up" style={{ animationDelay: "0.6s" }}>
               <div className="relative bg-[#f5efe6] text-[#1a2238] rounded-2xl rounded-br-sm px-5 py-4 shadow-2xl">
                 <p className="text-sm leading-relaxed">
-                  <span className="font-semibold">Tem uma conexão aqui.</span>
+                  <span className="font-semibold">Oi, estou aqui.</span>
                   <br />
                   <br />
-                  Posso te mostrar o que estou percebendo?
+                  Pode falar comigo sobre o que estiver sentindo.
                 </p>
-                {/* Coração tag */}
                 <div className="absolute -bottom-3 -right-2 w-9 h-9 rounded-full bg-[#f5efe6] shadow-md flex items-center justify-center">
                   <span className="text-base">💜</span>
                 </div>
