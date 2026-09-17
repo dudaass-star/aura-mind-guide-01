@@ -2,7 +2,7 @@
 
 ## Diagnóstico
 
-A V2 tem boa aparência, demonstração concreta e uma oferta clara, mas ainda reduz a AURA a três ideias: disponibilidade, memória e sessões. Isso explica o funcionamento, porém não comunica a dimensão real do produto.
+A V2 tem boa aparência, demonstração concreta e uma oferta clara, mas ainda reduz a AURA a três ideias: disponibilidade, memória e sessões. Isso explica o funcionamento, porém não comunica a dimensão real do produto. A melhoria precisa elevar a percepção de valor sem perder a compreensão imediata: em poucos segundos, o visitante ainda deve entender que a AURA é uma inteligência de acompanhamento emocional pelo WhatsApp, disponível para conversas por texto e áudio, com encontros guiados.
 
 Hoje, a promessa principal é “presente quando você mais precisa”. Ela transmite acolhimento, mas poderia servir para muitos serviços. A explicação repete que a AURA lembra da história, enquanto o diferencial maior é o que ela constrói com essa história: conecta acontecimentos, percebe movimentos, confronta padrões com cuidado e transforma conversas em um percurso de clareza, direção e mudança.
 
@@ -12,11 +12,23 @@ A parte mais valiosa do produto — capítulos mensais do percurso, mudanças pe
 
 ### 1. Elevar a primeira tela
 
-Manter a estrutura visual e a oferta de R$ 6,90, mas trocar a promessa genérica por uma ideia proprietária:
+Manter a estrutura visual e a oferta de R$ 6,90, mas trocar a promessa genérica por uma ideia proprietária sem deixar o produto abstrato. A primeira tela trabalhará em duas camadas complementares:
+
+1. **Promessa maior:** uma frase curta sobre a transformação e o percurso da pessoa;
+2. **Explicação concreta imediata:** uma frase simples dizendo o que a AURA é, onde funciona e como ajuda.
+
+Exemplo da lógica, ainda sujeito ao refinamento final da redação:
+
+> **Uma inteligência que acompanha quem você está se tornando.**
+>
+> Pelo WhatsApp, a AURA conversa com você por texto e áudio, conecta o que acontece na sua vida e conduz encontros guiados para transformar pensamentos confusos em clareza, direção e movimento.
+
+Assim, a frase emocional desperta interesse e a linha seguinte responde imediatamente: “o que é?”, “onde uso?” e “o que ela faz?”. A página não dependerá da promessa abstrata sozinha.
 
 - apresentar a AURA como uma inteligência que acompanha quem a pessoa está se tornando;
 - mostrar que ela conecta o que acontece hoje ao percurso vivido;
 - deixar “WhatsApp, memória e 24/7” como prova de funcionamento, não como centro da promessa;
+- manter WhatsApp, texto, áudio e encontros guiados visíveis já na primeira tela, para o visitante compreender o produto sem precisar rolar;
 - atualizar também título e descrição usados no compartilhamento da página.
 
 ### 2. Transformar a conversa demonstrativa em prova do diferencial
@@ -113,11 +125,29 @@ Fechamento
 - página V3 e demais páginas;
 - integrações e lógica do produto.
 
+## Princípio de clareza para toda a página
+
+Cada afirmação conceitual será acompanhada por uma prova concreta logo em seguida:
+
+```text
+Ideia maior → como acontece na prática → experiência real do produto
+```
+
+Exemplos:
+
+- “acompanha quem você está se tornando” → capítulos mensais, marcos e mudanças percebidas;
+- “conecta acontecimentos” → demonstração de conversa e insights do percurso;
+- “transforma conversa em direção” → encontros guiados, fechamento e próximos passos;
+- “está presente no dia a dia” → WhatsApp, texto, áudio e pergunta do dia.
+
+Isso evita tanto uma página rasa, baseada em uma lista de recursos, quanto uma página bonita e vaga, que não explica o produto.
+
 ## Validação
 
 - revisar a página completa em celular e computador;
 - confirmar que preço, links e rastreamento continuam funcionando;
 - verificar que nenhum recurso foi prometido além do que existe no produto;
+- pedir a uma pessoa que não conhece a AURA para responder, após ver apenas a primeira tela: “o que é, onde funciona e para que serve?”;
 - garantir que a primeira tela mostre parte da próxima seção em alturas comuns;
 - testar a conversa demonstrativa, botões e seleção de planos;
 - comparar a nova narrativa com os indicadores atuais de rolagem e cliques já existentes.
