@@ -58,7 +58,7 @@ const PricingV2 = () => {
             <br /> hoje mesmo.
           </h2>
           <p className="mt-5 text-base text-foreground/75 max-w-md">
-            7 dias para experimentar por apenas R$ 6,90. Depois, a partir de{" "}
+            Comece a construir um percurso que ganha profundidade a cada conversa. Experimente por 7 dias por R$ 6,90. Depois, a partir de{" "}
             <span className="font-semibold text-foreground">
               {fmtBRL(perDay).replace("R$", "R$")} por dia
             </span>{" "}

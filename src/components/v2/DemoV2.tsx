@@ -30,14 +30,14 @@ const messages: Message[] = [
   { sender: "aura", content: "Deixa eu te perguntar uma coisa: teve algum momento recente, mesmo que pequeno, em que você sentiu que estava vivendo de verdade?" },
   { sender: "aura", content: "Pode ser algo simples", time: "21:33" },
   { sender: "user", content: "Semana passada eu passei a tarde toda desenhando. Nem vi o tempo passar.", time: "21:34", isFirstInSequence: true },
-  { sender: "aura", content: "Olha só o que você acabou de me mostrar...", isFirstInSequence: true },
-  { sender: "aura", content: "Você diz que não sabe o que quer" },
-  { sender: "aura", content: "mas seu corpo sabe" },
-  { sender: "aura", content: "Ele te levou pra um lugar onde o tempo sumiu" },
-  { sender: "aura", content: "Isso não é \"só existir\"" },
-  { sender: "aura", content: "Isso é uma pista enorme." },
+  { sender: "aura", content: "Posso te devolver uma coisa que estou percebendo?", isFirstInSequence: true },
   { sender: "aura", content: "E lembra que em março você me disse que \"nada mais te empolgava\"?" },
-  { sender: "aura", content: "Eu guardei isso. Hoje você me trouxe uma tarde inteira que passou voando." },
+  { sender: "aura", content: "Hoje você me trouxe uma tarde inteira em que o tempo sumiu." },
+  { sender: "aura", content: "Talvez a questão não seja que nada te move — talvez você tenha se afastado dos lugares onde se sente viva." },
+  { sender: "aura", content: "Isso faz sentido pra você ou estou enxergando errado?" },
+  { sender: "user", content: "Faz. Eu parei de desenhar porque achei que não levava a lugar nenhum.", time: "21:34", isFirstInSequence: true },
+  { sender: "aura", content: "Então talvez a primeira decisão não seja descobrir a vida inteira agora." , isFirstInSequence: true },
+  { sender: "aura", content: "Pode ser voltar a dar espaço ao que já te devolve presença — e observar o que essa pista abre." },
   { sender: "aura", content: "", time: "21:34", isAudioOnly: true },
 ];
 
@@ -248,7 +248,7 @@ const DemoV2 = () => {
             <span className="text-gradient-sage">Aura</span>
           </h2>
           <p className="mt-5 text-base md:text-lg text-muted-foreground">
-            Uma conversa real que mostra como a Aura te ajuda a enxergar o que você não vê.
+            Veja como uma conversa deixa de ser só desabafo e começa a revelar direção.
           </p>
         </div>
 
@@ -390,13 +390,13 @@ const DemoV2 = () => {
 
         {/* Caption */}
         <p className="text-center text-sm text-muted-foreground mt-10 max-w-lg mx-auto">
-          A Aura não dá respostas prontas. Ela te ajuda a encontrar as suas — com perguntas certeiras e apoio genuíno.
+          A AURA conecta o que você vive hoje ao que já apareceu no seu percurso — e devolve essa leitura como uma hipótese para vocês explorarem juntos.
         </p>
 
         {isComplete && (
           <div className="text-center mt-10 animate-fade-up">
             <p className="font-display text-xl md:text-2xl font-medium text-foreground mb-5">
-              Pronto pra descobrir suas pistas?
+              Pronto para começar a enxergar seu percurso?
             </p>
             <Link
               to={checkoutHref("demo")}

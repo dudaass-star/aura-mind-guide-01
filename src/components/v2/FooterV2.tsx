@@ -11,7 +11,7 @@ const FooterV2 = () => (
             <img src={logoOlaAura} alt="Olá AURA" className="h-16 w-auto brightness-0 invert" />
           </Link>
           <p className="text-xs text-white/65 max-w-[220px]">
-            Acompanhamento emocional inteligente no WhatsApp.
+            Uma inteligência de acompanhamento emocional que transforma conversas em clareza, direção e percurso.
           </p>
           <a
             href="mailto:suporte@olaaura.com.br"

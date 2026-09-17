@@ -1,48 +1,51 @@
 import {
-  Clock, Brain, CalendarCheck, FileText, Heart, Pause,
-  Cloud, Lightbulb, Bell, Headphones, MessageSquare, Sparkles,
+  CalendarCheck, BookMarked, Route, Headphones,
+  MessageCircleQuestion, Cloud, Lightbulb, MessageSquare,
 } from "lucide-react";
 
 const benefits = [
-  { icon: Clock, title: "Nunca mais sozinho às 3h", desc: "Madrugada, domingo, feriado: a AURA responde quando o peso aparece." },
-  { icon: Brain, title: "Ela lembra da sua história", desc: "Você não precisa recomeçar do zero. Ela retoma de onde vocês pararam." },
-  { icon: CalendarCheck, title: "45 minutos só pra você", desc: "Sessões guiadas com método — não é papo aleatório de chatbot." },
-  { icon: FileText, title: "Você sai com clareza no papel", desc: "Depois de cada sessão, recebe um resumo com o que ficou claro." },
-  { icon: Heart, title: "Nunca te abandona", desc: "Se você sumir, a AURA vai atrás de você." },
-  { icon: Pause, title: "Pausa quando precisar", desc: "Pause sua assinatura por até 30 dias." },
-  { icon: Cloud, title: "Cápsula do Tempo", desc: "Grave uma mensagem para seu eu do futuro." },
-  { icon: Lightbulb, title: "Insights que você não pediu", desc: "A AURA percebe padrões e te traz reflexões." },
-  { icon: Bell, title: "Lembretes na hora certa", desc: "A AURA agenda e lembra do que importa pra você." },
-  { icon: Headphones, title: "Meditações guiadas", desc: "A AURA percebe quando você precisa e envia." },
-  { icon: MessageSquare, title: "Texto e áudio", desc: "Fale do jeito que for mais fácil pra você." },
-  { icon: Sparkles, title: "Conteúdo no seu ritmo", desc: "Episódios sobre ansiedade, autoestima e mais." },
+  { icon: CalendarCheck, title: "Encontros guiados de 45 minutos", desc: "Um espaço focado para investigar um tema, ganhar perspectiva e chegar a um fechamento que permanece." },
+  { icon: BookMarked, title: "Seu percurso em capítulos", desc: "Mudanças, temas, marcos e trechos das suas próprias palavras formam um capítulo novo a cada mês." },
+  { icon: Route, title: "Jornadas ligadas ao seu momento", desc: "Conteúdos que não chegam soltos: continuam o que apareceu nas suas conversas e acompanham seu ritmo." },
+  { icon: Headphones, title: "Meditações e áudios para o contexto", desc: "Experiências em áudio escolhidas para o que você está vivendo, na mesma voz que já te acompanha." },
+  { icon: MessageCircleQuestion, title: "Perguntas que abrem caminhos", desc: "Provocações relevantes ajudam a sair do piloto automático e iniciar conversas que importam." },
+  { icon: Cloud, title: "Cápsula do tempo", desc: "Grave uma mensagem para o seu eu do futuro e perceba, com a própria voz, o que mudou." },
+  { icon: Lightbulb, title: "Insights e próximos passos", desc: "Conexões importantes deixam de se perder e podem virar clareza, escolha e movimento na vida real." },
 ];
 
 const BenefitsGridV2 = () => (
   <section className="relative py-24 md:py-32 v2-dark-section">
     <div className="container mx-auto px-6">
       <div className="text-center max-w-2xl mx-auto mb-14">
-        <p className="text-xs uppercase tracking-[0.25em] text-white/65 mb-4">tudo isso</p>
+        <p className="text-xs uppercase tracking-[0.25em] text-white/65 mb-4">uma experiência que cresce com você</p>
         <h2 className="font-display text-3xl md:text-5xl font-medium leading-[1.15] tracking-tight text-white">
-          A partir de <span className="italic">R$ 0,33</span> por dia.
+          A conversa passa. O que ela constrói
+          <br className="hidden md:block" /> <span className="italic text-gradient-sage">fica com você.</span>
         </h2>
         <p className="mt-5 text-base text-white/70">
-          Saúde mental acessível não é saúde mental inferior. É saúde mental para todos.
+          A AURA transforma o que vocês vivem juntas em experiências que ajudam você a enxergar, registrar e sustentar mudanças.
         </p>
       </div>
 
-      <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-10 max-w-6xl mx-auto">
-        {benefits.map((b) => (
-          <div key={b.title} className="flex gap-3">
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mt-0.5">
-              <b.icon className="w-4 h-4 text-primary" />
+      <div className="grid md:grid-cols-2 gap-px max-w-5xl mx-auto border-y border-white/10">
+        {benefits.map((b, index) => (
+          <div key={b.title} className={`flex gap-4 py-7 md:px-8 ${index % 2 === 0 ? "md:border-r md:border-white/10" : ""}`}>
+            <div className="flex-shrink-0 w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mt-0.5">
+              <b.icon className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white mb-1">{b.title}</h3>
-              <p className="text-xs text-white/70 leading-relaxed">{b.desc}</p>
+              <h3 className="font-display text-lg text-white mb-2">{b.title}</h3>
+              <p className="text-sm text-white/70 leading-relaxed">{b.desc}</p>
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="mt-12 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-xs text-white/65">
+        <span className="inline-flex items-center gap-2"><MessageSquare className="w-4 h-4 text-primary" /> Texto e áudio</span>
+        <span>WhatsApp</span>
+        <span>Disponível 24/7</span>
+        <span>Continuidade entre conversas</span>
       </div>
     </div>
   </section>

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Star, Clock, Brain, Check } from "lucide-react";
+import { Star, Clock, Waypoints, Check } from "lucide-react";
 import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
 import heroImg from "@/assets/v2/hero-mulher-sofa.jpg";
 
@@ -19,15 +19,15 @@ const HeroV2 = () => (
           </span>
 
           <h1 className="mt-6 font-display text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] tracking-tight">
-            Presente quando
+            Uma inteligência que acompanha
             <br />
-            <span className="italic text-gradient-sage">você</span> mais precisa.
+            <span className="italic text-gradient-sage">quem você está se tornando.</span>
           </h1>
 
-          <p className="mt-6 text-base md:text-lg text-white/70 max-w-md leading-relaxed">
-            A AURA lembra da sua história, entende seu momento e te acompanha no
-            WhatsApp — com sessões guiadas de 45 minutos e conversa aberta a
-            qualquer hora do dia.
+          <p className="mt-6 text-base md:text-lg text-white/70 max-w-lg leading-relaxed">
+            Pelo WhatsApp, a AURA conversa com você por texto e áudio, conecta o que
+            acontece na sua vida e conduz encontros guiados de 45 minutos para
+            transformar pensamentos confusos em clareza, direção e movimento.
           </p>
 
           <div className="mt-8 flex flex-col items-start gap-2">
@@ -63,10 +63,10 @@ const HeroV2 = () => (
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Brain className="w-5 h-5 text-primary" />
+              <Waypoints className="w-5 h-5 text-primary" />
               <div>
-                <p className="font-display text-base text-white">Memória</p>
-                <p className="text-xs text-white/55">de longo prazo</p>
+                <p className="font-display text-base text-white">Conexões</p>
+                <p className="text-xs text-white/55">entre o que você vive</p>
               </div>
             </div>
           </div>
@@ -89,10 +89,10 @@ const HeroV2 = () => (
             <div className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 w-[230px] md:w-[240px] v2-fade-up" style={{ animationDelay: "0.6s" }}>
               <div className="relative bg-[#f5efe6] text-[#1a2238] rounded-2xl rounded-br-sm px-5 py-4 shadow-2xl">
                 <p className="text-sm leading-relaxed">
-                  <span className="font-semibold">Oi, estou aqui.</span>
+                  <span className="font-semibold">Tem uma conexão aqui.</span>
                   <br />
                   <br />
-                  Pode falar comigo sobre o que estiver sentindo.
+                  Posso te mostrar o que estou percebendo?
                 </p>
                 {/* Coração tag */}
                 <div className="absolute -bottom-3 -right-2 w-9 h-9 rounded-full bg-[#f5efe6] shadow-md flex items-center justify-center">

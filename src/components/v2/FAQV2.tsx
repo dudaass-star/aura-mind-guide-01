@@ -8,20 +8,20 @@ import { trackFaqOpen } from "@/lib/ga4";
 
 const faqs = [
   {
-    q: "O que muda em ter a AURA no seu WhatsApp?",
-    a: "Ela lembra da sua história, entende seu momento e vai te conhecendo mais a cada conversa. Diferente de uma conversa isolada, a AURA constrói uma relação contínua: o que você contou ontem sustenta o apoio de amanhã. Está disponível das 6h à meia-noite, todos os dias, por texto ou áudio — e quando você precisa ir mais fundo, tem sessão guiada de 45 minutos com resumo escrito no final.",
+    q: "O que é a AURA e como ela funciona?",
+    a: "A AURA é uma inteligência de acompanhamento emocional pelo WhatsApp. Você conversa por texto ou áudio sobre o que está vivendo. Ela faz perguntas, conecta acontecimentos e ajuda a transformar o que está confuso em clareza e direção. Quando quiser aprofundar um tema, há encontros guiados de 45 minutos com fechamento e resumo escrito.",
   },
   {
     q: "Como é a primeira conversa?",
     a: "Simples: você manda uma mensagem contando o que está sentindo, do jeito que sair. A AURA não aplica formulário nem entrega respostas prontas — ela pergunta, escuta e ajuda você a organizar o que está embaralhado. Nos primeiros dias ela vai mapeando sua vida concreta, e daí em diante cada conversa fica mais precisa, porque ela já sabe quem é quem na sua história.",
   },
   {
-    q: "Por que é tão mais barato que terapia?",
-    a: "A Aura consegue oferecer acompanhamento emocional de qualidade a um custo muito menor porque está disponível 24/7 e escala com tecnologia. Não é terapia — é suporte emocional contínuo, com metodologia, memória do seu histórico e direção prática. É um complemento ou ponto de partida acessível para quem não pode pagar R$ 200 por sessão.",
+    q: "O que a AURA constrói ao longo do tempo?",
+    a: "As conversas não ficam soltas. A AURA transforma o percurso em capítulos mensais com temas, mudanças percebidas, marcos e trechos das suas próprias palavras. Você também encontra resumos dos encontros, insights e experiências ligadas ao seu momento no seu espaço pessoal.",
   },
   {
-    q: "A Aura substitui terapia com psicólogo?",
-    a: "Aura é acompanhamento emocional e direção prática — não substitui atendimento psicológico profissional. Muita gente usa como complemento entre sessões ou como ponto de partida para quem não tem acesso à terapia. Se você está em crise severa, procure ajuda especializada.",
+    q: "A AURA substitui atendimento psicológico?",
+    a: "A AURA é uma experiência própria de acompanhamento emocional, clareza e direção prática. Ela não realiza diagnóstico nem substitui atendimento psicológico profissional. Se você estiver em risco imediato ou em uma emergência, procure ajuda especializada.",
   },
   {
     q: "Como funciona o período de teste?",
@@ -32,8 +32,8 @@ const faqs = [
     a: "Sim! Se você precisar dar um tempo, pode pausar sua assinatura por até 30 dias sem perder seu histórico ou progresso. Quando voltar, a Aura continua de onde parou.",
   },
   {
-    q: "O que são as Sessões Especiais?",
-    a: "São encontros de 45 minutos com metodologia estruturada (Investigação Socrática + Logoterapia). Você escolhe o tema: Clareza (decisões), Padrões (comportamentos repetitivos), Propósito (sentido de vida) ou Livre. Depois, recebe um resumo escrito com os principais insights.",
+    q: "O que são os encontros guiados?",
+    a: "São 45 minutos dedicados a aprofundar um tema importante com método e continuidade. A AURA investiga com você, ajuda a construir uma nova perspectiva e encerra com um fechamento coerente com aquele momento. Depois, o encontro fica registrado com resumo escrito no seu espaço pessoal.",
   },
   {
     q: "Posso enviar áudio?",

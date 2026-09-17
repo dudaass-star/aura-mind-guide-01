@@ -1,20 +1,20 @@
-import { MessageCircle, Sparkles, CalendarHeart } from "lucide-react";
+import { MessageCircle, Waypoints, Compass } from "lucide-react";
 
 const steps = [
   {
     icon: MessageCircle,
-    title: "Mande mensagem quando precisar",
-    desc: "Texto ou áudio, a qualquer hora. A AURA responde em segundos.",
+    title: "Traga a vida como ela está",
+    desc: "Conte por texto ou áudio o que aconteceu, o que está pesando ou a decisão que não sai do lugar.",
   },
   {
-    icon: Sparkles,
-    title: "Conversa com profundidade",
-    desc: "A AURA faz as perguntas certas e te ajuda a refletir e entender você.",
+    icon: Waypoints,
+    title: "Ela conecta os pontos",
+    desc: "A AURA relaciona acontecimentos, percebe movimentos e devolve hipóteses para vocês explorarem juntos.",
   },
   {
-    icon: CalendarHeart,
-    title: "Sessões estruturadas",
-    desc: "45 minutos focados, com metodologia, resumo escrito e retrospectiva do seu progresso.",
+    icon: Compass,
+    title: "Você encontra direção",
+    desc: "A conversa ganha um fechamento, um próximo passo ou um encontro guiado de 45 minutos para aprofundar.",
   },
 ];
 
@@ -23,7 +23,7 @@ const HowItWorksV2 = () => (
     <div className="container mx-auto px-6">
       <div className="text-center max-w-2xl mx-auto mb-16">
         <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground mb-4">
-          simples como mandar uma mensagem · profundo como uma sessão de verdade
+          simples como mandar uma mensagem · profundo o bastante para mudar sua perspectiva
         </p>
         <h2 className="font-display text-3xl md:text-5xl font-medium leading-[1.15] tracking-tight text-foreground">
           Como funciona a <span className="text-gradient-sage">Aura</span>
