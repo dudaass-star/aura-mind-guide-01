@@ -26,7 +26,7 @@ const FinalCTAV3 = () => (
         <div className="flex flex-col items-center md:items-end gap-2">
           <Link
             to={checkoutHref("final", "v3")}
-            onClick={() => trackLandingCta("final", "Quero começar agora (v2, "v3")")}
+            onClick={() => trackLandingCta("final", "Quero começar agora (v2)", "v3")}
           >
             <Button variant="sage" size="xl" className="rounded-2xl px-8">
               Quero começar agora

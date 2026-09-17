@@ -41,7 +41,7 @@ const HeaderV3 = () => {
             <a href="#faq" className={linkBase}>FAQ</a>
             <Link
               to={checkoutHref("header", "v3")}
-              onClick={() => trackLandingCta("header", "Começar agora (v2 desktop, "v3")")}
+              onClick={() => trackLandingCta("header", "Começar agora (v2 desktop)", "v3")}
             >
               <Button variant="sage" size="sm" className="rounded-full px-5">
                 Começar agora
@@ -68,7 +68,7 @@ const HeaderV3 = () => {
               <Link
                 to={checkoutHref("header", "v3")}
                 onClick={() => {
-                  trackLandingCta("header", "Começar agora (v2 mobile menu, "v3")");
+                  trackLandingCta("header", "Começar agora (v2 mobile menu)", "v3");
                   setIsMenuOpen(false);
                 }}
               >

@@ -27,7 +27,7 @@ const StickyMobileCTAV3 = () => {
       <Link
         to={checkoutHref("sticky", "v3")}
         className="block"
-        onClick={() => trackLandingCta("sticky", "Começar por R$ 6,90 (v2, "v3")")}
+        onClick={() => trackLandingCta("sticky", "Começar por R$ 6,90 (v2)", "v3")}
       >
         <Button variant="sage" size="lg" className="w-full rounded-full">
           Começar por R$ 6,90

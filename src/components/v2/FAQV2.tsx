@@ -8,28 +8,32 @@ import { trackFaqOpen } from "@/lib/ga4";
 
 const faqs = [
   {
-    q: "O que muda em ter a AURA no seu WhatsApp?",
-    a: "Ela lembra da sua história, entende seu momento e vai te conhecendo mais a cada conversa. Diferente de uma conversa isolada, a AURA constrói uma relação contínua: o que você contou ontem sustenta o apoio de amanhã. Está disponível 24/7, por texto ou áudio — e quando você precisa ir mais fundo, tem encontro guiado de 45 minutos com resumo escrito no final.",
+    q: "O que é a AURA e como ela funciona?",
+    a: "A AURA é uma inteligência de acompanhamento emocional pelo WhatsApp. Você conversa por texto ou áudio sobre o que está vivendo. Ela faz perguntas, conecta acontecimentos e ajuda a transformar o que está confuso em clareza e direção. Quando quiser aprofundar um tema, há encontros guiados de 45 minutos com fechamento e resumo escrito.",
   },
   {
     q: "Como é a primeira conversa?",
     a: "Simples: você manda uma mensagem contando o que está sentindo, do jeito que sair. A AURA não aplica formulário nem entrega respostas prontas — ela pergunta, escuta e ajuda você a organizar o que está embaralhado. Nos primeiros dias ela vai mapeando sua vida concreta, e daí em diante cada conversa fica mais precisa, porque ela já sabe quem é quem na sua história.",
   },
   {
-    q: "A AURA substitui atendimento profissional?",
-    a: "Não. A AURA é apoio no dia a dia: conversa contínua, memória do seu percurso e direção prática. Ela não faz diagnóstico, não substitui atendimento profissional e não se apresenta como tratamento. É um espaço seguro para desabafar, refletir e encontrar clareza.",
+    q: "O que a AURA constrói ao longo do tempo?",
+    a: "As conversas não ficam soltas. A AURA transforma o percurso em capítulos mensais com temas, mudanças percebidas, marcos e trechos das suas próprias palavras. Você também encontra resumos dos encontros, insights e experiências ligadas ao seu momento no seu espaço pessoal.",
+  },
+  {
+    q: "A AURA substitui atendimento psicológico?",
+    a: "A AURA é uma experiência própria de acompanhamento emocional, clareza e direção prática. Ela não realiza diagnóstico nem substitui atendimento psicológico profissional. Se você estiver em risco imediato ou em uma emergência, procure ajuda especializada.",
   },
   {
     q: "Como funciona o período de teste?",
-    a: "Você experimenta a AURA por 7 dias com acesso completo ao plano escolhido, pagando apenas uma taxa simbólica (a partir de R$ 6,90). Se não fizer sentido, cancele a qualquer momento antes do 8º dia e não será cobrado mais nada. Se nos primeiros 7 dias você não sentir diferença, devolvemos seu dinheiro — sem perguntas.",
+    a: "Você experimenta a Aura por 7 dias com acesso completo ao plano escolhido, pagando apenas uma taxa simbólica (a partir de R$ 6,90). Se não fizer sentido, cancele a qualquer momento antes do 8º dia e não será cobrado mais nada. Se nos primeiros 7 dias você não sentir diferença, devolvemos seu dinheiro — sem perguntas.",
   },
   {
     q: "Posso pausar minha assinatura?",
-    a: "Sim! Se você precisar dar um tempo, pode pausar sua assinatura por até 30 dias sem perder seu histórico ou progresso. Quando voltar, a AURA continua de onde parou.",
+    a: "Sim! Se você precisar dar um tempo, pode pausar sua assinatura por até 30 dias sem perder seu histórico ou progresso. Quando voltar, a Aura continua de onde parou.",
   },
   {
-    q: "O que são os Encontros Guiados?",
-    a: "São encontros de 45 minutos com metodologia estruturada. Você escolhe o tema: Clareza (decisões), Padrões (comportamentos repetitivos), Propósito (sentido de vida) ou Livre. Depois, recebe um resumo escrito com os principais insights.",
+    q: "O que são os encontros guiados?",
+    a: "São 45 minutos dedicados a aprofundar um tema importante com método e continuidade. A AURA investiga com você, ajuda a construir uma nova perspectiva e encerra com um fechamento coerente com aquele momento. Depois, o encontro fica registrado com resumo escrito no seu espaço pessoal.",
   },
   {
     q: "Posso enviar áudio?",
@@ -37,7 +41,7 @@ const faqs = [
   },
   {
     q: "Meus dados ficam seguros?",
-    a: "Sim. Seus dados são criptografados e usados apenas para a AURA lembrar do seu histórico e melhorar seu acompanhamento. Seguimos todas as normas da LGPD.",
+    a: "Sim. Seus dados são criptografados e usados apenas para a Aura lembrar do seu histórico e melhorar seu acompanhamento. Seguimos todas as normas da LGPD.",
   },
   {
     q: "Posso cancelar quando quiser?",
@@ -45,7 +49,7 @@ const faqs = [
   },
   {
     q: "O que é a Cápsula do Tempo?",
-    a: "É um recurso exclusivo da AURA. Em momentos especiais da conversa, a AURA te convida a gravar um áudio para o seu eu do futuro. Você grava, confirma que ficou do jeito que queria, e a AURA guarda com carinho. Daqui a 3 meses, você recebe essa mensagem de volta — de surpresa. É poderoso se ouvir meses depois e perceber o quanto você evoluiu.",
+    a: "É um recurso exclusivo da Aura. Em momentos especiais da conversa, a Aura te convida a gravar um áudio para o seu eu do futuro. Você grava, confirma que ficou do jeito que queria, e a Aura guarda com carinho. Daqui a 3 meses, você recebe essa mensagem de volta — de surpresa. É poderoso se ouvir meses depois e perceber o quanto você evoluiu.",
   },
 ];
 
@@ -91,4 +95,3 @@ const FAQV2 = () => (
 );
 
 export default FAQV2;
-
