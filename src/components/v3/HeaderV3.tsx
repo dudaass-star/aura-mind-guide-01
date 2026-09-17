@@ -26,7 +26,7 @@ const HeaderV3 = () => {
     >
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between py-3">
-          <Link to="/v3" className="flex items-center">
+          <Link to="/" className="flex items-center">
             <img
               src={logoOlaAura}
               alt="Olá AURA"
@@ -35,8 +35,8 @@ const HeaderV3 = () => {
           </Link>
 
           <nav className="hidden md:flex items-center gap-7">
-            <a href="#como-funciona" className={linkBase}>Como funciona</a>
-            <a href="#depoimentos" className={linkBase}>Depoimentos</a>
+            <Link to="/guia" className={linkBase}>Guia</Link>
+            <Link to="/blog" className={linkBase}>Blog</Link>
             <a href="#precos" className={linkBase}>Preços</a>
             <a href="#faq" className={linkBase}>FAQ</a>
             <Link
@@ -61,8 +61,8 @@ const HeaderV3 = () => {
         {isMenuOpen && (
           <nav className="md:hidden py-4 border-t border-white/10 bg-[hsl(220_35%_10%/0.95)] backdrop-blur-md -mx-6 px-6">
             <div className="flex flex-col gap-4">
-              <a href="#como-funciona" className={linkBase} onClick={() => setIsMenuOpen(false)}>Como funciona</a>
-              <a href="#depoimentos" className={linkBase} onClick={() => setIsMenuOpen(false)}>Depoimentos</a>
+              <Link to="/guia" className={linkBase} onClick={() => setIsMenuOpen(false)}>Guia</Link>
+              <Link to="/blog" className={linkBase} onClick={() => setIsMenuOpen(false)}>Blog</Link>
               <a href="#precos" className={linkBase} onClick={() => setIsMenuOpen(false)}>Preços</a>
               <a href="#faq" className={linkBase} onClick={() => setIsMenuOpen(false)}>FAQ</a>
               <Link

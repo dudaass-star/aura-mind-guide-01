@@ -12,15 +12,14 @@ const FinalCTAV3 = () => (
         </div>
 
         <div className="text-center md:text-left">
-          <p className="text-xs uppercase tracking-[0.25em] text-white/65 mb-3">lembre-se</p>
+          <p className="text-xs uppercase tracking-[0.25em] text-white/65 mb-3">seu próximo capítulo</p>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-medium leading-[1.1] tracking-tight text-white">
-            Você não precisa enfrentar
-            <br className="hidden md:block" /> tudo <span className="italic text-gradient-sage">sozinho.</span>
+            Não é apenas sobre atravessar
+            <br className="hidden md:block" /> dias difíceis. É sobre <span className="italic text-gradient-sage">quem você está se tornando.</span>
           </h2>
           <p className="mt-4 text-base text-white/70">
-            Um mês inteiro com a AURA — conversas ilimitadas, encontros guiados e
-            memória do seu percurso — sai a partir de R$ 9,90. Menos que um café por dia
-            para parar de remoer e começar a agir.
+            Comece pelo WhatsApp. Converse por texto ou áudio, aprofunde o que importa
+            em encontros guiados e veja seu percurso ganhar forma ao longo do tempo.
           </p>
         </div>
 

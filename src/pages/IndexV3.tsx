@@ -31,16 +31,16 @@ const IndexV3 = () => {
   return (
     <>
       <Helmet>
-        <title>Olá AURA — Apoio no WhatsApp para sua cabeça parar</title>
+        <title>Olá AURA — Uma inteligência que escuta e ajuda você a seguir</title>
         <meta
           name="description"
-          content="AURA é companhia inteligente no WhatsApp. Conversa contínua, encontros guiados e memória do seu percurso. Comece por R$ 6,90 por 7 dias."
+          content="Converse por texto ou áudio no WhatsApp e encontre direção em encontros guiados de 45 minutos. Experimente 7 dias por R$ 6,90."
         />
         <meta name="robots" content="noindex, nofollow" />
         <link rel="canonical" href="https://olaaura.com.br/v3" />
         <meta property="og:url" content="https://olaaura.com.br/v3" />
-        <meta property="og:title" content="Olá AURA — Apoio no WhatsApp para sua cabeça parar" />
-        <meta property="og:description" content="Companhia inteligente no WhatsApp. Conversa contínua, encontros guiados e memória do seu percurso. Comece por R$ 6,90." />
+        <meta property="og:title" content="Olá AURA — Uma inteligência que escuta e ajuda você a seguir" />
+        <meta property="og:description" content="Converse por texto ou áudio no WhatsApp e encontre direção em encontros guiados de 45 minutos. Experimente 7 dias por R$ 6,90." />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
         <script type="application/ld+json">
@@ -68,8 +68,8 @@ const IndexV3 = () => {
         <main>
           <HeroV3 />
           <DemoV3 />
-          <HowItWorksV3 />
           <BenefitsGridV3 />
+          <HowItWorksV3 />
           <TestimonialsV3 />
           <PricingV3 />
           <FAQV3 />
