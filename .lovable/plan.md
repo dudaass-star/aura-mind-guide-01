@@ -15,25 +15,33 @@ Fazer o visitante entender e sentir o diferencial da AURA em poucos segundos, an
 ### 2. Antecipar o momento “UAU” com um arco completo
 A conexão mais forte deixará de aparecer somente no fim. A nova conversa seguirá este fluxo:
 
-> **Usuária:** “Eu sei que essa relação me faz mal. Mas quando ele some, eu sinto falta e acabo voltando.”
+> **Usuária:** “Eu sei que essa relação me faz mal. Mas é só ele sumir que eu sinto falta e acabo voltando.”
 >
-> **AURA:** “Quando ele volta, o que chega primeiro: a sensação de ser amada ou o alívio de não ter sido abandonada?”
+> **AURA:** “Posso te fazer uma pergunta meio difícil?”
 >
-> **Usuária:** “Alívio. Porque por alguns dias parece que agora vai ser diferente.”
+> **AURA:** “Quando ele volta, o que você sente primeiro? Que é amada... ou o alívio de não ter sido deixada?”
 >
-> **AURA:** “Então talvez você não esteja voltando para a relação que existe. Está voltando para a esperança da relação que ainda queria viver.”
+> **Usuária:** “Alívio. Porque por alguns dias eu acho que agora vai ser diferente.”
 >
-> **AURA:** “E cada volta alivia o medo de perdê-lo — mas te coloca de novo no lugar em que você se perde.”
+> **AURA:** “Então olha o que parece estar acontecendo...”
 >
-> **AURA:** “Se não precisasse provar que essa história podia dar certo, o que você já saberia sobre o que precisa fazer?”
+> **AURA:** “Talvez você não esteja voltando pra relação que vocês têm.”
+>
+> **AURA:** “Talvez esteja voltando pra esperança da relação que queria que vocês tivessem.”
+>
+> **AURA:** “E por alguns dias esse alívio parece amor. Até você começar a se perder de novo.”
+>
+> **AURA:** “Se você parasse de tentar fazer essa história dar certo... o que já saberia que precisa fazer?”
 >
 > **Usuária:** “Que eu preciso parar de voltar.”
 >
-> **AURA:** “Então não falta clareza. O que falta é sustentar a escolha quando a saudade tentar negociar com ela.”
+> **AURA:** “É. Então talvez não esteja faltando clareza.”
+>
+> **AURA:** “O difícil é sustentar o que você já sabe quando a saudade vier tentar te convencer do contrário.”
 
 Essa versão não depende de uma frase solta ou de a AURA perguntar se “leu errado”. O valor nasce da sequência: ela diferencia amor de alívio, revela a esperança que mantém o ciclo, conduz a própria pessoa à resposta e nomeia com firmeza onde está o desafio real.
 
-A redação final poderá ser lapidada durante a implementação para manter naturalidade e ritmo, sem mudar esse arco aprovado.
+A conversa usará frases curtas, contrações naturais (“pra”, “tá”), pausas e balões separados. A AURA não fará um discurso: perguntará, escutará, devolverá o padrão com cuidado e deixará a descoberta acontecer junto com a pessoa.
 
 ### 3. Acelerar a reprodução
 - Trocar as pausas longas, adequadas a uma conversa real, por um ritmo de demonstração.
