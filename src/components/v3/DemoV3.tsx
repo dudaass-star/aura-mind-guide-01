@@ -305,7 +305,7 @@ const DemoV3 = () => {
             </p>
             <Link
               to={checkoutHref("demo", "v3")}
-              onClick={() => trackLandingCta("demo", "Começar minha jornada (demo v2)", "v3")}
+              onClick={() => trackLandingCta("demo", "Começar minha jornada (demo v3)", "v3")}
             >
               <Button variant="sage" size="xl">
                 Começar minha jornada

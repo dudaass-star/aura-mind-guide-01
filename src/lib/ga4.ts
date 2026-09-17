@@ -4,6 +4,7 @@
 const MARKETING_ROUTES = [
   "/",
   "/v2",
+  "/v3",
   "/checkout",
   "/obrigado",
   "/experimentar",

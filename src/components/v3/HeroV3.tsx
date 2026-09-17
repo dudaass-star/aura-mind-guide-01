@@ -33,7 +33,7 @@ const HeroV3 = () => (
           <div className="mt-8 flex flex-col items-start gap-2">
             <Link
               to={checkoutHref("hero", "v3")}
-              onClick={() => trackLandingCta("hero", "Começar por R$ 6,90 (v2)", "v3")}
+              onClick={() => trackLandingCta("hero", "Começar por R$ 6,90 (v3)", "v3")}
             >
               <Button variant="sage" size="xl" className="rounded-2xl px-10 shadow-lg">
                 Começar por R$ 6,90
