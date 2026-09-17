@@ -400,7 +400,7 @@ const DemoV2 = () => {
 
         {/* Caption */}
         <p className="text-center text-sm text-muted-foreground mt-10 max-w-lg mx-auto">
-          A AURA conecta o que você vive hoje ao que já apareceu no seu percurso — e devolve essa leitura como uma hipótese para vocês explorarem juntos.
+          A AURA não entrega uma resposta pronta. Ela faz a pergunta que muda o ângulo, percebe o padrão e ajuda você a enxergar o que já estava sentindo.
         </p>
 
         {isComplete && (
