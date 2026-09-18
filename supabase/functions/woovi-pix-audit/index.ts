@@ -50,6 +50,33 @@ function money(cents: number): string {
   return (Number(cents || 0) / 100).toFixed(2).replace(".", ",");
 }
 
+/** Estado consolidado de uma parcela recorrente da Woovi. */
+function installmentPayment(i: Record<string, any>): {
+  paid: boolean;
+  status: string;
+  id: string;
+  paidAt: string | null;
+  dueDate: string | null;
+  value: number;
+} {
+  const cobr = (i?.cobr || {}) as Record<string, any>;
+  const tries = Array.isArray(cobr?.tries) ? cobr.tries as Record<string, any>[] : [];
+  const paidTry = tries.find((t) => WOOVI_PAID_STATUSES.includes(String(t?.tryStatus || "").toUpperCase()));
+  const installmentStatus = String(i?.status || "").toUpperCase();
+  const cobrStatus = String(cobr?.status || "").toUpperCase();
+  const paid = WOOVI_PAID_STATUSES.includes(installmentStatus)
+    || WOOVI_PAID_STATUSES.includes(cobrStatus)
+    || !!paidTry;
+  return {
+    paid,
+    status: paid ? "COMPLETED" : (cobrStatus || installmentStatus || "UNKNOWN"),
+    id: String(cobr?.identifierId || cobr?.endToEndId || i?.globalID || i?.correlationID || ""),
+    paidAt: (cobr?.paymentDate || paidTry?.updatedAt || null) as string | null,
+    dueDate: (i?.dateGenerateCharge || cobr?.dueDate || null) as string | null,
+    value: Number(cobr?.value ?? paidTry?.value ?? i?.value ?? 0),
+  };
+}
+
 /** Reenvia o pagamento pro webhook-woovi: fonte única de verdade da ativação. */
 async function replayToWebhook(payload: Record<string, unknown>): Promise<boolean> {
   const url = Deno.env.get("SUPABASE_URL");
@@ -246,10 +273,9 @@ Deno.serve(async (req) => {
   const resendMandateFor = typeof body.resend_mandate_step1_for === "string"
     ? body.resend_mandate_step1_for
     : null;
-  // Modo rápido (`{ only: "extrato" }`): roda SÓ a varredura 6, que é a única
-  // fonte da parcela do carnê. Serve para um cron curto (a cada 10 min) que
-  // reconcilia o pagamento em minutos — assim quem acabou de pagar não parece
-  // abandono para as rotinas de recuperação.
+  // Modo rápido (`{ only: "extrato" }`): consulta primeiro as parcelas reais dos
+  // mandatos vencidos. O webhook mensal da Woovi pode não chegar e o endpoint da
+  // assinatura não inclui `installments`; por isso a parcela é a prova primária.
   const onlyExtrato = body.only === "extrato" || body.only === "extrato_debug";
   const debugExtrato = body.only === "extrato_debug";
   // Modo rápido (`{ only: "mandatos" }`): roda SÓ a varredura 4 (status real do
@@ -885,6 +911,8 @@ Deno.serve(async (req) => {
       .not("mandate_approved_at", "is", null)
       .not("next_charge_date", "is", null)
       .lte("next_charge_date", today)
+      .order("next_charge_date", { ascending: true })
+      .order("id", { ascending: true })
       .limit(200);
 
     // Mandato nativo (troca de plano / retenção) não tem entrada: a 1ª parcela é
@@ -925,30 +953,34 @@ Deno.serve(async (req) => {
       dueQueue.push(s);
     }
 
-    for (const sub of (skipVarreduras ? [] : dueQueue) || []) {
-      const r = await wooviFetch<Record<string, any>>(
-        `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
-      );
-      await new Promise((res) => setTimeout(res, 250));
-      if (!r.ok || !r.data) {
-        // Silêncio da Woovi (429/5xx) não é "mandato sem cobrança": registra pra
-        // reconferência na próxima varredura em vez de sumir do radar.
+    // O cron rápido precisa caber na janela curta do pg_net. Rodamos quatro
+    // mandatos por vez e alternamos o lote a cada dez minutos para que recusas
+    // antigas não impeçam a leitura dos demais.
+    let reconciliationQueue = dueQueue;
+    if (onlyExtrato && !debugExtrato && dueQueue.length > 4) {
+      const batchCount = Math.ceil(dueQueue.length / 4);
+      const slot = Math.floor(now.getTime() / 600000) % batchCount;
+      reconciliationQueue = dueQueue.slice(slot * 4, slot * 4 + 4);
+    }
+
+    for (const sub of (onlyMandatos ? [] : reconciliationQueue) || []) {
+      let remoteCharges: Record<string, any>[];
+      try {
+        remoteCharges = await listInstallments(String(sub.subscription_id));
+      } catch (e) {
+        const status = e instanceof WooviUnavailable ? e.status : "erro";
         report.ciclo_sem_cobranca.push({
           sub: sub.subscription_id, email: sub.customer_email,
           ciclo: sub.next_charge_date,
-          motivo: `woovi indisponível (${r.status}) — reconferir`, dryRun,
+          motivo: `woovi indisponível (${status}) — reconferir`, dryRun,
         });
         continue;
       }
-      const remote = ((r.data as Record<string, any>)?.subscription || r.data) as Record<string, any>;
-      const remoteCharges: Record<string, any>[] = Array.isArray(remote?.charges)
-        ? remote.charges
-        : Array.isArray(remote?.installments) ? remote.installments : [];
 
       // Cobrança do ciclo já vencido (a partir da data prevista de débito).
       const cycleCharges = remoteCharges.filter((c) => {
-        const when = String(c?.createdAt || c?.dueDate || c?.expiresDate || "").slice(0, 10);
-        return !when || when >= String(sub.next_charge_date);
+        const when = String(c?.dateGenerateCharge || c?.cobr?.dueDate || c?.createdAt || "").slice(0, 10);
+        return (!when || when >= String(sub.next_charge_date)) && (!when || when <= today);
       });
 
       if (cycleCharges.length === 0) {
@@ -964,9 +996,9 @@ Deno.serve(async (req) => {
       }
 
       for (const c of cycleCharges) {
-        const status = String(c?.status || "").toUpperCase();
-        if (!WOOVI_PAID_STATUSES.includes(status)) continue;
-        const correlationID = String(c?.correlationID || c?.identifier || c?.globalID || "");
+        const payment = installmentPayment(c);
+        if (!payment.paid) continue;
+        const correlationID = payment.id;
         if (!correlationID) continue;
         const { data: known } = await supabase
           .from("woovi_charges").select("id, paid_at")
@@ -978,8 +1010,17 @@ Deno.serve(async (req) => {
         }
         const ok = await replayToWebhook({
           event: "OPENPIX:CHARGE_COMPLETED",
-          charge: { ...c, correlationID, status },
-          subscription: { globalID: remote?.globalID, correlationID: remote?.correlationID },
+          charge: {
+            correlationID,
+            globalID: c?.globalID || null,
+            status: payment.status,
+            value: payment.value,
+            paidAt: payment.paidAt || new Date().toISOString(),
+            dueDate: payment.dueDate,
+            comment: "reconciliado pela parcela Woovi",
+          },
+          installment: c,
+          subscription: { globalID: sub.subscription_id, subscriptionId: sub.subscription_id },
         });
         if (ok) report.recuperados.push({ charge: correlationID, via: "ciclo" });
       }
@@ -987,9 +1028,7 @@ Deno.serve(async (req) => {
       // Rede de segurança da recuperação silenciosa: se nenhuma cobrança do
       // ciclo vencido está paga e o webhook de "ciclo não pago" nunca chegou,
       // a cadência nunca começaria — o cliente pararia de pagar em silêncio.
-      const anyPaid = cycleCharges.some((c) =>
-        WOOVI_PAID_STATUSES.includes(String(c?.status || "").toUpperCase())
-      );
+      const anyPaid = cycleCharges.some((c) => installmentPayment(c).paid);
       if (!anyPaid) {
         // Ciclo vencido sem pagamento não pode conviver com acesso liberado
         // além do que o cliente pagou (caso real: entrada de teste paga, plano
@@ -1042,6 +1081,18 @@ Deno.serve(async (req) => {
           });
         }
       }
+    }
+
+    // O cron de dez minutos termina aqui: ele existe para reconhecer parcelas
+    // pagas rapidamente. Extrato completo, cobertura e demais auditorias seguem
+    // na rotina geral de quinze minutos, sem atrasar a renovação do acesso.
+    if (onlyExtrato && !debugExtrato) {
+      return new Response(JSON.stringify({
+        dryRun,
+        modo: "parcelas",
+        analisados: reconciliationQueue.length,
+        report,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // ---- 5b) Cobertura: todo mandato vivo precisa ter parcela na Woovi ------
