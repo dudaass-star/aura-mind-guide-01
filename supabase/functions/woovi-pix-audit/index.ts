@@ -959,7 +959,10 @@ Deno.serve(async (req) => {
     let reconciliationQueue = dueQueue;
     if (onlyExtrato && !debugExtrato && dueQueue.length > 4) {
       const batchCount = Math.ceil(dueQueue.length / 4);
-      const slot = Math.floor(now.getTime() / 600000) % batchCount;
+      const requestedSlot = Number(body.batch_offset);
+      const slot = Number.isInteger(requestedSlot) && requestedSlot >= 0
+        ? Math.min(requestedSlot, batchCount - 1)
+        : Math.floor(now.getTime() / 600000) % batchCount;
       reconciliationQueue = dueQueue.slice(slot * 4, slot * 4 + 4);
     }
 
