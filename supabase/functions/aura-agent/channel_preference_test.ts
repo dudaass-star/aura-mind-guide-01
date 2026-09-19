@@ -23,11 +23,15 @@ for (const phrase of REQUIRED_PHRASES) {
 }
 
 Deno.test("Preferência de texto continua precedendo os gatilhos obrigatórios de áudio", () => {
-  const textGuard = AGENT_SOURCE.indexOf("reason: 'user_prefers_text'");
-  const crisisRule = AGENT_SOURCE.indexOf("reason: 'crisis'");
-  const openingRule = AGENT_SOURCE.indexOf("reason: 'session_opening'");
-  const closingRule = AGENT_SOURCE.indexOf("reason: 'session_closing'");
+  const decisionStart = AGENT_SOURCE.indexOf("function determineAudioMode");
+  const decisionEnd = AGENT_SOURCE.indexOf("\nfunction ", decisionStart + 1);
+  const decisionSource = AGENT_SOURCE.slice(decisionStart, decisionEnd);
+  const textGuard = decisionSource.indexOf("reason: 'user_prefers_text'");
+  const crisisRule = decisionSource.indexOf("reason: 'crisis'");
+  const openingRule = decisionSource.indexOf("reason: 'session_opening'");
+  const closingRule = decisionSource.indexOf("reason: 'session_closing'");
 
+  assert(decisionStart >= 0, "determineAudioMode ausente");
   assert(textGuard >= 0, "bloqueio user_prefers_text ausente");
   assert(textGuard < crisisRule, "crise passou a preceder a preferência de texto");
   assert(textGuard < openingRule, "abertura passou a preceder a preferência de texto");
