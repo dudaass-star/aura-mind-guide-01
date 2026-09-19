@@ -27,7 +27,7 @@ Deno.test("Preferência de texto continua precedendo os gatilhos obrigatórios d
   const decisionEnd = AGENT_SOURCE.indexOf("\nfunction ", decisionStart + 1);
   const decisionSource = AGENT_SOURCE.slice(decisionStart, decisionEnd);
   const textGuard = decisionSource.indexOf("reason: 'user_prefers_text'");
-  const crisisRule = decisionSource.indexOf("reason: 'crisis'");
+  const crisisRule = decisionSource.indexOf("reason: 'crisis_detected'");
   const openingRule = decisionSource.indexOf("reason: 'session_opening'");
   const closingRule = decisionSource.indexOf("reason: 'session_closing'");
 
