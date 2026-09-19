@@ -16,4 +16,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Evoluir a Landing V2 para vender transformação com clareza concreta sobre produto e oferta
 - [x] Tornar a demonstração da Landing V2 mais rápida, humana e impactante com uma dor real recorrente
 - [x] Tornar a chamada principal da Landing V2 mais concreta, com escuta, direção e movimento
-- [ ] Tornar o acesso ao Meu Espaço confiável: rastrear entrega, recuperar por WhatsApp, vincular o perfil e reparar casos existentes
+- [ ] Resolver especificamente quando o cliente não recebe o código do Meu Espaço e escolher uma alternativa de entrada mais confiável
