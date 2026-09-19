@@ -38,6 +38,7 @@ import JourneyComplete from "./pages/JourneyComplete";
 import Unsubscribe from "./pages/Unsubscribe";
 import UserPortal from "./pages/UserPortal";
 import PortalLogin from "./pages/PortalLogin";
+import PortalWhatsAppAccess from "./pages/PortalWhatsAppAccess";
 import ReautorizarPix from "./pages/ReautorizarPix";
 import PixTaster from "./pages/PixTaster";
 import { PortalAuthProvider } from "./contexts/PortalAuthContext";
@@ -121,6 +122,7 @@ const App = () => (
             <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route path="/meu-espaco" element={<UserPortal />} />
             <Route path="/meu-espaco/entrar" element={<PortalLogin />} />
+            <Route path="/meu-espaco/acesso-whatsapp" element={<PortalWhatsAppAccess />} />
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/pagamento" element={<Pagamento />} />
