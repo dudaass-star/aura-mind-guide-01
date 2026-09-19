@@ -3769,6 +3769,10 @@ function userWantsText(message: string): boolean {
     'prefiro texto', 'pode escrever', 'volta pro texto', 'volte para texto',
     'sem áudio', 'sem audio', 'para de áudio', 'para de audio',
     'não precisa de áudio', 'nao precisa de audio', 'só texto', 'so texto',
+    'não manda áudio', 'nao manda audio', 'não mande áudio', 'nao mande audio',
+    'não envia áudio', 'nao envia audio', 'não envie áudio', 'nao envie audio',
+    'não quero áudio', 'nao quero audio', 'não quero ouvir áudio', 'nao quero ouvir audio',
+    'prefiro ler', 'por mensagem', 'por mensagens',
     'escreve', 'digita', 'por escrito'
   ];
   return textPhrases.some(phrase => lowerMsg.includes(phrase));
