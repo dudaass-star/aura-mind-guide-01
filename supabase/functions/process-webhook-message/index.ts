@@ -450,6 +450,31 @@ Deno.serve(async (req) => {
 
     console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}, instance: ${profile.whatsapp_instance_id || 'env-default'}`);
 
+    // Recuperação determinística do Meu Espaço. O próprio inbound confirma o número
+    // cadastrado e abre a janela necessária para responder com o link de uso único.
+    const portalAccessIntent = /(?:n[aã]o\s+recebi|sem|problema\s+(?:com|no))[^\n]{0,45}c[oó]digo[^\n]{0,55}(?:meu\s+espa[cç]o|painel|entrar|acesso)|entrar\s+(?:no|pelo)\s+(?:meu\s+espa[cç]o|painel|whatsapp)/i.test(messageText || '');
+    if (portalAccessIntent) {
+      const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
+      if (!internalSecret) throw new Error('INTERNAL_WEBHOOK_SECRET ausente');
+      const response = await fetch(`${supabaseUrl}/functions/v1/portal-whatsapp-access`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+          'x-internal-secret': internalSecret,
+        },
+        body: JSON.stringify({ action: 'request', phone: cleanPhone }),
+      });
+      if (!response.ok) {
+        console.error('❌ Falha ao gerar acesso do portal:', response.status, await response.text());
+        const fallback = 'Não consegui gerar seu link agora. Tenta novamente em alguns minutos, por favor.';
+        await sendMessage(cleanPhone, fallback, undefined, profile.user_id);
+      }
+      return new Response(JSON.stringify({ success: true, action: 'portal_access_requested' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // ========================================================================
     // TRIAL EXPIRATION — handled by Stripe webhook, NOT inline.
     //

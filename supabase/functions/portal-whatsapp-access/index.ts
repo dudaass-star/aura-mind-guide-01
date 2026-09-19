@@ -87,6 +87,12 @@ Deno.serve(async (req) => {
       return json({ token_hash: properties.hashed_token, type: properties.verification_type || "magiclink" });
     }
 
+    const internalSecret = req.headers.get("x-internal-secret");
+    const expectedSecret = Deno.env.get("INTERNAL_WEBHOOK_SECRET");
+    if (!internalSecret || !expectedSecret || internalSecret !== expectedSecret) {
+      return json({ error: "unauthorized" }, 401);
+    }
+
     const normalized = normalizeBrazilianPhone(String(body?.phone || ""));
     if (!/^55\d{10,11}$/.test(normalized)) return json({ ok: true, message: GENERIC_MESSAGE });
     const phoneHash = await sha256(normalized);
@@ -129,8 +135,7 @@ Deno.serve(async (req) => {
     const link = `${siteOrigin(req)}/meu-espaco/acesso-whatsapp#token=${encodeURIComponent(token)}`;
     const firstName = profile.name?.trim().split(/\s+/)[0] || "";
     const text = `${firstName ? `Oi, ${firstName}!` : "Oi!"} Aqui está seu link seguro para entrar no Meu Espaço da Aura:\n\n${link}\n\nEle vale por 10 minutos e funciona uma única vez.`;
-    // Este pedido nasce na própria tela. O envio livre só é feito se houver janela de atendimento aberta;
-    // sem uma janela, falha fechado até existir um template de autenticação aprovado.
+    // O pedido chega de uma mensagem do próprio cliente, portanto a janela de atendimento está aberta.
     const sent = await sendMessage(normalized, text, undefined, profile.user_id || profile.id);
     await admin.from("portal_access_requests").update({
       status: sent.success ? "sent" : "failed",
