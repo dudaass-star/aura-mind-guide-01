@@ -4260,6 +4260,13 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      consume_portal_access_request: {
+        Args: { _action_hash: string }
+        Returns: {
+          profile_id: string
+          request_id: string
+        }[]
+      }
       count_recent_tickets: {
         Args: { _days?: number; _email: string }
         Returns: number
