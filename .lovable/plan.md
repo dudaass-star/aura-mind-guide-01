@@ -1,83 +1,78 @@
-# Tornar o acesso ao Meu Espaço confiável de ponta a ponta
+# Resolver “não recebi o código” no Meu Espaço
 
-## Diagnóstico confirmado
+## O problema exato
 
-No caso da Patrícia, o pagamento de R$ 6,90 foi confirmado em 16/08, o acesso foi liberado até 23/08 e as boas-vindas chegaram pelo WhatsApp. Ela tentou entrar no painel, uma conta de acesso foi criada e três e-mails de código foram aceitos pelo serviço de envio, mas ela nunca conseguiu concluir o login.
+Hoje o cliente pode entrar com Google ou pedir um código/link por e-mail. Código e link usam o mesmo canal; portanto, quando o e-mail é filtrado, atrasado ou não entregue, os dois falham juntos.
 
-O registro `sent` atual significa apenas que o serviço de e-mail aceitou a mensagem; não confirma entrega na caixa da cliente. O perfil pago também permaneceu ligado ao identificador antigo, pois esse vínculo só acontece depois que a pessoa consegue entrar. Portanto, o sistema hoje consegue registrar “código enviado” mesmo quando o cliente continua sem acesso.
+No caso da Patrícia, três envios foram aceitos pelo serviço de e-mail, mas ela nunca entrou. Isso confirma o ponto central: “enviado” não significa “recebido”.
 
-A correção anterior não cobriu esse ponto: ela criou uma rede de segurança para as boas-vindas no WhatsApp e melhorou o vínculo depois do login, mas não criou recuperação para quem não recebe o código. A ferramenta que gera um acesso alternativo existe, porém é manual e restrita ao administrador.
+## Alternativas avaliadas
 
-O problema é sistêmico, não exclusivo da Patrícia:
+1. **Reenviar o código por e-mail** — deve continuar disponível, mas não resolve falha de entrega.
+2. **Link mágico por e-mail** — é mais simples que digitar seis números, porém depende do mesmo e-mail e sofre a mesma falha.
+3. **Entrar com Google** — já existe, é seguro e deve ganhar mais destaque; não atende quem comprou com outro provedor de e-mail ou não quer usar Google.
+4. **Código por SMS** — adiciona custo, fraude e dependência de operadora; não é a melhor escolha para uma experiência que já acontece no WhatsApp.
+5. **Passkey** — é a direção mais moderna para retornos futuros, mas precisa de um primeiro acesso bem-sucedido para ser cadastrada. Não resolve sozinha o primeiro “não recebi”.
+6. **Link único pelo WhatsApp cadastrado** — é o melhor fallback para a Aura: usa o canal onde o cliente já conversa, elimina a dependência do e-mail e pode validar o número contra a assinatura.
 
-- Desde 01/08, 158 compradores Woovi têm e-mail cadastrado; 90 nunca criaram conta de acesso — isso, sozinho, não é erro, pois podem nunca ter tentado entrar.
-- 13 criaram a conta, receberam e-mail aceito pelo serviço, nunca entraram e continuam sem vínculo com o perfil pago. Esse é o mesmo estado técnico da Patrícia.
-- A infraestrutura de e-mail está saudável agora, mas existem 28 mensagens antigas encerradas definitivamente sem nova tentativa automática.
-- Não há recuperação automática para código expirado, filtrado, atrasado ou não entregue.
+## Solução recomendada
 
-## Correção definitiva
+Manter três caminhos simples:
 
-### 1. Criar um gravador único do estado de acesso
+- **Continuar com Google** como primeira opção.
+- **Receber código por e-mail** como alternativa normal.
+- **Não recebeu? Entrar pelo WhatsApp cadastrado** como recuperação imediata.
 
-- Registrar cada etapa: acesso solicitado, código enfileirado, envio aceito, falha, expiração, login concluído e perfil vinculado.
-- Não tratar `sent` como acesso concluído; sucesso real será `primeiro login + vínculo do perfil pago`.
-- Usar o mesmo acompanhamento para Woovi, cartão e demais meios de pagamento.
+Não enviar um novo código no WhatsApp. Enviar um **botão/link de acesso único**, com validade curta, que abre o Meu Espaço já autenticado. Isso reduz atrito e evita que o cliente copie números entre aplicativos.
 
-### 2. Recuperar automaticamente quem pediu acesso e não entrou
+## Implementação
 
-- Após a solicitação do código, verificar se houve login e vínculo dentro de uma janela curta.
-- Se o e-mail falhar, expirar ou continuar sem login, gerar uma nova tentativa automaticamente, respeitando limite e validade.
-- Se ainda não houver entrada, mandar pelo WhatsApp cadastrado uma mensagem humana com um acesso seguro e de uso único.
-- Nunca enviar acesso para telefone ou e-mail que não pertença ao perfil pago.
+### 1. Recuperação na própria tela
 
-### 3. Resolver pelo próprio WhatsApp, sem depender de intervenção humana
+- Adicionar “Reenviar código” com contagem regressiva.
+- Após o primeiro envio, exibir “Entrar pelo meu WhatsApp cadastrado”.
+- Pedir apenas o WhatsApp usado na assinatura.
+- Responder de forma neutra, sem revelar se um número não cadastrado pertence ou não a outra conta.
 
-- Reconhecer de forma determinística frases como “não chegou o código”, “não consigo entrar” e “paguei e não acessei”.
-- Antes de responder, consultar pagamento, validade, tentativas de acesso e vínculo reais.
-- Para cliente pago no número cadastrado, gerar e entregar um acesso seguro na hora; não mandar pagar novamente e não apenas explicar o procedimento.
-- Se a pessoa pediu devolução, manter esse pedido separado da correção de acesso.
+### 2. Link seguro pelo WhatsApp
 
-### 4. Tornar o vínculo do perfil idempotente e completo
+- Localizar o perfil pela normalização do telefone e confirmar que ele possui assinatura ou acesso válido.
+- Gerar uma credencial aleatória de uso único, armazenada somente como hash.
+- Expirar em 10 minutos e invalidar no primeiro uso.
+- Vincular a credencial ao perfil, telefone, finalidade `portal_login` e tentativa de acesso.
+- Limitar solicitações por perfil e telefone.
+- Enviar somente ao próprio número cadastrado, usando resposta livre dentro da janela de atendimento ou template aprovado fora dela.
 
-- Centralizar a migração do identificador antigo para o usuário autenticado.
-- Propagar o vínculo também para tabelas de pagamento Woovi e demais relações hoje não incluídas na migração.
-- Executar tudo como uma operação verificável: ou o perfil e suas relações ficam vinculados, ou a tentativa fica registrada para repetição segura.
-- Impedir dois perfis para o mesmo comprador e preservar a proteção contra vincular telefone de outra pessoa.
+### 3. Entrada e vínculo
 
-### 5. Melhorar a tela quando o código não chega
+- Ao abrir o link, trocar a credencial por uma sessão real do Meu Espaço.
+- Vincular a conta autenticada ao perfil pago pelo fluxo existente.
+- Invalidar o link antes de redirecionar ao painel, impedindo reutilização e compartilhamento.
+- Se o perfil estiver cancelado e sem período pago vigente, não liberar conteúdo; mostrar o estado correto da conta.
 
-- Adicionar reenvio real com contagem regressiva e confirmação do endereço digitado.
-- Mostrar alternativa imediata pelo Google quando o e-mail for compatível.
-- Oferecer “Receber ajuda pelo meu WhatsApp cadastrado” após a primeira falha, sem expor detalhes internos.
-- Diferenciar claramente: código incorreto, código expirado, envio temporariamente indisponível e conta não encontrada.
+### 4. Melhorar o caminho por e-mail
 
-### 6. Fechar os buracos da fila de e-mail
+- Não afirmar “código enviado” quando houver falha conhecida na fila.
+- Diferenciar código incorreto de código expirado.
+- Gerar um código novo no reenvio; nunca reaproveitar um expirado.
+- Manter Google visível também na etapa em que o cliente aguarda o e-mail.
 
-- Aumentar a tolerância da fila para que uma indisponibilidade curta não descarte códigos ainda úteis.
-- Reprocessar falhas temporárias com limite; códigos já expirados devem ser substituídos por um novo, nunca reenviados.
-- Considerar bloqueios e devoluções de e-mail antes de prometer “código enviado”.
-- Quando o e-mail não for confiável, mudar automaticamente para a recuperação pelo WhatsApp cadastrado.
+### 5. Passkey depois do primeiro acesso
 
-### 7. Reparar os casos existentes sem disparo indiscriminado
+- Não faz parte da correção inicial.
+- Pode ser adicionada depois como opção “entrar com biometria” para clientes recorrentes, reduzindo a dependência de e-mail e WhatsApp nos próximos acessos.
 
-- Identificar os 13 casos no mesmo estado da Patrícia e separar ativos, cancelados e pessoas que já resolveram por outro caminho.
-- Corrigir os vínculos que já podem ser comprovados com segurança.
-- Acionar somente clientes ativos que efetivamente tentaram entrar e continuam sem acesso; não mandar mensagem para todos os compradores que nunca abriram o painel.
-- Tratar a Patrícia à parte: assinatura cancelada e pedido de devolução, sem reativar ou oferecer nova cobrança.
+## Validação
 
-## Validação obrigatória
-
-1. Pagamento confirmado → WhatsApp de boas-vindas → pedido de código → entrada → perfil correto carregado.
-2. E-mail entregue normalmente.
-3. E-mail temporariamente indisponível e recuperado sem perder o cliente.
-4. Código expirado substituído por um novo.
-5. E-mail bloqueado ou devolvido → acesso seguro pelo WhatsApp cadastrado.
-6. E-mail diferente do checkout → confirmação por telefone e vínculo correto.
-7. Telefone de outra conta → bloqueio sem vazamento de dados.
-8. Repetição do fluxo sem criar duas contas, dois perfis ou mover dados duas vezes.
-9. Cliente cancelado não é reativado pelo reparo de acesso.
-10. Agente nunca afirma “não pagou” sem consultar o pagamento real.
+1. Código por e-mail recebido e validado.
+2. Código não recebido → reenvio funciona.
+3. Código não recebido → link chega ao WhatsApp cadastrado e entra sem pedir código.
+4. Número não cadastrado não revela dados e não recebe link.
+5. Link expirado, já usado ou compartilhado é recusado.
+6. Cliente com acesso vencido entra na conta, mas não recebe conteúdo pago indevidamente.
+7. Google continua funcionando e vincula o perfil correto.
+8. Testes em celular real, Gmail, Hotmail e Outlook.
 
 ## Critério de conclusão
 
-O fluxo só será considerado resolvido quando uma simulação completa provar que nenhum caminho termina apenas em “e-mail enviado”: toda tentativa precisa terminar em acesso vinculado, nova tentativa automática ou alternativa segura pelo WhatsApp — nunca em silêncio.
+Um cliente que não recebe o e-mail consegue entrar pelo WhatsApp cadastrado em poucos toques, sem suporte manual e sem criar um caminho de acesso reutilizável ou inseguro.
