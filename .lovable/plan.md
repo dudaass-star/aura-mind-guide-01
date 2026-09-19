@@ -1,54 +1,32 @@
-# Respeitar “não envie áudio” sem exceções acidentais
+# Correção cirúrgica do pedido “não mande áudio”
 
-## Diagnóstico confirmado
+## O que aconteceu
 
-O problema da Bruna foi real e a causa principal está comprovada no código e nos dados:
+A falha está identificada no turno exato da Bruna:
 
-- Ela pediu texto de várias formas: “Pode responder com mensagens?”, “Prefiro ler”, “Eu pedi pra conversar por mensagens”, “Não quero ouvir áudio”, “Mensagem” e “Não mande áudio”.
-- Nenhuma dessas formas foi reconhecida pelos detectores atuais. Eles procuram frases mais rígidas, como “não manda áudio”, “sem áudio” e “só texto”. Por isso o perfil dela permaneceu em `voice_mode = auto`, sem data de preferência.
-- Sem o bloqueio registrado, a sessão continuou liberando áudio por abertura, decisão espontânea da IA e fechamento. O último caso é inequívoco: após “Não mande áudio”, a resposta dizia “Pode deixar, sem áudio”, mas foi enviada em áudio.
-- O prompt já orienta a não usar áudio quando a pessoa pede texto, mas isso não basta: o modelo entendeu semanticamente alguns pedidos e mesmo assim voltou a marcar áudio depois.
-- A regra está duplicada e divergente em dois pontos do sistema. Uma frase pode ser reconhecida antes do atendimento e não dentro do agente, ou o contrário.
-- A etapa final de envio confia na marcação recebida e não verifica novamente a preferência mais recente. Assim, uma decisão antiga pode seguir para áudio mesmo se uma nova mensagem de recusa chegar durante o processamento.
-- Há dois caminhos paralelos que também precisam ser fechados: o piloto que espelha áudio e o envio de meditações gravadas não consultam de forma completa a preferência por texto.
+1. Bruna escreveu **“Não mande áudio”**.
+2. Os dois reconhecedores atuais de preferência não incluem essa formulação. Eles reconhecem formas próximas, como “não manda áudio”, “não quero áudio” e “sem áudio”, mas não o imperativo **“não mande áudio”**.
+3. Por isso, o pedido não foi registrado como preferência por texto e o perfil continuou em modo automático.
+4. A IA entendeu o sentido e escreveu **“Pode deixar, sem áudio”**, porém isso controlou apenas o conteúdo da resposta.
+5. Como o sistema ainda considerava aquele momento um fechamento de sessão, sua regra determinística marcou a resposta como áudio obrigatório. Essa regra envia áudio mesmo quando a IA não coloca a marca de áudio.
+6. Resultado: a Aura prometeu texto no conteúdo, mas a camada de envio transformou a mesma resposta em áudio. Depois, “Desisto” também foi tratado como fechamento e gerou outro áudio porque a preferência ainda não havia sido registrada.
 
-## Implementação
+Portanto, não foi uma decisão psicológica da Aura nem uma falha geral de envio. Foi uma lacuna literal na identificação do pedido, combinada com a regra já existente de áudio no fechamento.
 
-1. **Criar uma única interpretação determinística de canal**
-   - Centralizar a detecção usada pelo recebimento e pelo agente.
-   - Normalizar acentos, pontuação, flexões e linguagem natural.
-   - Cobrir pedidos afirmativos e negativos reais, incluindo “mensagem”, “prefiro ler”, “não quero ouvir”, “não mande”, “para com áudio” e equivalentes.
-   - Evitar falsos positivos quando a pessoa apenas menciona voz/áudio no assunto da conversa.
-   - Quando houver conflito na mesma mensagem, a instrução explícita mais recente vence.
+## Correção mínima
 
-2. **Transformar o pedido de texto em bloqueio real de áudio**
-   - Persistir imediatamente a preferência antes de qualquer outro tratamento.
-   - Manter `texto` até a pessoa pedir áudio novamente, sem expirar silenciosamente em sete dias.
-   - Fazer o pedido de texto prevalecer sobre abertura, fechamento, crise emocional, decisão da IA e espelhamento de áudio.
-   - Em risco de vida, continuar o protocolo de segurança por texto; não usar áudio contra a vontade declarada.
+1. Acrescentar às duas identificações existentes as formas naturais que apareceram no caso, sem reformular toda a lógica:
+   - “não mande áudio” / “não envie áudio”;
+   - “prefiro ler”;
+   - “responda/converse por mensagem”;
+   - “não quero ouvir áudio”.
+2. Manter a precedência atual: uma vez reconhecido o pedido, texto já vence abertura e fechamento de sessão.
+3. Adicionar testes focados nessas frases, comprovando que:
+   - a preferência é registrada como texto;
+   - o fechamento deixa de forçar áudio;
+   - pedidos explícitos de áudio continuam funcionando normalmente.
+4. Publicar apenas as duas funções envolvidas e validar o cenário da Bruna de ponta a ponta.
 
-3. **Aplicar uma trava final antes de cada envio**
-   - Reconsultar a preferência atual imediatamente antes de gerar ou enviar TTS.
-   - Se a pessoa tiver mudado para texto enquanto a resposta era preparada, converter qualquer bolha de áudio pendente para texto.
-   - Não salvar conteúdo de áudio interrompido para envio posterior.
-   - Aplicar a mesma trava a meditações gravadas; só enviá-las quando houver pedido/aceite explícito compatível.
+## Fora do escopo
 
-4. **Alinhar o prompt sem depender dele para segurança**
-   - Informar claramente que uma preferência textual vigente proíbe `[MODO_AUDIO]`.
-   - Remover instruções conflitantes que tratam áudio de abertura ou fechamento como obrigatório.
-   - Manter a decisão determinística no sistema como autoridade final.
-
-5. **Criar testes de regressão baseados no caso real**
-   - Testar todas as frases usadas pela Bruna e variações com/sem acento.
-   - Simular abertura, conteúdo emocional, fechamento, áudio enviado pelo usuário, meditação e mensagem nova chegando durante a geração.
-   - Garantir o inverso: “quero áudio” continua funcionando e revoga conscientemente a preferência de texto.
-   - Garantir que menções como “a voz dele é alta” não sejam confundidas com preferência de canal.
-
-6. **Publicar e validar no fluxo real**
-   - Publicar conjuntamente o recebimento, o agente e o envio de meditação para não haver regras desencontradas.
-   - Executar testes dirigidos no ambiente publicado e confirmar que nenhuma resposta sai em áudio após cada formulação de recusa.
-   - Conferir os registros de falha e decisões de envio após a publicação para descartar diferença entre código e produção.
-
-## Resultado esperado
-
-Depois de qualquer pedido claro para não receber áudio, toda resposta seguinte será enviada por texto até um novo pedido explícito de áudio. A regra valerá em sessões, crises, fechamentos, respostas demoradas, mensagens concorrentes e meditações.
+Não alterar orçamento de áudio, meditações, regras de crise, duração da preferência, espelhamento de voz ou arquitetura de envio nesta correção. Esses pontos podem ser avaliados separadamente, mas não são necessários para resolver a falha comprovada da Bruna.
