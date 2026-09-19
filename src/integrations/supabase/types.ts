@@ -1859,6 +1859,62 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_access_requests: {
+        Row: {
+          action_hash: string | null
+          created_at: string
+          delivery_message_id: string | null
+          delivery_provider: string | null
+          email_hash: string | null
+          expires_at: string
+          id: string
+          phone_hash: string
+          profile_id: string | null
+          sent_at: string | null
+          status: string
+          updated_at: string
+          used_at: string | null
+        }
+        Insert: {
+          action_hash?: string | null
+          created_at?: string
+          delivery_message_id?: string | null
+          delivery_provider?: string | null
+          email_hash?: string | null
+          expires_at?: string
+          id?: string
+          phone_hash: string
+          profile_id?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          used_at?: string | null
+        }
+        Update: {
+          action_hash?: string | null
+          created_at?: string
+          delivery_message_id?: string | null
+          delivery_provider?: string | null
+          email_hash?: string | null
+          expires_at?: string
+          id?: string
+          phone_hash?: string
+          profile_id?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_access_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           asaas_customer_id: string | null
@@ -4203,6 +4259,13 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      consume_portal_access_request: {
+        Args: { _action_hash: string }
+        Returns: {
+          profile_id: string
+          request_id: string
+        }[]
       }
       count_recent_tickets: {
         Args: { _days?: number; _email: string }
