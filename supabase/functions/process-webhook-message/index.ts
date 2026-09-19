@@ -51,8 +51,12 @@ function detectChannelPreference(message: string): 'audio' | 'texto' | null {
   const textPhrases = [
     'responde por texto', 'responder por texto', 'em texto', 'por texto',
     'escreve', 'escrito', 'não manda áudio', 'nao manda audio',
+    'não mande áudio', 'nao mande audio', 'não envia áudio', 'nao envia audio',
+    'não envie áudio', 'nao envie audio',
     'sem áudio', 'sem audio', 'prefiro texto', 'para de mandar áudio',
     'para de mandar audio', 'não quero áudio', 'nao quero audio',
+    'não quero ouvir áudio', 'nao quero ouvir audio', 'prefiro ler',
+    'por mensagem', 'por mensagens',
   ];
   if (textPhrases.some(p => lower.includes(p))) return 'texto';
   if (/(fala|fale|responde|responder|manda|mande|escreve|escreva)\s+(em|por|no|na|de)\s+texto/i.test(lower)) return 'texto';
