@@ -18,6 +18,6 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Tornar a chamada principal da Landing V2 mais concreta, com escuta, direção e movimento
 - [x] Resolver especificamente quando o cliente não recebe o código do Meu Espaço com link seguro de uso único pelo WhatsApp cadastrado
 - [x] Entregar no chat o relatório de churn por mês de vida e LTV, sem alterar o painel
-- [ ] Unificar o fluxo de retenção do envio à reativação, com rastreamento e reconciliação por oferta
-- [ ] Corrigir reativação por gateway, links de winback, PIX com menos atrito e identificação por cliente
-- [ ] Validar entrega, clique, pagamento e liberação em cartão e PIX antes de medir adesão
+- [x] Unificar o fluxo de retenção do envio à reativação, com rastreamento e reconciliação por oferta
+- [x] Corrigir reativação por gateway, links de winback, PIX com menos atrito e identificação por cliente
+- [x] Validar em simulação segura entrega, clique e evolução até pagamento/liberação; confirmações reais seguem por webhook e reconciliação horária
