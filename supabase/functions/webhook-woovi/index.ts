@@ -20,6 +20,7 @@ import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
 import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { isTasterCorrelationId, TASTER_WINDOW_HOURS, cancelTasterReminders } from "../_shared/taster.ts";
+import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
 import {
   wooviFetch, brtDate,
   WOOVI_APPROVED_STATUSES as APPROVED_STATUSES,
@@ -1063,6 +1064,15 @@ Deno.serve(async (req) => {
                 await supabase.from("woovi_charges")
                   .update({ access_activated_at: null }).eq("id", chargeRowId);
                 throw new Error("ativação de acesso falhou — devolvendo para retentativa");
+              }
+              if (sub.retention_offer_id) {
+                await supabase.from("retention_offers").update({
+                  provider_payment_id: String(chargeId),
+                  provider_subscription_id: sub.subscription_id,
+                  amount_cents: valueCents,
+                }).eq("id", sub.retention_offer_id);
+                await recordRetentionOfferEvent(supabase, sub.retention_offer_id, "paid", "webhook_woovi", String(chargeId), { value_cents: valueCents, cycle_index: cycleIndex });
+                await recordRetentionOfferEvent(supabase, sub.retention_offer_id, "applied", "webhook_woovi", String(chargeId));
               }
             }
 

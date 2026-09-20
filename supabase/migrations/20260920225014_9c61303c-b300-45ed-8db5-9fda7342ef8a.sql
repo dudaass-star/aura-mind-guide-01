@@ -1,0 +1,2 @@
+ALTER TABLE public.woovi_subscriptions ADD COLUMN retention_offer_id uuid REFERENCES public.retention_offers(id) ON DELETE SET NULL;
+CREATE INDEX woovi_subscriptions_retention_offer_idx ON public.woovi_subscriptions(retention_offer_id) WHERE retention_offer_id IS NOT NULL;

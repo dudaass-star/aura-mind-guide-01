@@ -31,6 +31,7 @@ const PLAN_LABELS: Record<string, string> = {
 export default function ReautorizarPix() {
   const [params] = useSearchParams();
   const token = params.get("token") || "";
+  const retentionCode = params.get("r") || "";
   // Oferta de retenção aceita: o mandato novo nasce já no valor reduzido.
   const offer = params.get("offer") || "";
 
@@ -42,7 +43,7 @@ export default function ReautorizarPix() {
   const [confirmed, setConfirmed] = useState(false);
 
   const gerarQr = useCallback(async () => {
-    if (!token) {
+    if (!token && !retentionCode) {
       setError("Link inválido. Abra o link direto do e-mail que enviamos.");
       return;
     }
@@ -51,7 +52,7 @@ export default function ReautorizarPix() {
     try {
       const { data, error: fnError } = await supabase.functions.invoke(
         "pix-reauth-router",
-        { body: { action: "create", token, ...(offer ? { offer } : {}) } },
+        { body: { action: "create", ...(retentionCode ? { retentionCode } : { token }), ...(offer ? { offer } : {}) } },
       );
       if (fnError) throw new Error(fnError.message);
       if (!data || (data as { error?: string }).error) {
@@ -66,7 +67,7 @@ export default function ReautorizarPix() {
     } finally {
       setLoading(false);
     }
-  }, [token, offer]);
+  }, [token, retentionCode, offer]);
 
   // Polling do status da autorização enquanto o QR está na tela.
   useEffect(() => {
@@ -74,7 +75,7 @@ export default function ReautorizarPix() {
     const interval = setInterval(async () => {
       try {
         const { data } = await supabase.functions.invoke("pix-reauth-router", {
-          body: { action: "status", token, authorizationId: qr.authorizationId },
+          body: { action: "status", ...(retentionCode ? { retentionCode } : { token }), authorizationId: qr.authorizationId },
         });
         const st = data as { state?: string; status?: string } | null;
         if (st?.status) setStatus(st.status);
@@ -87,7 +88,11 @@ export default function ReautorizarPix() {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [qr?.authorizationId, confirmed, token]);
+  }, [qr?.authorizationId, confirmed, token, retentionCode]);
+
+  useEffect(() => {
+    if ((token || retentionCode) && !qr && !loading && !error) void gerarQr();
+  }, [token, retentionCode, qr, loading, error, gerarQr]);
 
   const copiar = async () => {
     if (!qr?.copyPaste) return;

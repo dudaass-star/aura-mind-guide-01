@@ -422,6 +422,7 @@ export type Database = {
           created_at: string
           gateway: string | null
           id: string
+          offer_id: string | null
           pause_until: string | null
           phone: string
           reason: string
@@ -435,6 +436,7 @@ export type Database = {
           created_at?: string
           gateway?: string | null
           id?: string
+          offer_id?: string | null
           pause_until?: string | null
           phone: string
           reason: string
@@ -448,6 +450,7 @@ export type Database = {
           created_at?: string
           gateway?: string | null
           id?: string
+          offer_id?: string | null
           pause_until?: string | null
           phone?: string
           reason?: string
@@ -456,7 +459,15 @@ export type Database = {
           save_tier?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cancellation_feedback_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "retention_offers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       checkins: {
         Row: {
@@ -807,6 +818,7 @@ export type Database = {
           link_generated: boolean
           message_sid: string | null
           offer_accepted: boolean | null
+          offer_id: string | null
           offer_tier: string | null
           offer_token_code: string | null
           payment_id: string | null
@@ -834,6 +846,7 @@ export type Database = {
           link_generated?: boolean
           message_sid?: string | null
           offer_accepted?: boolean | null
+          offer_id?: string | null
           offer_tier?: string | null
           offer_token_code?: string | null
           payment_id?: string | null
@@ -861,6 +874,7 @@ export type Database = {
           link_generated?: boolean
           message_sid?: string | null
           offer_accepted?: boolean | null
+          offer_id?: string | null
           offer_tier?: string | null
           offer_token_code?: string | null
           payment_id?: string | null
@@ -873,7 +887,15 @@ export type Database = {
           template_sid?: string | null
           whatsapp_sent?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "dunning_attempts_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "retention_offers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       editorial_calendar: {
         Row: {
@@ -2381,6 +2403,7 @@ export type Database = {
           gateway: string | null
           id: string
           metadata: Json
+          offer_id: string | null
           origin: string
           phone: string | null
           tier: string
@@ -2394,6 +2417,7 @@ export type Database = {
           gateway?: string | null
           id?: string
           metadata?: Json
+          offer_id?: string | null
           origin: string
           phone?: string | null
           tier: string
@@ -2407,10 +2431,162 @@ export type Database = {
           gateway?: string | null
           id?: string
           metadata?: Json
+          offer_id?: string | null
           origin?: string
           phone?: string | null
           tier?: string
           user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retention_events_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "retention_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      retention_offer_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          offer_id: string
+          provider_reference: string | null
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          offer_id: string
+          provider_reference?: string | null
+          source: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          offer_id?: string
+          provider_reference?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retention_offer_events_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "retention_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      retention_offers: {
+        Row: {
+          accepted_at: string | null
+          amount_cents: number | null
+          applied_at: string | null
+          billing_cycle: string | null
+          channel: string
+          created_at: string
+          declined_at: string | null
+          delivered_at: string | null
+          email_normalized: string | null
+          expires_at: string
+          failed_at: string | null
+          gateway: string
+          id: string
+          metadata: Json
+          opened_at: string | null
+          origin: string
+          paid_at: string | null
+          payment_pending_at: string | null
+          phone_normalized: string | null
+          plan: string | null
+          profile_id: string | null
+          profile_user_id: string
+          provider_checkout_id: string | null
+          provider_message_id: string | null
+          provider_payment_id: string | null
+          provider_subscription_id: string | null
+          public_code_hash: string
+          reason: string | null
+          sent_at: string | null
+          status: string
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          amount_cents?: number | null
+          applied_at?: string | null
+          billing_cycle?: string | null
+          channel?: string
+          created_at?: string
+          declined_at?: string | null
+          delivered_at?: string | null
+          email_normalized?: string | null
+          expires_at?: string
+          failed_at?: string | null
+          gateway: string
+          id?: string
+          metadata?: Json
+          opened_at?: string | null
+          origin: string
+          paid_at?: string | null
+          payment_pending_at?: string | null
+          phone_normalized?: string | null
+          plan?: string | null
+          profile_id?: string | null
+          profile_user_id: string
+          provider_checkout_id?: string | null
+          provider_message_id?: string | null
+          provider_payment_id?: string | null
+          provider_subscription_id?: string | null
+          public_code_hash: string
+          reason?: string | null
+          sent_at?: string | null
+          status?: string
+          tier: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          amount_cents?: number | null
+          applied_at?: string | null
+          billing_cycle?: string | null
+          channel?: string
+          created_at?: string
+          declined_at?: string | null
+          delivered_at?: string | null
+          email_normalized?: string | null
+          expires_at?: string
+          failed_at?: string | null
+          gateway?: string
+          id?: string
+          metadata?: Json
+          opened_at?: string | null
+          origin?: string
+          paid_at?: string | null
+          payment_pending_at?: string | null
+          phone_normalized?: string | null
+          plan?: string | null
+          profile_id?: string | null
+          profile_user_id?: string
+          provider_checkout_id?: string | null
+          provider_message_id?: string | null
+          provider_payment_id?: string | null
+          provider_subscription_id?: string | null
+          public_code_hash?: string
+          reason?: string | null
+          sent_at?: string | null
+          status?: string
+          tier?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -4065,6 +4241,7 @@ export type Database = {
           recurrency_id: string | null
           replaced_by_subscription_id: string | null
           request_key: string | null
+          retention_offer_id: string | null
           start_date: string | null
           status: string
           subscription_id: string | null
@@ -4111,6 +4288,7 @@ export type Database = {
           recurrency_id?: string | null
           replaced_by_subscription_id?: string | null
           request_key?: string | null
+          retention_offer_id?: string | null
           start_date?: string | null
           status?: string
           subscription_id?: string | null
@@ -4157,6 +4335,7 @@ export type Database = {
           recurrency_id?: string | null
           replaced_by_subscription_id?: string | null
           request_key?: string | null
+          retention_offer_id?: string | null
           start_date?: string | null
           status?: string
           subscription_id?: string | null
@@ -4166,6 +4345,13 @@ export type Database = {
           value_cents?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "woovi_subscriptions_retention_offer_id_fkey"
+            columns: ["retention_offer_id"]
+            isOneToOne: false
+            referencedRelation: "retention_offers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "woovi_subscriptions_user_id_fkey"
             columns: ["user_id"]
@@ -4349,6 +4535,16 @@ export type Database = {
           _ticket_id: string
         }
         Returns: string
+      }
+      record_retention_offer_event: {
+        Args: {
+          _event_type: string
+          _metadata?: Json
+          _offer_id: string
+          _provider_reference?: string
+          _source: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

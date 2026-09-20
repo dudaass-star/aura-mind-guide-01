@@ -11,6 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations } from "../_shared/zapi-client.ts";
+import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,7 +79,7 @@ Deno.serve(async (req) => {
             if (i > 0) await new Promise((r) => setTimeout(r, 1500));
             const { data } = await supabaseCb
               .from("dunning_attempts")
-              .select("profile_user_id, provider, invoice_id, subscription_id, payment_id, customer_id, attempt_number")
+              .select("profile_user_id, provider, invoice_id, subscription_id, payment_id, customer_id, attempt_number, offer_id")
               .eq("message_sid", messageSid)
               .maybeSingle();
             att = data;
@@ -100,6 +101,7 @@ Deno.serve(async (req) => {
               error_message: `${messageStatus} (ErrorCode ${errorCode})`,
             })
             .eq("message_sid", messageSid);
+          await recordRetentionOfferEvent(supabaseCb, att?.offer_id, "failed", "twilio_status", messageSid, { status: messageStatus, error_code: errorCode });
 
           if (att?.profile_user_id) {
             // ErrorCode 63027 = template inexistente para o sender/locale.
@@ -189,10 +191,14 @@ Deno.serve(async (req) => {
           console.error("❌ [recovery-webhook] fallback pós-falha de entrega:", fbErr);
         }
       } else if (messageStatus === "delivered" || messageStatus === "read") {
-        await supabaseCb
+        const { data: attempts } = await supabaseCb
           .from("dunning_attempts")
           .update({ delivery_status: messageStatus, whatsapp_sent: true, error_stage: null, error_message: null })
-          .eq("message_sid", messageSid);
+          .eq("message_sid", messageSid)
+          .select("offer_id");
+        for (const attempt of attempts || []) {
+          await recordRetentionOfferEvent(supabaseCb, attempt.offer_id, "delivered", "twilio_status", messageSid, { status: messageStatus });
+        }
       }
       return new Response("", { status: 200, headers: { ...corsHeaders, "Content-Type": "text/plain" } });
     }

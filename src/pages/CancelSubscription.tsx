@@ -85,10 +85,13 @@ const CancelSubscription = () => {
   // Ofertas de dunning chegam por WhatsApp como /cancelar?t=<token>&offer=<tier>.
   const offerParamRaw = searchParams.get("offer");
   const portalToken = searchParams.get("t");
-  const highlightedTier: Tier | null =
+  const retentionCode = searchParams.get("r");
+  const [trackedTier, setTrackedTier] = useState<Tier | null>(null);
+  const queryTier: Tier | null =
     offerParamRaw === "discount_30" || offerParamRaw === "lite" || offerParamRaw === "base"
       ? offerParamRaw
       : null;
+  const highlightedTier: Tier | null = trackedTier || queryTier;
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
@@ -115,9 +118,9 @@ const CancelSubscription = () => {
     setPhone(formatPhone(e.target.value));
   };
 
-  const checkSubscription = async (opts?: { token?: string; skipToOffers?: boolean }) => {
+  const checkSubscription = async (opts?: { token?: string; retentionCode?: string; skipToOffers?: boolean }) => {
     const digits = phone.replace(/\D/g, "");
-    if (!opts?.token && digits.length < 10) {
+    if (!opts?.token && !opts?.retentionCode && digits.length < 10) {
       toast.error("Por favor, insira um número de telefone válido");
       return;
     }
@@ -127,7 +130,9 @@ const CancelSubscription = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke("cancel-subscription", {
-        body: opts?.token
+        body: opts?.retentionCode
+          ? { retention_code: opts.retentionCode, action: "check" }
+          : opts?.token
           ? { token: opts.token, action: "check", offer: highlightedTier }
           : { phone: digits, action: "check", offer: highlightedTier },
       });
@@ -139,6 +144,9 @@ const CancelSubscription = () => {
         setStatus("already_active");
         setMessage(data.message);
       } else if (data.success && data.status === "active") {
+        if (data.offer === "discount_30" || data.offer === "lite" || data.offer === "base") {
+          setTrackedTier(data.offer);
+        }
         setSubscription(data.subscription);
         // Preserva o gateway retornado pelo backend pra decisões de UI (nota PIX etc).
         if (data.gateway) {
@@ -181,11 +189,14 @@ const CancelSubscription = () => {
   // Link de oferta do WhatsApp (/cancelar?t=<token>&offer=<tier>): identifica
   // o usuário pelo token e leva direto pra oferta prometida na mensagem.
   useEffect(() => {
-    if (autoCheckedRef.current || !portalToken) return;
+    if (autoCheckedRef.current || (!portalToken && !retentionCode)) return;
     autoCheckedRef.current = true;
-    void checkSubscription({ token: portalToken, skipToOffers: !!highlightedTier });
+    void checkSubscription({
+      ...(retentionCode ? { retentionCode } : { token: portalToken || undefined }),
+      skipToOffers: !!retentionCode || !!highlightedTier,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [portalToken, highlightedTier]);
+  }, [portalToken, retentionCode, highlightedTier]);
 
   const runAction = async (
     action:
@@ -203,7 +214,9 @@ const CancelSubscription = () => {
     try {
       const { data, error } = await supabase.functions.invoke("cancel-subscription", {
         body: {
-          ...(digits.length >= 10 ? { phone: digits } : { token: portalToken }),
+          ...(retentionCode
+            ? { retention_code: retentionCode }
+            : digits.length >= 10 ? { phone: digits } : { token: portalToken }),
           action,
           reason: selectedReason || null,
           reason_detail: reasonDetail || null,
@@ -271,7 +284,9 @@ const CancelSubscription = () => {
       const digits = phone.replace(/\D/g, "");
       const { data, error } = await supabase.functions.invoke("cancel-subscription", {
         body: {
-          ...(digits.length >= 10 ? { phone: digits } : { token: portalToken }),
+          ...(retentionCode
+            ? { retention_code: retentionCode }
+            : digits.length >= 10 ? { phone: digits } : { token: portalToken }),
           action: "reactivate",
           offer: highlightedTier,
         },

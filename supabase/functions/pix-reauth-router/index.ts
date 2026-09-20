@@ -8,6 +8,7 @@
 //   • create (default) → gera o QR composto no gateway certo
 //   • status           → informa se a autorização/pagamento já foi confirmado
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { findRetentionOfferByCode, recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,8 +31,16 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json().catch(() => ({})) as Record<string, string>;
-    const token = body.token;
+    let token = body.token;
+    const retentionCode = body.retentionCode;
     const action = body.action || "create";
+    const retentionOffer = retentionCode ? await findRetentionOfferByCode(supabase, retentionCode) : null;
+    if (retentionCode && !retentionOffer) return json({ error: "Oferta inválida ou expirada" }, 400);
+    if (!token && retentionOffer?.profile_user_id) {
+      const { data: portal } = await supabase.from("user_portal_tokens").select("token")
+        .eq("user_id", retentionOffer.profile_user_id).maybeSingle();
+      token = portal?.token;
+    }
     if (!token) return json({ error: "Token ausente" }, 400);
 
     const { data: tokenRow } = await supabase
@@ -50,8 +59,9 @@ Deno.serve(async (req) => {
         : "asaas";
     // Oferta de retenção: o mandato novo nasce já no valor reduzido (no PIX não
     // existe cupom). Só a Woovi suporta hoje.
-    const offer = ["discount_30", "lite", "base"].includes(String(body.offer))
-      ? String(body.offer)
+    const requestedOffer = retentionOffer?.tier || body.offer;
+    const offer = ["discount_30", "lite", "base"].includes(String(requestedOffer))
+      ? String(requestedOffer)
       : null;
 
     if (action === "status") {
@@ -106,7 +116,7 @@ Deno.serve(async (req) => {
         : "criar-pix-recorrente-asaas";
     const { data, error } = await supabase.functions.invoke(fn, {
       body: offer && gateway === "woovi"
-        ? { mode: "offer", offer, token }
+        ? { mode: "offer", offer, token, retentionOfferId: retentionOffer?.id || "" }
         : { mode: "reauthorize", token },
     });
     if (error) {
@@ -114,6 +124,12 @@ Deno.serve(async (req) => {
       return json({ error: "Não conseguimos gerar o QR Code agora. Tente em alguns minutos." }, 502);
     }
     if ((data as Record<string, unknown>)?.error) return json(data, 400);
+    if (retentionOffer?.id && gateway === "woovi") {
+      const authorizationId = String((data as Record<string, unknown>)?.authorizationId || "");
+      await supabase.from("retention_offers").update({ provider_subscription_id: authorizationId || null }).eq("id", retentionOffer.id);
+      await recordRetentionOfferEvent(supabase, retentionOffer.id, "accepted", "pix_reauth", authorizationId || null);
+      await recordRetentionOfferEvent(supabase, retentionOffer.id, "payment_pending", "pix_reauth", authorizationId || null);
+    }
     return json({ ...(data as object), gateway });
   } catch (err) {
     console.error("[pix-reauth-router] erro:", err);
