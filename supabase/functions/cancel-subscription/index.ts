@@ -660,7 +660,7 @@ serve(async (req) => {
         profile.card_gateway === "asaas_card" ||
         profile.card_gateway === "asaas_pix");
 
-    if (isAsaasUser) {
+    if (isAsaasUser && profile?.asaas_customer_id) {
       let asaasMethod: "PIX" | "CARD" | null = null;
       if (profile.card_gateway === "asaas_pix") asaasMethod = "PIX";
       else if (profile.card_gateway === "asaas_card") asaasMethod = "CARD";
