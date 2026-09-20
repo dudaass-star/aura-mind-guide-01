@@ -126,6 +126,8 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.reconcile-subscriptions]
     verify_jwt = false
+  [functions.reconcile-retention-offers]
+    verify_jwt = false
   [functions.recover-abandoned-checkout]
     verify_jwt = false
   [functions.redirect-link]

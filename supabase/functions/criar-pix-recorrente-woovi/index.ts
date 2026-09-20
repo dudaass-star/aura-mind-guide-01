@@ -280,7 +280,9 @@ Deno.serve(async (req) => {
       ? String(body.retentionOfferId)
       : null;
     const isReauth = mode === "reauthorize" || mode === "offer";
-    const deferReplacement = body.deferReplacement === "true";
+    // Em ofertas, o mandato antigo continua intacto até o banco aprovar o novo.
+    // A aposentadoria segura acontece no webhook de aprovação.
+    const deferReplacement = mode === "offer" || body.deferReplacement === "true";
     const requestKeyInput = body.requestKey?.trim();
     const requestKey = requestKeyInput && /^[A-Za-z0-9_-]{16,100}$/.test(requestKeyInput)
       ? `${mode}:${requestKeyInput}`

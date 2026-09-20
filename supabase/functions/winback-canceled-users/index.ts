@@ -167,8 +167,7 @@ Deno.serve(async (req) => {
       const r = await sendProactive(c.phone!, msg, 'reconnect', c.user_id);
 
       if (r.success) {
-         await supabase.from('retention_offers').update({ provider_message_id: r.messageSid || null }).eq('id', offer.id);
-         await recordRetentionOfferEvent(supabase, offer.id, 'sent', `winback_${stage}`, r.messageSid || null);
+         await recordRetentionOfferEvent(supabase, offer.id, 'sent', `winback_${stage}`);
         const col = `winback_${stage}_sent_at`;
         await supabase.from('profiles').update({ [col]: new Date().toISOString() }).eq('id', c.id);
         await supabase.from('messages').insert({ user_id: c.user_id, role: 'assistant', content: msg });
