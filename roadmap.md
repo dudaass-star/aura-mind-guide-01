@@ -17,5 +17,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Tornar a demonstração da Landing V2 mais rápida, humana e impactante com uma dor real recorrente
 - [x] Tornar a chamada principal da Landing V2 mais concreta, com escuta, direção e movimento
 - [x] Resolver especificamente quando o cliente não recebe o código do Meu Espaço com link seguro de uso único pelo WhatsApp cadastrado
-- [ ] Separar retenção e churn por mês de vida do cliente (M1, M2, M3 e seguintes), sem misturar gateways
-- [ ] Calcular LTV realizado e projetado com base em pagamentos confirmados e retenção observada
+- [x] Entregar no chat o relatório de churn por mês de vida e LTV, sem alterar o painel
