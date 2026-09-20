@@ -270,6 +270,17 @@ serve(async (req) => {
       if (!offeredTier) {
         return jsonResponse({ success: false, message: "Oferta inválida." });
       }
+      if (retentionOffer && ["woovi", "woovi_pix"].includes(String(retentionOffer.gateway))) {
+        await recordRetentionOfferEvent(supabase, retentionOffer.id, "accepted", "reactivation_pix_redirect");
+        return jsonResponse({
+          success: true,
+          status: "offer_pix_qr",
+          gateway: "woovi_pix",
+          tier: offeredTier,
+          redirect_url: `/reautorizar-pix?r=${encodeURIComponent(String(retention_code))}`,
+          message: "Gerando seu PIX com o novo valor...",
+        });
+      }
       const origin = req.headers.get("origin") || "https://olaaura.com.br";
       const planKey = String(profile?.plan || "essencial").toLowerCase();
       let priceId: string | null = null;
