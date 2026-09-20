@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { getPhoneVariations } from "../_shared/zapi-client.ts";
 import { cancelMandate } from "../_shared/inter-cycles.ts";
+import { findRetentionOfferByCode, recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -106,10 +107,10 @@ serve(async (req) => {
     }
     logStep("Stripe key verified");
 
-    const { phone, token, action, reason, reason_detail, pause_days, offer } = await req.json();
+    const { phone, token, retention_code, action, reason, reason_detail, pause_days, offer } = await req.json();
     logStep("Request received", { phone: !!phone, token: !!token, action, reason });
 
-    if (!phone && !token) {
+    if (!phone && !token && !retention_code) {
       throw new Error("Phone number or token is required");
     }
 
@@ -123,8 +124,23 @@ serve(async (req) => {
     }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    const retentionOffer = retention_code
+      ? await findRetentionOfferByCode(supabase, String(retention_code))
+      : null;
+    if (retention_code && !retentionOffer) {
+      return jsonResponse({ success: false, message: "Esta oferta expirou. Fale com a gente para receber uma opção atualizada." }, 200);
+    }
+    if (retentionOffer && action === "check") {
+      await recordRetentionOfferEvent(supabase, retentionOffer.id, "opened", "cancel_page");
+    }
+
     // Identidade: telefone digitado OU token do portal (link de oferta do WhatsApp).
     let phoneClean = (phone || "").replace(/\D/g, "");
+    if (!phoneClean && retentionOffer?.profile_user_id) {
+      const { data: prof } = await supabase.from("profiles").select("phone")
+        .eq("user_id", retentionOffer.profile_user_id).maybeSingle();
+      phoneClean = String(prof?.phone || retentionOffer.phone_normalized || "").replace(/\D/g, "");
+    }
     if (!phoneClean && token) {
       const { data: pt } = await supabase
         .from("user_portal_tokens")
@@ -211,8 +227,9 @@ serve(async (req) => {
 
 
     // Oferta prometida no WhatsApp (link /cancelar?t=<token>&offer=<tier>).
+    const effectiveOffer = retentionOffer?.tier || offer;
     const offeredTier: "discount_30" | "lite" | "base" | null =
-      offer === "discount_30" || offer === "lite" || offer === "base" ? offer : null;
+      effectiveOffer === "discount_30" || effectiveOffer === "lite" || effectiveOffer === "base" ? effectiveOffer : null;
 
     // Sem assinatura no gateway (cancelada/expirada) + oferta prometida:
     // em vez de "Nenhuma assinatura ativa encontrada", devolve o estado de
@@ -294,10 +311,17 @@ serve(async (req) => {
             phone: phoneClean,
             retention_tier: offeredTier,
             origin: "dunning_reactivation",
+            retention_offer_id: retentionOffer?.id || "",
           },
         },
-        metadata: { phone: phoneClean, retention_tier: offeredTier },
+        metadata: { phone: phoneClean, retention_tier: offeredTier, retention_offer_id: retentionOffer?.id || "" },
       });
+
+      if (retentionOffer?.id) {
+        await supabase.from("retention_offers").update({ provider_checkout_id: session.id }).eq("id", retentionOffer.id);
+        await recordRetentionOfferEvent(supabase, retentionOffer.id, "accepted", "reactivation_checkout", session.id);
+        await recordRetentionOfferEvent(supabase, retentionOffer.id, "payment_pending", "reactivation_checkout", session.id);
+      }
 
       try {
         await supabase.from("retention_events").insert({
@@ -482,7 +506,9 @@ serve(async (req) => {
             status: "offer_pix_qr",
             gateway: "woovi_pix",
             tier,
-            redirect_url: `/reautorizar-pix?token=${tokenRow.token}&offer=${tier}`,
+            redirect_url: retentionOffer?.id
+              ? `/reautorizar-pix?r=${encodeURIComponent(String(retention_code))}`
+              : `/reautorizar-pix?token=${tokenRow.token}&offer=${tier}`,
             message: "Gerando seu PIX com o novo valor...",
           });
         }

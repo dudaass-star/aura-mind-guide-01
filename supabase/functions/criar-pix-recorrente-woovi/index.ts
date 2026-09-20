@@ -276,6 +276,9 @@ Deno.serve(async (req) => {
     // cliente ganha um QR NOVO, então pode pagar de outra conta — a atual é
     // justamente a que ficou sem saldo.
     const offerTier = mode === "offer" ? String(body.offer || "discount_30") : null;
+    const retentionOfferId = mode === "offer" && /^[0-9a-f-]{36}$/i.test(String(body.retentionOfferId || ""))
+      ? String(body.retentionOfferId)
+      : null;
     const isReauth = mode === "reauthorize" || mode === "offer";
     const deferReplacement = body.deferReplacement === "true";
     const requestKeyInput = body.requestKey?.trim();
@@ -492,6 +495,7 @@ Deno.serve(async (req) => {
       fbp: fbp || null,
       fbc: fbc || null,
       ga_client_id: gaClientId || null,
+      retention_offer_id: retentionOfferId,
     });
     if (attemptErr) {
       if (attemptErr.code === "23505") {
