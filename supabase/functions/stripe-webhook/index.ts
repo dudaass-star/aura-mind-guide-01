@@ -1525,6 +1525,7 @@ Me conta: como você está hoje?`;
       }
 
       if (paidSubscriptionId) {
+        let retentionOfferIdsPaid: string[] = [];
         try {
           const { data: paidOffers } = await supabase.from('retention_offers').select('id')
             .eq('provider_subscription_id', paidSubscriptionId)
@@ -1532,8 +1533,8 @@ Me conta: como você está hoje?`;
           for (const retentionOffer of paidOffers || []) {
             await supabase.from('retention_offers').update({ provider_payment_id: invoice.id, amount_cents: invoice.amount_paid }).eq('id', retentionOffer.id);
             await recordRetentionOfferEvent(supabase, retentionOffer.id, 'paid', 'stripe_webhook', invoice.id, { amount_paid: invoice.amount_paid, billing_reason: invoice.billing_reason });
-            await recordRetentionOfferEvent(supabase, retentionOffer.id, 'applied', 'stripe_webhook', invoice.id);
           }
+          retentionOfferIdsPaid = (paidOffers || []).map((offer: { id: string }) => offer.id);
           const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
@@ -1638,6 +1639,9 @@ Me conta: como você está hoje?`;
                 .eq('user_id', profileForTasks.user_id)
                 .eq('status', 'pending')
                 .like('task_type', 'dunning_%');
+            }
+            for (const offerId of retentionOfferIdsPaid) {
+              await recordRetentionOfferEvent(supabase, offerId, 'applied', 'stripe_webhook', invoice.id);
             }
           }
         } catch (err) {

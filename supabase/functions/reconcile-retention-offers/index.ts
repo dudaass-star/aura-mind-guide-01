@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     try {
       if (offer.gateway === "stripe" && stripe && offer.provider_subscription_id) {
         const invoices = await stripe.invoices.list({ subscription: offer.provider_subscription_id, status: "paid", limit: 3 });
-        const paid = invoices.data.find((invoice) => Number(invoice.amount_paid || 0) > 0 && invoice.created * 1000 >= new Date(offer.created_at).getTime());
+        const paid = invoices.data.find((invoice: Stripe.Invoice) => Number(invoice.amount_paid || 0) > 0 && invoice.created * 1000 >= new Date(offer.created_at).getTime());
         if (paid) { observed = "paid"; reference = paid.id; }
       } else if ((offer.gateway === "woovi" || offer.gateway === "woovi_pix") && offer.provider_subscription_id) {
         const { data: sub } = await supabase.from("woovi_subscriptions").select("id,entry_paid_at")
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
           const { data: charge } = await supabase.from("woovi_charges").select("installment_id,paid_at")
             .eq("subscription_id", offer.provider_subscription_id).not("paid_at", "is", null)
             .gte("paid_at", offer.created_at).order("paid_at", { ascending: false }).limit(1).maybeSingle();
-          if (charge?.paid_at || sub.entry_paid_at) { observed = "paid"; reference = charge?.installment_id || offer.provider_subscription_id; }
+          if (charge?.paid_at) { observed = "paid"; reference = charge.installment_id || offer.provider_subscription_id; }
         }
       }
 
