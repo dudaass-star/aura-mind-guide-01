@@ -12,6 +12,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { sendProactive } from '../_shared/whatsapp-provider.ts';
+import { createRetentionOffer, recordRetentionOfferEvent } from '../_shared/retention-offers.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -142,19 +143,39 @@ Deno.serve(async (req) => {
 
     try {
       // /checkout é caminho morto: o checkout canônico é o V2.
-      const checkoutUrl = 'https://olaaura.com.br/v2/checkout';
-      const link = (await createShortLink(checkoutUrl, c.phone!)) || checkoutUrl;
+       const { data: profile } = await supabase.from('profiles')
+         .select('id,email,card_gateway,plan,billing_cycle')
+         .eq('user_id', c.user_id).maybeSingle();
+       const tier = stage === 'd3' ? 'discount_30' : stage === 'd14' ? 'lite' : 'base';
+       const offer = await createRetentionOffer(supabase, {
+         profileUserId: c.user_id,
+         profileId: profile?.id || null,
+         phone: c.phone,
+         email: profile?.email || null,
+         origin: `winback_${stage}`,
+         reason: c.payment_failed_at ? 'payment_failed' : 'canceled',
+         tier,
+         gateway: profile?.card_gateway || 'stripe',
+         channel: 'whatsapp',
+         plan: profile?.plan || null,
+         billingCycle: profile?.billing_cycle || null,
+         expiresInHours: stage === 'd30' ? 336 : 168,
+       });
+       const link = `https://olaaura.com.br/cancelar?r=${offer.code}`;
       const msg = buildMessage(stage, c.name || '', link, !!c.payment_failed_at);
 
       const r = await sendProactive(c.phone!, msg, 'reconnect', c.user_id);
 
       if (r.success) {
+         await supabase.from('retention_offers').update({ provider_message_id: r.messageSid || null }).eq('id', offer.id);
+         await recordRetentionOfferEvent(supabase, offer.id, 'sent', `winback_${stage}`, r.messageSid || null);
         const col = `winback_${stage}_sent_at`;
         await supabase.from('profiles').update({ [col]: new Date().toISOString() }).eq('id', c.id);
         await supabase.from('messages').insert({ user_id: c.user_id, role: 'assistant', content: msg });
         results.push({ user_id: c.user_id, stage, success: true });
         console.log(`✅ Winback ${stage} sent to ${c.user_id}`);
       } else {
+         await recordRetentionOfferEvent(supabase, offer.id, 'failed', `winback_${stage}`, null, { error: r.error || 'send_failed' });
         await supabase.from('failed_message_log').insert({
           user_id: c.user_id,
           phone: c.phone,
