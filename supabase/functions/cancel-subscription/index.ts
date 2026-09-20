@@ -384,6 +384,7 @@ serve(async (req) => {
             // No PIX Automático o "desconto" é um mandato novo já no valor
             // reduzido: o cliente escaneia um QR e pode até usar outra conta.
             discount_available: true,
+            offer: offeredTier,
             reasons: CANCELLATION_REASONS,
           });
         }
@@ -471,6 +472,7 @@ serve(async (req) => {
           const tier = action === "apply_discount_3m"
             ? "discount_30"
             : action === "downgrade_to_lite" ? "lite" : "base";
+          await recordRetentionOfferEvent(supabase, retentionOffer?.id, "accepted", "cancel_flow");
 
           await supabase
             .from("user_portal_tokens")
@@ -955,6 +957,7 @@ serve(async (req) => {
           value_recap: valueRecap,
           discount_available: !discountUsedRecently,
           reasons: CANCELLATION_REASONS,
+          offer: offeredTier,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -978,6 +981,8 @@ serve(async (req) => {
           resumes_at: resumesAt,
         },
       });
+      await recordRetentionOfferEvent(supabase, retentionOffer?.id, "accepted", "cancel_flow", subscription.id);
+      await recordRetentionOfferEvent(supabase, retentionOffer?.id, "applied", "stripe", subscription.id, { tier: "discount_30" });
 
       await supabase.from('cancellation_feedback').insert({
         phone: phoneClean,
@@ -1068,6 +1073,7 @@ serve(async (req) => {
       const tier: "lite" | "base" =
         action === "downgrade_to_lite" ? "lite" : "base";
       const newPriceId = RETENTION_PRICES[tier];
+      await recordRetentionOfferEvent(supabase, retentionOffer?.id, "accepted", "cancel_flow", subscription.id);
       const itemId = subscription.items.data[0]?.id;
       if (!itemId) {
         return jsonResponse(

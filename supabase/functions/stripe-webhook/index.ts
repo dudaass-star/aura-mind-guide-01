@@ -8,6 +8,7 @@ import { sendWelcomeWhatsApp } from "../_shared/welcome-delivery.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
+import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -365,6 +366,15 @@ Deno.serve(async (req) => {
       const session = event.data.object as Stripe.Checkout.Session;
       console.log('✅ Checkout session completed:', session.id);
       console.log('📋 Session metadata:', session.metadata);
+      const retentionOfferId = session.metadata?.retention_offer_id || null;
+      if (retentionOfferId) {
+        await supabase.from('retention_offers').update({
+          provider_checkout_id: session.id,
+          provider_subscription_id: typeof session.subscription === 'string' ? session.subscription : null,
+        }).eq('id', retentionOfferId);
+        await recordRetentionOfferEvent(supabase, retentionOfferId, 'accepted', 'stripe_webhook', session.id);
+        await recordRetentionOfferEvent(supabase, retentionOfferId, 'payment_pending', 'stripe_webhook', session.id);
+      }
 
       // Mark checkout_session as completed for funnel tracking
       try {
@@ -1516,6 +1526,14 @@ Me conta: como você está hoje?`;
 
       if (paidSubscriptionId) {
         try {
+          const { data: paidOffers } = await supabase.from('retention_offers').select('id')
+            .eq('provider_subscription_id', paidSubscriptionId)
+            .in('status', ['accepted', 'payment_pending', 'paid']);
+          for (const retentionOffer of paidOffers || []) {
+            await supabase.from('retention_offers').update({ provider_payment_id: invoice.id, amount_cents: invoice.amount_paid }).eq('id', retentionOffer.id);
+            await recordRetentionOfferEvent(supabase, retentionOffer.id, 'paid', 'stripe_webhook', invoice.id, { amount_paid: invoice.amount_paid, billing_reason: invoice.billing_reason });
+            await recordRetentionOfferEvent(supabase, retentionOffer.id, 'applied', 'stripe_webhook', invoice.id);
+          }
           const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
