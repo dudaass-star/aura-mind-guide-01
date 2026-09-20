@@ -87,10 +87,11 @@ const CancelSubscription = () => {
   const portalToken = searchParams.get("t");
   const retentionCode = searchParams.get("r");
   const [trackedTier, setTrackedTier] = useState<Tier | null>(null);
-  const highlightedTier: Tier | null = trackedTier ||
+  const queryTier: Tier | null =
     offerParamRaw === "discount_30" || offerParamRaw === "lite" || offerParamRaw === "base"
       ? offerParamRaw
       : null;
+  const highlightedTier: Tier | null = trackedTier || queryTier;
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
