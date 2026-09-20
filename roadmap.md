@@ -21,4 +21,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Unificar o fluxo de retenção do envio à reativação, com rastreamento e reconciliação por oferta
 - [x] Corrigir reativação por gateway, links de winback, PIX com menos atrito e identificação por cliente
 - [x] Validar em simulação segura entrega, clique e evolução até pagamento/liberação; confirmações reais seguem por webhook e reconciliação horária
-- [ ] Planejar transformação da AURA em aplicativo web principal, com WhatsApp como canal auxiliar
+- [x] Planejar transformação da AURA em aplicativo web principal, com WhatsApp como canal auxiliar
