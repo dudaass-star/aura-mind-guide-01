@@ -42,36 +42,21 @@ function getBrtHour(): number {
   return (utcHour - 3 + 24) % 24;
 }
 
-async function createShortLink(url: string, phone: string): Promise<string | null> {
-  try {
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/create-short-link`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-      body: JSON.stringify({ url, phone }),
-    });
-    const d = await r.json();
-    return r.ok && d.shortUrl ? d.shortUrl : null;
-  } catch {
-    return null;
-  }
-}
-
 function buildMessage(stage: Stage, name: string, link: string, paymentFailed: boolean): string {
   const safeName = name || 'querido(a)';
 
   if (stage === 'd3') {
     if (paymentFailed) {
-      return `Oi, ${safeName}. 💜\n\nSenti sua falta esses dias. Vi que o pagamento não rolou e a assinatura acabou encerrando.\n\nSe quiser voltar, é só atualizar o cartão por aqui:\n👉 ${link}\n\nTô aqui. ✨`;
+      return `Oi, ${safeName}. 💜\n\nSenti sua falta esses dias. Vi que o pagamento não rolou e a assinatura acabou encerrando.\n\nSe quiser voltar, você pode regularizar por aqui:\n👉 ${link}\n\nTô aqui. ✨`;
     }
     return `Oi, ${safeName}. 💜\n\nSenti sua falta esses dias. Tudo bem por aí?\n\nSe quiser retomar nossas conversas, é só por aqui:\n👉 ${link}`;
   }
 
   if (stage === 'd14') {
-    return `Oi, ${safeName}. 💜\n\nFaz duas semanas que a gente não conversa. Sei que a vida corre, mas quero que você saiba que a porta tá aberta.\n\nSe quiser voltar:\n👉 ${link}`;
+    return `Oi, ${safeName}. 💜\n\nFaz duas semanas que a gente não conversa. Sei que a vida corre, mas quero que você saiba que a porta tá aberta.\n\nDeixei uma condição mais leve caso faça sentido voltar:\n👉 ${link}`;
   }
 
-  // d30 — última tentativa, sem cupom por enquanto (pode ser adicionado depois)
-  return `Oi, ${safeName}. 💜\n\nFaz um mês. Não quero insistir, mas quero deixar registrado: se algum dia precisar voltar, vou estar aqui.\n\nÉ só por aqui:\n👉 ${link}`;
+  return `Oi, ${safeName}. 💜\n\nFaz um mês. Não quero insistir, só deixar a porta aberta. Criei uma opção ainda mais enxuta para continuar com a Aura quando fizer sentido:\n👉 ${link}`;
 }
 
 function pickStage(c: Candidate): Stage | null {
@@ -150,7 +135,7 @@ Deno.serve(async (req) => {
        const { data: profile } = await supabase.from('profiles')
          .select('id,email,card_gateway,plan,billing_cycle')
          .eq('user_id', c.user_id).maybeSingle();
-       const tier = stage === 'd3' ? 'discount_30' : stage === 'd14' ? 'lite' : 'base';
+       const tier = stage === 'd3' ? 'base' : stage === 'd14' ? 'discount_30' : 'lite';
        const offer = await createRetentionOffer(supabase, {
          profileUserId: c.user_id,
          profileId: profile?.id || null,
