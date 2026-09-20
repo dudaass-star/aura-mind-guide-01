@@ -25,6 +25,7 @@
  */
 
 import { sendRecoveryTemplate } from "./twilio-recovery-client.ts";
+import { createRetentionOffer, recordRetentionOfferEvent } from "./retention-offers.ts";
 
 /**
  * Template genérico de falha de pagamento (avisos 1 e 2).
@@ -387,6 +388,24 @@ export async function sendDunningWhatsApp(
   const contentSid = ladderEntry?.sid || noticeSid;
   const tier: DunningOfferTier | "generic" = useOffer ? ladderEntry!.tier : "generic";
 
+  let retentionOffer: { id: string; code: string } | null = null;
+  if (useOffer) {
+    try {
+      retentionOffer = await createRetentionOffer(supabase, {
+        profileUserId: profile.user_id,
+        phone: profile.phone,
+        origin: "dunning",
+        tier,
+        gateway: provider,
+        channel: "whatsapp",
+        metadata: { event_id: eventId, invoice_id: invoiceId, payment_id: paymentId, subscription_id: subscriptionId },
+      });
+    } catch (err) {
+      console.error("[dunning-whatsapp] falha criando oferta:", err);
+      return { sent: false, skipped: "offer_tracking_failed", tier };
+    }
+  }
+
   const token = await ensurePortalToken(supabase, profile.user_id);
   if (!token) {
     await supabase.from("dunning_attempts").insert({
@@ -430,13 +449,13 @@ export async function sendDunningWhatsApp(
   // Oferta: {{2}} é só a query string (a URL do botão já é /cancelar?{{2}}).
   // Genérico: {{2}} é a URL completa de retomada de pagamento.
   const link = useOffer
-    ? `https://olaaura.com.br/cancelar?t=${token}&offer=${tier}`
+    ? `https://olaaura.com.br/cancelar?r=${retentionOffer?.code}`
     : `https://olaaura.com.br/pagamento?t=${token}`;
   const variables = {
     "1": firstName(profile.name),
     // Oferta: {{2}} é a query string (botão = /cancelar?{{2}}).
     // Genérico: {{2}} é só o token (botão = /pagamento?t={{2}}).
-    "2": useOffer ? `t=${token}&offer=${tier}` : token,
+    "2": useOffer ? `r=${retentionOffer?.code}` : token,
   };
 
   try {
@@ -454,11 +473,18 @@ export async function sendDunningWhatsApp(
       console.warn(`[dunning-whatsapp] aviso genérico falhou (${result.error}); escalando para ${ladder[0].tier}`);
       usedTier = ladder[0].tier;
       usedSid = ladder[0].sid!;
-      usedLink = `https://olaaura.com.br/cancelar?t=${token}&offer=${usedTier}`;
+      if (!retentionOffer) {
+        retentionOffer = await createRetentionOffer(supabase, {
+          profileUserId: profile.user_id, phone: profile.phone, origin: "dunning_fallback",
+          tier: usedTier, gateway: provider, channel: "whatsapp",
+          metadata: { event_id: eventId, invoice_id: invoiceId, payment_id: paymentId, subscription_id: subscriptionId },
+        });
+      }
+      usedLink = `https://olaaura.com.br/cancelar?r=${retentionOffer.code}`;
       result = await sendRecoveryTemplate(
         profile.phone,
         usedSid,
-        { "1": firstName(profile.name), "2": `t=${token}&offer=${usedTier}` },
+        { "1": firstName(profile.name), "2": `r=${retentionOffer.code}` },
         statusCallback,
       );
     }
@@ -469,10 +495,12 @@ export async function sendDunningWhatsApp(
         template_sid: usedSid,
         attempt_number: attemptNumber,
         offer_tier: usedTier,
+        offer_id: retentionOffer?.id || null,
         link_generated: true,
         whatsapp_sent: true,
         message_sid: result.messageSid || null,
       });
+      await recordRetentionOfferEvent(supabase, retentionOffer?.id, "sent", "dunning_whatsapp", result.messageSid);
       return { sent: true, attemptNumber, messageSid: result.messageSid, link: usedLink, tier: usedTier };
     }
 
@@ -481,10 +509,12 @@ export async function sendDunningWhatsApp(
       template_sid: usedSid,
       attempt_number: attemptNumber,
       offer_tier: usedTier,
+      offer_id: retentionOffer?.id || null,
       link_generated: true,
       error_stage: "twilio_send_failed",
       error_message: result.error || `HTTP ${result.status}`,
     });
+    await recordRetentionOfferEvent(supabase, retentionOffer?.id, "failed", "dunning_whatsapp", result.messageSid, { error: result.error || `HTTP ${result.status}` });
     return { sent: false, error: result.error || `HTTP ${result.status}`, link: usedLink, tier: usedTier };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -493,10 +523,12 @@ export async function sendDunningWhatsApp(
       template_sid: contentSid,
       attempt_number: attemptNumber,
       offer_tier: tier,
+      offer_id: retentionOffer?.id || null,
       link_generated: true,
       error_stage: "twilio_exception",
       error_message: msg,
     });
+    await recordRetentionOfferEvent(supabase, retentionOffer?.id, "failed", "dunning_whatsapp", null, { error: msg });
     return { sent: false, error: msg, link, tier };
   }
 }
