@@ -4241,6 +4241,7 @@ export type Database = {
           recurrency_id: string | null
           replaced_by_subscription_id: string | null
           request_key: string | null
+          retention_offer_id: string | null
           start_date: string | null
           status: string
           subscription_id: string | null
@@ -4287,6 +4288,7 @@ export type Database = {
           recurrency_id?: string | null
           replaced_by_subscription_id?: string | null
           request_key?: string | null
+          retention_offer_id?: string | null
           start_date?: string | null
           status?: string
           subscription_id?: string | null
@@ -4333,6 +4335,7 @@ export type Database = {
           recurrency_id?: string | null
           replaced_by_subscription_id?: string | null
           request_key?: string | null
+          retention_offer_id?: string | null
           start_date?: string | null
           status?: string
           subscription_id?: string | null
@@ -4342,6 +4345,13 @@ export type Database = {
           value_cents?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "woovi_subscriptions_retention_offer_id_fkey"
+            columns: ["retention_offer_id"]
+            isOneToOne: false
+            referencedRelation: "retention_offers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "woovi_subscriptions_user_id_fkey"
             columns: ["user_id"]
