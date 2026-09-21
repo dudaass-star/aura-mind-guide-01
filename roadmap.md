@@ -33,3 +33,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Aplicar a direção Inbox-first: abertura sempre na lista, conversa principal e navegação premium para as demais áreas
 
 - [x] Conferir se a navegação simples entre conversa e demais áreas já estava entregue antes de criar uma segunda navegação
+
+- [ ] Validar o fluxo mobile completo: lista de conversas, conversa da AURA, retorno e acesso às demais áreas sem sobreposição
