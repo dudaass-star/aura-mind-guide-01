@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations } from "../_shared/zapi-client.ts";
 import { saveMetaIdentity } from "../_shared/meta-identity.ts";
+import { isCheckoutAccessToken, saveCheckoutAccessClaim } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -91,7 +92,7 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup, prewarm } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup, prewarm, accessToken } = await req.json();
 
     // === WARMUP ===
     // O front chama isso no primeiro foco de campo pra matar o cold start da função
@@ -603,7 +604,7 @@ serve(async (req) => {
           Deno.env.get("SUPABASE_URL") ?? "",
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
-        void (async () => {
+        await (async () => {
           try {
             // Sessão pré-criada enquanto o usuário digitava: se ele corrigiu um
             // dado e geramos outra, limpamos a anterior ainda "created" da última
@@ -616,7 +617,7 @@ serve(async (req) => {
                 .eq("status", "created")
                 .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
             }
-            await supabase.from("checkout_sessions").insert({
+            const { data: checkoutRow } = await supabase.from("checkout_sessions").insert({
               phone: phoneClean,
               email: email || null,
               name: name,
@@ -625,7 +626,23 @@ serve(async (req) => {
               payment_method: isBoletoPayment ? "boleto" : "card",
               stripe_session_id: session.id,
               status: "created",
+            }).select("id").maybeSingle();
+            const claimId = await saveCheckoutAccessClaim(supabase, {
+              token: accessToken,
+              gateway: "stripe",
+              providerReference: session.id,
+              checkoutSessionId: checkoutRow?.id || null,
+              email,
+              phone: phoneClean,
+              name,
+              plan,
+              billing: billingPeriod,
             });
+            if (claimId) {
+              await stripe.checkout.sessions.update(session.id, {
+                metadata: { ...sessionConfig.metadata, checkout_access_claim_id: claimId },
+              });
+            }
             logStep("Checkout session logged to DB");
           } catch (e) {
             console.warn("⚠️ Failed to log checkout session (non-blocking):", (e as Error)?.message || e);
@@ -643,6 +660,7 @@ serve(async (req) => {
           clientSecret: (session as any).client_secret,
           publishableKey: Deno.env.get("STRIPE_PUBLISHABLE_KEY") || null,
           sessionId: session.id,
+          accessToken: isCheckoutAccessToken(accessToken) ? accessToken : null,
           returning_customer: returningCustomerMonthly,
           serverMs: Date.now() - reqStart,
         }

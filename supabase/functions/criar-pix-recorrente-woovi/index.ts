@@ -20,6 +20,7 @@ import {
 import { composeQr, extractWooviUrl } from "../_shared/pix-emv.ts";
 import { buildFixedPixRecurringOptions } from "../_shared/woovi-subscription-payload.ts";
 import { saveMetaIdentity } from "../_shared/meta-identity.ts";
+import { saveCheckoutAccessClaim } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -259,7 +260,7 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as Record<string, string>;
     let { plan, billing, name, email, phone, cpf } = body;
-    const { fbp, fbc, gaClientId } = body;
+    const { fbp, fbc, gaClientId, accessToken } = body;
     // Guarda o par fbp/fbc do lead: se a compra concluir sem cookie,
     // o webhook recupera daqui para o Purchase não perder atribuição.
     void saveMetaIdentity(supabase, { email, phone, fbp, fbc, source: "criar-pix-recorrente-woovi" });
@@ -722,6 +723,17 @@ Deno.serve(async (req) => {
       }).select("id").maybeSingle();
       if (funnelErr) console.warn("[criar-pix-recorrente-woovi] funil não logado:", funnelErr.message);
       checkoutSessionId = funnelRow?.id ?? null;
+      await saveCheckoutAccessClaim(supabase, {
+        token: accessToken,
+        gateway: "woovi",
+        providerReference: subscriptionId,
+        checkoutSessionId,
+        email: emailClean,
+        phone: phoneClean,
+        name,
+        plan,
+        billing,
+      });
     }
 
 
@@ -770,6 +782,7 @@ Deno.serve(async (req) => {
     return json({
       authorizationId: subscriptionId,
       checkoutSessionId,
+      accessToken,
       amount: entryCents / 100,
       recurringAmount: amountCents / 100,
       trial: withTrial,

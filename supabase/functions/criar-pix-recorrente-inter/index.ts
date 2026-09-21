@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import QRCode from "https://esm.sh/qrcode@1.5.4";
 import { interFetch, buildTxid, brtDate } from "../_shared/inter-pix.ts";
 import { saveMetaIdentity } from "../_shared/meta-identity.ts";
+import { saveCheckoutAccessClaim } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -190,7 +191,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const body = (await req.json()) as Record<string, string>;
     let { plan, billing, name, email, phone, cpf } = body;
-    const { fbp, fbc, gaClientId } = body;
+    const { fbp, fbc, gaClientId, accessToken } = body;
     // Cache de identidade do Meta: fallback do Purchase quando o cookie
     // não existir no momento da confirmação do pagamento.
     void saveMetaIdentity(supabase, { email, phone, fbp, fbc, source: "criar-pix-recorrente-inter" });
@@ -525,11 +526,22 @@ Deno.serve(async (req) => {
     // recovery_sent=true impede que o carrinho abandonado (desenhado pra cartão)
     // dispare mensagem para quem apenas gerou QR.
     if (mode !== "reauthorize") {
-      const { error: funnelErr } = await supabase.from("checkout_sessions").insert({
+      const { data: funnelRow, error: funnelErr } = await supabase.from("checkout_sessions").insert({
         phone: phoneClean || "sem-telefone", email: emailClean, name, plan, billing,
         payment_method: "pix_auto", status: "created", recovery_sent: true,
-      });
+      }).select("id").maybeSingle();
       if (funnelErr) console.warn("[criar-pix-recorrente-inter] funil não logado:", funnelErr.message);
+      await saveCheckoutAccessClaim(supabase, {
+        token: accessToken,
+        gateway: "inter",
+        providerReference: idRec,
+        checkoutSessionId: funnelRow?.id || null,
+        email: emailClean,
+        phone: phoneClean,
+        name,
+        plan,
+        billing,
+      });
     }
 
     if (mode === "reauthorize" && previousIdRec && !deferReplacement) {
@@ -540,6 +552,7 @@ Deno.serve(async (req) => {
 
     return json({
       authorizationId: idRec,
+      accessToken,
       amount: immediateCents / 100,
       recurringAmount: amountCents / 100,
       trial: withTrial,

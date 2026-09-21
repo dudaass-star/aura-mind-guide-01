@@ -40,7 +40,7 @@ export type FunnelStep =
   | "pix_rail_down"
   | "pix_blocked_rail_down"
   | "asaas_card_open"
-  | "purchase"
+  | "return_view"
   /** Confirmado pelo servidor (webhook). Não vem do navegador. */
   | "purchase_confirmed";
 

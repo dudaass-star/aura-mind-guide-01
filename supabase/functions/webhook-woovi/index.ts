@@ -21,6 +21,7 @@ import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { isTasterCorrelationId, TASTER_WINDOW_HOURS, cancelTasterReminders } from "../_shared/taster.ts";
 import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
+import { markCheckoutAccessPaidByReference } from "../_shared/checkout-access.ts";
 import {
   wooviFetch, brtDate,
   WOOVI_APPROVED_STATUSES as APPROVED_STATUSES,
@@ -508,6 +509,7 @@ async function activateAccess(
       }
     }
     console.log(`[webhook-woovi] ✅ acesso de ${userId} estendido até ${newExpiry} (plano ${plan})`);
+    await markCheckoutAccessPaidByReference(supabase, "woovi", sub.subscription_id as string, userId);
 
     // Cobrança CHEIA do mandato (dia 8 e ciclos seguintes): conversão comercial
     // real. A entrada de R$ 6,90 (`trialEntry`) segue medida como `Purchase`.

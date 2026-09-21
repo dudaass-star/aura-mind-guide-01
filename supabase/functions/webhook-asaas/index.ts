@@ -14,6 +14,7 @@ import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
 import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
+import { markCheckoutAccessPaidByReference } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1311,6 +1312,18 @@ async function handleActivation(
       });
     } catch (e) {
       console.warn("[webhook-asaas] ⚠️ falha registrando purchase_confirmed:", (e as Error)?.message);
+    }
+    await markCheckoutAccessPaidByReference(
+      supabase,
+      "asaas",
+      (updated.asaas_payment_id as string) || (updated.asaas_subscription_id as string) || null,
+      profileUserId,
+    );
+    const accessAuthorizationId = String(
+      (payment as any)?.pixAutomaticAuthorizationId || (payment as any)?.authorization?.id || "",
+    );
+    if (accessAuthorizationId) {
+      await markCheckoutAccessPaidByReference(supabase, "asaas", accessAuthorizationId, profileUserId);
     }
 
     // GA4 (Measurement Protocol) — paridade com o trilho do cartão.

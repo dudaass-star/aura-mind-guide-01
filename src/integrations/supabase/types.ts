@@ -561,6 +561,81 @@ export type Database = {
           },
         ]
       }
+      checkout_access_claims: {
+        Row: {
+          billing: string
+          checkout_session_id: string | null
+          consumed_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          gateway: string
+          id: string
+          name: string | null
+          paid_at: string | null
+          phone: string
+          plan: string
+          profile_id: string | null
+          provider_reference: string | null
+          status: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          billing: string
+          checkout_session_id?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          gateway: string
+          id?: string
+          name?: string | null
+          paid_at?: string | null
+          phone: string
+          plan: string
+          profile_id?: string | null
+          provider_reference?: string | null
+          status?: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          billing?: string
+          checkout_session_id?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          gateway?: string
+          id?: string
+          name?: string | null
+          paid_at?: string | null
+          phone?: string
+          plan?: string
+          profile_id?: string | null
+          provider_reference?: string | null
+          status?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkout_access_claims_checkout_session_id_fkey"
+            columns: ["checkout_session_id"]
+            isOneToOne: false
+            referencedRelation: "checkout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkout_access_claims_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checkout_funnel_events: {
         Row: {
           anon_session_id: string | null
@@ -4556,6 +4631,7 @@ export type Database = {
           subject: string
         }[]
       }
+      has_portal_entitlement: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

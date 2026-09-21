@@ -41,6 +41,16 @@ import { CheckoutObjections } from "@/components/checkout/CheckoutObjections";
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "quarterly" | "semestral" | "yearly";
 
+const getCheckoutAccessToken = (): string => {
+  const key = "aura_checkout_access";
+  const current = localStorage.getItem(key);
+  if (current && /^[a-f0-9]{64}$/i.test(current)) return current;
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  localStorage.setItem(key, token);
+  return token;
+};
+
 interface PlanConfig {
   name: string;
   monthlyPrice: string;
@@ -554,6 +564,7 @@ const CheckoutV2 = () => {
             name: name.trim(),
             email: email.trim(),
             phone,
+            accessToken: getCheckoutAccessToken(),
           },
         });
         if (!error && (data as any)?.clientSecret) {
@@ -681,6 +692,7 @@ const CheckoutV2 = () => {
             name: name.trim(),
             email: email.trim(),
             phone: phone,
+            accessToken: getCheckoutAccessToken(),
             ...(fbp && { fbp }),
             ...(fbc && { fbc }),
             ...(gaClientId && { gaClientId }),
@@ -739,6 +751,7 @@ const CheckoutV2 = () => {
             billing: billingPeriod,
             price: currentPrice,
             returningCustomerMonthly: isReturning,
+             accessToken: getCheckoutAccessToken(),
           }),
         );
         setHasRedirected(true);
@@ -1094,6 +1107,7 @@ const CheckoutV2 = () => {
           email: email.trim(),
           phone: phone.replace(/\D/g, ""),
           cpf: cpf.replace(/\D/g, ""),
+          accessToken: getCheckoutAccessToken(),
           // Trial semanal também no PIX Automático (só mensal; o backend nega
           // pra retornante e cai no valor cheio sozinho).
           ...(pixMode === "subscription" && billingPeriod === "monthly" ? { trial: true } : {}),
@@ -1533,6 +1547,7 @@ const CheckoutV2 = () => {
                   return fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined;
                 })()}
                 gaClientId={getGaClientId() || undefined}
+                accessToken={getCheckoutAccessToken()}
                 onBack={handleResetCheckout}
                 onSuccess={(info) => {
                   // Persiste flag pro /obrigado adaptar headline (retornante).
@@ -1546,6 +1561,7 @@ const CheckoutV2 = () => {
                         billing: billingPeriod,
                         price: currentPrice,
                         returningCustomerMonthly: !!info?.returningCustomerMonthly,
+                        accessToken: getCheckoutAccessToken(),
                       }),
                     );
                   } catch { /* best-effort */ }
