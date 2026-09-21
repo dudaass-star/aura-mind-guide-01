@@ -22,6 +22,7 @@ Não criar `profiles` nem uma conta autenticada antes do pagamento. Isso preserv
 2. A AURA mantém o prewarm já existente, preços, ciclos, Plano Semanal e gateways atuais.
 3. Ao iniciar cartão ou PIX, o servidor cria uma **intenção segura de acesso**, separada de `profiles`.
 4. O navegador guarda apenas um segredo aleatório de alta entropia; nome, e-mail ou telefone isolados nunca concedem acesso.
+5. O reconhecimento será explícito por token first-party/deep link, nunca por fingerprinting probabilístico do aparelho.
 
 ### 2. Pagamento e retorno
 
@@ -60,6 +61,8 @@ Não poderá conversar com a AURA, gerar áudio, iniciar sessão, acessar histó
 
 - Manter `checkout_sessions` como registro de tentativa e acrescentar uma entidade específica de **claim de acesso** ligada à tentativa, com `token_hash`, estado, expiração, uso único, gateway e identificadores externos.
 - Não armazenar o segredo bruto no banco; aplicar rate limit, expiração e revogação após troca pela sessão.
+- Enquanto não houver pagamento, esse claim autoriza somente a tela limitada; ele não cria usuário no Supabase Auth e não permite consultar `profiles`.
+- Definir retenção curta e expurgo automático para claims e dados de tentativas nunca pagas, respeitando a finalidade informada e as obrigações de recuperação/antifraude.
 - Transportar somente o identificador opaco da intenção nos metadados de Stripe/PIX e no retorno.
 - Tornar as transições monotônicas e idempotentes: um estado pago não pode regredir por webhook atrasado.
 - Reutilizar o mecanismo seguro já existente em `portal-whatsapp-access` para gerar/verificar a sessão, adaptando-o para uma intenção paga.
@@ -114,6 +117,7 @@ Usar o funil existente, acrescentando apenas eventos necessários:
 ## Recuperação e LTV sem pressão
 
 - Retomar a tentativa exata, com plano e método preservados, em vez de mandar checkout genérico.
+- Recuperar abandono por canais consentidos e com frequência limitada; nunca transformar dado digitado no checkout em acesso a uma conta existente.
 - Respeitar opt-out e preferência de canal; a persona AURA não fará upsell dentro de uma conversa emocional.
 - Depois da ativação, usar sinais de não uso para lembretes úteis e mensuráveis, sem simular preocupação clínica.
 - Manter cancelamento simples, consentimento de recorrência claro e acesso até o fim do período efetivamente pago.
