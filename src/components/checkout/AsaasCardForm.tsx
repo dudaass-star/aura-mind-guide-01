@@ -22,6 +22,7 @@ interface Props {
   fbp?: string;
   fbc?: string;
   gaClientId?: string;
+  accessToken?: string;
   onBack: () => void;
   onSuccess: (info?: { returningCustomerMonthly?: boolean }) => void;
 }
@@ -44,7 +45,7 @@ export function AsaasCardForm({
   plan, billing, name, email, phone,
   amountLabel, periodLabel, installmentMax,
   trial,
-  fbp, fbc, gaClientId,
+  fbp, fbc, gaClientId, accessToken,
   onBack, onSuccess,
 }: Props) {
   const [cpf, setCpf] = useState("");
@@ -103,6 +104,7 @@ export function AsaasCardForm({
           ...(fbp && { fbp }),
           ...(fbc && { fbc }),
           ...(gaClientId && { gaClientId }),
+          ...(accessToken && { accessToken }),
         },
       });
       if (error) throw new Error(error.message || "Erro ao processar cartão");

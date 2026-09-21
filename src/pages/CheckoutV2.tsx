@@ -1547,6 +1547,7 @@ const CheckoutV2 = () => {
                   return fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined;
                 })()}
                 gaClientId={getGaClientId() || undefined}
+                accessToken={getCheckoutAccessToken()}
                 onBack={handleResetCheckout}
                 onSuccess={(info) => {
                   // Persiste flag pro /obrigado adaptar headline (retornante).

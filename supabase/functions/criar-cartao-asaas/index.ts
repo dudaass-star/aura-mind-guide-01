@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { getPhoneVariations } from "../_shared/zapi-client.ts";
 import { saveMetaIdentity } from "../_shared/meta-identity.ts";
+import { saveCheckoutAccessClaim } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -121,7 +122,7 @@ Deno.serve(async (req) => {
       plan, billing, mode, installments, trial,
       name, email, phone, cpf,
       card, holder,
-      fbp, fbc, gaClientId,
+      fbp, fbc, gaClientId, accessToken,
     } = body as Record<string, any>;
 
     // Validações
@@ -480,6 +481,17 @@ Deno.serve(async (req) => {
       paymentMethodLabel = "CREDIT_CARD_RECURRING";
     }
 
+    await saveCheckoutAccessClaim(supabase, {
+      token: accessToken,
+      gateway: "asaas",
+      providerReference: paymentId,
+      email: emailClean,
+      phone: phoneClean,
+      name,
+      plan,
+      billing,
+    });
+
     // Persiste asaas_payments — se falhar, NÃO é non-blocking:
     // sem esse registro, o webhook não linka o pagamento a nenhum cliente
     // e a ativação nunca acontece. Registra em failed_message_log e devolve erro.
@@ -562,6 +574,7 @@ Deno.serve(async (req) => {
       mode: paymentMode,
       trial: useTrial,
       returning_customer: returningCustomerMonthly,
+      accessToken,
     }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {
