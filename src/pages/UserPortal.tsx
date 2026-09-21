@@ -93,6 +93,27 @@ const UserPortal = () => {
 
   const handleTabClick = (id: TabId) => {
     setActiveTab(id);
+    const valueFeature = id === "sessoes"
+      ? "session"
+      : id === "insights"
+        ? "progress"
+        : id === "meditacoes"
+          ? "practice"
+          : id === "sobre"
+            ? "profile"
+            : id === "conversar"
+              ? "conversation"
+              : null;
+    if (valueFeature && userId) {
+      void supabasePortal.from("portal_value_events").insert({
+        user_id: userId,
+        feature: valueFeature,
+        event_type: "opened",
+        source: "app",
+      }).then(({ error }) => {
+        if (error && error.code !== "23505") console.warn("Não foi possível registrar a descoberta da área");
+      });
+    }
     const key = NOVIDADE_TABS[id];
     if (key && userId) {
       markTabSeen(userId, key);
