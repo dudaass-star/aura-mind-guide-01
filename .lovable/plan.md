@@ -6,6 +6,13 @@ Fechar os dois pontos restantes da conversa web na Fase 1: medir a fluidez real 
 
 ## Implementação
 
+### Princípio de reaproveitamento
+
+- Reutilizar o núcleo já maduro do WhatsApp: acumulação de mensagens, trava por usuário, nova fala durante a resposta, contexto pendente, preferências, sessões, limites, segurança e geração das bolhas.
+- Não duplicar essas regras no aplicativo. Corrigir o núcleo comum quando houver falha e manter somente a camada de entrega diferente por canal.
+- No aplicativo, acrescentar apenas o que o WhatsApp entrega pela própria plataforma: bolha otimista, estado visual imediato, tempo real, histórico na tela, rascunho, posição de leitura, reconexão, áudio pelo navegador e telemetria no aparelho.
+- Não copiar atrasos, templates, janela de 24 horas, provedores ou confirmações de entrega específicos do WhatsApp.
+
 ### 1. Interrupção confiável de turnos
 
 - Ao aceitar qualquer nova mensagem, atualizar imediatamente o identificador do último envio do cliente, mesmo quando outro processamento já estiver ativo.
