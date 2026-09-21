@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowLeft, Check, CheckCheck, ChevronRight, Loader2, Mic, MoreVertical, Send, Square, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, Check, CheckCheck, ChevronRight, Loader2, Mic, Send, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
