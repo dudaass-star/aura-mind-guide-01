@@ -129,7 +129,7 @@
   --ring: 153 27% 43%;
   --radius: 0.75rem;
   --shadow-card: 0 18px 50px hsl(150 4% 13% / 0.14);
-  font-family: "Figtree", sans-serif;
+  font-family: "Figtree", ui-sans-serif, system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 
 .portal-chat-theme h1,
