@@ -2,6 +2,7 @@ type NotificationContext = {
   userId: string;
   category: "response" | "session" | "journey" | "practice" | "report" | "reminder" | "engagement";
   priority: "low" | "normal" | "high";
+  currentDeliveryId?: string;
 };
 
 export type NotificationPersonalization = {
@@ -18,13 +19,13 @@ export function isNonUrgentNotification(context: NotificationContext) {
     && !["response", "reminder"].includes(context.category);
 }
 
-export function nextPreferredDeliveryAt(preferredHourBrt: number, userId: string, now = new Date()) {
+export function nextPreferredDeliveryAt(preferredHourBrt: number, userId: string, now = new Date(), forceNextBrtDay = false) {
   const nowBrt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-  if (nowBrt.getUTCHours() === preferredHourBrt) return now;
+  if (!forceNextBrtDay && nowBrt.getUTCHours() === preferredHourBrt) return now;
   const minuteSeed = [...userId].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 45;
   const targetBrt = new Date(nowBrt);
   targetBrt.setUTCHours(preferredHourBrt, minuteSeed, 0, 0);
-  if (targetBrt.getTime() <= nowBrt.getTime()) {
+  if (forceNextBrtDay || targetBrt.getTime() <= nowBrt.getTime()) {
     targetBrt.setUTCDate(targetBrt.getUTCDate() + 1);
   }
   return new Date(targetBrt.getTime() + 3 * 60 * 60 * 1000);
@@ -98,12 +99,16 @@ export async function evaluateNotificationPersonalization(
 
   const nonUrgent = isNonUrgentNotification(context);
   if (nonUrgent) {
-    const { count } = await supabase.from("notification_deliveries")
+    let dailyDeliveries = supabase.from("notification_deliveries")
       .select("id", { count: "exact", head: true })
       .eq("user_id", context.userId)
-      .in("status", ["sent", "opened", "converted"])
-      .not("category", "in", "(response,session,reminder,billing,security)")
+      .in("status", ["scheduled", "sent", "opened", "converted"])
+      .not("category", "in", "(response,reminder,billing,security)")
       .gte("created_at", brtDayStartIso());
+    if (context.currentDeliveryId) {
+      dailyDeliveries = dailyDeliveries.neq("id", context.currentDeliveryId);
+    }
+    const { count } = await dailyDeliveries;
     if ((count || 0) >= 1) {
       return {
         allowed: false,
