@@ -52,11 +52,16 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const nearBottomRef = useRef(true);
+  const latestSequenceRef = useRef(0);
 
   const latestSequence = useMemo(
     () => messages.reduce((latest, message) => Math.max(latest, message.sequence_no || 0), 0),
     [messages],
   );
+
+  useEffect(() => {
+    latestSequenceRef.current = latestSequence;
+  }, [latestSequence]);
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior }));
@@ -115,7 +120,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
         .from("messages")
         .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url")
         .eq("user_id", userId)
-        .gt("sequence_no", latestSequence)
+        .gt("sequence_no", latestSequenceRef.current)
         .order("sequence_no", { ascending: true });
       if (data?.length) setMessages((current) => data.reduce(mergeMessage, current));
     };
@@ -125,7 +130,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
       window.removeEventListener("focus", onFocus);
       void supabasePortal.removeChannel(channel);
     };
-  }, [userId, latestSequence]);
+  }, [userId]);
 
   useEffect(() => {
     sessionStorage.setItem(`aura-chat-draft:${userId}`, draft);
