@@ -376,6 +376,7 @@ Deno.serve(async (req) => {
   let currentMessageId: string | null = null;
   let isInApp = false;
   let shouldResumeInterruptedTurn = false;
+  let firstResponseRecorded = false;
 
   try {
     const workerPayload = await req.json();
@@ -862,7 +863,7 @@ Deno.serve(async (req) => {
       const { data: forcedLock } = await supabase.from('aura_response_state')
         .update({ is_responding: true, response_started_at: responseStartedAt, last_user_message_id: currentMessageId, owner_token: turnOwnerToken })
         .eq('user_id', profile.user_id)
-        .eq('owner_token', currentState?.owner_token || '')
+        .eq('response_started_at', currentState?.response_started_at)
         .select();
       if (!forcedLock?.length) {
         return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'stale_lock_race_lost' }), {
@@ -888,6 +889,18 @@ Deno.serve(async (req) => {
 
     // Read pending content from lock result or fresh query
     const responseState = lockResult?.[0] || (await supabase.from('aura_response_state').select('*').eq('user_id', profile.user_id).maybeSingle()).data;
+    if (responseState?.processed_user_message_id === currentMessageId) {
+      await releaseLock();
+      return new Response(JSON.stringify({ status: 'ignored', reason: 'source_duplicate' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (isInApp && currentMessageId) {
+      await supabase.from('chat_turn_metrics').update({
+        processing_started_at: new Date().toISOString(),
+        status: 'processing',
+      }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+    }
     const pendingIsValid = responseState?.pending_expires_at && new Date(responseState.pending_expires_at).getTime() > Date.now();
     const pendingContent = pendingIsValid ? responseState?.pending_content || null : null;
     const pendingContext = pendingIsValid ? responseState?.pending_context || null : null;
@@ -1516,6 +1529,11 @@ Deno.serve(async (req) => {
         if (audioUrl || audioContent) {
           if (isInApp && (audioUrl || audioContent)) {
             sentAnyResponse = true;
+            if (!firstResponseRecorded && currentMessageId) {
+              firstResponseRecorded = true;
+              await supabase.from('chat_turn_metrics').update({ first_response_at: new Date().toISOString() })
+                .eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+            }
             await supabase.from('messages').insert({
               user_id: profile.user_id,
               role: 'assistant',
@@ -1581,6 +1599,11 @@ Deno.serve(async (req) => {
         // Still persist to DB so context is not lost, but log the failure
       }
       sentAnyResponse = true;
+      if (isInApp && !firstResponseRecorded && currentMessageId) {
+        firstResponseRecorded = true;
+        await supabase.from('chat_turn_metrics').update({ first_response_at: new Date().toISOString() })
+          .eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+      }
 
       // Persist assistant message to DB (with dedup check)
       try {
@@ -1672,7 +1695,13 @@ Deno.serve(async (req) => {
           })
           .eq('user_id', profile.user_id)
           .eq('owner_token', turnOwnerToken);
-        shouldResumeInterruptedTurn = true;
+      }
+      shouldResumeInterruptedTurn = true;
+      if (!pendingMessages) {
+        await supabase.from('aura_response_state')
+          .update({ is_responding: false, processed_user_message_id: currentMessageId })
+          .eq('user_id', profile.user_id)
+          .eq('owner_token', turnOwnerToken);
       }
     } else {
       await supabase
@@ -1729,6 +1758,13 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (isInApp && currentMessageId) {
+      await supabase.from('chat_turn_metrics').update({
+        completed_at: new Date().toISOString(),
+        status: wasInterrupted ? 'interrupted' : 'completed',
+      }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+    }
+
     return new Response(JSON.stringify({
       status: wasInterrupted ? 'interrupted' : 'success',
       messagesCount: wasInterrupted ? interruptedAtIndex : (agentData.messages?.length || 0),
@@ -1759,6 +1795,13 @@ Deno.serve(async (req) => {
       } catch (lockErr) {
         console.error('⚠️ Failed to release lock in outer catch:', lockErr);
       }
+    }
+    if (supabase && isInApp && profile?.user_id && currentMessageId) {
+      await supabase.from('chat_turn_metrics').update({
+        completed_at: new Date().toISOString(),
+        status: 'failed',
+        error_code: error instanceof Error ? error.name : 'unknown',
+      }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
     }
 
     // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally
