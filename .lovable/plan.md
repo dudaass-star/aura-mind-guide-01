@@ -26,13 +26,45 @@ No celular, a conversa será o centro da experiência e a navegação principal 
 
 ### Conversa
 
-- Campo de texto fixo e envio imediato.
+- Campo de texto fixo e envio otimista: a mensagem aparece na tela no mesmo toque, antes da confirmação do servidor, com estados discretos de enviando, enviada e falhou.
 - Gravação e envio de áudio; áudio recebido pode ser reproduzido no próprio aplicativo.
-- Resposta progressiva com indicação discreta de que a AURA está respondendo.
+- Sinal imediato e verdadeiro de presença da AURA enquanto o turno é processado; nunca usar animação de digitação para esconder uma falha ou uma fila parada.
+- Entrega progressiva por unidades completas de sentido: a primeira bolha coerente aparece assim que estiver pronta e as seguintes chegam no ritmo da conversa, sem esperar todo o conjunto terminar.
 - Preservação das bolhas, pausas, preferências de texto/áudio, sessões, limites do plano e protocolo de segurança já usados hoje.
 - Continuidade entre dispositivos sem duplicar mensagens.
-- Reenvio seguro quando houver falha de conexão, sem produzir duas respostas.
+- Se o cliente enviar outra mensagem enquanto a AURA responde, o turno é interrompido e recomposto com a fala nova, preservando a mesma naturalidade existente hoje.
+- Reenvio seguro quando houver falha de conexão, sem produzir duas mensagens do cliente nem duas respostas da AURA.
 - Aviso claro quando a sessão expirar ou o plano não permitir uma ação, com caminho direto para resolver.
+
+### Fluidez obrigatória
+
+A conversa não será considerada pronta apenas por “funcionar”. Ela precisa responder ao toque como um mensageiro maduro:
+
+- abrir diretamente na última posição lida, sem salto visual;
+- manter o campo de texto, o rascunho e a posição da conversa durante atualização, troca de aba ou reconexão;
+- não deslocar a tela quando mensagens antigas forem carregadas acima;
+- abrir o teclado sem esconder o campo, a última mensagem ou os controles de áudio;
+- permitir envio contínuo de mensagens curtas sem travar a interface;
+- carregar o histórico recente primeiro e buscar o restante para cima, sem bloquear a entrada;
+- mostrar a mensagem localmente mesmo em conexão lenta e permitir tentar novamente sem duplicidade;
+- manter botões e gravação responsivos enquanto a AURA processa a resposta;
+- evitar recarregamentos completos, telas brancas, esqueletos repetidos e spinners entre mensagens;
+- pré-carregar apenas o necessário da conversa e abrir áreas secundárias sob demanda.
+
+O atraso humano atual de 1,5–3,5 segundos não será copiado cegamente. No aplicativo, o reconhecimento visual é imediato; qualquer pausa intencional só pode acontecer depois que o cliente percebe que a mensagem foi recebida. A espera nunca pode parecer lentidão técnica.
+
+### Orçamento de desempenho percebido
+
+- toque em enviar → bolha local: **até 100 ms**;
+- confirmação de recebimento pelo servidor: **p95 até 1 s** em rede móvel normal;
+- indicador de atividade após a confirmação: **até 300 ms**;
+- primeira resposta útil da AURA: meta **p50 até 5 s** e **p95 até 12 s**, separando tempo da IA, ferramentas, áudio e entrega;
+- próxima bolha textual, quando houver: intervalo padrão entre **400 e 1.200 ms**, salvo pausa conversacional deliberada;
+- abertura da conversa com histórico recente utilizável: **p75 até 1,5 s**;
+- reprodução de áudio já disponível: início em **até 1 s**;
+- ações locais de navegação, digitação e gravação: sem bloqueio perceptível, inclusive enquanto chega uma resposta.
+
+Esses tempos serão medidos no aparelho do cliente e no servidor. Médias isoladas não bastam: serão acompanhados p50, p75, p95, taxa de erro e tempo por etapa.
 
 ### Histórico completo
 
@@ -74,6 +106,26 @@ A classificação entre **conversa com a AURA** e **suporte/financeiro** será d
 - Extrair do processamento atual a sequência comum: validar usuário → gravar mensagem → agrupar turno → chamar AURA → executar ações → gravar resposta → entregar no canal correto.
 - O núcleo da AURA apenas decide conteúdo e ações. Ele não envia diretamente por WhatsApp.
 - A entrega escolhe `in_app` para conversa web e mantém os provedores atuais para mensagens operacionais.
+- Cada envio recebe uma chave criada no aparelho; servidor, reconexão e tempo real reconhecem a mesma chave e nunca recriam o turno.
+- Separar “mensagem recebida”, “AURA processando”, “primeira resposta pronta” e “turno concluído”, permitindo atualizar a experiência sem esperar o processo inteiro.
+- Remover do caminho web esperas criadas exclusivamente para simular digitação no WhatsApp; manter somente ritmo que melhora a leitura entre bolhas.
+- Instrumentar cada etapa com um identificador do turno, sem registrar o conteúdo da conversa nos dados de desempenho.
+
+### Caminho rápido da conversa
+
+```text
+Toque em enviar
+  → bolha local imediata
+  → gravação idempotente
+  → confirmação + presença da AURA
+  → composição do turno com mensagens novas
+  → processamento pelo mesmo núcleo da AURA
+  → primeira bolha persistida e entregue em tempo real
+  → demais bolhas/áudio
+  → turno concluído
+```
+
+Persistência e entrega não podem depender de o navegador permanecer aberto. Se o cliente bloquear a tela ou trocar de aplicativo, a resposta continua sendo produzida e estará no histórico quando ele voltar.
 
 ### Segurança e privacidade
 
@@ -87,7 +139,9 @@ A classificação entre **conversa com a AURA** e **suporte/financeiro** será d
 ### Tempo real e notificações
 
 - Novas mensagens e estados chegam ao aplicativo em tempo real.
-- Se a conexão cair, o aplicativo consulta o estado canônico e retoma a conversa.
+- O tempo real é aceleração, não fonte única: se um evento for perdido, o aplicativo consulta o estado canônico e retoma sem lacuna ou duplicidade.
+- Após reconectar, reconciliar mensagens locais pendentes, respostas já gravadas e posição de leitura antes de liberar novo reenvio.
+- Usar atualização periódica curta somente como recuperação; nunca manter consultas agressivas permanentes quando o tempo real estiver saudável.
 - Na primeira entrega, WhatsApp e e-mail continuam responsáveis pelos alertas externos críticos.
 - Instalação na tela inicial será oferecida como aplicativo web; notificações push entram depois da estabilidade da conversa, sem bloquear o lançamento.
 
@@ -108,6 +162,8 @@ A classificação entre **conversa com a AURA** e **suporte/financeiro** será d
 - entrada autenticada do aplicativo;
 - texto, áudio, respostas, preferências e limites;
 - tempo real, idempotência, interrupção e retomada;
+- caminho rápido com envio otimista, presença imediata, entrega incremental por bolha e telemetria de latência;
+- fila persistente no servidor para que a resposta sobreviva ao fechamento da tela;
 - autenticação e isolamento de dados;
 - testes do protocolo de segurança e das sessões.
 
@@ -155,6 +211,11 @@ Se algum critério crítico não estiver comprovado no dia 30, novos clientes pe
 - mensagem de texto e áudio em celular e computador;
 - histórico antigo e novo em ordem, sem mistura de usuários;
 - envio simultâneo por duas abas e reconexão durante resposta;
+- digitação, áudio e envio com teclado aberto em iPhone e Android, incluindo aparelhos pequenos;
+- mensagens rápidas em sequência, nova fala durante a resposta e retorno após bloquear a tela;
+- conexão lenta, perda de tempo real, timeout da IA e reenvio manual sem duplicidade;
+- histórico longo carregado para cima sem salto, perda de rascunho ou travamento do campo;
+- medição real dos orçamentos de latência do toque à primeira resposta;
 - pedido de “só texto” e “não envie áudio” respeitado;
 - início, continuidade, término e avaliação de sessão;
 - limites de cada plano;
@@ -175,7 +236,10 @@ Começar com equipe e contas de teste, depois um grupo pequeno de clientes ativo
 - pelo menos **99,5%** das mensagens persistidas e entregues sem duplicidade;
 - zero mistura de histórico entre usuários;
 - pelo menos **99%** dos acessos concluídos sem suporte humano;
-- tempo de resposta igual ou melhor que o WhatsApp atual;
+- cumprimento dos orçamentos de desempenho percebido em rede móvel, com painel por etapa e alertas de regressão;
+- pelo menos **99%** dos turnos exibindo confirmação ou presença em até 1 segundo;
+- pelo menos **99,5%** dos turnos concluídos mesmo que a tela seja fechada após o envio;
+- nenhuma perda de rascunho ou salto de leitura nos cenários móveis homologados;
 - zero regressão comprovada em segurança, sessões e preferências de áudio.
 
 ### Adoção
