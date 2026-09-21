@@ -5,6 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
 import avatarAura from "@/assets/avatar-aura.jpg";
+import { InstallAppMenuItem } from "@/components/portal/InstallAppMenuItem";
 
 type ChatMessage = {
   id: string;
@@ -446,6 +447,7 @@ export function ConversarTab({
                 <RefreshCw className="h-4 w-4" />
                 <span>Trocar de plano</span>
               </DropdownMenuItem>
+              <InstallAppMenuItem />
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={onSignOut} className="gap-3 px-3 py-3 font-body text-destructive focus:text-destructive">
                 <LogOut className="h-4 w-4" />
