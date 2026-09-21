@@ -1319,8 +1319,11 @@ async function handleActivation(
       (updated.asaas_payment_id as string) || (updated.asaas_subscription_id as string) || null,
       profileUserId,
     );
-    if ((updated as any).pix_automatic_authorization_id) {
-      await markCheckoutAccessPaidByReference(supabase, "asaas", String((updated as any).pix_automatic_authorization_id), profileUserId);
+    const accessAuthorizationId = String(
+      (payment as any)?.pixAutomaticAuthorizationId || (payment as any)?.authorization?.id || "",
+    );
+    if (accessAuthorizationId) {
+      await markCheckoutAccessPaidByReference(supabase, "asaas", accessAuthorizationId, profileUserId);
     }
 
     // GA4 (Measurement Protocol) — paridade com o trilho do cartão.

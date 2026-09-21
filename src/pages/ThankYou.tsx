@@ -1,13 +1,17 @@
 import { Helmet } from "react-helmet-async";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, useNavigate } from "react-router-dom";
 import { CheckCircle, Smartphone, Sparkles, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { logFunnel } from "@/lib/checkout-funnel";
+import { supabase } from "@/integrations/supabase/client";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
 
 const ThankYou = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [userData, setUserData] = useState({ name: "", plan: "anual", returning: false });
+  const [accessState, setAccessState] = useState<"checking" | "pending" | "ready" | "unavailable">("checking");
 
   useEffect(() => {
     // Nada de desligar o autoConfig aqui: isso também matava a Correspondência
@@ -42,12 +46,11 @@ const ThankYou = () => {
     }
 
     setUserData(checkoutData);
-    // Linha de chegada do funil: sem isso o painel media início e nunca fim.
-    // Idempotente por sessão pra não contar refresh como nova compra.
+    // Registra somente a volta do navegador. Compra confirmada vem do servidor.
     try {
-      if (!sessionStorage.getItem("aura_funnel_purchase_logged")) {
-        sessionStorage.setItem("aura_funnel_purchase_logged", "1");
-        logFunnel("purchase", {
+      if (!sessionStorage.getItem("aura_funnel_return_logged")) {
+        sessionStorage.setItem("aura_funnel_return_logged", "1");
+        logFunnel("return_view", {
           plan: checkoutData.plan,
           detail: checkoutData.returning ? "retornante" : "novo",
         });
@@ -62,6 +65,47 @@ const ThankYou = () => {
     // partir dos webhooks de pagamento). Disparar aqui também duplicaria a
     // conversão, porque o event_id do navegador não coincide com o do webhook.
   }, [location.state]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("aura_checkout_access");
+    if (!token) {
+      setAccessState("unavailable");
+      return;
+    }
+    let cancelled = false;
+    let attempts = 0;
+    const check = async () => {
+      attempts += 1;
+      const { data, error } = await supabase.functions.invoke("checkout-app-access", {
+        body: { action: "status", token },
+      });
+      if (cancelled) return;
+      if (error) {
+        setAccessState("unavailable");
+        return;
+      }
+      if (!data?.paid) {
+        setAccessState("pending");
+        if (attempts < 20) window.setTimeout(check, 3000);
+        return;
+      }
+      setAccessState("ready");
+      const consumed = await supabase.functions.invoke("checkout-app-access", {
+        body: { action: "consume", token },
+      });
+      if (cancelled || consumed.error || !consumed.data?.token_hash) return;
+      const verified = await supabasePortal.auth.verifyOtp({
+        token_hash: consumed.data.token_hash,
+        type: consumed.data.type || "magiclink",
+      });
+      if (!verified.error) {
+        localStorage.removeItem("aura_checkout_access");
+        navigate("/meu-espaco", { replace: true });
+      }
+    };
+    void check();
+    return () => { cancelled = true; };
+  }, [navigate]);
 
   const firstName = userData.name?.split(" ")[0] || "você";
 
@@ -106,9 +150,9 @@ const ThankYou = () => {
               </p>
             ) : (
               <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-                Sua assinatura do plano <span className="text-primary font-medium">{userData.plan}</span> foi confirmada.
+                {accessState === "pending" ? "Estamos confirmando seu pagamento." : <>Sua assinatura do plano <span className="text-primary font-medium">{userData.plan}</span> foi confirmada.</>}
                 <br />
-                Agora é só começar sua conversa com a AURA.
+                {accessState === "ready" ? "Abrindo seu aplicativo…" : "Assim que confirmar, seu aplicativo abre automaticamente."}
               </p>
             )}
           </div>
