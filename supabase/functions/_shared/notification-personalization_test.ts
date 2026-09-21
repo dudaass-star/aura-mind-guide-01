@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { isNonUrgentNotification, nextPreferredDeliveryAt } from "./notification-personalization.ts";
+import { evaluateNotificationPersonalization, isNonUrgentNotification, nextPreferredDeliveryAt } from "./notification-personalization.ts";
 
 Deno.test("resposta e lembrete prioritário nunca são adiados pela personalização", () => {
   assertEquals(isNonUrgentNotification({ userId: "u", category: "response", priority: "normal" }), false);
@@ -36,4 +36,52 @@ Deno.test("sessão mensal normal participa do limite diário", () => {
 
 Deno.test("resposta normal continua fora do limite diário de descoberta", () => {
   assertEquals(isNonUrgentNotification({ userId: "u", category: "response", priority: "normal" }), false);
+});
+
+function createPersonalizationDb(deliveries: Array<{ id: string }> = []) {
+  const profiles = {
+    select: () => profiles,
+    eq: () => profiles,
+    maybeSingle: async () => ({ data: { created_at: "2026-09-18T15:00:00.000Z" } }),
+  };
+  const messages = {
+    select: () => messages,
+    eq: () => messages,
+    not: () => messages,
+    order: () => messages,
+    limit: async () => ({ data: [] }),
+  };
+  const notificationDeliveries = {
+    select: () => notificationDeliveries,
+    eq: () => notificationDeliveries,
+    in: () => notificationDeliveries,
+    not: () => notificationDeliveries,
+    gte: () => notificationDeliveries,
+    neq: (_field: string, id: string) => ({ count: deliveries.filter((item) => item.id !== id).length }),
+    then: (resolve: (value: { count: number }) => unknown) => resolve({ count: deliveries.length }),
+  };
+  return {
+    from: (table: string) => table === "profiles" ? profiles : table === "messages" ? messages : notificationDeliveries,
+  };
+}
+
+Deno.test("uma entrega programada não bloqueia a própria execução", async () => {
+  const result = await evaluateNotificationPersonalization(createPersonalizationDb([{ id: "atual" }]), {
+    userId: "cliente-a",
+    category: "journey",
+    priority: "normal",
+    currentDeliveryId: "atual",
+  });
+  assertEquals(result.allowed, true);
+});
+
+Deno.test("outra comunicação não urgente no mesmo dia bloqueia uma segunda", async () => {
+  const result = await evaluateNotificationPersonalization(createPersonalizationDb([{ id: "anterior" }]), {
+    userId: "cliente-a",
+    category: "report",
+    priority: "normal",
+    currentDeliveryId: "atual",
+  });
+  assertEquals(result.allowed, false);
+  assertEquals(result.reason, "daily_non_urgent_cap");
 });
