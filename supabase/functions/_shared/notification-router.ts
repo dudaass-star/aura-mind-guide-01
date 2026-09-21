@@ -52,6 +52,38 @@ function isSilentHours() {
   return hour >= 22 || hour < 8;
 }
 
+async function scheduleDelivery(
+  supabase: any,
+  request: NotificationRequest,
+  deliveryId: string,
+  scheduledFor: Date,
+  reason: string,
+) {
+  const expiresBeforeDelivery = request.expiresAt
+    && new Date(request.expiresAt).getTime() <= scheduledFor.getTime();
+  if (expiresBeforeDelivery) return false;
+
+  const { error } = await supabase.from("scheduled_tasks").insert({
+    user_id: request.userId,
+    task_type: "notification_delivery",
+    execute_at: scheduledFor.toISOString(),
+    status: "pending",
+    payload: { ...request, scheduledDeliveryId: deliveryId },
+  });
+  if (error) {
+    console.error("Falha ao programar notificação:", error);
+    return false;
+  }
+
+  await supabase.from("notification_deliveries").update({
+    status: "scheduled",
+    selected_channel: null,
+    scheduled_for: scheduledFor.toISOString(),
+    metadata: { privacy_safe: true, reason },
+  }).eq("id", deliveryId);
+  return true;
+}
+
 export async function routeNotification(supabase: any, request: NotificationRequest): Promise<RoutedNotificationResult> {
   const priority = request.priority || "normal";
   const personalization = await evaluateNotificationPersonalization(supabase, {
@@ -120,6 +152,17 @@ export async function routeNotification(supabase: any, request: NotificationRequ
   if (deliveryError || !delivery) throw deliveryError || new Error("Falha ao registrar entrega");
 
   if (!personalization.allowed) {
+    if (personalization.reason === "daily_non_urgent_cap") {
+      const nextDay = nextPreferredDeliveryAt(
+        personalization.preferredHourBrt,
+        request.userId,
+        new Date(),
+        true,
+      );
+      if (await scheduleDelivery(supabase, request, delivery.id, nextDay, "deferred_daily_cap")) {
+        return { success: true, channel: "none", reason: "deferred_daily_cap" };
+      }
+    }
     await supabase.from("notification_deliveries").update({
       selected_channel: "none",
       status: "suppressed",
@@ -144,24 +187,10 @@ export async function routeNotification(supabase: any, request: NotificationRequ
   if (!request.scheduledDeliveryId && isNonUrgentNotification(timingContext)) {
     const scheduledFor = nextPreferredDeliveryAt(personalization.preferredHourBrt, request.userId);
     const waitMs = scheduledFor.getTime() - Date.now();
-    const expiresBeforeDelivery = request.expiresAt && new Date(request.expiresAt).getTime() <= scheduledFor.getTime();
-    if (waitMs > 5 * 60_000 && !expiresBeforeDelivery) {
-      const { error: scheduleError } = await supabase.from("scheduled_tasks").insert({
-        user_id: request.userId,
-        task_type: "notification_delivery",
-        execute_at: scheduledFor.toISOString(),
-        status: "pending",
-        payload: { ...request, scheduledDeliveryId: delivery.id },
-      });
-      if (!scheduleError) {
-        await supabase.from("notification_deliveries").update({
-          status: "scheduled",
-          selected_channel: null,
-          scheduled_for: scheduledFor.toISOString(),
-        }).eq("id", delivery.id);
+    if (waitMs > 5 * 60_000) {
+      if (await scheduleDelivery(supabase, request, delivery.id, scheduledFor, "preferred_hour")) {
         return { success: true, channel: "none", reason: "scheduled_for_preferred_hour" };
       }
-      console.error("Falha ao programar notificação personalizada:", scheduleError);
     }
   }
 
@@ -196,6 +225,12 @@ export async function routeNotification(supabase: any, request: NotificationRequ
 
   // Prioridade alta pode gerar push no horário do compromisso, mas nunca
   // abre exceção para contato proativo pelo WhatsApp durante o silêncio.
+  if (silentHours && request.category === "response") {
+    const afterSilence = nextPreferredDeliveryAt(8, request.userId);
+    if (await scheduleDelivery(supabase, request, delivery.id, afterSilence, "after_silent_hours")) {
+      return { success: true, channel: "none", reason: "scheduled_after_silent_hours" };
+    }
+  }
   if (silentHours || request.fallback === "none") {
     const reason = silentHours ? "silent_hours" : "push_unavailable";
     await supabase.from("notification_deliveries").update({ selected_channel: "none", status: "suppressed", metadata: { reason } }).eq("id", delivery.id);

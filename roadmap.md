@@ -54,3 +54,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Fechar lacunas do push: programar avisos não urgentes no melhor horário e centralizar nova resposta com deduplicação e abertura rastreável
 
 - [x] Simular cenários reais de notificações por perfil, canal, horário, presença, limite e fallback; corrigir divergências encontradas.
+- [x] Reagendar respostas recebidas no silêncio e adiar o segundo conteúdo não urgente para o dia seguinte, sem elevar a frequência.

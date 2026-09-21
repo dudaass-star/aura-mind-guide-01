@@ -30,6 +30,18 @@ Deno.test("envia agora quando já está dentro da hora preferida", () => {
   assertEquals(nextPreferredDeliveryAt(19, "cliente-a", now).toISOString(), now.toISOString());
 });
 
+Deno.test("limite diário força o próximo dia mesmo antes do horário preferido", () => {
+  const now = new Date("2026-09-21T15:00:00.000Z"); // 12h BRT
+  const scheduled = nextPreferredDeliveryAt(19, "cliente-a", now, true);
+  assertEquals(scheduled.toISOString().slice(0, 13), "2026-09-22T22");
+});
+
+Deno.test("resposta no silêncio é retomada às 8h BRT", () => {
+  const now = new Date("2026-09-22T05:00:00.000Z"); // 2h BRT
+  const scheduled = nextPreferredDeliveryAt(8, "cliente-a", now);
+  assertEquals(scheduled.toISOString().slice(0, 13), "2026-09-22T11");
+});
+
 Deno.test("sessão mensal normal participa do limite diário", () => {
   assertEquals(isNonUrgentNotification({ userId: "u", category: "session", priority: "normal" }), true);
 });
