@@ -1371,7 +1371,7 @@ Deno.serve(async (req) => {
               status: 'scheduled',
               scheduled_for: retryAt,
               metadata: { reason: 'transient_delivery_failure', retry_attempt: attempt + 1 },
-            }).eq('id', scheduledDeliveryId).eq('user_id', task.user_id).eq('status', 'failed');
+            }).eq('id', scheduledDeliveryId).eq('user_id', task.user_id);
             await supabase.from('scheduled_tasks').insert({
               user_id: task.user_id,
               task_type: 'notification_delivery',
