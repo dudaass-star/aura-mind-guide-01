@@ -60,3 +60,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Diferenciar entrega por aparelho, app aberto e sucesso/falha do fallback nas métricas de notificação.
 - [x] Auditar a conversa em Android e iPhone e corrigir indicador de resposta coberto, áreas seguras, telas pequenas, áudio e convites que interrompiam a escrita.
 - [ ] Configurar os dados públicos do Web Push com o cliente e validar ativação, registro, envio, abertura e direcionamento em aparelho real.
+- [x] Refinar visual da conversa com direção grafite + jade, superfícies tonais e contraste premium, preservando a fluidez de digitação.

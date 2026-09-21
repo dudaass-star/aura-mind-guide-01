@@ -108,6 +108,36 @@
   }
 }
 
+/* Tema do aplicativo — grafite, jade e superfícies suaves. */
+.portal-chat-theme {
+  --background: 90 14% 96%;
+  --foreground: 150 4% 13%;
+  --card: 120 13% 98%;
+  --card-foreground: 150 4% 13%;
+  --popover: 120 13% 98%;
+  --popover-foreground: 150 4% 13%;
+  --primary: 153 27% 43%;
+  --primary-foreground: 90 14% 98%;
+  --secondary: 147 16% 89%;
+  --secondary-foreground: 150 5% 20%;
+  --muted: 147 12% 91%;
+  --muted-foreground: 150 6% 42%;
+  --accent: 147 16% 82%;
+  --accent-foreground: 150 5% 20%;
+  --border: 147 12% 83%;
+  --input: 147 12% 80%;
+  --ring: 153 27% 43%;
+  --radius: 0.75rem;
+  --shadow-card: 0 18px 50px hsl(150 4% 13% / 0.14);
+  font-family: "Figtree", ui-sans-serif, system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+
+.portal-chat-theme h1,
+.portal-chat-theme h2,
+.portal-chat-theme h3 {
+  font-family: "Outfit", sans-serif;
+}
+
 @layer base {
   * {
     @apply border-border;

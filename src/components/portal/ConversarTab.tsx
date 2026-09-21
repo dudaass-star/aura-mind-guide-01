@@ -81,14 +81,14 @@ const MessageTimeline = memo(function MessageTimeline({
   responding: boolean;
 }) {
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-5">
       {messages.map((message) => {
         const mine = message.role === "user";
         return (
-          <div key={message.id} data-chat-message className={cn("flex", mine ? "justify-end" : "justify-start")}>
+          <div key={message.id} data-chat-message className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
-              "min-w-0 max-w-[86%] rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed shadow-sm md:max-w-[76%]",
-              mine ? "bg-primary text-primary-foreground" : "border border-border/60 bg-background text-foreground",
+              "min-w-0 max-w-[86%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed md:max-w-[76%]",
+              mine ? "rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : "rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm",
               message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
             )} data-message-bubble>
               {(!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
@@ -98,19 +98,19 @@ const MessageTimeline = memo(function MessageTimeline({
                   <audio controls controlsList="nodownload" preload="metadata" playsInline className="block h-10 w-full max-w-full" src={message.audio_url} />
                 </div>
               )}
-              <div className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                <span>{formatTime(message.created_at)}</span>
-                {mine && message.delivery_status === "sending" && <Check className="h-3 w-3" />}
-                {mine && message.delivery_status === "delivered" && <CheckCheck className="h-3 w-3" />}
-                {mine && message.delivery_status === "failed" && <AlertCircle className="h-3 w-3" />}
-              </div>
+            </div>
+            <div className={cn("mt-1.5 flex items-center gap-1 px-1 text-[10px] font-medium text-muted-foreground", mine && "justify-end")}>
+              <span>{formatTime(message.created_at)}</span>
+              {mine && message.delivery_status === "sending" && <Check className="h-3 w-3" />}
+              {mine && message.delivery_status === "delivered" && <CheckCheck className="h-3 w-3 text-primary" />}
+              {mine && message.delivery_status === "failed" && <AlertCircle className="h-3 w-3 text-destructive" />}
             </div>
           </div>
         );
       })}
       {responding && (
         <div className="flex scroll-mb-3 justify-start" aria-live="polite" data-typing-indicator>
-          <div className="flex h-10 items-center gap-1.5 rounded-lg border border-border/60 bg-background px-4 shadow-sm" aria-label="AURA está respondendo">
+          <div className="flex h-10 items-center gap-1.5 rounded-2xl rounded-tl-sm border border-border/70 bg-card px-4 shadow-sm" aria-label="AURA está respondendo">
             {[0, 1, 2].map((dot) => <span key={dot} className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-muted-foreground" style={{ animationDelay: `${dot * 150}ms` }} />)}
           </div>
         </div>
@@ -543,7 +543,7 @@ export function ConversarTab({
        "flex h-dvh min-h-0 w-full flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
        chatOpen && "hidden",
     )}>
-      <header className="border-b border-border/70 pb-5 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] md:pt-6">
+      <header className="border-b border-border/70 bg-card/90 pb-5 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl md:pt-6">
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Olá, {firstName}</p>
@@ -590,7 +590,7 @@ export function ConversarTab({
           type="button"
           variant="ghost"
           onClick={() => setChatOpen(true)}
-          className="group h-auto w-full justify-start gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-4 text-left shadow-sm hover:bg-primary/10"
+          className="group h-auto w-full justify-start gap-3 rounded-xl border border-primary/25 bg-card px-3 py-4 text-left shadow-sm hover:border-primary/40 hover:bg-secondary/50"
           aria-label="Abrir conversa com a AURA"
         >
           <div className="relative shrink-0">
@@ -650,11 +650,14 @@ export function ConversarTab({
        "relative h-dvh min-h-0 flex-1 flex-col overflow-hidden bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
       chatOpen ? "flex" : "hidden",
     )}>
-      <header className="flex min-h-[calc(4.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-border/70 bg-background/95 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] backdrop-blur md:min-h-[4.5rem] md:px-5 md:pt-0">
+      <header className="flex min-h-[calc(4.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-border/70 bg-card/90 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur-xl md:min-h-[4.5rem] md:px-5 md:pt-0">
          <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => setChatOpen(false)} aria-label="Voltar para conversas">
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover ring-1 ring-border" />
+        <div className="relative shrink-0">
+          <img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/20" />
+          <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-primary" aria-hidden="true" />
+        </div>
         <div className="min-w-0 flex-1">
           <h2 className="truncate font-body text-base font-bold text-foreground">AURA</h2>
           <p className="truncate text-xs text-muted-foreground">{responding ? "respondendo…" : connected ? "presente com você" : "reconectando…"}</p>
@@ -668,7 +671,7 @@ export function ConversarTab({
           nearBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 150;
           if (nearBottomRef.current) setShowNew(false);
         }}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-secondary/20 px-3 py-5 sm:px-5"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-secondary/45 px-4 py-5 sm:px-5"
       >
         {hasOlder && (
           <Button type="button" variant="ghost" size="sm" className="mx-auto mb-5 flex" onClick={() => void loadOlder()}>
@@ -692,8 +695,8 @@ export function ConversarTab({
         </Button>
       )}
 
-        <form onSubmit={send} className="shrink-0 border-t border-border/60 bg-background pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3">
-         <div className="flex items-end gap-2 rounded-lg border border-input bg-card p-1.5 shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
+        <form onSubmit={send} className="shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl">
+         <div className="flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner focus-within:border-primary/50 focus-within:bg-card focus-within:ring-2 focus-within:ring-ring/20">
           {recording ? (
             <>
               <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" onClick={() => stopRecording(true)} aria-label="Cancelar gravação"><X /></Button>
@@ -727,7 +730,7 @@ export function ConversarTab({
           {!draft.trim() && (
             <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" disabled={sending} onClick={() => void startRecording()} aria-label="Gravar áudio"><Mic /></Button>
           )}
-          <Button type="submit" size="icon" className="h-10 w-10 shrink-0" disabled={!draft.trim() || sending} aria-label="Enviar mensagem">
+           <Button type="submit" size="icon" className="h-10 w-10 shrink-0 rounded-full shadow-sm" disabled={!draft.trim() || sending} aria-label="Enviar mensagem">
             {sending ? <Loader2 className="animate-spin" /> : <Send />}
           </Button>
           </>
@@ -740,8 +743,8 @@ export function ConversarTab({
   );
 
   return (
-    <main className="min-h-dvh bg-secondary/35 md:flex md:items-center md:justify-center md:p-6">
-       <div className={cn("mx-auto flex w-full overflow-hidden bg-background md:rounded-lg md:border md:border-border/70 md:shadow-card", chatOpen ? "max-w-4xl" : "max-w-lg")}>
+    <main className="portal-chat-theme min-h-dvh bg-foreground/10 md:flex md:items-center md:justify-center md:p-6">
+       <div className={cn("mx-auto flex w-full overflow-hidden bg-background md:rounded-2xl md:border md:border-border/70 md:shadow-card", chatOpen ? "max-w-4xl" : "max-w-lg")}>
         {conversationList}
         {openConversation}
       </div>
