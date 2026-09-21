@@ -58,3 +58,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Ampliar cenários extremos de push e proteger métricas de abertura/conversão, tokens inválidos e duplicidade entre clientes.
 - [x] Corrigir colisão global de idempotência, cap pelo dia real de entrega e duas novas tentativas em falhas transitórias.
 - [x] Diferenciar entrega por aparelho, app aberto e sucesso/falha do fallback nas métricas de notificação.
+- [x] Auditar a conversa em Android e iPhone e corrigir indicador de resposta coberto, áreas seguras, telas pequenas e áudio nas mensagens.

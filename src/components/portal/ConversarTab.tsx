@@ -162,6 +162,12 @@ export function ConversarTab({
   };
 
   useEffect(() => {
+    if (!responding || !nearBottomRef.current) return;
+    const timer = window.setTimeout(() => scrollToBottom("smooth"), 80);
+    return () => window.clearTimeout(timer);
+  }, [responding]);
+
+  useEffect(() => {
     const saved = localStorage.getItem(`aura-chat-draft:${userId}`);
     if (saved) setDraft(saved);
 
@@ -459,10 +465,10 @@ export function ConversarTab({
 
   const conversationList = (
     <aside className={cn(
-       "flex h-dvh min-h-[36rem] w-full flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))]",
+       "flex h-dvh min-h-0 w-full flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
        chatOpen && "hidden",
     )}>
-      <header className="border-b border-border/70 px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] md:pt-6">
+      <header className="border-b border-border/70 pb-5 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] md:pt-6">
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Olá, {firstName}</p>
@@ -470,11 +476,11 @@ export function ConversarTab({
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full border border-border bg-card shadow-sm" aria-label="Abrir menu da conta">
+              <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 rounded-full border border-border bg-card shadow-sm" aria-label="Abrir menu da conta">
                 <MoreVertical className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} collisionPadding={12} className="w-64 rounded-lg border-border bg-background p-1.5 shadow-card">
+            <DropdownMenuContent align="end" sideOffset={8} collisionPadding={16} className="z-[70] w-64 max-w-[calc(100vw-2rem)] rounded-lg border-border bg-background p-1.5 shadow-card">
               <DropdownMenuItem onSelect={onOpenBilling} disabled={accountLoading} className="gap-3 px-3 py-3 font-body">
                 {accountLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
                 <span>{accountLoading ? "Abrindo…" : billingLabel}</span>
@@ -566,10 +572,10 @@ export function ConversarTab({
 
   const openConversation = (
     <section className={cn(
-       "relative h-dvh min-h-[36rem] flex-1 flex-col overflow-hidden bg-background md:h-[min(820px,calc(100dvh-3rem))]",
+       "relative h-dvh min-h-0 flex-1 flex-col overflow-hidden bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
       chatOpen ? "flex" : "hidden",
     )}>
-      <header className="flex min-h-[4.5rem] items-center gap-3 border-b border-border/70 bg-background/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur md:px-5 md:pt-0">
+      <header className="flex min-h-[calc(4.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-border/70 bg-background/95 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] backdrop-blur md:min-h-[4.5rem] md:px-5 md:pt-0">
          <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => setChatOpen(false)} aria-label="Voltar para conversas">
           <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -587,7 +593,7 @@ export function ConversarTab({
           nearBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 150;
           if (nearBottomRef.current) setShowNew(false);
         }}
-        className="flex-1 overflow-y-auto overscroll-contain bg-secondary/20 px-3 py-5 sm:px-5"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-secondary/20 px-3 py-5 sm:px-5"
       >
         {hasOlder && (
           <Button type="button" variant="ghost" size="sm" className="mx-auto mb-5 flex" onClick={() => void loadOlder()}>
@@ -606,14 +612,19 @@ export function ConversarTab({
           {messages.map((message) => {
             const mine = message.role === "user";
             return (
-              <div key={message.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
+              <div key={message.id} data-chat-message className={cn("flex", mine ? "justify-end" : "justify-start")}>
                 <div className={cn(
-                  "max-w-[86%] rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed shadow-sm md:max-w-[76%]",
+                  "min-w-0 max-w-[86%] rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed shadow-sm md:max-w-[76%]",
                   mine ? "bg-primary text-primary-foreground" : "border border-border/60 bg-background text-foreground",
                   message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
-                )}>
-                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                  {message.is_audio && message.audio_url && <audio controls preload="metadata" className="mt-2 max-w-full" src={message.audio_url} />}
+                )} data-message-bubble>
+                  {(!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+                  {message.is_audio && message.audio_url && (
+                    <div className="w-[min(16rem,72vw)] max-w-full">
+                      <p className={cn("mb-1.5 text-xs font-semibold", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>Mensagem de voz</p>
+                      <audio controls controlsList="nodownload" preload="metadata" playsInline className="block h-10 w-full max-w-full" src={message.audio_url} />
+                    </div>
+                  )}
                   <div className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
                     <span>{formatTime(message.created_at)}</span>
                     {mine && message.delivery_status === "sending" && <Check className="h-3 w-3" />}
@@ -625,8 +636,8 @@ export function ConversarTab({
             );
           })}
           {responding && (
-            <div className="flex justify-start" aria-live="polite">
-               <div className="flex h-9 items-center gap-1 rounded-lg border border-border/60 bg-background px-4 shadow-sm">
+             <div className="flex scroll-mb-3 justify-start" aria-live="polite" data-typing-indicator>
+                <div className="flex h-10 items-center gap-1.5 rounded-lg border border-border/60 bg-background px-4 shadow-sm" aria-label="AURA está respondendo">
                 {[0, 1, 2].map((dot) => <span key={dot} className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-muted-foreground" style={{ animationDelay: `${dot * 150}ms` }} />)}
               </div>
             </div>
@@ -640,13 +651,15 @@ export function ConversarTab({
         </Button>
       )}
 
-       <form onSubmit={send} className="border-t border-border/60 bg-background px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <form onSubmit={send} className="shrink-0 border-t border-border/60 bg-background pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3">
          <div className="flex items-end gap-2 rounded-lg border border-input bg-card p-1.5 shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
           {recording ? (
             <>
               <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" onClick={() => stopRecording(true)} aria-label="Cancelar gravação"><X /></Button>
-              <div className="flex min-h-10 flex-1 items-center gap-2 px-2 text-sm text-foreground" aria-live="polite">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
+               <div className="flex min-h-10 flex-1 items-center gap-2 px-2 text-sm text-foreground" aria-live="polite">
+                 <span className="flex h-5 items-center gap-0.5" aria-hidden="true">
+                   {[0, 1, 2, 3].map((bar) => <span key={bar} className="w-0.5 animate-waveform rounded-full bg-destructive" style={{ animationDelay: `${bar * 90}ms` }} />)}
+                 </span>
                 Gravando {Math.floor(recordingMs / 60000)}:{String(Math.floor(recordingMs / 1000) % 60).padStart(2, "0")}
               </div>
               <Button type="button" size="icon" className="h-10 w-10 shrink-0" onClick={() => stopRecording()} aria-label="Enviar áudio"><Square /></Button>
