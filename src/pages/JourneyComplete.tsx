@@ -1,6 +1,7 @@
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
@@ -18,6 +19,8 @@ const topicEmoji: Record<string, string> = {
 
 const JourneyComplete = () => {
   const { journeyId, userId } = useParams<{ journeyId: string; userId: string }>();
+  const [searchParams] = useSearchParams();
+  const portalToken = searchParams.get("t");
   const [confirmed, setConfirmed] = useState(false);
   const [chosenJourneyId, setChosenJourneyId] = useState<string | null>(null);
   const hasPlaceholderParams = journeyId?.startsWith(":") || userId?.startsWith(":");
@@ -54,19 +57,11 @@ const JourneyComplete = () => {
   const chooseMutation = useMutation({
     mutationFn: async (chosenId: string) => {
       setChosenJourneyId(chosenId);
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/choose-next-journey`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: userId, journey_id: chosenId }),
-        }
-      );
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Erro ao selecionar jornada");
-      }
-      return response.json();
+      const { data, error } = await supabasePortal.functions.invoke("choose-next-journey", {
+        body: { journey_id: chosenId, portal_token: portalToken },
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message || "Erro ao selecionar jornada");
+      return data;
     },
     onSuccess: () => setConfirmed(true),
   });

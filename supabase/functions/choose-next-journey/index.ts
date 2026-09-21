@@ -12,11 +12,11 @@ serve(async (req) => {
   }
 
   try {
-    const { user_id, journey_id } = await req.json();
+    const { journey_id, portal_token } = await req.json();
 
-    if (!user_id || !journey_id) {
+    if (!journey_id) {
       return new Response(
-        JSON.stringify({ error: 'user_id and journey_id are required' }),
+        JSON.stringify({ error: 'journey_id is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -25,6 +25,37 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+
+    let userId: string | null = null;
+    const authorization = req.headers.get("authorization") || "";
+    const jwt = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+    if (jwt) {
+      const authClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authorization } }, auth: { persistSession: false } },
+      );
+      const { data } = await authClient.auth.getClaims(jwt);
+      userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
+    }
+    if (!userId && typeof portal_token === "string" && portal_token.length >= 32) {
+      const { data: portalAccess } = await supabase.from("user_portal_tokens")
+        .select("user_id").eq("token", portal_token).maybeSingle();
+      userId = portalAccess?.user_id || null;
+    }
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Acesso não reconhecido" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: entitled, error: entitlementError } = await supabase
+      .rpc("has_portal_entitlement", { _user_id: userId });
+    if (entitlementError) throw entitlementError;
+    if (!entitled) {
+      return new Response(JSON.stringify({ error: "Seu acesso não está liberado" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Validate journey exists and is active
     const { data: journey, error: journeyError } = await supabase
@@ -51,7 +82,7 @@ serve(async (req) => {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, user_id, name, current_journey_id')
-      .eq('user_id', user_id)
+       .eq('user_id', userId)
       .single();
 
     if (profileError || !profile) {
@@ -90,7 +121,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`✅ User ${profile.name || user_id} chose journey: ${journey.title}`);
+    console.log(`✅ User ${profile.name || userId} chose journey: ${journey.title}`);
 
     return new Response(
       JSON.stringify({ success: true, journey_title: journey.title }),
