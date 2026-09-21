@@ -153,10 +153,10 @@ export function AsaasCardForm({
             type="button"
             variant="sage"
             size="xl"
-            onClick={() => (window.location.href = "/meu-espaco")}
+            onClick={() => (window.location.href = "/obrigado")}
             className="w-full rounded-full"
           >
-            Acompanhar no meu espaço
+            Acompanhar confirmação
           </Button>
         </div>
       </div>
