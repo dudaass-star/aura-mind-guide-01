@@ -17,7 +17,7 @@ const BodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("permission_denied") }),
   z.object({
     action: z.literal("event"),
-    eventType: z.enum(["invite_shown", "activation_started", "opened"]),
+    eventType: z.enum(["invite_shown", "activation_started", "opened", "converted"]),
     notificationType: z.string().max(80).optional(),
     path: z.string().max(300).optional(),
     deliveryId: z.string().uuid().optional(),
@@ -60,6 +60,26 @@ Deno.serve(async (req) => {
       return json({ updated: true });
     }
     if (parsed.data.action === "event") {
+      if (parsed.data.eventType === "converted" && !parsed.data.deliveryId) {
+        return json({ error: "Entrega necessária para registrar conversão" }, 400);
+      }
+      if (parsed.data.deliveryId) {
+        const { data: ownedDelivery } = await admin.from("notification_deliveries")
+          .select("id")
+          .eq("id", parsed.data.deliveryId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (!ownedDelivery) return json({ error: "Entrega inválida" }, 403);
+      }
+      if (parsed.data.eventType === "converted" && parsed.data.deliveryId) {
+        const { data: existingConversion } = await admin.from("push_notification_events")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("delivery_id", parsed.data.deliveryId)
+          .eq("event_type", "converted")
+          .maybeSingle();
+        if (existingConversion) return json({ recorded: true, duplicate: true });
+      }
       await admin.from("push_notification_events").insert({
         user_id: userId,
         delivery_id: parsed.data.deliveryId || null,
@@ -72,6 +92,12 @@ Deno.serve(async (req) => {
           .eq("id", parsed.data.deliveryId)
           .eq("user_id", userId)
           .eq("selected_channel", "push");
+      }
+      if (parsed.data.eventType === "converted" && parsed.data.deliveryId) {
+        await admin.from("notification_deliveries").update({ status: "converted" })
+          .eq("id", parsed.data.deliveryId)
+          .eq("user_id", userId)
+          .eq("status", "opened");
       }
       return json({ recorded: true });
     }

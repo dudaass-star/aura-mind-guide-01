@@ -6,7 +6,7 @@ import {
 import { sendMessage, sendAudio, sendAudioUrl, type SendResult } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { CLICK_DELIVERY_TITLES, prefixWithTitle } from "../_shared/whatsapp-official.ts";
-import { sendPushToUser } from "../_shared/push-notifications.ts";
+import { routeNotification } from "../_shared/notification-router.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -903,15 +903,6 @@ Deno.serve(async (req) => {
       }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
     }
 
-    if (isInApp && sentAnyResponse && !wasInterrupted) {
-      const pushPromise = sendPushToUser(supabase, profile.user_id, {
-        title: 'AURA',
-        body: 'Tem uma nova mensagem esperando por você.',
-        path: '/meu-espaco',
-        type: 'new_reply',
-      }).catch((pushError) => console.error('Falha não bloqueante no aviso do aplicativo:', pushError));
-      (globalThis as any).EdgeRuntime.waitUntil(pushPromise);
-    }
     const pendingIsValid = responseState?.pending_expires_at && new Date(responseState.pending_expires_at).getTime() > Date.now();
     const pendingContent = pendingIsValid ? responseState?.pending_content || null : null;
     const pendingContext = pendingIsValid ? responseState?.pending_context || null : null;
@@ -1782,6 +1773,23 @@ Deno.serve(async (req) => {
         completed_at: new Date().toISOString(),
         status: wasInterrupted ? 'interrupted' : 'completed',
       }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+    }
+
+    if (isInApp && sentAnyResponse && !wasInterrupted && currentMessageId) {
+      const pushPromise = routeNotification(supabase, {
+        userId: profile.user_id,
+        phone: profile.phone || '',
+        idempotencyKey: `response:${currentMessageId}`,
+        category: 'response',
+        type: 'new_reply',
+        path: '/meu-espaco',
+        whatsappText: '',
+        whatsappCategory: 'checkin',
+        priority: 'normal',
+        fallback: 'none',
+        expiresAt: new Date(Date.now() + 6 * 60 * 60_000).toISOString(),
+      }).catch((pushError) => console.error('Falha não bloqueante no aviso do aplicativo:', pushError));
+      (globalThis as any).EdgeRuntime.waitUntil(pushPromise);
     }
 
     return new Response(JSON.stringify({

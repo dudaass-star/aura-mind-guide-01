@@ -3,6 +3,7 @@ import { cleanPhoneNumber, getPhoneVariations } from "../_shared/zapi-client.ts"
 import { sendMessage, sendAudio, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { sendDunningWhatsApp } from "../_shared/dunning-whatsapp.ts";
+import { routeNotification } from "../_shared/notification-router.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Recuperação do PIX Automático (Woovi): utilitários
@@ -116,6 +117,9 @@ async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
 // ser abortadas por falta de telefone no perfil, senão a assinatura morre sem
 // nenhuma tentativa de débito.
 const PHONELESS_TASK_TYPES = new Set([
+  // O push usa o aparelho já registrado; telefone só é necessário se houver
+  // fallback para WhatsApp e já segue preservado no payload da entrega.
+  'notification_delivery',
   'woovi_cycle_recycle',
   'woovi_next_cycle_cobr',
   'woovi_retry_confirm',
@@ -345,6 +349,17 @@ Deno.serve(async (req) => {
               await sendProactive(profile.phone, messageText, 'checkin', task.user_id);
               console.log(`✅ Scheduled message sent to ${profile.phone.substring(0, 4)}***`);
             }
+            break;
+          }
+
+          case 'notification_delivery': {
+            const request = payload as Parameters<typeof routeNotification>[1];
+            if (!request.scheduledDeliveryId || request.userId !== task.user_id) {
+              throw new Error('Entrega programada inválida');
+            }
+            const result = await routeNotification(supabase, request);
+            if (!result.success) throw new Error(result.error || result.reason || 'Falha na entrega programada');
+            console.log(`✅ Notificação programada concluída via ${result.channel}`);
             break;
           }
 

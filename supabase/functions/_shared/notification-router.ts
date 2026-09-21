@@ -1,7 +1,11 @@
 import { sendPushToUser } from "./push-notifications.ts";
 import { sendProactive } from "./whatsapp-provider.ts";
 import type { TemplateCategory } from "./whatsapp-official.ts";
-import { evaluateNotificationPersonalization } from "./notification-personalization.ts";
+import {
+  evaluateNotificationPersonalization,
+  isNonUrgentNotification,
+  nextPreferredDeliveryAt,
+} from "./notification-personalization.ts";
 
 type NotificationCategory = "response" | "session" | "journey" | "practice" | "report" | "reminder" | "engagement";
 
@@ -20,6 +24,7 @@ type NotificationRequest = {
   teaserText?: string;
   templateVariables?: string[];
   fallback?: "whatsapp" | "none";
+  scheduledDeliveryId?: string;
 };
 
 const SAFE_PUSH_COPY = {
@@ -28,6 +33,7 @@ const SAFE_PUSH_COPY = {
   monthly_schedule_available: (name?: string) => ({ title: `${name || "Oi"}, suas sessões do mês estão disponíveis`, body: "Escolha seus melhores dias e horários no aplicativo." }),
   journey_available: () => ({ title: "Uma nova parte da sua jornada chegou", body: "Abra a AURA quando tiver um momento para você." }),
   report_available: (name?: string) => ({ title: `${name || "Oi"}, seu resumo está pronto`, body: "Veja os movimentos e avanços que marcaram este período." }),
+  new_reply: () => ({ title: "AURA", body: "Tem uma nova mensagem esperando por você." }),
 } as const;
 
 export type RoutedNotificationResult = {
@@ -70,9 +76,26 @@ export async function routeNotification(supabase: any, request: NotificationRequ
       timing_source: personalization.timingSource,
     },
   };
-  let { data: delivery, error: deliveryError } = await supabase.from("notification_deliveries")
-    .insert(newDelivery).select("id").single();
-  if (deliveryError?.code === "23505") {
+  let delivery: { id: string } | null = null;
+  let deliveryError: any = null;
+  if (request.scheduledDeliveryId) {
+    const existingResult = await supabase.from("notification_deliveries")
+      .update({ status: "pending", scheduled_for: null })
+      .eq("id", request.scheduledDeliveryId)
+      .eq("user_id", request.userId)
+      .eq("status", "scheduled")
+      .select("id")
+      .maybeSingle();
+    delivery = existingResult.data;
+    deliveryError = existingResult.error;
+    if (!delivery) return { success: true, channel: "none", reason: "scheduled_delivery_unavailable" };
+  } else {
+    const insertResult = await supabase.from("notification_deliveries")
+      .insert(newDelivery).select("id").single();
+    delivery = insertResult.data;
+    deliveryError = insertResult.error;
+  }
+  if (!request.scheduledDeliveryId && deliveryError?.code === "23505") {
     const { data: existing } = await supabase.from("notification_deliveries")
       .select("id,status,selected_channel,updated_at")
       .eq("idempotency_key", request.idempotencyKey)
@@ -114,6 +137,31 @@ export async function routeNotification(supabase: any, request: NotificationRequ
   if (request.expiresAt && new Date(request.expiresAt).getTime() <= Date.now()) {
     await supabase.from("notification_deliveries").update({ selected_channel: "none", status: "suppressed", metadata: { reason: "expired" } }).eq("id", delivery.id);
     return { success: true, channel: "none", reason: "expired" };
+  }
+
+  const timingContext = { userId: request.userId, category: request.category, priority };
+  if (!request.scheduledDeliveryId && isNonUrgentNotification(timingContext)) {
+    const scheduledFor = nextPreferredDeliveryAt(personalization.preferredHourBrt, request.userId);
+    const waitMs = scheduledFor.getTime() - Date.now();
+    const expiresBeforeDelivery = request.expiresAt && new Date(request.expiresAt).getTime() <= scheduledFor.getTime();
+    if (waitMs > 5 * 60_000 && !expiresBeforeDelivery) {
+      const { error: scheduleError } = await supabase.from("scheduled_tasks").insert({
+        user_id: request.userId,
+        task_type: "notification_delivery",
+        execute_at: scheduledFor.toISOString(),
+        status: "pending",
+        payload: { ...request, scheduledDeliveryId: delivery.id },
+      });
+      if (!scheduleError) {
+        await supabase.from("notification_deliveries").update({
+          status: "scheduled",
+          selected_channel: null,
+          scheduled_for: scheduledFor.toISOString(),
+        }).eq("id", delivery.id);
+        return { success: true, channel: "none", reason: "scheduled_for_preferred_hour" };
+      }
+      console.error("Falha ao programar notificação personalizada:", scheduleError);
+    }
   }
 
   const mayNotifyNow = !isSilentHours() || request.priority === "high";

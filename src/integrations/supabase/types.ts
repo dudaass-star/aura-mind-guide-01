@@ -2011,6 +2011,7 @@ export type Database = {
           notification_type: string
           path: string | null
           priority: string
+          scheduled_for: string | null
           selected_channel: string | null
           status: string
           updated_at: string
@@ -2028,6 +2029,7 @@ export type Database = {
           notification_type: string
           path?: string | null
           priority?: string
+          scheduled_for?: string | null
           selected_channel?: string | null
           status?: string
           updated_at?: string
@@ -2045,6 +2047,7 @@ export type Database = {
           notification_type?: string
           path?: string | null
           priority?: string
+          scheduled_for?: string | null
           selected_channel?: string | null
           status?: string
           updated_at?: string
