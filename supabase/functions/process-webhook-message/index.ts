@@ -1539,8 +1539,8 @@ Deno.serve(async (req) => {
 
       console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
       
-      const sendResult = isInApp
-        ? { success: true, provider: 'in_app' } as SendResult
+      const sendResult: { success: boolean; provider: string; error?: string } = isInApp
+        ? { success: true, provider: 'in_app' }
         : await sendMessage(cleanPhone, responseText);
       if (!sendResult.success) {
         console.error(`❌ CRITICAL: Failed to send main response to ${cleanPhone?.substring(0, 4)}***: ${sendResult.error}`);
