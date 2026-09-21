@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, CalendarDays, Headphones, Sparkles, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
@@ -68,6 +68,7 @@ export function ValueDiscoveryCard({
   hasConversation: boolean;
   onNavigate?: (tab: Destination) => void;
 }) {
+  const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ["portal-value-discovery", userId],
     queryFn: async () => {
@@ -133,8 +134,10 @@ export function ValueDiscoveryCard({
             variant="link"
             className="mt-2 h-auto p-0 font-body font-bold text-primary"
             onClick={() => {
-              void recordValueEvent(userId, feature, "opened");
-              onNavigate?.(item.destination);
+              void recordValueEvent(userId, feature, "opened").finally(() => {
+                void queryClient.invalidateQueries({ queryKey: ["portal-value-discovery", userId] });
+                onNavigate?.(item.destination);
+              });
             }}
           >
             {item.action}

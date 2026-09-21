@@ -49,5 +49,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Tratar indisponibilidade temporária da Woovi sem expor erro técnico no checkout
 - [x] Implementar notificações no aplicativo: ativação guiada, registro seguro por aparelho e aviso discreto de nova resposta
 - [ ] Migrar comunicações elegíveis para estratégia push-first com fallback WhatsApp, personalização segura e métricas de conversão/LTV — roteador e primeira etapa (sessões, jornadas e resumos) implementados; falta piloto real de 7–14 dias
-- [ ] Personalizar a primeira semana com poucos dados: usar sinais do checkout, onboarding e primeiras interações para aumentar ativação e conversão ao mensal sem elevar a frequência
+- [x] Personalizar a primeira semana com poucos dados: usar sinais do checkout, onboarding e primeiras interações para aumentar ativação e conversão ao mensal sem elevar a frequência
 - [x] Criar descoberta guiada de valor na primeira semana: apresentar progressivamente conversa, sessão, jornada, práticas, áudios e progresso conforme o que o cliente ainda não experimentou
