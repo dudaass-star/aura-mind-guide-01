@@ -29,3 +29,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Validar conversa web com conta isolada: envio, resposta, histórico, tempo real, idempotência, isolamento e reconexão entre três abas
 - [ ] Construir Fase 2 do aplicativo: navegação centrada na conversa, áudio, conta e instalação
 - [ ] Executar piloto controlado e validar fluidez, segurança e continuidade antes da migração
+- [ ] Redesenhar o aplicativo com entrada por conversas, perfil da AURA e experiência premium familiar ao WhatsApp
