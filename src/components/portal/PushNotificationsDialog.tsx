@@ -34,6 +34,10 @@ export function PushNotificationsDialog({ open, onOpenChange, onInstallNeeded }:
   }, [open]);
 
   const activate = async () => {
+    if (window.top !== window.self) {
+      window.open(window.location.href, "_blank", "noopener,noreferrer");
+      return;
+    }
     setLoading(true);
     void supabasePortal.functions.invoke("register-push-device", { body: { action: "event", eventType: "activation_started" } });
     const next = await enablePushNotifications();
@@ -49,6 +53,7 @@ export function PushNotificationsDialog({ open, onOpenChange, onInstallNeeded }:
   };
 
   const status = result?.status;
+  const embeddedPreview = typeof window !== "undefined" && window.top !== window.self;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg border-border bg-background p-6 shadow-card">
@@ -80,18 +85,13 @@ export function PushNotificationsDialog({ open, onOpenChange, onInstallNeeded }:
         <div className="mt-2 space-y-2">
           {!enabled && status !== "registered" && (
             <Button type="button" className="h-11 w-full font-body" onClick={() => void activate()} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-              Ativar notificações
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : embeddedPreview ? <ExternalLink className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+              {embeddedPreview ? "Abrir e ativar" : "Ativar notificações"}
             </Button>
           )}
           {status === "install-first" && isIosPushInstallRequired() && (
             <Button type="button" variant="outline" className="h-11 w-full font-body" onClick={onInstallNeeded}>
               <ExternalLink className="h-4 w-4" /> Ver como instalar
-            </Button>
-          )}
-          {status === "open-in-new-tab" && (
-            <Button type="button" variant="outline" className="h-11 w-full font-body" onClick={() => window.open(window.location.href, "_blank", "noopener,noreferrer")}>
-              <ExternalLink className="h-4 w-4" /> Abrir em nova aba
             </Button>
           )}
           {status === "denied" && (
