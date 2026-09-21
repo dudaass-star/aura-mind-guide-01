@@ -1,6 +1,7 @@
 // Edge function: cria cobrança PIX via Asaas (one-time, planos trim/sem/anual)
 // Fluxo: cria/reaproveita customer → cria payment PIX → busca QR code → salva no banco
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { saveCheckoutAccessClaim } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,6 +104,7 @@ Deno.serve(async (req) => {
       email,
       phone,
       cpf,
+      accessToken,
     } = body as Record<string, string>;
 
     // Validação básica
@@ -254,7 +256,7 @@ Deno.serve(async (req) => {
 
     // Visibilidade de funil: registra o início PIX avulso igual ao cartão.
     // recovery_sent=true mantém o carrinho abandonado (cartão) fora daqui.
-    const { error: funnelErr } = await supabase.from("checkout_sessions").insert({
+    const { data: funnelRow, error: funnelErr } = await supabase.from("checkout_sessions").insert({
       phone: phoneClean || "sem-telefone",
       email: emailClean,
       name,
@@ -263,14 +265,26 @@ Deno.serve(async (req) => {
       payment_method: "pix",
       status: "created",
       recovery_sent: true,
-    });
+    }).select("id").maybeSingle();
     if (funnelErr) {
       console.warn("[criar-pix-asaas] funil PIX não logado:", funnelErr.message);
     }
+    await saveCheckoutAccessClaim(supabase, {
+      token: accessToken,
+      gateway: "asaas",
+      providerReference: payment.id,
+      checkoutSessionId: funnelRow?.id || null,
+      email: emailClean,
+      phone: phoneClean,
+      name,
+      plan,
+      billing,
+    });
 
     return new Response(
       JSON.stringify({
         paymentId: payment.id,
+        accessToken,
         amount: amountDecimal,
         qrCodeImage: qr.encodedImage,
         copyPaste: qr.payload,

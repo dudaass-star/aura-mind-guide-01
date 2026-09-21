@@ -5,6 +5,7 @@
 // Eventos PIX_AUTOMATIC_RECURRING_AUTHORIZATION_* e PAYMENT_RECEIVED chegam no webhook-asaas.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { saveMetaIdentity } from "../_shared/meta-identity.ts";
+import { saveCheckoutAccessClaim } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -177,7 +178,7 @@ Deno.serve(async (req) => {
         : "https://api-sandbox.asaas.com/v3";
 
     const body = await req.json();
-    let { plan, billing, name, email, phone, cpf, fbp, fbc, gaClientId } =
+    let { plan, billing, name, email, phone, cpf, fbp, fbc, gaClientId, accessToken } =
       body as Record<string, string>;
     const mode = (body as Record<string, string>).mode || "checkout";
     const reauthToken = (body as Record<string, string>).token;
@@ -536,7 +537,7 @@ Deno.serve(async (req) => {
     // recovery_sent=true evita que o fluxo de carrinho abandonado (desenhado pra
     // cartão) dispare mensagens pra quem só gerou QR.
     if (mode !== "reauthorize") {
-      const { error: funnelErr } = await supabase.from("checkout_sessions").insert({
+      const { data: funnelRow, error: funnelErr } = await supabase.from("checkout_sessions").insert({
         phone: phoneClean || "sem-telefone",
         email: emailClean,
         name,
@@ -545,10 +546,21 @@ Deno.serve(async (req) => {
         payment_method: "pix_auto",
         status: "created",
         recovery_sent: true,
-      });
+      }).select("id").maybeSingle();
       if (funnelErr) {
         console.warn("[criar-pix-recorrente-asaas] funil PIX não logado:", funnelErr.message);
       }
+      await saveCheckoutAccessClaim(supabase, {
+        token: accessToken,
+        gateway: "asaas",
+        providerReference: authorizationId,
+        checkoutSessionId: funnelRow?.id || null,
+        email: emailClean,
+        phone: phoneClean,
+        name,
+        plan,
+        billing,
+      });
     }
 
     // Reautorização: marca a autorização antiga como substituída pra a auditoria
@@ -566,6 +578,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         authorizationId,
+        accessToken,
         amount: trialInAuthorization && trialCents ? trialCents / 100 : amountDecimal,
         recurringAmount: amountDecimal,
         trial: trialInAuthorization,

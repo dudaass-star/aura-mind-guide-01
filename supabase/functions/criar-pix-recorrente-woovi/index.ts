@@ -20,6 +20,7 @@ import {
 import { composeQr, extractWooviUrl } from "../_shared/pix-emv.ts";
 import { buildFixedPixRecurringOptions } from "../_shared/woovi-subscription-payload.ts";
 import { saveMetaIdentity } from "../_shared/meta-identity.ts";
+import { saveCheckoutAccessClaim } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -722,6 +723,17 @@ Deno.serve(async (req) => {
       }).select("id").maybeSingle();
       if (funnelErr) console.warn("[criar-pix-recorrente-woovi] funil não logado:", funnelErr.message);
       checkoutSessionId = funnelRow?.id ?? null;
+      await saveCheckoutAccessClaim(supabase, {
+        token: accessToken,
+        gateway: "woovi",
+        providerReference: subscriptionId,
+        checkoutSessionId,
+        email: emailClean,
+        phone: phoneClean,
+        name,
+        plan,
+        billing,
+      });
     }
 
 
@@ -770,6 +782,7 @@ Deno.serve(async (req) => {
     return json({
       authorizationId: subscriptionId,
       checkoutSessionId,
+      accessToken,
       amount: entryCents / 100,
       recurringAmount: amountCents / 100,
       trial: withTrial,

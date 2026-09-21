@@ -66,3 +66,15 @@ export async function markCheckoutAccessPaid(
   }).eq("id", claimId).in("status", ["pending", "confirming", "paid"]);
   if (error) console.error("[checkout-access] Falha ao liberar intenção:", error.message);
 }
+
+export async function markCheckoutAccessPaidByReference(
+  supabase: any,
+  gateway: "stripe" | "asaas" | "inter" | "woovi",
+  providerReference: string | null | undefined,
+  profileUserId: string,
+): Promise<void> {
+  if (!providerReference) return;
+  const { data: claim } = await supabase.from("checkout_access_claims")
+    .select("id").eq("gateway", gateway).eq("provider_reference", providerReference).maybeSingle();
+  await markCheckoutAccessPaid(supabase, claim?.id, profileUserId);
+}
