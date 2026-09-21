@@ -484,7 +484,7 @@ Deno.serve(async (req) => {
     await saveCheckoutAccessClaim(supabase, {
       token: accessToken,
       gateway: "asaas",
-      providerReference: paymentId,
+      providerReference: paymentId || subscriptionId || "",
       email: emailClean,
       phone: phoneClean,
       name,
