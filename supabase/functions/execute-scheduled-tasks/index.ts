@@ -117,6 +117,9 @@ async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
 // ser abortadas por falta de telefone no perfil, senão a assinatura morre sem
 // nenhuma tentativa de débito.
 const PHONELESS_TASK_TYPES = new Set([
+  // O push usa o aparelho já registrado; telefone só é necessário se houver
+  // fallback para WhatsApp e já segue preservado no payload da entrega.
+  'notification_delivery',
   'woovi_cycle_recycle',
   'woovi_next_cycle_cobr',
   'woovi_retry_confirm',
