@@ -372,6 +372,11 @@ Deno.serve(async (req) => {
   let wasInterrupted = false;
   let interruptedAtIndex = -1;
   let agentData: any = null;
+  let turnOwnerToken: string | null = null;
+  let currentMessageId: string | null = null;
+  let isInApp = false;
+  let shouldResumeInterruptedTurn = false;
+  let firstResponseRecorded = false;
 
   try {
     const workerPayload = await req.json();
@@ -385,7 +390,7 @@ Deno.serve(async (req) => {
       channel = 'whatsapp', userId, inboundMessageDbId,
     } = workerPayload;
 
-    const isInApp = channel === 'in_app';
+    isInApp = channel === 'in_app';
 
     contingencyPhone = cleanPhone;
 
@@ -613,7 +618,8 @@ Deno.serve(async (req) => {
     // ========================================================================
     // INTERRUPTION SYSTEM
     // ========================================================================
-    const currentMessageId = messageId || `msg_${Date.now()}`;
+    currentMessageId = messageId || `msg_${Date.now()}`;
+    turnOwnerToken = crypto.randomUUID();
 
     // ========================================================================
     // ENTREGA DETERMINÍSTICA DE CONTEÚDO RICO (clique em template Quick Reply)
@@ -807,50 +813,63 @@ Deno.serve(async (req) => {
     }
 
     // ATOMIC LOCK: single UPDATE that only succeeds if is_responding = false
+    const responseStartedAt = new Date().toISOString();
     const { data: lockResult } = await supabase
       .from('aura_response_state')
       .update({
         is_responding: true,
-        response_started_at: new Date().toISOString(),
-        last_user_message_id: currentMessageId
+        response_started_at: responseStartedAt,
+        last_user_message_id: currentMessageId,
+        owner_token: turnOwnerToken,
       })
       .eq('user_id', profile.user_id)
       .eq('is_responding', false)
       .select();
 
     if (!lockResult || lockResult.length === 0) {
-      // Lock not acquired — check if stale (>60s)
+      // Lock não adquirido: sinaliza a nova fala ao turno ativo e só toma posse
+      // se o dono anterior estiver realmente vencido.
       const { data: currentState } = await supabase
         .from('aura_response_state')
-        .select('response_started_at')
+        .select('response_started_at, owner_token')
         .eq('user_id', profile.user_id)
         .maybeSingle();
 
       const respondingAge = Date.now() - new Date(currentState?.response_started_at || 0).getTime();
 
-      if (respondingAge < 60000) {
+      if (respondingAge < 240000) {
         // PERSIST message BEFORE aborting so the winning worker can accumulate it
-        if (messageText) {
-          const { data: recentDup } = await supabase
-            .from('messages').select('id').eq('user_id', profile.user_id).eq('role', 'user')
-            .eq('content', messageText).gte('created_at', new Date(Date.now() - 30000).toISOString())
-            .limit(1).maybeSingle();
-          if (!recentDup) {
-            await supabase.from('messages').insert({ user_id: profile.user_id, role: 'user', content: messageText });
-            console.log(`💾 Pre-lock: persisted message for accumulation by winning worker`);
-          }
+        if (!isInApp && messageText) {
+          await supabase.from('messages').upsert({
+            user_id: profile.user_id,
+            role: 'user',
+            content: messageText,
+            channel: 'whatsapp',
+            source_message_id: currentMessageId,
+          }, { onConflict: 'user_id,channel,source_message_id', ignoreDuplicates: true });
+          console.log(`💾 Pre-lock: persisted message for accumulation by winning worker`);
         }
+        await supabase.from('aura_response_state')
+          .update({ last_user_message_id: currentMessageId, updated_at: new Date().toISOString() })
+          .eq('user_id', profile.user_id);
         console.log(`🛑 ABORT: Lock atômico — outro worker respondendo (age: ${Math.round(respondingAge / 1000)}s). Mensagem será acumulada.`);
         return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'another_worker_responding' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      // Stale lock — force acquisition
+      // Trava vencida: aquisição comparando o dono lido para impedir dois vencedores.
       console.log(`⚠️ Lock stale (${Math.round(respondingAge / 1000)}s), forçando aquisição`);
-      await supabase.from('aura_response_state')
-        .update({ is_responding: true, response_started_at: new Date().toISOString(), last_user_message_id: currentMessageId })
-        .eq('user_id', profile.user_id);
+      const { data: forcedLock } = await supabase.from('aura_response_state')
+        .update({ is_responding: true, response_started_at: responseStartedAt, last_user_message_id: currentMessageId, owner_token: turnOwnerToken })
+        .eq('user_id', profile.user_id)
+        .eq('response_started_at', currentState?.response_started_at)
+        .select();
+      if (!forcedLock?.length) {
+        return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'stale_lock_race_lost' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // Helper to release lock on early returns
@@ -859,7 +878,8 @@ Deno.serve(async (req) => {
         await supabase
           .from('aura_response_state')
           .update({ is_responding: false })
-          .eq('user_id', profile.user_id);
+          .eq('user_id', profile.user_id)
+          .eq('owner_token', turnOwnerToken);
       } catch (e) {
         console.error(`⚠️ Erro ao liberar lock para user ${profile.user_id}:`, e);
       }
@@ -869,8 +889,21 @@ Deno.serve(async (req) => {
 
     // Read pending content from lock result or fresh query
     const responseState = lockResult?.[0] || (await supabase.from('aura_response_state').select('*').eq('user_id', profile.user_id).maybeSingle()).data;
-    const pendingContent = responseState?.pending_content || null;
-    const pendingContext = responseState?.pending_context || null;
+    if (responseState?.processed_user_message_id === currentMessageId) {
+      await releaseLock();
+      return new Response(JSON.stringify({ status: 'ignored', reason: 'source_duplicate' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (isInApp && currentMessageId) {
+      await supabase.from('chat_turn_metrics').update({
+        processing_started_at: new Date().toISOString(),
+        status: 'processing',
+      }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+    }
+    const pendingIsValid = responseState?.pending_expires_at && new Date(responseState.pending_expires_at).getTime() > Date.now();
+    const pendingContent = pendingIsValid ? responseState?.pending_content || null : null;
+    const pendingContext = pendingIsValid ? responseState?.pending_context || null : null;
     const lastUserContext = responseState?.last_user_context || null;
 
     if (pendingContent) {
@@ -892,32 +925,19 @@ Deno.serve(async (req) => {
       inboundMessageCreatedAt = persistedInbound?.created_at ?? null;
       (globalThis as any).__inboundMessageDbId = inboundMessageDbId;
     } else if (messageText) {
-      // Content-based dedup: check for identical message in last 30s
-      const { data: recentDup } = await supabase
-        .from('messages')
-        .select('id')
-        .eq('user_id', profile.user_id)
-        .eq('role', 'user')
-        .eq('content', messageText)
-        .gte('created_at', new Date(Date.now() - 30000).toISOString())
-        .limit(1)
-        .maybeSingle();
-
-      if (recentDup) {
-        console.log(`⏭️ DEDUP: Mensagem idêntica encontrada nos últimos 30s (id: ${recentDup.id}), abortando`);
-        await releaseLock();
-        return new Response(JSON.stringify({ status: 'ignored', reason: 'content_duplicate' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
       try {
         const { data: insertedMsg } = await supabase
           .from('messages')
-          .insert({ user_id: profile.user_id, role: 'user', content: messageText })
+          .upsert({
+            user_id: profile.user_id,
+            role: 'user',
+            content: messageText,
+            channel: 'whatsapp',
+            source_message_id: currentMessageId,
+          }, { onConflict: 'user_id,channel,source_message_id', ignoreDuplicates: true })
           .select('id, created_at')
-          .single();
-        inboundSaved = true;
+          .maybeSingle();
+        inboundSaved = Boolean(insertedMsg);
         inboundMessageCreatedAt = insertedMsg?.created_at ?? null;
         if (insertedMsg?.id) {
           (globalThis as any).__inboundMessageDbId = insertedMsg.id;
@@ -1363,7 +1383,10 @@ Deno.serve(async (req) => {
 
     // Clear pending content after passing to agent
     if (pendingContent) {
-      await supabase.from('aura_response_state').update({ pending_content: null, pending_context: null }).eq('user_id', profile.user_id);
+      await supabase.from('aura_response_state')
+        .update({ pending_content: null, pending_context: null, pending_expires_at: null })
+        .eq('user_id', profile.user_id)
+        .eq('owner_token', turnOwnerToken);
     }
 
     console.log('🤖 Agent response:', JSON.stringify(agentData, null, 2));
@@ -1376,7 +1399,7 @@ Deno.serve(async (req) => {
     // ========================================================================
     const { data: postAgentMsgs } = await supabase
       .from('messages')
-      .select('content, created_at')
+      .select('id, content, created_at, client_message_id, source_message_id')
       .eq('user_id', profile.user_id)
       .eq('role', 'user')
       .gt('created_at', lastAssistantMsg?.created_at || '1970-01-01')
@@ -1387,6 +1410,12 @@ Deno.serve(async (req) => {
       if (newAccumulatedText !== messageText) {
         console.log(`📦 Re-acumulação: ${postAgentMsgs.length} msgs (antes: ${recentUserMsgs?.length || 1}). Re-chamando agente...`);
         messageText = newAccumulatedText;
+        const latestPostAgentMessage = postAgentMsgs[postAgentMsgs.length - 1];
+        currentMessageId = latestPostAgentMessage?.client_message_id || latestPostAgentMessage?.source_message_id || latestPostAgentMessage?.id || currentMessageId;
+        await supabase.from('aura_response_state')
+          .update({ last_user_message_id: currentMessageId })
+          .eq('user_id', profile.user_id)
+          .eq('owner_token', turnOwnerToken);
         agentData = await callAuraAgent(false);
         console.log('🤖 Agent re-response:', JSON.stringify(agentData, null, 2));
       }
@@ -1500,6 +1529,11 @@ Deno.serve(async (req) => {
         if (audioUrl || audioContent) {
           if (isInApp && (audioUrl || audioContent)) {
             sentAnyResponse = true;
+            if (!firstResponseRecorded && currentMessageId) {
+              firstResponseRecorded = true;
+              await supabase.from('chat_turn_metrics').update({ first_response_at: new Date().toISOString() })
+                .eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+            }
             await supabase.from('messages').insert({
               user_id: profile.user_id,
               role: 'assistant',
@@ -1565,6 +1599,11 @@ Deno.serve(async (req) => {
         // Still persist to DB so context is not lost, but log the failure
       }
       sentAnyResponse = true;
+      if (isInApp && !firstResponseRecorded && currentMessageId) {
+        firstResponseRecorded = true;
+        await supabase.from('chat_turn_metrics').update({ first_response_at: new Date().toISOString() })
+          .eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+      }
 
       // Persist assistant message to DB (with dedup check)
       try {
@@ -1647,14 +1686,29 @@ Deno.serve(async (req) => {
         console.log(`📦 Salvando ${agentData.messages.length - interruptedAtIndex} bubbles pendentes para avaliação posterior`);
         await supabase
           .from('aura_response_state')
-          .update({ is_responding: false, pending_content: pendingMessages, pending_context: messageText.substring(0, 200) })
-          .eq('user_id', profile.user_id);
+          .update({
+            is_responding: false,
+            pending_content: pendingMessages,
+            pending_context: messageText.substring(0, 200),
+            pending_expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+            processed_user_message_id: currentMessageId,
+          })
+          .eq('user_id', profile.user_id)
+          .eq('owner_token', turnOwnerToken);
+      }
+      shouldResumeInterruptedTurn = true;
+      if (!pendingMessages) {
+        await supabase.from('aura_response_state')
+          .update({ is_responding: false, processed_user_message_id: currentMessageId })
+          .eq('user_id', profile.user_id)
+          .eq('owner_token', turnOwnerToken);
       }
     } else {
       await supabase
         .from('aura_response_state')
-        .update({ is_responding: false, pending_content: null, pending_context: null })
-        .eq('user_id', profile.user_id);
+        .update({ is_responding: false, pending_content: null, pending_context: null, pending_expires_at: null, processed_user_message_id: currentMessageId })
+        .eq('user_id', profile.user_id)
+        .eq('owner_token', turnOwnerToken);
     }
 
     } finally {
@@ -1664,10 +1718,59 @@ Deno.serve(async (req) => {
           .from('aura_response_state')
           .update({ is_responding: false })
           .eq('user_id', profile.user_id)
+          .eq('owner_token', turnOwnerToken)
           .eq('is_responding', true);
       } catch (cleanupError) {
         console.error(`⚠️ Erro silencioso ao liberar lock para user ${profile.user_id}:`, cleanupError);
       }
+    }
+
+    const { data: finalTurnState } = await supabase.from('aura_response_state')
+      .select('last_user_message_id')
+      .eq('user_id', profile.user_id)
+      .maybeSingle();
+    shouldResumeInterruptedTurn = shouldResumeInterruptedTurn || Boolean(
+      finalTurnState?.last_user_message_id && finalTurnState.last_user_message_id !== currentMessageId,
+    );
+
+    if (shouldResumeInterruptedTurn) {
+      const { data: latestInbound } = await supabase.from('messages')
+        .select('id, content, channel, client_message_id, source_message_id')
+        .eq('user_id', profile.user_id)
+        .eq('role', 'user')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const resumeMessageId = latestInbound?.client_message_id || latestInbound?.source_message_id || latestInbound?.id;
+      if (latestInbound && resumeMessageId && resumeMessageId !== currentMessageId) {
+        const resumePromise = fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/process-webhook-message`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'x-internal-secret': Deno.env.get('INTERNAL_WEBHOOK_SECRET') || '',
+          },
+          body: JSON.stringify({
+            channel: latestInbound.channel || channel,
+            userId: profile.user_id,
+            cleanPhone: profile.phone,
+            phone: profile.phone,
+            messageId: resumeMessageId,
+            inboundMessageDbId: latestInbound.id,
+            text: latestInbound.content,
+            hasAudio: false,
+            hasImage: false,
+          }),
+        });
+        (globalThis as any).EdgeRuntime.waitUntil(resumePromise);
+      }
+    }
+
+    if (isInApp && currentMessageId) {
+      await supabase.from('chat_turn_metrics').update({
+        completed_at: new Date().toISOString(),
+        status: wasInterrupted ? 'interrupted' : 'completed',
+      }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
     }
 
     return new Response(JSON.stringify({
@@ -1695,9 +1798,21 @@ Deno.serve(async (req) => {
         await supabase.from('aura_response_state')
           .update({ is_responding: false })
           .eq('user_id', profile.user_id)
+          .eq('owner_token', turnOwnerToken)
           .eq('is_responding', true);
       } catch (lockErr) {
         console.error('⚠️ Failed to release lock in outer catch:', lockErr);
+      }
+    }
+    if (supabase && isInApp && profile?.user_id && currentMessageId) {
+      try {
+        await supabase.from('chat_turn_metrics').update({
+          completed_at: new Date().toISOString(),
+          status: 'failed',
+          error_code: error instanceof Error ? error.name : 'unknown',
+        }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+      } catch (metricsError) {
+        console.error('⚠️ Falha não bloqueante na telemetria do chat:', metricsError);
       }
     }
 

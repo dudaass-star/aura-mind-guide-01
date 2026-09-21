@@ -31,6 +31,15 @@ type PendingMessage = {
   createdAt: string;
 };
 
+function readOutbox(key: string): PendingMessage[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]") as PendingMessage[] | PendingMessage;
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [];
+  }
+}
+
 function orderMessages(messages: ChatMessage[]) {
   return [...messages].sort((a, b) => {
     if (a.sequence_no !== null && b.sequence_no !== null) return a.sequence_no - b.sequence_no;
@@ -96,7 +105,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
   };
 
   useEffect(() => {
-    const saved = sessionStorage.getItem(`aura-chat-draft:${userId}`);
+    const saved = localStorage.getItem(`aura-chat-draft:${userId}`);
     if (saved) setDraft(saved);
 
     const load = async () => {
@@ -182,7 +191,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
   }, [userId]);
 
   useEffect(() => {
-    sessionStorage.setItem(`aura-chat-draft:${userId}`, draft);
+    localStorage.setItem(`aura-chat-draft:${userId}`, draft);
     if (composerRef.current) {
       composerRef.current.style.height = "0px";
       composerRef.current.style.height = `${Math.min(composerRef.current.scrollHeight, 128)}px`;
@@ -208,8 +217,14 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
     });
   };
 
-  const persistOutbox = (pending: PendingMessage | null) => {
-    if (pending) localStorage.setItem(outboxKey, JSON.stringify(pending));
+  const enqueueOutbox = (pending: PendingMessage) => {
+    const queue = readOutbox(outboxKey).filter((item) => item.clientId !== pending.clientId);
+    localStorage.setItem(outboxKey, JSON.stringify([...queue, pending]));
+  };
+
+  const removeFromOutbox = (clientId: string) => {
+    const queue = readOutbox(outboxKey).filter((item) => item.clientId !== clientId);
+    if (queue.length) localStorage.setItem(outboxKey, JSON.stringify(queue));
     else localStorage.removeItem(outboxKey);
   };
 
@@ -225,7 +240,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
       },
     });
     if (error || !data?.accepted) throw error || new Error(data?.error || "Falha no envio");
-    persistOutbox(null);
+    removeFromOutbox(pending.clientId);
     setMessages((current) => mergeMessage(current, {
       id: data.message.id,
       user_id: userId,
@@ -264,9 +279,9 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
     };
     setMessages((current) => [...current, optimistic]);
     setDraft("");
-    sessionStorage.removeItem(`aura-chat-draft:${userId}`);
+    localStorage.removeItem(`aura-chat-draft:${userId}`);
     setSending(true);
-    persistOutbox(pending);
+    enqueueOutbox(pending);
     scrollToBottom();
 
     try {
@@ -283,15 +298,13 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
   };
 
   useEffect(() => {
-    const raw = localStorage.getItem(outboxKey);
-    if (!raw || !navigator.onLine) return;
-    try {
-      const pending = JSON.parse(raw) as PendingMessage;
-      setSending(true);
-      void submitMessage(pending).catch(() => {}).finally(() => setSending(false));
-    } catch {
-      localStorage.removeItem(outboxKey);
-    }
+    const queue = readOutbox(outboxKey);
+    if (!queue.length || !navigator.onLine) return;
+    setSending(true);
+    void queue.reduce(
+      (chain, pending) => chain.then(() => submitMessage(pending)).catch(() => undefined),
+      Promise.resolve(),
+    ).finally(() => setSending(false));
   }, [outboxKey]);
 
   const blobToBase64 = (blob: Blob) => new Promise<string>((resolve, reject) => {
@@ -350,7 +363,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
           delivery_status: "sending", is_audio: true, audio_url: localUrl, optimistic: true,
         }]);
         setSending(true);
-        persistOutbox(pending);
+        enqueueOutbox(pending);
         scrollToBottom();
         try { await submitMessage(pending); }
         catch {

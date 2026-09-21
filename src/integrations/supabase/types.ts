@@ -281,8 +281,11 @@ export type Database = {
           is_responding: boolean | null
           last_user_context: Json | null
           last_user_message_id: string | null
+          owner_token: string | null
           pending_content: string | null
           pending_context: string | null
+          pending_expires_at: string | null
+          processed_user_message_id: string | null
           response_started_at: string | null
           updated_at: string | null
           user_id: string
@@ -291,8 +294,11 @@ export type Database = {
           is_responding?: boolean | null
           last_user_context?: Json | null
           last_user_message_id?: string | null
+          owner_token?: string | null
           pending_content?: string | null
           pending_context?: string | null
+          pending_expires_at?: string | null
+          processed_user_message_id?: string | null
           response_started_at?: string | null
           updated_at?: string | null
           user_id: string
@@ -301,8 +307,11 @@ export type Database = {
           is_responding?: boolean | null
           last_user_context?: Json | null
           last_user_message_id?: string | null
+          owner_token?: string | null
           pending_content?: string | null
           pending_context?: string | null
+          pending_expires_at?: string | null
+          processed_user_message_id?: string | null
           response_started_at?: string | null
           updated_at?: string | null
           user_id?: string
@@ -468,6 +477,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      chat_turn_metrics: {
+        Row: {
+          channel: string
+          client_message_id: string
+          client_sent_at: string | null
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          first_response_at: string | null
+          id: string
+          processing_started_at: string | null
+          server_received_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel?: string
+          client_message_id: string
+          client_sent_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          first_response_at?: string | null
+          id?: string
+          processing_started_at?: string | null
+          server_received_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          client_message_id?: string
+          client_sent_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          first_response_at?: string | null
+          id?: string
+          processing_started_at?: string | null
+          server_received_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       checkins: {
         Row: {
@@ -1661,6 +1718,7 @@ export type Database = {
           metadata: Json
           role: string
           sequence_no: number
+          source_message_id: string | null
           user_id: string
         }
         Insert: {
@@ -1675,6 +1733,7 @@ export type Database = {
           metadata?: Json
           role: string
           sequence_no?: number
+          source_message_id?: string | null
           user_id: string
         }
         Update: {
@@ -1689,6 +1748,7 @@ export type Database = {
           metadata?: Json
           role?: string
           sequence_no?: number
+          source_message_id?: string | null
           user_id?: string
         }
         Relationships: [

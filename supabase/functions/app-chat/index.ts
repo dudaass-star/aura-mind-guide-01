@@ -79,6 +79,11 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (existing) return json({ accepted: true, message: existing, duplicate: true }, 202);
 
+    const clientSentDate = clientSentAt ? new Date(clientSentAt) : null;
+    const safeClientSentAt = clientSentDate && Number.isFinite(clientSentDate.getTime())
+      ? clientSentDate.toISOString()
+      : null;
+
     let audioUrl: string | null = null;
     let audioPath: string | null = null;
     if (hasAudio && audioBase64 && audioMime) {
@@ -119,12 +124,13 @@ Deno.serve(async (req) => {
         content: hasAudio ? "Áudio enviado" : text,
         channel: "in_app",
         client_message_id: clientMessageId,
+        source_message_id: clientMessageId,
         delivery_status: "delivered",
         is_audio: hasAudio,
         audio_url: audioUrl,
         metadata: {
           ...(audioPath ? { audio_storage_path: audioPath, audio_mime: audioMime, audio_duration_ms: audioDurationMs } : {}),
-          client_sent_at: clientSentAt || null,
+          client_sent_at: safeClientSentAt,
           server_received_at: receivedAt,
           accepted_at: new Date().toISOString(),
         },
@@ -143,6 +149,23 @@ Deno.serve(async (req) => {
       }
       throw insertError;
     }
+
+
+    await Promise.all([
+      admin.from("aura_response_state").upsert({
+        user_id: userId,
+        last_user_message_id: clientMessageId,
+        updated_at: receivedAt,
+      }, { onConflict: "user_id" }),
+      admin.from("chat_turn_metrics").upsert({
+        user_id: userId,
+        client_message_id: clientMessageId,
+        channel: "in_app",
+        client_sent_at: safeClientSentAt,
+        server_received_at: receivedAt,
+        status: "accepted",
+      }, { onConflict: "user_id,client_message_id", ignoreDuplicates: true }),
+    ]);
 
     const workerPromise = fetch(`${supabaseUrl}/functions/v1/process-webhook-message`, {
       method: "POST",
