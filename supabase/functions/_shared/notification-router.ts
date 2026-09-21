@@ -1,6 +1,7 @@
 import { sendPushToUser } from "./push-notifications.ts";
 import { sendProactive } from "./whatsapp-provider.ts";
 import type { TemplateCategory } from "./whatsapp-official.ts";
+import { evaluateNotificationPersonalization } from "./notification-personalization.ts";
 
 type NotificationCategory = "response" | "session" | "journey" | "practice" | "report" | "reminder" | "engagement";
 
@@ -46,16 +47,28 @@ function isSilentHours() {
 }
 
 export async function routeNotification(supabase: any, request: NotificationRequest): Promise<RoutedNotificationResult> {
+  const priority = request.priority || "normal";
+  const personalization = await evaluateNotificationPersonalization(supabase, {
+    userId: request.userId,
+    category: request.category,
+    priority,
+  });
   const newDelivery = {
     user_id: request.userId,
     idempotency_key: request.idempotencyKey,
     category: request.category,
     notification_type: request.type,
-    priority: request.priority || "normal",
+    priority,
     path: request.path,
     expires_at: request.expiresAt || null,
     status: "pending",
-    metadata: { privacy_safe: true },
+    metadata: {
+      privacy_safe: true,
+      personalization_rule: personalization.rule,
+      journey_stage: personalization.stage,
+      preferred_hour_brt: personalization.preferredHourBrt,
+      timing_source: personalization.timingSource,
+    },
   };
   let { data: delivery, error: deliveryError } = await supabase.from("notification_deliveries")
     .insert(newDelivery).select("id").single();
@@ -81,6 +94,22 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     deliveryError = null;
   }
   if (deliveryError || !delivery) throw deliveryError || new Error("Falha ao registrar entrega");
+
+  if (!personalization.allowed) {
+    await supabase.from("notification_deliveries").update({
+      selected_channel: "none",
+      status: "suppressed",
+      metadata: {
+        privacy_safe: true,
+        reason: personalization.reason,
+        personalization_rule: personalization.rule,
+        journey_stage: personalization.stage,
+        preferred_hour_brt: personalization.preferredHourBrt,
+        timing_source: personalization.timingSource,
+      },
+    }).eq("id", delivery.id);
+    return { success: true, channel: "none", reason: personalization.reason };
+  }
 
   if (request.expiresAt && new Date(request.expiresAt).getTime() <= Date.now()) {
     await supabase.from("notification_deliveries").update({ selected_channel: "none", status: "suppressed", metadata: { reason: "expired" } }).eq("id", delivery.id);

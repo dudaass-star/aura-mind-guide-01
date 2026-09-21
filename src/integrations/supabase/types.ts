@@ -2144,6 +2144,36 @@ export type Database = {
           },
         ]
       }
+      portal_value_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          feature: string
+          id: string
+          metadata: Json
+          source: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          feature: string
+          id?: string
+          metadata?: Json
+          source?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          feature?: string
+          id?: string
+          metadata?: Json
+          source?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           asaas_customer_id: string | null
