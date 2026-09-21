@@ -162,6 +162,25 @@ export function ConversarTab({
   };
 
   useEffect(() => {
+    if (!chatOpen) return;
+
+    nearBottomRef.current = true;
+    setShowNew(false);
+    let finalFrame = 0;
+    const openingFrame = window.requestAnimationFrame(() => {
+      finalFrame = window.requestAnimationFrame(() => {
+        const conversation = scrollRef.current;
+        if (conversation) conversation.scrollTo({ top: conversation.scrollHeight, behavior: "auto" });
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(openingFrame);
+      window.cancelAnimationFrame(finalFrame);
+    };
+  }, [chatOpen]);
+
+  useEffect(() => {
     if (!responding || !nearBottomRef.current) return;
     const timer = window.setTimeout(() => scrollToBottom("smooth"), 80);
     return () => window.clearTimeout(timer);
