@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowLeft, CalendarDays, Check, CheckCheck, ChevronRight, Headphones, Loader2, Mic, Send, Sparkles, Square, Sun, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Sparkles, Square, Sun, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
 import avatarAura from "@/assets/avatar-aura.jpg";
@@ -71,10 +72,20 @@ export function ConversarTab({
   userId,
   firstName,
   onNavigate,
+  onOpenBilling,
+  onChangePlan,
+  onSignOut,
+  billingLabel,
+  accountLoading = false,
 }: {
   userId: string;
   firstName: string;
   onNavigate?: (tab: "hoje" | "sessoes" | "insights" | "sobre" | "meditacoes") => void;
+  onOpenBilling: () => void;
+  onChangePlan: () => void;
+  onSignOut: () => void;
+  billingLabel: string;
+  accountLoading?: boolean;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -420,9 +431,28 @@ export function ConversarTab({
             <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Olá, {firstName}</p>
             <h1 className="font-display text-[2rem] font-semibold leading-none text-foreground">Conversas</h1>
           </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card font-display text-sm font-semibold text-foreground shadow-sm" aria-label={`Perfil de ${firstName}`}>
-            {firstName.slice(0, 1).toUpperCase()}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full border border-border bg-card shadow-sm" aria-label="Abrir menu da conta">
+                <MoreVertical className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={8} collisionPadding={12} className="w-64 rounded-lg border-border bg-background p-1.5 shadow-card">
+              <DropdownMenuItem onSelect={onOpenBilling} disabled={accountLoading} className="gap-3 px-3 py-3 font-body">
+                {accountLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                <span>{accountLoading ? "Abrindo…" : billingLabel}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onChangePlan} className="gap-3 px-3 py-3 font-body">
+                <RefreshCw className="h-4 w-4" />
+                <span>Trocar de plano</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onSignOut} className="gap-3 px-3 py-3 font-body text-destructive focus:text-destructive">
+                <LogOut className="h-4 w-4" />
+                <span>Sair</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
