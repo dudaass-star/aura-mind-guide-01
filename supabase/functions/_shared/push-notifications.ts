@@ -23,7 +23,8 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
 
   let sent = 0;
   const separator = options.path.includes("?") ? "&" : "?";
-  const trackedPath = `${options.path}${separator}push=open&type=${encodeURIComponent(options.type)}`;
+  const deliveryParam = options.deliveryId ? `&delivery=${encodeURIComponent(options.deliveryId)}` : "";
+  const trackedPath = `${options.path}${separator}push=open&type=${encodeURIComponent(options.type)}${deliveryParam}`;
   const backgroundDevices = devices.filter((device: { is_foreground: boolean; last_seen_at: string }) =>
     !device.is_foreground || Date.now() - new Date(device.last_seen_at).getTime() > 90_000
   );
