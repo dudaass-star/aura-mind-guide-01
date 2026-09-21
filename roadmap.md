@@ -35,3 +35,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Conferir se a navegação simples entre conversa e demais áreas já estava entregue antes de criar uma segunda navegação
 
 - [x] Validar o fluxo mobile completo: lista de conversas, conversa da AURA, retorno e acesso às demais áreas sem sobreposição
+- [x] Reunir pagamento, troca de plano e saída no menu de três pontos da tela inicial

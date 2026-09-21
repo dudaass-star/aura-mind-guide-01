@@ -309,7 +309,18 @@ const UserPortal = () => {
         {/* Content */}
         <div className={activeTab === "conversar" ? "flex-1 w-full" : "flex-1 max-w-2xl mx-auto w-full px-5 py-6 pb-24"}>
           {activeTab !== "conversar" && <PlanTierBanner profile={profile} onChangePlan={() => setChangePlanOpen(true)} />}
-          {activeTab === "conversar" && <ConversarTab userId={userId!} firstName={firstName} onNavigate={handleTabClick} />}
+          {activeTab === "conversar" && (
+            <ConversarTab
+              userId={userId!}
+              firstName={firstName}
+              onNavigate={handleTabClick}
+              onOpenBilling={() => void handleOpenBillingPortal()}
+              onChangePlan={() => setChangePlanOpen(true)}
+              onSignOut={() => void signOut()}
+              billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
+              accountLoading={portalLoading}
+            />
+          )}
           {activeTab === "hoje" && (
             <HojeTab
               userId={userId!}
@@ -327,36 +338,8 @@ const UserPortal = () => {
         {/* WhatsApp segue disponível para suporte, sem competir com a conversa principal. */}
         {activeTab !== "conversar" && <FloatingWhatsAppCTA />}
 
-        {/* Footer */}
+        {/* Rodapé institucional; ações da conta ficam no menu da tela inicial. */}
         {activeTab !== "conversar" && <footer className="border-t border-border/40 py-6 text-center">
-          <button
-            onClick={handleOpenBillingPortal}
-            disabled={portalLoading}
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-accent transition-colors font-['Nunito'] mb-3 disabled:opacity-60"
-          >
-            {portalLoading ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
-            <span>
-              {portalLoading
-                ? "Abrindo…"
-                : isWooviPix
-                  ? "Passar a pagar no cartão"
-                  : "Atualizar forma de pagamento"}
-            </span>
-          </button>
-          <button
-            onClick={() => setChangePlanOpen(true)}
-            className="block mx-auto mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-accent transition-colors font-['Nunito']"
-          >
-            <RefreshCw size={14} />
-            <span>Trocar de plano</span>
-          </button>
-          <button
-            onClick={signOut}
-            className="block mx-auto mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-accent transition-colors font-['Nunito']"
-          >
-            <LogOut size={14} />
-            <span>Sair</span>
-          </button>
           <p className="text-sm text-muted-foreground font-['Nunito']">Conteúdo exclusivo da Aura</p>
           <a
             href="https://olaaura.com.br"
