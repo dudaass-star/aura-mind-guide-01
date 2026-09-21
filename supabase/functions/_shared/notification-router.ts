@@ -9,9 +9,8 @@ type NotificationRequest = {
   phone: string;
   idempotencyKey: string;
   category: NotificationCategory;
-  type: string;
-  title: string;
-  body: string;
+  type: keyof typeof SAFE_PUSH_COPY;
+  firstName?: string;
   path: string;
   whatsappText: string;
   whatsappCategory: TemplateCategory;
@@ -21,6 +20,14 @@ type NotificationRequest = {
   templateVariables?: string[];
   fallback?: "whatsapp" | "none";
 };
+
+const SAFE_PUSH_COPY = {
+  session_reminder_24h: (name?: string) => ({ title: `${name || "Oi"}, sua sessão está chegando`, body: "Abra a AURA para conferir e se preparar." }),
+  session_reminder_5m: (name?: string) => ({ title: `${name || "Oi"}, sua sessão começa em instantes`, body: "A AURA já está pronta para receber você." }),
+  monthly_schedule_available: (name?: string) => ({ title: `${name || "Oi"}, suas sessões do mês estão disponíveis`, body: "Escolha seus melhores dias e horários no aplicativo." }),
+  journey_available: () => ({ title: "Uma nova parte da sua jornada chegou", body: "Abra a AURA quando tiver um momento para você." }),
+  report_available: (name?: string) => ({ title: `${name || "Oi"}, seu resumo está pronto`, body: "Veja os movimentos e avanços que marcaram este período." }),
+} as const;
 
 export type RoutedNotificationResult = {
   success: boolean;
@@ -83,9 +90,10 @@ export async function routeNotification(supabase: any, request: NotificationRequ
   const mayNotifyNow = !isSilentHours() || request.priority === "high";
   // Lembretes de sessão de alta prioridade preservam a entrega no horário agendado.
   if (mayNotifyNow) {
+    const safeCopy = SAFE_PUSH_COPY[request.type](request.firstName);
     const push = await sendPushToUser(supabase, request.userId, {
-      title: request.title,
-      body: request.body,
+      title: safeCopy.title,
+      body: safeCopy.body,
       path: request.path,
       type: request.type,
       deliveryId: delivery.id,
