@@ -15,7 +15,7 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
   const { data: entitled } = await supabase.rpc("has_portal_entitlement", { _user_id: userId });
   if (!entitled) return { sent: 0, reason: "not_entitled" };
   const { data: devices, error } = await supabase.from("push_devices")
-    .select("id,token")
+    .select("id,token,is_foreground,last_seen_at")
     .eq("user_id", userId)
     .eq("enabled", true);
   if (error || !devices?.length) return { sent: 0, reason: "no_devices" };
@@ -23,7 +23,11 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
   let sent = 0;
   const separator = options.path.includes("?") ? "&" : "?";
   const trackedPath = `${options.path}${separator}push=open&type=${encodeURIComponent(options.type)}`;
-  await Promise.all(devices.map(async (device: { id: string; token: string }) => {
+  const backgroundDevices = devices.filter((device: { is_foreground: boolean; last_seen_at: string }) =>
+    !device.is_foreground || Date.now() - new Date(device.last_seen_at).getTime() > 90_000
+  );
+  if (!backgroundDevices.length) return { sent: 0, reason: "app_visible" };
+  await Promise.all(backgroundDevices.map(async (device: { id: string; token: string }) => {
     const response = await fetch(`${GATEWAY_URL}/v1/projects/_/messages:send`, {
       method: "POST",
       headers: {

@@ -72,3 +72,8 @@ export async function disablePushNotifications() {
   await supabasePortal.functions.invoke("register-push-device", { body: { action: "disable_current" } });
   localStorage.removeItem("aura-push-enabled");
 }
+
+export function reportPushPresence(foreground: boolean) {
+  if (localStorage.getItem("aura-push-enabled") !== "true") return;
+  void supabasePortal.functions.invoke("register-push-device", { body: { action: "presence", foreground } });
+}

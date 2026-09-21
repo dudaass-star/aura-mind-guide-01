@@ -18,6 +18,7 @@ import { ConversarTab } from "@/components/portal/ConversarTab";
 import { FloatingWhatsAppCTA } from "@/components/portal/FloatingWhatsAppCTA";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
+import { reportPushPresence } from "@/lib/push-notifications";
 import {
   usePortalNovidades,
   markTabSeen,
@@ -65,6 +66,21 @@ const UserPortal = () => {
       },
     });
   }, [searchParams, userId]);
+
+  useEffect(() => {
+    if (!userId || linkStatus !== "linked") return;
+    const report = () => reportPushPresence(document.visibilityState === "visible");
+    report();
+    document.addEventListener("visibilitychange", report);
+    window.addEventListener("focus", report);
+    window.addEventListener("blur", report);
+    return () => {
+      reportPushPresence(false);
+      document.removeEventListener("visibilitychange", report);
+      window.removeEventListener("focus", report);
+      window.removeEventListener("blur", report);
+    };
+  }, [linkStatus, userId]);
   const { data: novidades, refetch: refetchNovidades } = usePortalNovidades(userId);
 
   // Ao abrir o portal, marca a aba inicial como vista.

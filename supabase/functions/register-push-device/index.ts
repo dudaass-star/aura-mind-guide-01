@@ -21,6 +21,7 @@ const BodySchema = z.discriminatedUnion("action", [
     notificationType: z.string().max(80).optional(),
     path: z.string().max(300).optional(),
   }),
+  z.object({ action: z.literal("presence"), foreground: z.boolean() }),
 ]);
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -50,6 +51,13 @@ Deno.serve(async (req) => {
     if (!parsed.success) return json({ error: "Dados inválidos" }, 400);
 
     const admin = createClient(url, serviceKey);
+    if (parsed.data.action === "presence") {
+      await admin.from("push_devices").update({
+        is_foreground: parsed.data.foreground,
+        last_seen_at: new Date().toISOString(),
+      }).eq("user_id", userId).eq("enabled", true);
+      return json({ updated: true });
+    }
     if (parsed.data.action === "event") {
       await admin.from("push_notification_events").insert({
         user_id: userId,
