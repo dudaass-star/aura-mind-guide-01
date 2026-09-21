@@ -218,7 +218,11 @@ export async function routeNotification(supabase: any, request: NotificationRequ
       deliveryId: delivery.id,
     });
     if (push.sent > 0) {
-      await supabase.from("notification_deliveries").update({ selected_channel: "push", status: "sent" }).eq("id", delivery.id);
+      await supabase.from("notification_deliveries").update({
+        selected_channel: "push",
+        status: "sent",
+        metadata: { privacy_safe: true, devices_sent: push.sent },
+      }).eq("id", delivery.id);
       await supabase.from("push_notification_events").insert({
         user_id: request.userId,
         delivery_id: delivery.id,
@@ -230,6 +234,13 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     }
     if (push.reason === "app_visible") {
       await supabase.from("notification_deliveries").update({ selected_channel: "in_app", status: "suppressed", metadata: { reason: "app_visible" } }).eq("id", delivery.id);
+      await supabase.from("push_notification_events").insert({
+        user_id: request.userId,
+        delivery_id: delivery.id,
+        event_type: "app_visible",
+        notification_type: request.type,
+        path: request.path,
+      });
       return { success: true, channel: "in_app", reason: "app_visible" };
     }
   }
@@ -268,7 +279,7 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     event_type: "whatsapp_fallback",
     notification_type: request.type,
     path: request.path,
-    metadata: { success: whatsapp.success },
+    metadata: { success: whatsapp.success, outcome: whatsapp.success ? "sent" : "failed" },
   });
   return { success: whatsapp.success, channel: "whatsapp", reason: whatsapp.error, error: whatsapp.error };
 }
