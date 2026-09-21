@@ -110,7 +110,7 @@ AÇÕES SUGERIDAS (use 1 ou mais, em ordem):
 - A 1ª ação da lista é a "principal" e também aparece em "suggested_action" (singular) por compatibilidade. As demais são executadas em sequência no mesmo aprovar/enviar.
 - Tipos válidos:
 - none: só responder, sem ação
-- send_portal_link: enviar link de acesso ao /meu-espaco (login com Google ou código de 6 dígitos por email — sem token na URL)
+- send_portal_link: enviar link de acesso ao /meu-espaco (login com Google ou código de 8 dígitos por email — sem token na URL)
 - cancel_subscription: cancelar assinatura agora
 - pause_subscription: pausar por X dias (informe pause_days)
 - refund_invoice: reembolsar fatura específica (informe invoice_id e amount_cents se parcial)
@@ -143,13 +143,13 @@ IMPORTANTE:
 REGRA DE ACESSO AO PORTAL (INVIOLÁVEL):
 - Se o ticket é sobre acesso ao /meu-espaco — ex.: "não consigo entrar", "esqueci a senha", "como acesso", "não recebi o link", "quero ver minhas sessões/cápsulas/jornadas/insights no portal" — suggested_action.type DEVE ser "send_portal_link".
 - O draft_body DEVE conter literalmente a URL https://olaaura.com.br/meu-espaco (texto puro, sem placeholder tipo {{PORTAL_LINK}}, sem "?t=...", sem encurtador).
-- Explique em uma linha curta: "entre com o mesmo email da sua conta — pode usar Google ou pedir um código de 6 dígitos por email". Não há senha cadastrada.
+- Explique em uma linha curta: "entre com o mesmo email da sua conta — pode usar Google ou pedir um código de 8 dígitos por email". Não há senha cadastrada.
 - PROIBIDO redirecionar o cliente pro WhatsApp pra resolver acesso ao portal.
 - PROIBIDO prometer "vou te enviar um link mágico de login" — o link é a URL pública acima e o login acontece na própria página.
 
 REGRA DE COBRANÇA / ATUALIZAR PAGAMENTO (INVIOLÁVEL):
 - Se o ticket é sobre cobrança falhada, cartão recusado, "minha cobrança não passou", "como atualizo meu cartão / forma de pagamento", acesso bloqueado por falta de pagamento → suggested_action.type DEVE ser "send_portal_link".
-- O draft_body DEVE conter literalmente https://olaaura.com.br/meu-espaco e instruir: "entre com o mesmo email da sua conta (Google ou código de 6 dígitos por email) e, no rodapé, clique em **Atualizar forma de pagamento** pra trocar o cartão. Assim que a cobrança passar, o acesso volta automaticamente."
+- O draft_body DEVE conter literalmente https://olaaura.com.br/meu-espaco e instruir: "entre com o mesmo email da sua conta (Google ou código de 8 dígitos por email) e, no rodapé, clique em **Atualizar forma de pagamento** pra trocar o cartão. Assim que a cobrança passar, o acesso volta automaticamente."
 - PROIBIDO mencionar "Stripe", "parceiro de pagamentos", "portal do Stripe", "gateway" no texto pro cliente. A marca é Aura; o backend resolve o provedor sem expor isso.
 - Exceção PIX/Asaas: se o contexto mostra que o cliente paga via Asaas (não há stripe.subscriptions ativas e há asaas.subscriptions/payments), NÃO aponte pro botão "Atualizar forma de pagamento" (ele só serve pra cartão). Em vez disso, ofereça gerar uma nova cobrança PIX e peça confirmação no rascunho (suggested_action pode ser "none" ou "refund_asaas_payment"/"cancel_asaas_subscription" conforme o caso).`;
 
