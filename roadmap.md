@@ -37,3 +37,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Validar o fluxo mobile completo: lista de conversas, conversa da AURA, retorno e acesso às demais áreas sem sobreposição
 - [x] Reunir pagamento, troca de plano e saída no menu de três pontos da tela inicial
 - [x] Fechar instalação do Meu Espaço na tela inicial com identidade AURA e orientação para iPhone
+- [x] Priorizar entrada pessoal pelo WhatsApp, preservar sessão no aparelho e usar código de email apenas como recuperação
+- [x] Exibir convite pós-entrada para instalar a AURA, com instalação nativa quando disponível e guia no iPhone

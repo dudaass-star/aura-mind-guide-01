@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
 
     const link = `${siteOrigin(req)}/meu-espaco/acesso-whatsapp#token=${encodeURIComponent(token)}`;
     const firstName = profile.name?.trim().split(/\s+/)[0] || "";
-    const text = `${firstName ? `Oi, ${firstName}!` : "Oi!"} Aqui está seu link seguro para entrar no Meu Espaço da Aura:\n\n${link}\n\nEle vale por 10 minutos e funciona uma única vez.`;
+    const text = `${firstName ? `Oi, ${firstName}!` : "Oi!"} Seu acesso à AURA está pronto. Toque abaixo para abrir sua conversa:\n\n${link}\n\nEste link vale por 10 minutos e funciona uma única vez. Depois de entrar, seu acesso fica salvo neste aparelho.`;
     // O pedido chega de uma mensagem do próprio cliente, portanto a janela de atendimento está aberta.
     const sent = await sendMessage(normalized, text, undefined, profile.user_id || profile.id);
     await admin.from("portal_access_requests").update({

@@ -163,6 +163,26 @@ export default function PortalLogin() {
 
             {step === "email" && (
               <>
+                <Button asChild type="button" className="w-full min-h-12 h-auto py-3 font-['Nunito']">
+                  <a
+                    href={auraWhatsAppLink("Quero entrar no Meu Espaço pelo WhatsApp cadastrado.")}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <MessageCircle size={18} />
+                    <span className="ml-2">Entrar pelo WhatsApp</span>
+                  </a>
+                </Button>
+                <p className="mt-2 text-center text-xs text-muted-foreground font-['Nunito']">
+                  Envie a mensagem pronta e receba seu link pessoal de acesso.
+                </p>
+
+                <div className="flex items-center gap-3 my-5">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground font-['Nunito']">ou use outra forma</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
                 <Button
                   type="button"
                   variant="outline"
@@ -172,12 +192,6 @@ export default function PortalLogin() {
                   <GoogleIcon />
                   <span className="ml-2">Continuar com Google</span>
                 </Button>
-
-                <div className="flex items-center gap-3 my-4">
-                  <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground font-['Nunito']">ou</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
 
                 <form onSubmit={handleSendOtp} className="space-y-3">
                   <label className="block">
@@ -205,7 +219,7 @@ export default function PortalLogin() {
                     ) : (
                       <>
                         <Mail size={16} />
-                        <span className="ml-2">Receber código por email</span>
+                        <span className="ml-2">Entrar por email</span>
                       </>
                     )}
                   </Button>
