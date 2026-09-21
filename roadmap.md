@@ -40,3 +40,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Priorizar entrada pessoal pelo WhatsApp, preservar sessão no aparelho e usar código de email apenas como recuperação
 - [x] Exibir convite pós-entrada para instalar a AURA, com instalação nativa quando disponível e guia no iPhone
 - [x] Revisar e aprimorar o plano da entrada normal com referências de mercado, priorizando conversão e LTV sem descaracterizar a AURA
+
+- [ ] Implementar entrada normal integrada: intenção segura, liberação pós-pagamento, área limitada, proteção de recursos e métricas
