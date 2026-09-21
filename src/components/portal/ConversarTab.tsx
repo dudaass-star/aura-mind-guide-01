@@ -15,6 +15,7 @@ type ChatMessage = {
   delivery_status: string;
   is_audio: boolean;
   audio_url: string | null;
+  metadata?: Record<string, unknown>;
   optimistic?: boolean;
 };
 
@@ -71,6 +72,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
   const chunksRef = useRef<Blob[]>([]);
   const recordingStartedRef = useRef(0);
   const recordingTimerRef = useRef<number | null>(null);
+  const discardRecordingRef = useRef(false);
   const outboxKey = `aura-chat-outbox:${userId}`;
 
   const latestSequence = useMemo(
@@ -95,7 +97,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
       const [{ data, error }, { data: state }] = await Promise.all([
         supabasePortal
           .from("messages")
-          .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url")
+          .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url,metadata")
           .eq("user_id", userId)
           .order("sequence_no", { ascending: false })
           .limit(PAGE_SIZE),
@@ -106,7 +108,13 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
           .maybeSingle(),
       ]);
       if (!error && data) {
-        setMessages(orderMessages(data as ChatMessage[]));
+        const hydrated = await Promise.all((data as ChatMessage[]).map(async (message) => {
+          const storagePath = typeof message.metadata?.audio_storage_path === "string" ? message.metadata.audio_storage_path : null;
+          if (!storagePath) return message;
+          const { data: signed } = await supabasePortal.storage.from("chat-audios").createSignedUrl(storagePath, 3600);
+          return signed?.signedUrl ? { ...message, audio_url: signed.signedUrl } : message;
+        }));
+        setMessages(orderMessages(hydrated));
         setHasOlder(data.length === PAGE_SIZE);
         setTimeout(() => scrollToBottom("auto"), 0);
       }
@@ -146,7 +154,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
     const reconcile = async () => {
       const { data } = await supabasePortal
         .from("messages")
-        .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url")
+        .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url,metadata")
         .eq("user_id", userId)
         .gt("sequence_no", latestSequenceRef.current)
         .order("sequence_no", { ascending: true });
@@ -181,7 +189,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
     const previousHeight = scrollRef.current.scrollHeight;
     const { data } = await supabasePortal
       .from("messages")
-      .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url")
+      .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url,metadata")
       .eq("user_id", userId)
       .lt("sequence_no", firstSequence)
       .order("sequence_no", { ascending: false })
@@ -290,7 +298,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
   const stopRecording = (discard = false) => {
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === "inactive") return;
-    if (discard) chunksRef.current = [];
+    discardRecordingRef.current = discard;
     recorder.stop();
   };
 
@@ -302,6 +310,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
       const recorder = supported ? new MediaRecorder(stream, { mimeType: supported }) : new MediaRecorder(stream);
       streamRef.current = stream;
       recorderRef.current = recorder;
+      discardRecordingRef.current = false;
       chunksRef.current = [];
       recordingStartedRef.current = Date.now();
       recorder.ondataavailable = (event) => event.data.size && chunksRef.current.push(event.data);
@@ -312,6 +321,10 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
         const duration = Math.min(Date.now() - recordingStartedRef.current, MAX_AUDIO_MS);
         const chunks = chunksRef.current;
         chunksRef.current = [];
+        if (discardRecordingRef.current) {
+          discardRecordingRef.current = false;
+          return;
+        }
         if (!chunks.length) return;
         const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
         if (blob.size > 10 * 1024 * 1024) return setAudioError("O áudio ficou grande demais. Grave até 2 minutos.");

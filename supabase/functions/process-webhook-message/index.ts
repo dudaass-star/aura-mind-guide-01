@@ -407,9 +407,11 @@ Deno.serve(async (req) => {
         isAudioMessage = true;
         console.log('✅ Audio transcribed:', messageText);
         if (isInApp && inboundMessageDbId) {
+          const { data: inboundAudio } = await supabase.from('messages')
+            .select('metadata').eq('id', inboundMessageDbId).eq('user_id', userId).maybeSingle();
           await supabase.from('messages').update({
             content: messageText,
-            metadata: { audio_transcribed_at: new Date().toISOString() },
+            metadata: { ...(inboundAudio?.metadata || {}), audio_transcribed_at: new Date().toISOString() },
           }).eq('id', inboundMessageDbId).eq('user_id', userId);
         }
       }
@@ -1506,6 +1508,7 @@ Deno.serve(async (req) => {
               audio_url: audioUrl,
               channel: 'in_app',
               delivery_status: 'delivered',
+              metadata: { reply_to_message_id: inboundMessageDbId || null, assistant_persisted_at: new Date().toISOString() },
             });
             continue;
           }
@@ -1577,6 +1580,7 @@ Deno.serve(async (req) => {
             content: responseText,
             channel: isInApp ? 'in_app' : 'whatsapp',
             delivery_status: 'delivered',
+            metadata: { reply_to_message_id: inboundMessageDbId || null, assistant_persisted_at: new Date().toISOString() },
           });
         } else {
           console.log('⏭️ DEDUP: Assistant text message already exists, skipping persist');

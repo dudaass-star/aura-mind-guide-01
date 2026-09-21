@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 
     const { data: existing } = await admin
       .from("messages")
-      .select("id, sequence_no, delivery_status")
+      .select("id, sequence_no, delivery_status, created_at, is_audio, audio_url, metadata")
       .eq("user_id", userId)
       .eq("client_message_id", clientMessageId)
       .maybeSingle();
@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
       if (insertError.code === "23505") {
         const { data: duplicate } = await admin
           .from("messages")
-          .select("id, sequence_no, delivery_status, created_at")
+          .select("id, sequence_no, delivery_status, created_at, is_audio, audio_url, metadata")
           .eq("user_id", userId)
           .eq("client_message_id", clientMessageId)
           .single();
