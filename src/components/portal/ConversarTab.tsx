@@ -15,7 +15,7 @@ type ChatMessage = {
   delivery_status: string;
   is_audio: boolean;
   audio_url: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: unknown;
   optimistic?: boolean;
 };
 
@@ -49,6 +49,12 @@ function mergeMessage(messages: ChatMessage[], incoming: ChatMessage) {
 function formatTime(value: string | null) {
   if (!value) return "";
   return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function audioStoragePath(message: ChatMessage) {
+  if (!message.metadata || typeof message.metadata !== "object" || Array.isArray(message.metadata)) return null;
+  const path = (message.metadata as Record<string, unknown>).audio_storage_path;
+  return typeof path === "string" ? path : null;
 }
 
 export function ConversarTab({ userId, firstName }: { userId: string; firstName: string }) {
@@ -109,7 +115,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
       ]);
       if (!error && data) {
         const hydrated = await Promise.all((data as ChatMessage[]).map(async (message) => {
-          const storagePath = typeof message.metadata?.audio_storage_path === "string" ? message.metadata.audio_storage_path : null;
+          const storagePath = audioStoragePath(message);
           if (!storagePath) return message;
           const { data: signed } = await supabasePortal.storage.from("chat-audios").createSignedUrl(storagePath, 3600);
           return signed?.signedUrl ? { ...message, audio_url: signed.signedUrl } : message;
@@ -158,7 +164,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
         .eq("user_id", userId)
         .gt("sequence_no", latestSequenceRef.current)
         .order("sequence_no", { ascending: true });
-      if (data?.length) setMessages((current) => data.reduce(mergeMessage, current));
+      if (data?.length) setMessages((current) => (data as ChatMessage[]).reduce<ChatMessage[]>((acc, message) => mergeMessage(acc, message), current));
     };
     const onFocus = () => void reconcile();
     const onVisibility = () => document.visibilityState === "visible" && void reconcile();
