@@ -1650,27 +1650,45 @@ export type Database = {
       }
       messages: {
         Row: {
+          audio_url: string | null
+          channel: string
+          client_message_id: string | null
           content: string
           created_at: string | null
+          delivery_status: string
           id: string
           is_audio: boolean
+          metadata: Json
           role: string
+          sequence_no: number
           user_id: string
         }
         Insert: {
+          audio_url?: string | null
+          channel?: string
+          client_message_id?: string | null
           content: string
           created_at?: string | null
+          delivery_status?: string
           id?: string
           is_audio?: boolean
+          metadata?: Json
           role: string
+          sequence_no?: number
           user_id: string
         }
         Update: {
+          audio_url?: string | null
+          channel?: string
+          client_message_id?: string | null
           content?: string
           created_at?: string | null
+          delivery_status?: string
           id?: string
           is_audio?: boolean
+          metadata?: Json
           role?: string
+          sequence_no?: number
           user_id?: string
         }
         Relationships: [
