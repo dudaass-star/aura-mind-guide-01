@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, Share2, SquarePlus } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Download } from "lucide-react";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 type InstallPromptEvent = Event & {
@@ -18,10 +17,9 @@ function isIosDevice() {
     || (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
 }
 
-export function InstallAppMenuItem() {
+export function InstallAppMenuItem({ onShowIosGuide }: { onShowIosGuide: () => void }) {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(() => isStandalone());
-  const [showIosGuide, setShowIosGuide] = useState(false);
   const ios = isIosDevice();
 
   useEffect(() => {
@@ -50,7 +48,7 @@ export function InstallAppMenuItem() {
 
   const handleInstall = async () => {
     if (ios) {
-      setShowIosGuide(true);
+      onShowIosGuide();
       return;
     }
     if (!installPrompt) return;
@@ -60,38 +58,9 @@ export function InstallAppMenuItem() {
   };
 
   return (
-    <>
-      <DropdownMenuItem
-        onSelect={(event) => {
-          event.preventDefault();
-          void handleInstall();
-        }}
-        className="gap-3 px-3 py-3 font-body"
-      >
-        <Download className="h-4 w-4" />
-        <span>Instalar aplicativo</span>
-      </DropdownMenuItem>
-
-      <Dialog open={showIosGuide} onOpenChange={setShowIosGuide}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg border-border bg-background p-6 shadow-card">
-          <DialogHeader className="text-left">
-            <DialogTitle className="font-display text-xl text-foreground">Instalar a AURA no iPhone</DialogTitle>
-            <DialogDescription className="pt-1 font-body leading-relaxed">
-              Faça isso no Safari para deixar a AURA na sua tela inicial.
-            </DialogDescription>
-          </DialogHeader>
-          <ol className="space-y-4 pt-2 font-body text-sm text-foreground">
-            <li className="flex gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-primary"><Share2 className="h-4 w-4" /></span>
-              <span className="pt-1.5">Toque em <strong>Compartilhar</strong> na barra do Safari.</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-primary"><SquarePlus className="h-4 w-4" /></span>
-              <span className="pt-1.5">Escolha <strong>Adicionar à Tela de Início</strong> e confirme.</span>
-            </li>
-          </ol>
-        </DialogContent>
-      </Dialog>
-    </>
+    <DropdownMenuItem onSelect={() => void handleInstall()} className="gap-3 px-3 py-3 font-body">
+      <Download className="h-4 w-4" />
+      <span>Instalar aplicativo</span>
+    </DropdownMenuItem>
   );
 }
