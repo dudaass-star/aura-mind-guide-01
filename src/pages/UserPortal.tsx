@@ -4,7 +4,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { useEffect, useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import { Sparkles, Headphones, Lock, LogOut, Sun, Calendar, User } from "lucide-react";
+import { Sparkles, Headphones, LogOut, Sun, Calendar, User, MessageCircle } from "lucide-react";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
 import { PortalLoading } from "@/components/portal/shared";
@@ -14,6 +14,7 @@ import { HojeTab } from "@/components/portal/HojeTab";
 import { SessoesTab } from "@/components/portal/SessoesTab";
 import { InsightsTab } from "@/components/portal/InsightsTab";
 import { SobreVoceTab } from "@/components/portal/SobreVoceTab";
+import { ConversarTab } from "@/components/portal/ConversarTab";
 import { FloatingWhatsAppCTA } from "@/components/portal/FloatingWhatsAppCTA";
 import { CreditCard, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -24,9 +25,10 @@ import {
   type TabKey,
 } from "@/components/portal/hooks/usePortalNovidades";
 
-type TabId = "hoje" | "sessoes" | "insights" | "sobre" | "meditacoes";
+type TabId = "conversar" | "hoje" | "sessoes" | "insights" | "sobre" | "meditacoes";
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "conversar", label: "Conversar", icon: MessageCircle },
   { id: "hoje", label: "Hoje", icon: Sun },
   { id: "sessoes", label: "Sessões", icon: Calendar },
   { id: "insights", label: "Percurso", icon: Sparkles },
@@ -45,7 +47,7 @@ const UserPortal = () => {
   const [searchParams] = useSearchParams();
   const rawTab = searchParams.get("tab") as TabId | "memoria" | null;
   // Legacy: aba "memoria" foi absorvida em "sobre".
-  const initialTab: TabId = (rawTab === "memoria" ? "sobre" : (rawTab as TabId)) || "hoje";
+  const initialTab: TabId = (rawTab === "memoria" ? "sobre" : (rawTab as TabId)) || "conversar";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [portalLoading, setPortalLoading] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
@@ -305,8 +307,9 @@ const UserPortal = () => {
         </div>
 
         {/* Content */}
-        <div className="flex-1 max-w-2xl mx-auto w-full px-5 py-6 pb-24">
-          <PlanTierBanner profile={profile} onChangePlan={() => setChangePlanOpen(true)} />
+        <div className={activeTab === "conversar" ? "flex-1 w-full" : "flex-1 max-w-2xl mx-auto w-full px-5 py-6 pb-24"}>
+          {activeTab !== "conversar" && <PlanTierBanner profile={profile} onChangePlan={() => setChangePlanOpen(true)} />}
+          {activeTab === "conversar" && <ConversarTab userId={userId!} firstName={firstName} />}
           {activeTab === "hoje" && (
             <HojeTab
               userId={userId!}
@@ -321,11 +324,11 @@ const UserPortal = () => {
           {activeTab === "meditacoes" && <MeditacoesTab userId={userId!} />}
         </div>
 
-        {/* CTA flutuante presente em todas as abas */}
-        <FloatingWhatsAppCTA />
+        {/* WhatsApp segue disponível para suporte, sem competir com a conversa principal. */}
+        {activeTab !== "conversar" && <FloatingWhatsAppCTA />}
 
         {/* Footer */}
-        <footer className="border-t border-border/40 py-6 text-center">
+        {activeTab !== "conversar" && <footer className="border-t border-border/40 py-6 text-center">
           <button
             onClick={handleOpenBillingPortal}
             disabled={portalLoading}
@@ -363,7 +366,7 @@ const UserPortal = () => {
           >
             olaaura.com.br
           </a>
-        </footer>
+        </footer>}
       </div>
 
       {userId && (
