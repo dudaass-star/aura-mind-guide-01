@@ -41,4 +41,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Exibir convite pós-entrada para instalar a AURA, com instalação nativa quando disponível e guia no iPhone
 - [x] Revisar e aprimorar o plano da entrada normal com referências de mercado, priorizando conversão e LTV sem descaracterizar a AURA
 
-- [ ] Implementar entrada normal integrada: intenção segura, liberação pós-pagamento, área limitada, proteção de recursos e métricas
+- [x] Implementar entrada normal integrada: intenção segura, liberação pós-pagamento, proteção de recursos e métricas de confirmação
+- [ ] Validar a liberação automática com uma compra real de cada trilho (cartão, PIX Asaas, PIX Inter e PIX Woovi); depende de transações reais dos provedores

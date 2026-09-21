@@ -150,7 +150,11 @@ const ThankYou = () => {
               </p>
             ) : (
               <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-                {accessState === "pending" ? "Estamos confirmando seu pagamento." : <>Sua assinatura do plano <span className="text-primary font-medium">{userData.plan}</span> foi confirmada.</>}
+                {accessState === "pending" || accessState === "checking"
+                  ? "Estamos confirmando seu pagamento."
+                  : accessState === "unavailable"
+                    ? "Recebemos seu retorno do pagamento."
+                    : <>Sua assinatura do plano <span className="text-primary font-medium">{userData.plan}</span> foi confirmada.</>}
                 <br />
                 {accessState === "ready" ? "Abrindo seu aplicativo…" : "Assim que confirmar, seu aplicativo abre automaticamente."}
               </p>
