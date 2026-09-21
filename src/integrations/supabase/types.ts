@@ -2376,6 +2376,92 @@ export type Database = {
           },
         ]
       }
+      push_devices: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          is_foreground: boolean
+          last_seen_at: string
+          permission: string
+          platform: string
+          token: string
+          token_hash: string
+          updated_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          is_foreground?: boolean
+          last_seen_at?: string
+          permission?: string
+          platform?: string
+          token: string
+          token_hash: string
+          updated_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          is_foreground?: boolean
+          last_seen_at?: string
+          permission?: string
+          platform?: string
+          token?: string
+          token_hash?: string
+          updated_at?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_notification_events: {
+        Row: {
+          created_at: string
+          device_id: string | null
+          event_type: string
+          id: string
+          metadata: Json
+          notification_type: string | null
+          path: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json
+          notification_type?: string | null
+          path?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json
+          notification_type?: string | null
+          path?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_notification_events_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "push_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recovery_agent_config: {
         Row: {
           created_at: string

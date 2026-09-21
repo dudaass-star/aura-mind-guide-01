@@ -118,6 +118,8 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.process-webhook-message]
     verify_jwt = false
+  [functions.register-push-device]
+    verify_jwt = false
   [functions.portal-whatsapp-access]
     verify_jwt = false
   [functions.reactivation-blast]
