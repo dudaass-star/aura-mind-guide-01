@@ -20,6 +20,7 @@ import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
 import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
+import { markCheckoutAccessPaidByReference } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -365,6 +366,7 @@ async function activateAccess(
       }
     }
     console.log(`[webhook-inter] ✅ acesso de ${userId} estendido até ${newExpiry} (plano ${plan})`);
+    await markCheckoutAccessPaidByReference(supabase, "inter", rec.id_rec as string, userId);
 
     await supabase.from("inter_pix_recurrences")
       .update({ user_id: profileRowId || rec.user_id, status: "ATIVA", last_error: null })
