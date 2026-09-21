@@ -458,7 +458,7 @@ export function ConversarTab({
               type="button"
               variant="ghost"
               onClick={() => onNavigate?.(tab as "hoje" | "sessoes" | "insights" | "meditacoes")}
-              className="h-auto min-w-0 flex-col gap-1 rounded-lg px-1 py-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+              className="h-auto min-w-0 flex-col gap-1 rounded-lg px-1 py-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground whitespace-normal"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
               <span className="w-full truncate">{label}</span>
@@ -483,12 +483,8 @@ export function ConversarTab({
           <h2 className="truncate font-body text-base font-bold text-foreground">AURA</h2>
           <p className="truncate text-xs text-muted-foreground">{responding ? "respondendo…" : connected ? "presente com você" : "reconectando…"}</p>
         </div>
-        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" aria-label="Mais opções">
-          <MoreVertical className="h-5 w-5" />
-        </Button>
       </header>
 
-  return (
       <div
         ref={scrollRef}
         onScroll={(event) => {
