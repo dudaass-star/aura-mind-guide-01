@@ -18,7 +18,7 @@ import { ConversarTab } from "@/components/portal/ConversarTab";
 import { FloatingWhatsAppCTA } from "@/components/portal/FloatingWhatsAppCTA";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
-import { reportPushPresence } from "@/lib/push-notifications";
+import { rememberPushAttribution, reportPushConversion, reportPushPresence } from "@/lib/push-notifications";
 import {
   usePortalNovidades,
   markTabSeen,
@@ -57,14 +57,17 @@ const UserPortal = () => {
 
   useEffect(() => {
     if (!userId || searchParams.get("push") !== "open") return;
+    const deliveryId = searchParams.get("delivery") || undefined;
     void supabasePortal.functions.invoke("register-push-device", {
       body: {
         action: "event",
         eventType: "opened",
         notificationType: searchParams.get("type") || undefined,
-        deliveryId: searchParams.get("delivery") || undefined,
+        deliveryId,
         path: window.location.pathname,
       },
+    }).then(({ error }) => {
+      if (!error && deliveryId) rememberPushAttribution(deliveryId, searchParams.get("type") || undefined);
     });
   }, [searchParams, userId]);
 
@@ -93,6 +96,7 @@ const UserPortal = () => {
 
   const handleTabClick = (id: TabId) => {
     setActiveTab(id);
+    if (id !== "conversar") void reportPushConversion(`/meu-espaco?tab=${id}`);
     const valueFeature = id === "sessoes"
       ? "session"
       : id === "insights"

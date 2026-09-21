@@ -83,3 +83,38 @@ export function reportPushPresence(foreground: boolean) {
   if (localStorage.getItem("aura-push-enabled") !== "true" || !deviceId) return;
   void supabasePortal.functions.invoke("register-push-device", { body: { action: "presence", deviceId, foreground } });
 }
+
+const PUSH_ATTRIBUTION_KEY = "aura-push-attribution";
+const PUSH_ATTRIBUTION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export function rememberPushAttribution(deliveryId: string, notificationType?: string) {
+  sessionStorage.setItem(PUSH_ATTRIBUTION_KEY, JSON.stringify({
+    deliveryId,
+    notificationType,
+    openedAt: Date.now(),
+  }));
+}
+
+export async function reportPushConversion(path: string) {
+  const raw = sessionStorage.getItem(PUSH_ATTRIBUTION_KEY);
+  if (!raw) return;
+  try {
+    const attribution = JSON.parse(raw) as { deliveryId?: string; notificationType?: string; openedAt?: number };
+    if (!attribution.deliveryId || !attribution.openedAt || Date.now() - attribution.openedAt > PUSH_ATTRIBUTION_WINDOW_MS) {
+      sessionStorage.removeItem(PUSH_ATTRIBUTION_KEY);
+      return;
+    }
+    const { error } = await supabasePortal.functions.invoke("register-push-device", {
+      body: {
+        action: "event",
+        eventType: "converted",
+        notificationType: attribution.notificationType,
+        deliveryId: attribution.deliveryId,
+        path,
+      },
+    });
+    if (!error) sessionStorage.removeItem(PUSH_ATTRIBUTION_KEY);
+  } catch {
+    sessionStorage.removeItem(PUSH_ATTRIBUTION_KEY);
+  }
+}

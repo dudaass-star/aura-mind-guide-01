@@ -9,6 +9,7 @@ import avatarAura from "@/assets/avatar-aura.jpg";
 import { InstallAppMenuItem, useInstallApp } from "@/components/portal/InstallAppMenuItem";
 import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDialog";
 import { ValueDiscoveryCard } from "@/components/portal/ValueDiscoveryCard";
+import { reportPushConversion } from "@/lib/push-notifications";
 
 type ChatMessage = {
   id: string;
@@ -342,6 +343,7 @@ export function ConversarTab({
 
     try {
       await submitMessage(pending);
+      void reportPushConversion("/meu-espaco?tab=conversar");
     } catch {
       setMessages((current) => current.map((message) =>
         message.client_message_id === clientId
