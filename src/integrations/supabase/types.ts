@@ -2381,6 +2381,7 @@ export type Database = {
           created_at: string
           enabled: boolean
           id: string
+          is_foreground: boolean
           last_seen_at: string
           permission: string
           platform: string
@@ -2394,6 +2395,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          is_foreground?: boolean
           last_seen_at?: string
           permission?: string
           platform?: string
@@ -2407,6 +2409,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          is_foreground?: boolean
           last_seen_at?: string
           permission?: string
           platform?: string
