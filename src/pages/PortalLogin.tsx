@@ -115,7 +115,7 @@ export default function PortalLogin() {
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.length < 6) return;
+    if (otp.length !== 8) return;
     setVerifying(true);
     const { error } = await supabasePortal.auth.verifyOtp({
       email: email.trim().toLowerCase(),
@@ -217,7 +217,7 @@ export default function PortalLogin() {
               <div className="space-y-4">
               <form onSubmit={handleVerify} className="space-y-4">
                 <p className="text-sm text-muted-foreground font-['Nunito'] text-center">
-                  Enviamos um <strong className="text-foreground">código de 6 dígitos</strong> e um <strong className="text-foreground">link</strong> para
+                  Enviamos um <strong className="text-foreground">código de 8 dígitos</strong> e um <strong className="text-foreground">link</strong> para
                   <br />
                   <strong className="text-foreground">{email}</strong>
                   <br />
@@ -227,8 +227,9 @@ export default function PortalLogin() {
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  maxLength={6}
-                  placeholder="000000"
+                  autoComplete="one-time-code"
+                  maxLength={8}
+                  placeholder="00000000"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                   autoFocus
@@ -236,7 +237,7 @@ export default function PortalLogin() {
                 />
                 <Button
                   type="submit"
-                  disabled={verifying || otp.length < 6}
+                  disabled={verifying || otp.length !== 8}
                   className="w-full h-11 font-['Nunito']"
                 >
                   {verifying ? (
