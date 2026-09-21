@@ -79,6 +79,16 @@ function cleanDigits(s: string): string {
   return (s || "").replace(/\D/g, "");
 }
 
+function isTemporaryWooviFailure(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function wooviFailureMessage(status: number): string {
+  return isTemporaryWooviFailure(status)
+    ? "O PIX está temporariamente indisponível. Aguarde alguns instantes e tente novamente."
+    : "Não foi possível gerar o PIX. Confira os dados e tente novamente.";
+}
+
 function isValidCPF(cpf: string): boolean {
   const c = cleanDigits(cpf);
   if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
@@ -546,7 +556,10 @@ Deno.serve(async (req) => {
           creation_status: "failed", status: "FALHA_CRIACAO",
           last_error: `cobrança de entrada HTTP ${cobRes.status}: ${cobRes.raw.slice(0, 240)}`,
         }).eq("id", attemptId);
-        throw new Error(`Woovi recusou a cobrança de entrada (HTTP ${cobRes.status}): ${cobRes.raw.slice(0, 300)}`);
+        if (isTemporaryWooviFailure(cobRes.status)) {
+          return json({ error: wooviFailureMessage(cobRes.status), temporary: true }, 503);
+        }
+        return json({ error: wooviFailureMessage(cobRes.status) }, 422);
       }
       const cobCharge = ((cobRes.data as Record<string, any>)?.charge || cobRes.data) as Record<string, any>;
       const cobBrCode = cobCharge?.brCode as string | undefined;
@@ -582,7 +595,10 @@ Deno.serve(async (req) => {
           creation_status: "failed", status: "FALHA_CRIACAO",
           last_error: `mandato HTTP ${created.status}: ${created.raw.slice(0, 240)}`,
         }).eq("id", attemptId);
-        throw new Error(`Woovi recusou o mandato (HTTP ${created.status}): ${created.raw.slice(0, 300)}`);
+        if (isTemporaryWooviFailure(created.status)) {
+          return json({ error: wooviFailureMessage(created.status), temporary: true }, 503);
+        }
+        return json({ error: wooviFailureMessage(created.status) }, 422);
       }
       rawPayload = created.data;
       sub = (created.data as Record<string, any>)?.subscription as Record<string, any> | undefined;
@@ -642,7 +658,10 @@ Deno.serve(async (req) => {
           creation_status: "failed", status: "FALHA_CRIACAO",
           last_error: `Woovi recusou a assinatura HTTP ${created.status}: ${created.raw.slice(0, 240)}`,
         }).eq("id", attemptId);
-        throw new Error(`Woovi recusou a assinatura (HTTP ${created.status}): ${created.raw.slice(0, 300)}`);
+        if (isTemporaryWooviFailure(created.status)) {
+          return json({ error: wooviFailureMessage(created.status), temporary: true }, 503);
+        }
+        return json({ error: wooviFailureMessage(created.status) }, 422);
       }
       rawPayload = created.data;
       sub = (created.data as Record<string, any>)?.subscription as Record<string, any> | undefined;

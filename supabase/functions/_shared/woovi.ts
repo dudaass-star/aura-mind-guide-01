@@ -67,7 +67,7 @@ function schedule<T>(fn: () => Promise<T>): Promise<T> {
  */
 export async function wooviFetch<T = unknown>(
   path: string,
-  init: RequestInit & { body?: unknown } = {},
+  init: Omit<RequestInit, "body"> & { body?: unknown } = {},
 ): Promise<WooviResponse<T>> {
   const appId = Deno.env.get("WOOVI_APP_ID");
   if (!appId) throw new Error("WOOVI_APP_ID ausente");
