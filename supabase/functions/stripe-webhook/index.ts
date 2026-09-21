@@ -9,6 +9,7 @@ import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
+import { markCheckoutAccessPaid } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -367,6 +368,7 @@ Deno.serve(async (req) => {
       console.log('✅ Checkout session completed:', session.id);
       console.log('📋 Session metadata:', session.metadata);
       const retentionOfferId = session.metadata?.retention_offer_id || null;
+      const checkoutAccessClaimId = session.metadata?.checkout_access_claim_id || null;
       if (retentionOfferId) {
         await supabase.from('retention_offers').update({
           provider_checkout_id: session.id,
@@ -1156,6 +1158,8 @@ Deno.serve(async (req) => {
         console.error('❌ Database error:', dbError);
         profileUserId = existingProfile?.user_id || crypto.randomUUID();
       }
+
+      await markCheckoutAccessPaid(supabase, checkoutAccessClaimId, profileUserId);
 
       // Generate portal token for paid users
       let portalLink = '';

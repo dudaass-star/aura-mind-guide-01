@@ -70,6 +70,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (profileError) throw profileError;
     if (!profile) return json({ error: "Conta não vinculada" }, 403);
+    const { data: entitled, error: entitlementError } = await admin.rpc("has_portal_entitlement", { _user_id: userId });
+    if (entitlementError) throw entitlementError;
+    if (!entitled) return json({ error: "Seu acesso ainda não está liberado" }, 403);
 
     const { data: existing } = await admin
       .from("messages")
