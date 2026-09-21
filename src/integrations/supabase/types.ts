@@ -285,6 +285,7 @@ export type Database = {
           pending_content: string | null
           pending_context: string | null
           pending_expires_at: string | null
+          processed_user_message_id: string | null
           response_started_at: string | null
           updated_at: string | null
           user_id: string
@@ -297,6 +298,7 @@ export type Database = {
           pending_content?: string | null
           pending_context?: string | null
           pending_expires_at?: string | null
+          processed_user_message_id?: string | null
           response_started_at?: string | null
           updated_at?: string | null
           user_id: string
@@ -309,6 +311,7 @@ export type Database = {
           pending_content?: string | null
           pending_context?: string | null
           pending_expires_at?: string | null
+          processed_user_message_id?: string | null
           response_started_at?: string | null
           updated_at?: string | null
           user_id?: string
