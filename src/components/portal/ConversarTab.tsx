@@ -87,7 +87,7 @@ export function ConversarTab({
   const [recording, setRecording] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
   const [audioError, setAudioError] = useState("");
-  const [chatOpen, setChatOpen] = useState(() => window.matchMedia("(min-width: 768px)").matches);
+  const [chatOpen, setChatOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const nearBottomRef = useRef(true);
@@ -411,8 +411,8 @@ export function ConversarTab({
 
   const conversationList = (
     <aside className={cn(
-      "flex h-dvh min-h-[36rem] flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))] md:w-[23rem] md:border-r md:border-border/70",
-      chatOpen && "hidden md:flex",
+       "flex h-dvh min-h-[36rem] w-full flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))]",
+       chatOpen && "hidden",
     )}>
       <header className="border-b border-border/70 px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] md:pt-6">
         <div className="flex items-end justify-between gap-4">
@@ -483,11 +483,11 @@ export function ConversarTab({
 
   const openConversation = (
     <section className={cn(
-      "relative h-dvh min-h-[36rem] flex-1 flex-col overflow-hidden bg-background md:flex md:h-[min(820px,calc(100dvh-3rem))]",
+       "relative h-dvh min-h-[36rem] flex-1 flex-col overflow-hidden bg-background md:h-[min(820px,calc(100dvh-3rem))]",
       chatOpen ? "flex" : "hidden",
     )}>
       <header className="flex min-h-[4.5rem] items-center gap-3 border-b border-border/70 bg-background/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur md:px-5 md:pt-0">
-        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full md:hidden" onClick={() => setChatOpen(false)} aria-label="Voltar para conversas">
+         <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => setChatOpen(false)} aria-label="Voltar para conversas">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover ring-1 ring-border" />
@@ -604,7 +604,7 @@ export function ConversarTab({
 
   return (
     <main className="min-h-dvh bg-secondary/35 md:flex md:items-center md:justify-center md:p-6">
-      <div className="mx-auto flex w-full max-w-6xl overflow-hidden bg-background md:rounded-lg md:border md:border-border/70 md:shadow-card">
+       <div className={cn("mx-auto flex w-full overflow-hidden bg-background md:rounded-lg md:border md:border-border/70 md:shadow-card", chatOpen ? "max-w-4xl" : "max-w-lg")}>
         {conversationList}
         {openConversation}
       </div>

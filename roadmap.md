@@ -30,4 +30,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [ ] Construir Fase 2 do aplicativo: navegação centrada na conversa, áudio, conta e instalação
 - [ ] Executar piloto controlado e validar fluidez, segurança e continuidade antes da migração
 - [x] Redesenhar o aplicativo com entrada por conversas, perfil da AURA e experiência premium familiar ao WhatsApp
-- [ ] Aplicar a direção Inbox-first: abertura sempre na lista, conversa principal e navegação premium para as demais áreas
+- [x] Aplicar a direção Inbox-first: abertura sempre na lista, conversa principal e navegação premium para as demais áreas
