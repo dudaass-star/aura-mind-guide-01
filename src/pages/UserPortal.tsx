@@ -62,6 +62,7 @@ const UserPortal = () => {
         action: "event",
         eventType: "opened",
         notificationType: searchParams.get("type") || undefined,
+        deliveryId: searchParams.get("delivery") || undefined,
         path: window.location.pathname,
       },
     });

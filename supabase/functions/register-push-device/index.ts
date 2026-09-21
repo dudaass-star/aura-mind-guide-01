@@ -20,6 +20,7 @@ const BodySchema = z.discriminatedUnion("action", [
     eventType: z.enum(["invite_shown", "activation_started", "opened"]),
     notificationType: z.string().max(80).optional(),
     path: z.string().max(300).optional(),
+    deliveryId: z.string().uuid().optional(),
   }),
   z.object({ action: z.literal("presence"), deviceId: z.string().uuid(), foreground: z.boolean() }),
 ]);
@@ -61,10 +62,17 @@ Deno.serve(async (req) => {
     if (parsed.data.action === "event") {
       await admin.from("push_notification_events").insert({
         user_id: userId,
+        delivery_id: parsed.data.deliveryId || null,
         event_type: parsed.data.eventType,
         notification_type: parsed.data.notificationType || null,
         path: parsed.data.path || null,
       });
+      if (parsed.data.eventType === "opened" && parsed.data.deliveryId) {
+        await admin.from("notification_deliveries").update({ status: "opened" })
+          .eq("id", parsed.data.deliveryId)
+          .eq("user_id", userId)
+          .eq("selected_channel", "push");
+      }
       return json({ recorded: true });
     }
     if (parsed.data.action === "permission_denied") {

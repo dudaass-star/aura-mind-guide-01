@@ -367,13 +367,13 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
             idempotencyKey: `session:24h:${session.id}`,
             category: 'session',
             type: 'session_reminder_24h',
-            title: `${userName}, sua sessão está chegando`,
-            body: 'Abra a AURA para conferir e se preparar.',
+            firstName: userName,
             path: '/meu-espaco?tab=sessoes',
             whatsappText: message,
             whatsappCategory: 'session_reminder',
             priority: 'high',
             expiresAt: session.scheduled_at,
+            fallback: 'none',
           });
 
           if (result.success) {
@@ -469,8 +469,7 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
             idempotencyKey: `session:5m:${session.id}`,
             category: 'session',
             type: 'session_reminder_5m',
-            title: `${userName}, sua sessão começa em instantes`,
-            body: 'A AURA já está pronta para receber você.',
+            firstName: userName,
             path: '/meu-espaco?tab=sessoes',
             whatsappText: message,
             whatsappCategory: 'session_reminder',

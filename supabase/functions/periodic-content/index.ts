@@ -210,8 +210,6 @@ serve(async (req) => {
               idempotencyKey: `journey:${episode.id}:${user.user_id}`,
               category: 'journey',
               type: 'journey_available',
-              title: 'Uma nova parte da sua jornada chegou',
-              body: 'Abra a AURA quando tiver um momento para você.',
               path: '/meu-espaco?tab=percurso',
               whatsappText: message,
               whatsappCategory: 'content',
