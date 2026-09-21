@@ -406,6 +406,12 @@ Deno.serve(async (req) => {
         messageText = transcription;
         isAudioMessage = true;
         console.log('✅ Audio transcribed:', messageText);
+        if (isInApp && inboundMessageDbId) {
+          await supabase.from('messages').update({
+            content: messageText,
+            metadata: { audio_transcribed_at: new Date().toISOString() },
+          }).eq('id', inboundMessageDbId).eq('user_id', userId);
+        }
       }
     }
 
@@ -950,10 +956,18 @@ Deno.serve(async (req) => {
     if (hasAudio && !messageText) {
       console.log(`🎤 Audio transcription failed for user ${profile.user_id} — sending fallback and releasing lock`);
       
-      await sendMessage(
-        cleanPhone,
-        "Desculpa, não consegui ouvir seu áudio direito. 😅 Pode me mandar por texto ou tentar gravar de novo?"
-      );
+      const audioErrorText = "Desculpa, não consegui ouvir seu áudio direito. Pode me mandar por texto ou tentar gravar de novo?";
+      if (isInApp) {
+        await supabase.from('messages').insert({
+          user_id: profile.user_id,
+          role: 'assistant',
+          content: audioErrorText,
+          channel: 'in_app',
+          delivery_status: 'delivered',
+        });
+      } else {
+        await sendMessage(cleanPhone, audioErrorText);
+      }
       await releaseLock();
       return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1437,7 +1451,7 @@ Deno.serve(async (req) => {
 
       // Delay between bubbles
       if (i > 0 && msg.delay) {
-        const actualDelay = Math.min(msg.delay, 5000);
+        const actualDelay = isInApp ? Math.min(Math.max(msg.delay, 400), 1200) : Math.min(msg.delay, 5000);
         console.log(`⏱️ Waiting ${actualDelay}ms before next message...`);
         await new Promise(resolve => setTimeout(resolve, actualDelay));
       }

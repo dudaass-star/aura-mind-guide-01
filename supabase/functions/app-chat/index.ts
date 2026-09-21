@@ -1,9 +1,22 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { z } from "npm:zod@3.25.76";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+const AUDIO_TYPES = new Set(["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav"]);
+
+const BodySchema = z.object({
+  text: z.string().trim().max(8000).optional(),
+  client_message_id: z.string().uuid(),
+  audio_base64: z.string().max(14_000_000).optional(),
+  audio_mime: z.string().max(80).optional(),
+  audio_duration_ms: z.number().int().min(100).max(120_000).optional(),
+  client_sent_at: z.string().datetime().optional(),
+}).superRefine((value, context) => {
+  const hasText = Boolean(value.text);
+  const hasAudio = Boolean(value.audio_base64 && value.audio_mime && value.audio_duration_ms);
+  if (hasText === hasAudio) context.addIssue({ code: z.ZodIssueCode.custom, message: "Envie texto ou áudio" });
+});
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -36,13 +49,14 @@ Deno.serve(async (req) => {
     const userId = claimsData?.claims?.sub as string | undefined;
     if (claimsError || !userId) return json({ error: "Sessão inválida" }, 401);
 
-    const body = await req.json().catch(() => ({}));
-    const text = typeof body.text === "string" ? body.text.trim() : "";
-    const clientMessageId = typeof body.client_message_id === "string" ? body.client_message_id : "";
-    if (!text || text.length > 8000) return json({ error: "Mensagem inválida" }, 400);
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientMessageId)) {
-      return json({ error: "Identificador de envio inválido" }, 400);
-    }
+    const receivedAt = new Date().toISOString();
+    const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
+    if (!parsed.success) return json({ error: "Mensagem inválida", details: parsed.error.flatten().fieldErrors }, 400);
+    const { client_message_id: clientMessageId, audio_base64: audioBase64, audio_duration_ms: audioDurationMs, client_sent_at: clientSentAt } = parsed.data;
+    const text = parsed.data.text || "";
+    const audioMime = parsed.data.audio_mime?.split(";")[0].toLowerCase();
+    const hasAudio = Boolean(audioBase64);
+    if (hasAudio && (!audioMime || !AUDIO_TYPES.has(audioMime))) return json({ error: "Formato de áudio não aceito" }, 400);
 
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: profile, error: profileError } = await admin
@@ -61,17 +75,57 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (existing) return json({ accepted: true, message: existing, duplicate: true }, 202);
 
+    let audioUrl: string | null = null;
+    let audioPath: string | null = null;
+    if (hasAudio && audioBase64 && audioMime) {
+      const { count } = await admin
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("channel", "in_app")
+        .eq("is_audio", true)
+        .gte("created_at", new Date(Date.now() - 60_000).toISOString());
+      if ((count || 0) >= 5) return json({ error: "Aguarde um instante antes de enviar outro áudio" }, 429);
+
+      let bytes: Uint8Array;
+      try {
+        const binary = atob(audioBase64);
+        bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      } catch {
+        return json({ error: "Áudio inválido" }, 400);
+      }
+      if (!bytes.length || bytes.length > MAX_AUDIO_BYTES) return json({ error: "O áudio deve ter no máximo 10 MB" }, 400);
+      const extension = audioMime.includes("mp4") ? "m4a" : audioMime.split("/")[1];
+      audioPath = `${userId}/${clientMessageId}.${extension}`;
+      const { error: uploadError } = await admin.storage.from("chat-audios").upload(audioPath, bytes, {
+        contentType: audioMime,
+        upsert: false,
+      });
+      if (uploadError && !uploadError.message.toLowerCase().includes("already exists")) throw uploadError;
+      const { data: signed, error: signedError } = await admin.storage.from("chat-audios").createSignedUrl(audioPath, 21_600);
+      if (signedError || !signed?.signedUrl) throw signedError || new Error("Falha ao proteger o áudio");
+      audioUrl = signed.signedUrl;
+    }
+
     const { data: inserted, error: insertError } = await admin
       .from("messages")
       .insert({
         user_id: userId,
         role: "user",
-        content: text,
+        content: hasAudio ? "Áudio enviado" : text,
         channel: "in_app",
         client_message_id: clientMessageId,
         delivery_status: "delivered",
+        is_audio: hasAudio,
+        audio_url: audioUrl,
+        metadata: {
+          ...(audioPath ? { audio_storage_path: audioPath, audio_mime: audioMime, audio_duration_ms: audioDurationMs } : {}),
+          client_sent_at: clientSentAt || null,
+          server_received_at: receivedAt,
+          accepted_at: new Date().toISOString(),
+        },
       })
-      .select("id, sequence_no, delivery_status, created_at")
+      .select("id, sequence_no, delivery_status, created_at, is_audio, audio_url, metadata")
       .single();
     if (insertError) {
       if (insertError.code === "23505") {
@@ -100,8 +154,9 @@ Deno.serve(async (req) => {
         phone: profile.phone,
         messageId: clientMessageId,
         inboundMessageDbId: inserted.id,
-        text,
-        hasAudio: false,
+        text: hasAudio ? "" : text,
+        hasAudio,
+        audioUrl,
         hasImage: false,
       }),
     }).then(async (response) => {
@@ -109,7 +164,7 @@ Deno.serve(async (req) => {
     }).catch((error) => console.error("Falha ao iniciar processamento do chat:", error));
 
     (globalThis as any).EdgeRuntime.waitUntil(workerPromise);
-    return json({ accepted: true, message: inserted }, 202);
+    return json({ accepted: true, message: inserted, server_received_at: receivedAt }, 202);
   } catch (error) {
     console.error("Erro no chat do aplicativo:", error);
     return json({ error: "Não foi possível enviar agora" }, 500);
