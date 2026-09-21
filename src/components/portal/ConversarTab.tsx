@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ArrowDown, ArrowLeft, Bell, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -72,6 +72,52 @@ function audioStoragePath(message: ChatMessage) {
   const path = (message.metadata as Record<string, unknown>).audio_storage_path;
   return typeof path === "string" ? path : null;
 }
+
+const MessageTimeline = memo(function MessageTimeline({
+  messages,
+  responding,
+}: {
+  messages: ChatMessage[];
+  responding: boolean;
+}) {
+  return (
+    <div className="space-y-2.5">
+      {messages.map((message) => {
+        const mine = message.role === "user";
+        return (
+          <div key={message.id} data-chat-message className={cn("flex", mine ? "justify-end" : "justify-start")}>
+            <div className={cn(
+              "min-w-0 max-w-[86%] rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed shadow-sm md:max-w-[76%]",
+              mine ? "bg-primary text-primary-foreground" : "border border-border/60 bg-background text-foreground",
+              message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
+            )} data-message-bubble>
+              {(!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+              {message.is_audio && message.audio_url && (
+                <div className="w-[min(16rem,72vw)] max-w-full">
+                  <p className={cn("mb-1.5 text-xs font-semibold", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>Mensagem de voz</p>
+                  <audio controls controlsList="nodownload" preload="metadata" playsInline className="block h-10 w-full max-w-full" src={message.audio_url} />
+                </div>
+              )}
+              <div className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                <span>{formatTime(message.created_at)}</span>
+                {mine && message.delivery_status === "sending" && <Check className="h-3 w-3" />}
+                {mine && message.delivery_status === "delivered" && <CheckCheck className="h-3 w-3" />}
+                {mine && message.delivery_status === "failed" && <AlertCircle className="h-3 w-3" />}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {responding && (
+        <div className="flex scroll-mb-3 justify-start" aria-live="polite" data-typing-indicator>
+          <div className="flex h-10 items-center gap-1.5 rounded-lg border border-border/60 bg-background px-4 shadow-sm" aria-label="AURA está respondendo">
+            {[0, 1, 2].map((dot) => <span key={dot} className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-muted-foreground" style={{ animationDelay: `${dot * 150}ms` }} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 export function ConversarTab({
   userId,
@@ -273,11 +319,21 @@ export function ConversarTab({
   }, [userId]);
 
   useEffect(() => {
-    localStorage.setItem(`aura-chat-draft:${userId}`, draft);
-    if (composerRef.current) {
-      composerRef.current.style.height = "0px";
-      composerRef.current.style.height = `${Math.min(composerRef.current.scrollHeight, 128)}px`;
-    }
+    const frame = window.requestAnimationFrame(() => {
+      const composer = composerRef.current;
+      if (!composer) return;
+      composer.style.height = "0px";
+      composer.style.height = `${Math.min(composer.scrollHeight, 128)}px`;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [draft]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (draft) localStorage.setItem(`aura-chat-draft:${userId}`, draft);
+      else localStorage.removeItem(`aura-chat-draft:${userId}`);
+    }, 400);
+    return () => window.clearTimeout(timer);
   }, [draft, userId]);
 
   const loadOlder = async () => {
@@ -627,41 +683,7 @@ export function ConversarTab({
           </div>
         )}
 
-        <div className="space-y-2.5">
-          {messages.map((message) => {
-            const mine = message.role === "user";
-            return (
-              <div key={message.id} data-chat-message className={cn("flex", mine ? "justify-end" : "justify-start")}>
-                <div className={cn(
-                  "min-w-0 max-w-[86%] rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed shadow-sm md:max-w-[76%]",
-                  mine ? "bg-primary text-primary-foreground" : "border border-border/60 bg-background text-foreground",
-                  message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
-                )} data-message-bubble>
-                  {(!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
-                  {message.is_audio && message.audio_url && (
-                    <div className="w-[min(16rem,72vw)] max-w-full">
-                      <p className={cn("mb-1.5 text-xs font-semibold", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>Mensagem de voz</p>
-                      <audio controls controlsList="nodownload" preload="metadata" playsInline className="block h-10 w-full max-w-full" src={message.audio_url} />
-                    </div>
-                  )}
-                  <div className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                    <span>{formatTime(message.created_at)}</span>
-                    {mine && message.delivery_status === "sending" && <Check className="h-3 w-3" />}
-                    {mine && message.delivery_status === "delivered" && <CheckCheck className="h-3 w-3" />}
-                    {mine && message.delivery_status === "failed" && <AlertCircle className="h-3 w-3" />}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          {responding && (
-             <div className="flex scroll-mb-3 justify-start" aria-live="polite" data-typing-indicator>
-                <div className="flex h-10 items-center gap-1.5 rounded-lg border border-border/60 bg-background px-4 shadow-sm" aria-label="AURA está respondendo">
-                {[0, 1, 2].map((dot) => <span key={dot} className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-muted-foreground" style={{ animationDelay: `${dot * 150}ms` }} />)}
-              </div>
-            </div>
-          )}
-        </div>
+        <MessageTimeline messages={messages} responding={responding} />
       </div>
 
       {showNew && (
