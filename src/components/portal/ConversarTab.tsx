@@ -129,12 +129,12 @@ export function ConversarTab({
   }, [installApp.available, installApp.installed, userId]);
 
   useEffect(() => {
-    if (showInstallInvite || installApp.available || localStorage.getItem("aura-push-enabled") === "true") return;
+    if (chatOpen || recording || draft.trim() || showInstallInvite || installApp.available || localStorage.getItem("aura-push-enabled") === "true") return;
     const dismissedUntil = Number(localStorage.getItem(`aura-push-dismissed-until:${userId}`) || 0);
     if (dismissedUntil > Date.now()) return;
     const timer = window.setTimeout(() => setShowPushDialog(true), 3500);
     return () => window.clearTimeout(timer);
-  }, [installApp.available, showInstallInvite, userId]);
+  }, [chatOpen, draft, installApp.available, recording, showInstallInvite, userId]);
 
   const postponeInstall = () => {
     localStorage.setItem(`aura-install-dismissed-until:${userId}`, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
@@ -678,7 +678,7 @@ export function ConversarTab({
             }}
             rows={1}
             maxLength={8000}
-            placeholder="Escreva o que está sentindo..."
+             placeholder="Mensagem..."
             className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-base text-foreground outline-none placeholder:text-muted-foreground"
             aria-label="Mensagem para a AURA"
             onFocus={() => setTimeout(() => scrollToBottom(), 250)}
