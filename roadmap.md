@@ -24,7 +24,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Planejar transformação da AURA em aplicativo web principal, com WhatsApp como canal auxiliar
 - [x] Revisar plano do aplicativo com requisitos rigorosos de fluidez, latência e paridade com WhatsApp
 - [x] Construir a base da Fase 1: conversa autenticada por texto, tempo real, idempotência, histórico e resposta persistente
-- [ ] Completar a Fase 1: envio de áudio, telemetria de latência e testes de interrupção
+- [ ] Completar a Fase 1: envio de áudio e telemetria implementados; falta concluir testes de interrupção e reconexão
 - [x] Auditar e reaproveitar no aplicativo as regras maduras de fluidez e negociação de turnos já usadas no WhatsApp, separando apenas o que depende do canal
 - [x] Validar conversa web com conta isolada: envio, resposta, histórico, tempo real, idempotência, isolamento e reconexão entre três abas
 - [ ] Construir Fase 2 do aplicativo: navegação centrada na conversa, áudio, conta e instalação
