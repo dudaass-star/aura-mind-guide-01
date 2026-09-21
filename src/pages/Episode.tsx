@@ -1,6 +1,7 @@
 import { useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
@@ -27,24 +28,7 @@ const Episode = () => {
   const [confirmed, setConfirmed] = useState(false);
   const [chosenJourneyId, setChosenJourneyId] = useState<string | null>(null);
 
-  // Fallback: se a URL trouxer apenas `u` (links antigos do WhatsApp),
-  // buscamos o portal token a partir do user_id para que o botão
-  // "Meu Espaço" continue levando o usuário ao painel.
-  const { data: fallbackPortalToken } = useQuery({
-    queryKey: ["episode-portal-token", userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_portal_tokens")
-        .select("token")
-        .eq("user_id", userId!)
-        .maybeSingle();
-      if (error) throw error;
-      return data?.token as string | undefined;
-    },
-    enabled: !!userId && !portalToken,
-  });
-
-  const effectivePortalToken = portalToken || fallbackPortalToken || null;
+  const effectivePortalToken = portalToken || null;
 
   const { data: episode, isLoading, error } = useQuery({
     queryKey: ["episode", id],
@@ -83,19 +67,11 @@ const Episode = () => {
   const chooseMutation = useMutation({
     mutationFn: async (chosenId: string) => {
       setChosenJourneyId(chosenId);
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/choose-next-journey`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: userId, journey_id: chosenId }),
-        }
-      );
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Erro ao selecionar jornada");
-      }
-      return response.json();
+      const { data, error } = await supabasePortal.functions.invoke("choose-next-journey", {
+        body: { journey_id: chosenId, portal_token: effectivePortalToken },
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message || "Erro ao selecionar jornada");
+      return data;
     },
     onSuccess: () => setConfirmed(true),
   });

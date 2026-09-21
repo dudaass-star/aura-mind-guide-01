@@ -43,3 +43,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 
 - [x] Implementar entrada normal integrada: intenção segura, liberação pós-pagamento, proteção de recursos e métricas de confirmação
 - [ ] Validar a liberação automática com uma compra real de cada trilho (cartão, PIX Asaas, PIX Inter e PIX Woovi); depende de transações reais dos provedores
+- [x] Proteger a troca de jornada no servidor com identidade válida e acesso ativo, eliminando alteração por user_id exposto
