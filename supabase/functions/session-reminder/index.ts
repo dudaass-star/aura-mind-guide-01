@@ -3,6 +3,7 @@ import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { sendFreeText, isWithin24hWindow } from "../_shared/whatsapp-official.ts";
 import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
+import { routeNotification } from "../_shared/notification-router.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -305,15 +306,6 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // 24h reminder: ONLY send as free text if 24h window is open
-        const windowOpen = isWithin24hWindow(profile.last_user_message_at);
-        if (!windowOpen) {
-          console.log(`⏭️ Skipping 24h reminder for session ${session.id}: 24h window closed (template reserved for 5min)`);
-          // Still mark as sent so we don't retry
-          await supabase.from('sessions').update({ reminder_24h_sent: true }).eq('id', session.id);
-          continue;
-        }
-
         const userName = profile.name || 'você';
         const sessionDate = new Date(session.scheduled_at);
         const sessionTime = sessionDate.toLocaleTimeString('pt-BR', {
@@ -369,9 +361,20 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          // Usa sendProactive para ganhar prefixo "Lembrete de sessão 🕐" e
-          // cair em template caso a janela 24h esteja fechada.
-          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
+          const result = await routeNotification(supabase, {
+            userId: session.user_id,
+            phone: cleanPhone,
+            idempotencyKey: `session:24h:${session.id}`,
+            category: 'session',
+            type: 'session_reminder_24h',
+            title: `${userName}, sua sessão está chegando`,
+            body: 'Abra a AURA para conferir e se preparar.',
+            path: '/meu-espaco?tab=sessoes',
+            whatsappText: message,
+            whatsappCategory: 'session_reminder',
+            priority: 'high',
+            expiresAt: session.scheduled_at,
+          });
 
           if (result.success) {
             await supabase
@@ -460,7 +463,20 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
             console.log(`⏭️ 5m reminder ${session.id}: pending_insight ocupado (${cur?.substring(0, 30)}) — não sobrescreve`);
           }
 
-          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
+          const result = await routeNotification(supabase, {
+            userId: session.user_id,
+            phone: cleanPhone,
+            idempotencyKey: `session:5m:${session.id}`,
+            category: 'session',
+            type: 'session_reminder_5m',
+            title: `${userName}, sua sessão começa em instantes`,
+            body: 'A AURA já está pronta para receber você.',
+            path: '/meu-espaco?tab=sessoes',
+            whatsappText: message,
+            whatsappCategory: 'session_reminder',
+            priority: 'high',
+            expiresAt: new Date(new Date(session.scheduled_at).getTime() + 60 * 60 * 1000).toISOString(),
+          });
 
           if (result.success) {
             // Idempotência: só marca reminder_5m_sent quando o envio confirma sucesso.

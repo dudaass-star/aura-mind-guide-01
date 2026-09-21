@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { routeNotification } from "../_shared/notification-router.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -92,7 +93,18 @@ Me conta: quais dias e horários funcionam pra você esse mês?
 
 Por exemplo: "segundas e quintas às 19h" ou "quartas às 20h"`;
 
-        const result = await sendProactive(user.phone, message, 'checkin', user.user_id);
+        const result = await routeNotification(supabase, {
+          userId: user.user_id,
+          phone: user.phone,
+          idempotencyKey: `monthly-schedule:${today}:${user.user_id}`,
+          category: 'session',
+          type: 'monthly_schedule_available',
+          title: `${user.name?.split(' ')[0] || 'Oi'}, suas sessões do mês estão disponíveis`,
+          body: 'Escolha seus melhores dias e horários no aplicativo.',
+          path: '/meu-espaco?tab=sessoes',
+          whatsappText: message,
+          whatsappCategory: 'checkin',
+        });
         
         if (result.success) {
           console.log(`✅ Monthly renewal message sent to ${user.name}`);

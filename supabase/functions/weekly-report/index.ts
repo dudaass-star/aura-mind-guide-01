@@ -3,6 +3,7 @@ import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { isWithin24hWindow } from "../_shared/whatsapp-official.ts";
+import { routeNotification } from "../_shared/notification-router.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -483,7 +484,19 @@ Deno.serve(async (req) => {
         // Send teaser via WhatsApp (inside window: sends teaser directly; outside: sends template)
         const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
         const cleanPhone = cleanPhoneNumber(profile.phone);
-        const result = await sendProactive(cleanPhone, teaser, 'weekly_report', profile.user_id);
+        const result = await routeNotification(supabase, {
+          userId: profile.user_id,
+          phone: cleanPhone,
+          idempotencyKey: `report:${reportMonthStr}:${profile.user_id}`,
+          category: 'report',
+          type: 'report_available',
+          title: `${userName}, seu resumo está pronto`,
+          body: 'Veja os movimentos e avanços que marcaram este período.',
+          path: '/meu-espaco?tab=percurso',
+          whatsappText: teaser,
+          whatsappCategory: 'weekly_report',
+          teaserText: teaser,
+        });
 
         if (result.success) {
           console.log(`✅ Report teaser sent to ${profile.name} (${profile.phone}) [window=${windowOpen ? 'open' : 'closed'}]`);

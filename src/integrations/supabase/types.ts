@@ -1998,6 +1998,60 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_deliveries: {
+        Row: {
+          category: string
+          conversion_type: string | null
+          created_at: string
+          expires_at: string | null
+          fallback_after: string | null
+          id: string
+          idempotency_key: string
+          metadata: Json
+          notification_type: string
+          path: string | null
+          priority: string
+          selected_channel: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          conversion_type?: string | null
+          created_at?: string
+          expires_at?: string | null
+          fallback_after?: string | null
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          notification_type: string
+          path?: string | null
+          priority?: string
+          selected_channel?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          conversion_type?: string | null
+          created_at?: string
+          expires_at?: string | null
+          fallback_after?: string | null
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          notification_type?: string
+          path?: string | null
+          priority?: string
+          selected_channel?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       plan_configs: {
         Row: {
           created_at: string
@@ -2424,6 +2478,7 @@ export type Database = {
       push_notification_events: {
         Row: {
           created_at: string
+          delivery_id: string | null
           device_id: string | null
           event_type: string
           id: string
@@ -2434,6 +2489,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          delivery_id?: string | null
           device_id?: string | null
           event_type: string
           id?: string
@@ -2444,6 +2500,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          delivery_id?: string | null
           device_id?: string | null
           event_type?: string
           id?: string
@@ -2453,6 +2510,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "push_notification_events_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "notification_deliveries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "push_notification_events_device_id_fkey"
             columns: ["device_id"]

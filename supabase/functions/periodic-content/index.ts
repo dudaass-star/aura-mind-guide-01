@@ -4,6 +4,7 @@ import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, antiBurstDelayForInstance, groupByInstance } from "../_shared/instance-helper.ts";
 import { pickNextJourney } from "../_shared/journey-helper.ts";
+import { routeNotification } from "../_shared/notification-router.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -203,14 +204,19 @@ serve(async (req) => {
             }
 
             const cleanPhone = cleanPhoneNumber(user.phone);
-            const sendResult = await sendProactive(
-              cleanPhone,
-              message,
-              'content',
-              user.user_id,
-              zapiConfig,
-              manifestoResult.teaser || undefined
-            );
+            const sendResult = await routeNotification(supabase, {
+              userId: user.user_id,
+              phone: cleanPhone,
+              idempotencyKey: `journey:${episode.id}:${user.user_id}`,
+              category: 'journey',
+              type: 'journey_available',
+              title: 'Uma nova parte da sua jornada chegou',
+              body: 'Abra a AURA quando tiver um momento para você.',
+              path: '/meu-espaco?tab=percurso',
+              whatsappText: message,
+              whatsappCategory: 'content',
+              teaserText: manifestoResult.teaser || undefined,
+            });
 
             if (sendResult.success) {
               console.log(`✅ Manifesto sent to ${user.name?.split(' ')[0] || 'user'}`);

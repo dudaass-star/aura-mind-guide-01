@@ -5,6 +5,7 @@ type PushOptions = {
   body: string;
   path: string;
   type: string;
+  deliveryId?: string;
 };
 
 export async function sendPushToUser(supabase: any, userId: string, options: PushOptions) {
@@ -50,7 +51,7 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
     if (response.ok) {
       sent += 1;
       await supabase.from("push_notification_events").insert({
-        user_id: userId, device_id: device.id, event_type: "sent", notification_type: options.type, path: trackedPath,
+        user_id: userId, device_id: device.id, delivery_id: options.deliveryId || null, event_type: "sent", notification_type: options.type, path: trackedPath,
       });
       return;
     }
@@ -61,6 +62,7 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
     await supabase.from("push_notification_events").insert({
       user_id: userId,
       device_id: device.id,
+      delivery_id: options.deliveryId || null,
       event_type: "failed",
       notification_type: options.type,
       path: trackedPath,
