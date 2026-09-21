@@ -1725,6 +1725,14 @@ Deno.serve(async (req) => {
       }
     }
 
+    const { data: finalTurnState } = await supabase.from('aura_response_state')
+      .select('last_user_message_id')
+      .eq('user_id', profile.user_id)
+      .maybeSingle();
+    shouldResumeInterruptedTurn = shouldResumeInterruptedTurn || Boolean(
+      finalTurnState?.last_user_message_id && finalTurnState.last_user_message_id !== currentMessageId,
+    );
+
     if (shouldResumeInterruptedTurn) {
       const { data: latestInbound } = await supabase.from('messages')
         .select('id, content, channel, client_message_id, source_message_id')
@@ -1797,11 +1805,15 @@ Deno.serve(async (req) => {
       }
     }
     if (supabase && isInApp && profile?.user_id && currentMessageId) {
-      await supabase.from('chat_turn_metrics').update({
-        completed_at: new Date().toISOString(),
-        status: 'failed',
-        error_code: error instanceof Error ? error.name : 'unknown',
-      }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+      try {
+        await supabase.from('chat_turn_metrics').update({
+          completed_at: new Date().toISOString(),
+          status: 'failed',
+          error_code: error instanceof Error ? error.name : 'unknown',
+        }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+      } catch (metricsError) {
+        console.error('⚠️ Falha não bloqueante na telemetria do chat:', metricsError);
+      }
     }
 
     // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally

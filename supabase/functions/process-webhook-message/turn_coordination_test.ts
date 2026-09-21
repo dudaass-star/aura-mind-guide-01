@@ -4,6 +4,7 @@ const SOURCE = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
 
 Deno.test("nova fala sinaliza o turno ativo", () => {
   assert(SOURCE.includes(".update({ last_user_message_id: currentMessageId, updated_at:"));
+  assert(SOURCE.includes("finalTurnState.last_user_message_id !== currentMessageId"));
 });
 
 Deno.test("somente o dono libera a trava", () => {
