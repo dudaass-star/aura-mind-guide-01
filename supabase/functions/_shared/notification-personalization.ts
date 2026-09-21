@@ -20,10 +20,11 @@ export function isNonUrgentNotification(context: NotificationContext) {
 
 export function nextPreferredDeliveryAt(preferredHourBrt: number, userId: string, now = new Date()) {
   const nowBrt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  if (nowBrt.getUTCHours() === preferredHourBrt) return now;
   const minuteSeed = [...userId].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 45;
   const targetBrt = new Date(nowBrt);
   targetBrt.setUTCHours(preferredHourBrt, minuteSeed, 0, 0);
-  if (targetBrt.getTime() <= nowBrt.getTime() + 5 * 60_000) {
+  if (targetBrt.getTime() <= nowBrt.getTime()) {
     targetBrt.setUTCDate(targetBrt.getUTCDate() + 1);
   }
   return new Date(targetBrt.getTime() + 3 * 60 * 60 * 1000);

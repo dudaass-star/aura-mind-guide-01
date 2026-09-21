@@ -144,7 +144,7 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     const scheduledFor = nextPreferredDeliveryAt(personalization.preferredHourBrt, request.userId);
     const waitMs = scheduledFor.getTime() - Date.now();
     const expiresBeforeDelivery = request.expiresAt && new Date(request.expiresAt).getTime() <= scheduledFor.getTime();
-    if (waitMs > 60 * 60_000 && !expiresBeforeDelivery) {
+    if (waitMs > 5 * 60_000 && !expiresBeforeDelivery) {
       const { error: scheduleError } = await supabase.from("scheduled_tasks").insert({
         user_id: request.userId,
         task_type: "notification_delivery",

@@ -23,3 +23,8 @@ Deno.test("agenda para o dia seguinte quando o horário preferido já passou", (
   const scheduled = nextPreferredDeliveryAt(19, "cliente-a", now);
   assertEquals(scheduled.toISOString().slice(0, 13), "2026-09-22T22");
 });
+
+Deno.test("envia agora quando já está dentro da hora preferida", () => {
+  const now = new Date("2026-09-21T22:35:00.000Z"); // 19h35 BRT
+  assertEquals(nextPreferredDeliveryAt(19, "cliente-a", now).toISOString(), now.toISOString());
+});
