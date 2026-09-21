@@ -132,7 +132,9 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     const { data: existing } = await supabase.from("notification_deliveries")
       .select("id,status,selected_channel,updated_at")
       .eq("idempotency_key", request.idempotencyKey)
+      .eq("user_id", request.userId)
       .single();
+    if (!existing) throw new Error("Chave de entrega já pertence a outro cliente");
     const stalePending = existing?.status === "pending"
       && Date.now() - new Date(existing.updated_at).getTime() > 5 * 60_000;
     if (existing?.status !== "failed" && !stalePending) {

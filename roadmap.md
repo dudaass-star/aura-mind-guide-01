@@ -55,3 +55,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 
 - [x] Simular cenários reais de notificações por perfil, canal, horário, presença, limite e fallback; corrigir divergências encontradas.
 - [x] Reagendar respostas recebidas no silêncio e adiar o segundo conteúdo não urgente para o dia seguinte, sem elevar a frequência.
+- [x] Ampliar cenários extremos de push e proteger métricas de abertura/conversão, tokens inválidos e duplicidade entre clientes.
