@@ -48,4 +48,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Preservar o acesso automático quando o cliente faz mais de uma tentativa de pagamento no mesmo aparelho
 - [x] Tratar indisponibilidade temporária da Woovi sem expor erro técnico no checkout
 - [x] Implementar notificações no aplicativo: ativação guiada, registro seguro por aparelho e aviso discreto de nova resposta
-- [ ] Migrar comunicações elegíveis para estratégia push-first com fallback WhatsApp, personalização segura e métricas de conversão/LTV
+- [ ] Migrar comunicações elegíveis para estratégia push-first com fallback WhatsApp, personalização segura e métricas de conversão/LTV — roteador e primeira etapa (sessões, jornadas e resumos) implementados; falta piloto real de 7–14 dias

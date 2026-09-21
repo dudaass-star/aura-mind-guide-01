@@ -25,6 +25,7 @@ export type RoutedNotificationResult = {
   success: boolean;
   channel: "push" | "whatsapp" | "in_app" | "none";
   reason?: string;
+  error?: string;
 };
 
 function isSilentHours() {
@@ -110,5 +111,5 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     path: request.path,
     metadata: { success: whatsapp.success },
   });
-  return { success: whatsapp.success, channel: "whatsapp", reason: whatsapp.error };
+  return { success: whatsapp.success, channel: "whatsapp", reason: whatsapp.error, error: whatsapp.error };
 }
