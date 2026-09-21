@@ -76,6 +76,7 @@ export interface SendResult {
   success: boolean;
   provider: WhatsAppProvider;
   error?: string;
+  type?: 'template' | 'freetext';
 }
 
 // ============================================================================

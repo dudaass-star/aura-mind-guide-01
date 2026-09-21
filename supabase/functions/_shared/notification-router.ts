@@ -64,7 +64,8 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     return { success: true, channel: "none", reason: "expired" };
   }
 
-  if (!isSilentHours()) {
+  // Lembretes de sessão de alta prioridade preservam a entrega no horário agendado.
+  if (!isSilentHours() || request.priority === "high") {
     const push = await sendPushToUser(supabase, request.userId, {
       title: request.title,
       body: request.body,
