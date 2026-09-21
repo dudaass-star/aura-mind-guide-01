@@ -13,7 +13,7 @@ const BodySchema = z.discriminatedUnion("action", [
     platform: z.enum(["web", "ios", "android", "desktop"]),
     userAgent: z.string().max(500).optional(),
   }),
-  z.object({ action: z.literal("disable_current") }),
+  z.object({ action: z.literal("disable_current"), deviceId: z.string().uuid() }),
   z.object({ action: z.literal("permission_denied") }),
   z.object({
     action: z.literal("event"),
@@ -21,7 +21,7 @@ const BodySchema = z.discriminatedUnion("action", [
     notificationType: z.string().max(80).optional(),
     path: z.string().max(300).optional(),
   }),
-  z.object({ action: z.literal("presence"), foreground: z.boolean() }),
+  z.object({ action: z.literal("presence"), deviceId: z.string().uuid(), foreground: z.boolean() }),
 ]);
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
       await admin.from("push_devices").update({
         is_foreground: parsed.data.foreground,
         last_seen_at: new Date().toISOString(),
-      }).eq("user_id", userId).eq("enabled", true);
+      }).eq("id", parsed.data.deviceId).eq("user_id", userId).eq("enabled", true);
       return json({ updated: true });
     }
     if (parsed.data.action === "event") {
@@ -72,7 +72,8 @@ Deno.serve(async (req) => {
       return json({ recorded: true });
     }
     if (parsed.data.action === "disable_current") {
-      await admin.from("push_devices").update({ enabled: false, updated_at: new Date().toISOString() }).eq("user_id", userId);
+      await admin.from("push_devices").update({ enabled: false, is_foreground: false, updated_at: new Date().toISOString() })
+        .eq("id", parsed.data.deviceId).eq("user_id", userId);
       await admin.from("push_notification_events").insert({ user_id: userId, event_type: "disabled" });
       return json({ disabled: true });
     }
@@ -86,6 +87,7 @@ Deno.serve(async (req) => {
       user_agent: parsed.data.userAgent || null,
       permission: "granted",
       enabled: true,
+      is_foreground: true,
       last_seen_at: new Date().toISOString(),
     }, { onConflict: "user_id,token_hash" }).select("id").single();
     if (error) throw error;
@@ -93,7 +95,7 @@ Deno.serve(async (req) => {
       { user_id: userId, device_id: device.id, event_type: "permission_granted" },
       { user_id: userId, device_id: device.id, event_type: "registered" },
     ]);
-    return json({ registered: true });
+    return json({ registered: true, deviceId: device.id });
   } catch (error) {
     console.error("Falha ao registrar notificações:", error);
     return json({ error: "Não foi possível registrar este aparelho" }, 500);

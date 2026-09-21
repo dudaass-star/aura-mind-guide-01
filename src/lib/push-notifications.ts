@@ -59,8 +59,9 @@ export async function enablePushNotifications(): Promise<PushActivationResult> {
     const { data, error } = await supabasePortal.functions.invoke("register-push-device", {
       body: { action: "register", token, platform, userAgent: navigator.userAgent },
     });
-    if (error || !data?.registered) throw error || new Error("Falha ao registrar aparelho");
+    if (error || !data?.registered || !data?.deviceId) throw error || new Error("Falha ao registrar aparelho");
     localStorage.setItem("aura-push-enabled", "true");
+    localStorage.setItem("aura-push-device-id", data.deviceId);
     return { status: "registered" };
   } catch (error) {
     console.warn("Falha ao ativar notificações", error);
@@ -69,11 +70,16 @@ export async function enablePushNotifications(): Promise<PushActivationResult> {
 }
 
 export async function disablePushNotifications() {
-  await supabasePortal.functions.invoke("register-push-device", { body: { action: "disable_current" } });
+  const deviceId = localStorage.getItem("aura-push-device-id");
+  if (deviceId) {
+    await supabasePortal.functions.invoke("register-push-device", { body: { action: "disable_current", deviceId } });
+  }
   localStorage.removeItem("aura-push-enabled");
+  localStorage.removeItem("aura-push-device-id");
 }
 
 export function reportPushPresence(foreground: boolean) {
-  if (localStorage.getItem("aura-push-enabled") !== "true") return;
-  void supabasePortal.functions.invoke("register-push-device", { body: { action: "presence", foreground } });
+  const deviceId = localStorage.getItem("aura-push-device-id");
+  if (localStorage.getItem("aura-push-enabled") !== "true" || !deviceId) return;
+  void supabasePortal.functions.invoke("register-push-device", { body: { action: "presence", deviceId, foreground } });
 }
