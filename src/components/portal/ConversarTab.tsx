@@ -1,12 +1,12 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowLeft, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
 import avatarAura from "@/assets/avatar-aura.jpg";
-import { InstallAppMenuItem } from "@/components/portal/InstallAppMenuItem";
+import { InstallAppMenuItem, useInstallApp } from "@/components/portal/InstallAppMenuItem";
 
 type ChatMessage = {
   id: string;
@@ -102,6 +102,8 @@ export function ConversarTab({
   const [audioError, setAudioError] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
+  const [showInstallInvite, setShowInstallInvite] = useState(false);
+  const installApp = useInstallApp();
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const nearBottomRef = useRef(true);
@@ -113,6 +115,25 @@ export function ConversarTab({
   const recordingTimerRef = useRef<number | null>(null);
   const discardRecordingRef = useRef(false);
   const outboxKey = `aura-chat-outbox:${userId}`;
+
+  useEffect(() => {
+    if (!installApp.available || installApp.installed) return;
+    const dismissedUntil = Number(localStorage.getItem(`aura-install-dismissed-until:${userId}`) || 0);
+    if (dismissedUntil > Date.now()) return;
+    const timer = window.setTimeout(() => setShowInstallInvite(true), 1200);
+    return () => window.clearTimeout(timer);
+  }, [installApp.available, installApp.installed, userId]);
+
+  const postponeInstall = () => {
+    localStorage.setItem(`aura-install-dismissed-until:${userId}`, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    setShowInstallInvite(false);
+  };
+
+  const beginInstall = async () => {
+    setShowInstallInvite(false);
+    if (installApp.ios) setShowIosInstallGuide(true);
+    else await installApp.install();
+  };
 
   const latestSequence = useMemo(
     () => messages.reduce((latest, message) => Math.max(latest, message.sequence_no || 0), 0),
@@ -449,7 +470,12 @@ export function ConversarTab({
                 <RefreshCw className="h-4 w-4" />
                 <span>Trocar de plano</span>
               </DropdownMenuItem>
-              <InstallAppMenuItem onShowIosGuide={() => setShowIosInstallGuide(true)} />
+              <InstallAppMenuItem
+                available={installApp.available}
+                ios={installApp.ios}
+                onInstall={installApp.install}
+                onShowIosGuide={() => setShowIosInstallGuide(true)}
+              />
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={onSignOut} className="gap-3 px-3 py-3 font-body text-destructive focus:text-destructive">
                 <LogOut className="h-4 w-4" />
@@ -660,6 +686,25 @@ export function ConversarTab({
               <span className="pt-1.5">Escolha <strong>Adicionar à Tela de Início</strong> e confirme.</span>
             </li>
           </ol>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showInstallInvite} onOpenChange={(open) => open ? setShowInstallInvite(true) : postponeInstall()}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg border-border bg-background p-6 shadow-card">
+          <DialogHeader className="text-left">
+            <DialogTitle className="font-display text-2xl text-foreground">Deixe a AURA mais perto</DialogTitle>
+            <DialogDescription className="pt-1 font-body leading-relaxed">
+              Adicione a AURA à sua tela inicial. Depois, é só tocar no ícone para voltar às suas conversas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 space-y-2">
+            <Button type="button" className="h-11 w-full font-body" onClick={() => void beginInstall()}>
+              <Download className="h-4 w-4" />
+              {installApp.ios ? "Ver como adicionar" : "Instalar AURA"}
+            </Button>
+            <Button type="button" variant="ghost" className="h-10 w-full font-body text-muted-foreground" onClick={postponeInstall}>
+              Agora não
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </main>

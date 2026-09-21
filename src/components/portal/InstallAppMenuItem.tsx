@@ -7,19 +7,19 @@ type InstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
-function isStandalone() {
+export function isAppStandalone() {
   return window.matchMedia("(display-mode: standalone)").matches
     || ("standalone" in window.navigator && Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone));
 }
 
-function isIosDevice() {
+export function isIosDevice() {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent)
     || (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
 }
 
-export function InstallAppMenuItem({ onShowIosGuide }: { onShowIosGuide: () => void }) {
+export function useInstallApp() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
-  const [installed, setInstalled] = useState(() => isStandalone());
+  const [installed, setInstalled] = useState(() => isAppStandalone());
   const ios = isIosDevice();
 
   useEffect(() => {
@@ -31,8 +31,9 @@ export function InstallAppMenuItem({ onShowIosGuide }: { onShowIosGuide: () => v
     const handleInstalled = () => {
       setInstalled(true);
       setInstallPrompt(null);
+      localStorage.setItem("aura-app-installed", "true");
     };
-    const handleDisplayMode = () => setInstalled(isStandalone());
+    const handleDisplayMode = () => setInstalled(isAppStandalone());
 
     window.addEventListener("beforeinstallprompt", handlePrompt);
     window.addEventListener("appinstalled", handleInstalled);
@@ -44,17 +45,37 @@ export function InstallAppMenuItem({ onShowIosGuide }: { onShowIosGuide: () => v
     };
   }, []);
 
-  if (installed || (!installPrompt && !ios)) return null;
-
-  const handleInstall = async () => {
-    if (ios) {
-      onShowIosGuide();
-      return;
-    }
+  const install = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
     const choice = await installPrompt.userChoice;
     if (choice.outcome === "accepted") setInstallPrompt(null);
+  };
+
+  return {
+    available: !installed && (Boolean(installPrompt) || ios),
+    installed,
+    ios,
+    install,
+  };
+}
+
+export function InstallAppMenuItem({
+  available,
+  ios,
+  onInstall,
+  onShowIosGuide,
+}: {
+  available: boolean;
+  ios: boolean;
+  onInstall: () => Promise<void>;
+  onShowIosGuide: () => void;
+}) {
+  if (!available) return null;
+
+  const handleInstall = async () => {
+    if (ios) onShowIosGuide();
+    else await onInstall();
   };
 
   return (

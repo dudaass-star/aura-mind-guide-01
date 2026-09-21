@@ -32,7 +32,11 @@ export default function PortalWhatsAppAccess() {
         token_hash: data.token_hash,
         type: data.type === "signup" ? "signup" : "magiclink",
       });
-      if (verifyError) setError(true);
+      if (verifyError) {
+        setError(true);
+        return;
+      }
+      localStorage.setItem("aura-access-source", "whatsapp");
     })();
   }, [loading, session]);
 
