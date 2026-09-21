@@ -13,6 +13,22 @@ export type NotificationPersonalization = {
   rule: string;
 };
 
+export function isNonUrgentNotification(context: NotificationContext) {
+  return context.priority !== "high"
+    && !["response", "session", "reminder"].includes(context.category);
+}
+
+export function nextPreferredDeliveryAt(preferredHourBrt: number, userId: string, now = new Date()) {
+  const nowBrt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const minuteSeed = [...userId].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 45;
+  const targetBrt = new Date(nowBrt);
+  targetBrt.setUTCHours(preferredHourBrt, minuteSeed, 0, 0);
+  if (targetBrt.getTime() <= nowBrt.getTime() + 5 * 60_000) {
+    targetBrt.setUTCDate(targetBrt.getUTCDate() + 1);
+  }
+  return new Date(targetBrt.getTime() + 3 * 60 * 60 * 1000);
+}
+
 const DEFAULT_HOURS: Record<NotificationContext["category"], number> = {
   response: 9,
   session: 9,
@@ -79,8 +95,7 @@ export async function evaluateNotificationPersonalization(
     timingSource = "entry_time";
   }
 
-  const nonUrgent = context.priority !== "high"
-    && !["response", "session", "reminder"].includes(context.category);
+  const nonUrgent = isNonUrgentNotification(context);
   if (nonUrgent) {
     const { count } = await supabase.from("notification_deliveries")
       .select("id", { count: "exact", head: true })
