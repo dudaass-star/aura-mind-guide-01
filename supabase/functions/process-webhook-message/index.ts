@@ -372,6 +372,9 @@ Deno.serve(async (req) => {
   let wasInterrupted = false;
   let interruptedAtIndex = -1;
   let agentData: any = null;
+  let turnOwnerToken: string | null = null;
+  let currentMessageId: string | null = null;
+  let isInApp = false;
 
   try {
     const workerPayload = await req.json();
@@ -385,7 +388,7 @@ Deno.serve(async (req) => {
       channel = 'whatsapp', userId, inboundMessageDbId,
     } = workerPayload;
 
-    const isInApp = channel === 'in_app';
+    isInApp = channel === 'in_app';
 
     contingencyPhone = cleanPhone;
 
@@ -613,7 +616,7 @@ Deno.serve(async (req) => {
     // ========================================================================
     // INTERRUPTION SYSTEM
     // ========================================================================
-    const currentMessageId = messageId || `msg_${Date.now()}`;
+    currentMessageId = messageId || `msg_${Date.now()}`;
 
     // ========================================================================
     // ENTREGA DETERMINÍSTICA DE CONTEÚDO RICO (clique em template Quick Reply)
