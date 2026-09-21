@@ -19,6 +19,7 @@ type NotificationRequest = {
   expiresAt?: string;
   teaserText?: string;
   templateVariables?: string[];
+  fallback?: "whatsapp" | "none";
 };
 
 export type RoutedNotificationResult = {
@@ -38,15 +39,7 @@ function isSilentHours() {
 }
 
 export async function routeNotification(supabase: any, request: NotificationRequest): Promise<RoutedNotificationResult> {
-  const { data: existing } = await supabase.from("notification_deliveries")
-    .select("id,status,selected_channel")
-    .eq("idempotency_key", request.idempotencyKey)
-    .maybeSingle();
-  if (existing && ["sent", "opened", "converted", "suppressed"].includes(existing.status)) {
-    return { success: true, channel: existing.selected_channel || "none", reason: "duplicate" };
-  }
-
-  const { data: delivery, error: deliveryError } = await supabase.from("notification_deliveries").upsert({
+  const newDelivery = {
     user_id: request.userId,
     idempotency_key: request.idempotencyKey,
     category: request.category,
@@ -56,7 +49,29 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     expires_at: request.expiresAt || null,
     status: "pending",
     metadata: { privacy_safe: true },
-  }, { onConflict: "idempotency_key" }).select("id").single();
+  };
+  let { data: delivery, error: deliveryError } = await supabase.from("notification_deliveries")
+    .insert(newDelivery).select("id").single();
+  if (deliveryError?.code === "23505") {
+    const { data: existing } = await supabase.from("notification_deliveries")
+      .select("id,status,selected_channel,updated_at")
+      .eq("idempotency_key", request.idempotencyKey)
+      .single();
+    const stalePending = existing?.status === "pending"
+      && Date.now() - new Date(existing.updated_at).getTime() > 5 * 60_000;
+    if (existing?.status !== "failed" && !stalePending) {
+      return { success: true, channel: existing?.selected_channel || "none", reason: "duplicate" };
+    }
+    const { data: reclaimed } = await supabase.from("notification_deliveries")
+      .update({ status: "pending", metadata: { privacy_safe: true, retry: true } })
+      .eq("id", existing.id)
+      .eq("status", existing.status)
+      .select("id")
+      .maybeSingle();
+    if (!reclaimed) return { success: true, channel: "none", reason: "duplicate" };
+    delivery = reclaimed;
+    deliveryError = null;
+  }
   if (deliveryError || !delivery) throw deliveryError || new Error("Falha ao registrar entrega");
 
   if (request.expiresAt && new Date(request.expiresAt).getTime() <= Date.now()) {
@@ -64,8 +79,9 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     return { success: true, channel: "none", reason: "expired" };
   }
 
+  const mayNotifyNow = !isSilentHours() || request.priority === "high";
   // Lembretes de sessão de alta prioridade preservam a entrega no horário agendado.
-  if (!isSilentHours() || request.priority === "high") {
+  if (mayNotifyNow) {
     const push = await sendPushToUser(supabase, request.userId, {
       title: request.title,
       body: request.body,
@@ -88,6 +104,12 @@ export async function routeNotification(supabase: any, request: NotificationRequ
       await supabase.from("notification_deliveries").update({ selected_channel: "in_app", status: "suppressed", metadata: { reason: "app_visible" } }).eq("id", delivery.id);
       return { success: true, channel: "in_app", reason: "app_visible" };
     }
+  }
+
+  if (!mayNotifyNow || request.fallback === "none") {
+    const reason = mayNotifyNow ? "push_unavailable" : "silent_hours";
+    await supabase.from("notification_deliveries").update({ selected_channel: "none", status: "suppressed", metadata: { reason } }).eq("id", delivery.id);
+    return { success: true, channel: "none", reason };
   }
 
   const whatsapp = await sendProactive(
