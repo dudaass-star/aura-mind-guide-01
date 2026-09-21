@@ -382,7 +382,10 @@ Deno.serve(async (req) => {
       messageType, buttonText, buttonPayload, originalRepliedMessageSid,
       // Identificador da mensagem citada via "Responder" nativo do WhatsApp (Meta)
       quotedMessageId,
+      channel = 'whatsapp', userId, inboundMessageDbId,
     } = workerPayload;
+
+    const isInApp = channel === 'in_app';
 
     contingencyPhone = cleanPhone;
 
@@ -414,13 +417,14 @@ Deno.serve(async (req) => {
     // ========================================================================
     // USER LOOKUP
     // ========================================================================
-    const phoneVariations = getPhoneVariations(cleanPhone);
-    console.log(`🔍 Searching for phone variations: ${phoneVariations.join(', ')}`);
+    const phoneVariations = isInApp ? [] : getPhoneVariations(cleanPhone);
+    console.log(isInApp ? `🔍 Searching profile by authenticated user` : `🔍 Searching for phone variations: ${phoneVariations.join(', ')}`);
 
-    const { data: profileResults, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .in('phone', phoneVariations)
+    let profileQuery = supabase.from('profiles').select('*');
+    profileQuery = isInApp
+      ? profileQuery.eq('user_id', userId)
+      : profileQuery.in('phone', phoneVariations);
+    const { data: profileResults, error: profileError } = await profileQuery
       .order('status', { ascending: true })
       .order('updated_at', { ascending: false })
       .limit(1);
@@ -446,7 +450,7 @@ Deno.serve(async (req) => {
     } catch {}
 
     // Auto-correção de telefone
-    if (profile.phone !== cleanPhone) {
+    if (!isInApp && profile.phone !== cleanPhone) {
       console.log(`📱 Auto-correcting phone: ${profile.phone} -> ${cleanPhone}`);
       await supabase.from('profiles').update({ phone: cleanPhone }).eq('id', profile.id);
       profile.phone = cleanPhone;
@@ -868,9 +872,18 @@ Deno.serve(async (req) => {
     // ========================================================================
     // PERSIST INBOUND MESSAGE (after lock — prevents duplicates from competing workers)
     // ========================================================================
-    let inboundSaved = false;
+    let inboundSaved = Boolean(isInApp && inboundMessageDbId);
     let inboundMessageCreatedAt: string | null = null;
-    if (messageText) {
+    if (isInApp && inboundMessageDbId) {
+      const { data: persistedInbound } = await supabase
+        .from('messages')
+        .select('created_at')
+        .eq('id', inboundMessageDbId)
+        .eq('user_id', profile.user_id)
+        .maybeSingle();
+      inboundMessageCreatedAt = persistedInbound?.created_at ?? null;
+      (globalThis as any).__inboundMessageDbId = inboundMessageDbId;
+    } else if (messageText) {
       // Content-based dedup: check for identical message in last 30s
       const { data: recentDup } = await supabase
         .from('messages')
@@ -1166,7 +1179,7 @@ Deno.serve(async (req) => {
     // ========================================================================
     // INITIAL DELAY — Simulates "reading" the message
     // ========================================================================
-    const initialDelay = 1500 + Math.random() * 2000;
+    const initialDelay = isInApp ? 0 : 1500 + Math.random() * 2000;
     console.log(`⏳ Initial thinking delay: ${Math.round(initialDelay)}ms`);
     await new Promise(resolve => setTimeout(resolve, initialDelay));
 
@@ -1469,13 +1482,29 @@ Deno.serve(async (req) => {
           await logFailedMessage(supabase, profile.user_id, cleanPhone, responseText, 'tts_failed', 'process-webhook-message:audio');
         }
         if (audioUrl || audioContent) {
+          if (isInApp && (audioUrl || audioContent)) {
+            sentAnyResponse = true;
+            await supabase.from('messages').insert({
+              user_id: profile.user_id,
+              role: 'assistant',
+              content: responseText,
+              is_audio: true,
+              audio_url: audioUrl,
+              channel: 'in_app',
+              delivery_status: 'delivered',
+            });
+            continue;
+          }
+
           let audioResult: SendResult;
           if (audioUrl) {
             console.log(`🔗 Sending audio via public URL: ${audioUrl}`);
             audioResult = await sendAudioUrl(cleanPhone, audioUrl);
-          } else {
+          } else if (audioContent) {
             console.log(`📦 No audioUrl available, attempting base64 fallback (Z-API only)`);
-            audioResult = await sendAudio(cleanPhone, audioContent!);
+            audioResult = await sendAudio(cleanPhone, audioContent);
+          } else {
+            continue;
           }
           if (audioResult.success) {
             sentAnyResponse = true;
@@ -1510,7 +1539,9 @@ Deno.serve(async (req) => {
 
       console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
       
-      const sendResult = await sendMessage(cleanPhone, responseText);
+      const sendResult: { success: boolean; provider: string; error?: string } = isInApp
+        ? { success: true, provider: 'in_app' }
+        : await sendMessage(cleanPhone, responseText);
       if (!sendResult.success) {
         console.error(`❌ CRITICAL: Failed to send main response to ${cleanPhone?.substring(0, 4)}***: ${sendResult.error}`);
         await logFailedMessage(supabase, profile.user_id, cleanPhone, responseText, sendResult.error);
@@ -1526,7 +1557,13 @@ Deno.serve(async (req) => {
           .gte('created_at', new Date(Date.now() - 30000).toISOString())
           .limit(1).maybeSingle();
         if (!existingAssistant2) {
-          await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+          await supabase.from('messages').insert({
+            user_id: profile.user_id,
+            role: 'assistant',
+            content: responseText,
+            channel: isInApp ? 'in_app' : 'whatsapp',
+            delivery_status: 'delivered',
+          });
         } else {
           console.log('⏭️ DEDUP: Assistant text message already exists, skipping persist');
         }
@@ -1548,7 +1585,7 @@ Deno.serve(async (req) => {
             retryText = retryText.replace(/\[\s*[A-Z_]{3,}(?::[^\]]*)?\s*\]/g, '').replace(/\[\s*\/[A-Z_]{3,}\s*\]/g, '').trim();
             if (!retryText) continue;
             
-            await sendMessage(cleanPhone, retryText);
+            if (!isInApp) await sendMessage(cleanPhone, retryText);
             sentAnyResponse = true;
             try {
               const { data: retryDedupCheck } = await supabase
@@ -1556,7 +1593,13 @@ Deno.serve(async (req) => {
                 .eq('content', retryText).gte('created_at', new Date(Date.now() - 30000).toISOString())
                 .limit(1).maybeSingle();
               if (!retryDedupCheck) {
-                await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: retryText });
+                await supabase.from('messages').insert({
+                  user_id: profile.user_id,
+                  role: 'assistant',
+                  content: retryText,
+                  channel: isInApp ? 'in_app' : 'whatsapp',
+                  delivery_status: 'delivered',
+                });
               } else {
                 console.log('⚠️ Retry dedup: skipped duplicate assistant message');
               }
