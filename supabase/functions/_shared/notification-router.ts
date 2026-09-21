@@ -58,6 +58,7 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     userId: request.userId,
     category: request.category,
     priority,
+    currentDeliveryId: request.scheduledDeliveryId,
   });
   const newDelivery = {
     user_id: request.userId,

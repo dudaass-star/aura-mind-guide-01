@@ -2,6 +2,7 @@ type NotificationContext = {
   userId: string;
   category: "response" | "session" | "journey" | "practice" | "report" | "reminder" | "engagement";
   priority: "low" | "normal" | "high";
+  currentDeliveryId?: string;
 };
 
 export type NotificationPersonalization = {
@@ -98,12 +99,16 @@ export async function evaluateNotificationPersonalization(
 
   const nonUrgent = isNonUrgentNotification(context);
   if (nonUrgent) {
-    const { count } = await supabase.from("notification_deliveries")
+    let dailyDeliveries = supabase.from("notification_deliveries")
       .select("id", { count: "exact", head: true })
       .eq("user_id", context.userId)
       .in("status", ["scheduled", "sent", "opened", "converted"])
       .not("category", "in", "(response,reminder,billing,security)")
       .gte("created_at", brtDayStartIso());
+    if (context.currentDeliveryId) {
+      dailyDeliveries = dailyDeliveries.neq("id", context.currentDeliveryId);
+    }
+    const { count } = await dailyDeliveries;
     if ((count || 0) >= 1) {
       return {
         allowed: false,
