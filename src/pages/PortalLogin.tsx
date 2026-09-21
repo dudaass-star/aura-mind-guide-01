@@ -50,7 +50,7 @@ export default function PortalLogin() {
       sessionStorage.setItem("aura-oauth-target", "portal");
     } catch {}
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/meu-espaco",
+      redirect_uri: window.location.origin + "/meu-espaco/auth/callback",
     });
     if (result.error) {
       try { sessionStorage.removeItem("aura-oauth-target"); } catch {}
