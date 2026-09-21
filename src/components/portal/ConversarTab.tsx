@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowLeft, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, Bell, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,6 +7,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { InstallAppMenuItem, useInstallApp } from "@/components/portal/InstallAppMenuItem";
+import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDialog";
 
 type ChatMessage = {
   id: string;
@@ -103,6 +104,7 @@ export function ConversarTab({
   const [chatOpen, setChatOpen] = useState(false);
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
   const [showInstallInvite, setShowInstallInvite] = useState(false);
+  const [showPushDialog, setShowPushDialog] = useState(false);
   const installApp = useInstallApp();
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -123,6 +125,14 @@ export function ConversarTab({
     const timer = window.setTimeout(() => setShowInstallInvite(true), 1200);
     return () => window.clearTimeout(timer);
   }, [installApp.available, installApp.installed, userId]);
+
+  useEffect(() => {
+    if (showInstallInvite || installApp.available || localStorage.getItem("aura-push-enabled") === "true") return;
+    const dismissedUntil = Number(localStorage.getItem(`aura-push-dismissed-until:${userId}`) || 0);
+    if (dismissedUntil > Date.now()) return;
+    const timer = window.setTimeout(() => setShowPushDialog(true), 3500);
+    return () => window.clearTimeout(timer);
+  }, [installApp.available, showInstallInvite, userId]);
 
   const postponeInstall = () => {
     localStorage.setItem(`aura-install-dismissed-until:${userId}`, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
@@ -476,6 +486,10 @@ export function ConversarTab({
                 onInstall={installApp.install}
                 onShowIosGuide={() => setShowIosInstallGuide(true)}
               />
+              <DropdownMenuItem onSelect={() => setShowPushDialog(true)} className="gap-3 px-3 py-3 font-body">
+                <Bell className="h-4 w-4" />
+                <span>Notificações</span>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={onSignOut} className="gap-3 px-3 py-3 font-body text-destructive focus:text-destructive">
                 <LogOut className="h-4 w-4" />
@@ -707,6 +721,19 @@ export function ConversarTab({
           </div>
         </DialogContent>
       </Dialog>
+      <PushNotificationsDialog
+        open={showPushDialog}
+        onOpenChange={(open) => {
+          setShowPushDialog(open);
+          if (!open && localStorage.getItem("aura-push-enabled") !== "true") {
+            localStorage.setItem(`aura-push-dismissed-until:${userId}`, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+          }
+        }}
+        onInstallNeeded={() => {
+          setShowPushDialog(false);
+          setShowIosInstallGuide(true);
+        }}
+      />
     </main>
   );
 }
