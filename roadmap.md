@@ -52,3 +52,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Personalizar a primeira semana com poucos dados: usar sinais do checkout, onboarding e primeiras interações para aumentar ativação e conversão ao mensal sem elevar a frequência
 - [x] Criar descoberta guiada de valor na primeira semana: apresentar progressivamente conversa, sessão, jornada, práticas, áudios e progresso conforme o que o cliente ainda não experimentou
 - [x] Fechar lacunas do push: programar avisos não urgentes no melhor horário e centralizar nova resposta com deduplicação e abertura rastreável
+
+- [ ] Simular cenários reais de notificações por perfil, canal, horário, presença, limite e fallback; corrigir divergências encontradas.
