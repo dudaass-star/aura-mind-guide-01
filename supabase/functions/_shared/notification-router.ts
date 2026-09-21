@@ -86,6 +86,7 @@ async function scheduleDelivery(
 
 export async function routeNotification(supabase: any, request: NotificationRequest): Promise<RoutedNotificationResult> {
   const priority = request.priority || "normal";
+  const scopedIdempotencyKey = `${request.userId}:${request.idempotencyKey}`;
   const personalization = await evaluateNotificationPersonalization(supabase, {
     userId: request.userId,
     category: request.category,
@@ -94,7 +95,7 @@ export async function routeNotification(supabase: any, request: NotificationRequ
   });
   const newDelivery = {
     user_id: request.userId,
-    idempotency_key: request.idempotencyKey,
+    idempotency_key: scopedIdempotencyKey,
     category: request.category,
     notification_type: request.type,
     priority,
@@ -113,7 +114,7 @@ export async function routeNotification(supabase: any, request: NotificationRequ
   let deliveryError: any = null;
   if (request.scheduledDeliveryId) {
     const existingResult = await supabase.from("notification_deliveries")
-      .update({ status: "pending", scheduled_for: null })
+      .update({ status: "pending" })
       .eq("id", request.scheduledDeliveryId)
       .eq("user_id", request.userId)
       .eq("status", "scheduled")
@@ -131,7 +132,7 @@ export async function routeNotification(supabase: any, request: NotificationRequ
   if (!request.scheduledDeliveryId && deliveryError?.code === "23505") {
     const { data: existing } = await supabase.from("notification_deliveries")
       .select("id,status,selected_channel,updated_at")
-      .eq("idempotency_key", request.idempotencyKey)
+      .eq("idempotency_key", scopedIdempotencyKey)
       .eq("user_id", request.userId)
       .single();
     if (!existing) throw new Error("Chave de entrega já pertence a outro cliente");
@@ -141,7 +142,15 @@ export async function routeNotification(supabase: any, request: NotificationRequ
       return { success: true, channel: existing?.selected_channel || "none", reason: "duplicate" };
     }
     const { data: reclaimed } = await supabase.from("notification_deliveries")
-      .update({ status: "pending", metadata: { privacy_safe: true, retry: true } })
+      .update({
+        status: "pending",
+        category: request.category,
+        notification_type: request.type,
+        priority,
+        path: request.path,
+        expires_at: request.expiresAt || null,
+        metadata: { privacy_safe: true, retry: true },
+      })
       .eq("id", existing.id)
       .eq("status", existing.status)
       .eq("updated_at", existing.updated_at)

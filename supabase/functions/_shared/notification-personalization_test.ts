@@ -69,6 +69,7 @@ function createPersonalizationDb(deliveries: Array<{ id: string }> = []) {
     in: () => notificationDeliveries,
     not: () => notificationDeliveries,
     gte: () => notificationDeliveries,
+    or: () => notificationDeliveries,
     neq: (_field: string, id: string) => ({ count: deliveries.filter((item) => item.id !== id).length }),
     then: (resolve: (value: { count: number }) => unknown) => resolve({ count: deliveries.length }),
   };
