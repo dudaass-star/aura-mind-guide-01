@@ -93,7 +93,11 @@ const ThankYou = () => {
       const consumed = await supabase.functions.invoke("checkout-app-access", {
         body: { action: "consume", token },
       });
-      if (cancelled || consumed.error || !consumed.data?.token_hash) return;
+      if (cancelled) return;
+      if (consumed.error || !consumed.data?.token_hash) {
+        setAccessState("unavailable");
+        return;
+      }
       const verified = await supabasePortal.auth.verifyOtp({
         token_hash: consumed.data.token_hash,
         type: consumed.data.type || "magiclink",
@@ -101,6 +105,8 @@ const ThankYou = () => {
       if (!verified.error) {
         localStorage.removeItem("aura_checkout_access");
         navigate("/meu-espaco", { replace: true });
+      } else {
+        setAccessState("unavailable");
       }
     };
     void check();
@@ -204,9 +210,15 @@ const ThankYou = () => {
 
           {/* Back link */}
           <div className="mt-8 animate-fade-up delay-400">
-            <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Voltar para o site
-            </Link>
+            {accessState === "unavailable" ? (
+              <Button asChild variant="outline">
+                <Link to="/meu-espaco/entrar">Entrar com meu código</Link>
+              </Button>
+            ) : (
+              <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Voltar para o site
+              </Link>
+            )}
           </div>
         </div>
       </div>

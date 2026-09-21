@@ -596,16 +596,15 @@ serve(async (req) => {
     // `fallback: true` = 2ª chamada do mesmo usuário (widget embedado não montou e
     // caímos no Checkout hospedado). Não duplicamos a linha do funil nesse caso.
     // Gravação fire-and-forget: não faz o cliente esperar pelo log do funil.
-    if (fallback) {
-      logStep("Fallback session — funnel log skipped");
-    } else {
-      try {
-        const supabase = createClient(
-          Deno.env.get("SUPABASE_URL") ?? "",
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-        );
-        await (async () => {
-          try {
+    try {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
+      await (async () => {
+        try {
+          let checkoutRowId: string | null = null;
+          if (!fallback) {
             // Sessão pré-criada enquanto o usuário digitava: se ele corrigiu um
             // dado e geramos outra, limpamos a anterior ainda "created" da última
             // hora pra não duplicar linha de funil nem e-mail de recuperação.
@@ -627,30 +626,35 @@ serve(async (req) => {
               stripe_session_id: session.id,
               status: "created",
             }).select("id").maybeSingle();
-            const claimId = await saveCheckoutAccessClaim(supabase, {
-              token: accessToken,
-              gateway: "stripe",
-              providerReference: session.id,
-              checkoutSessionId: checkoutRow?.id || null,
-              email,
-              phone: phoneClean,
-              name,
-              plan,
-              billing: billingPeriod,
-            });
-            if (claimId) {
-              await stripe.checkout.sessions.update(session.id, {
-                metadata: { ...sessionConfig.metadata, checkout_access_claim_id: claimId },
-              });
-            }
+            checkoutRowId = checkoutRow?.id || null;
             logStep("Checkout session logged to DB");
-          } catch (e) {
-            console.warn("⚠️ Failed to log checkout session (non-blocking):", (e as Error)?.message || e);
+          } else {
+            logStep("Fallback session — funnel log skipped");
           }
-        })();
-      } catch (dbErr) {
-        console.warn("⚠️ Failed to log checkout session (non-blocking):", dbErr);
-      }
+          // O fallback hospedado também precisa assumir a intenção de acesso.
+          // Sem isso, um pagamento concluído após falha do widget não abre o app.
+          const claimId = await saveCheckoutAccessClaim(supabase, {
+            token: accessToken,
+            gateway: "stripe",
+            providerReference: session.id,
+            checkoutSessionId: checkoutRowId,
+            email,
+            phone: phoneClean,
+            name,
+            plan,
+            billing: billingPeriod,
+          });
+          if (claimId) {
+            await stripe.checkout.sessions.update(session.id, {
+              metadata: { ...sessionConfig.metadata, checkout_access_claim_id: claimId },
+            });
+          }
+        } catch (e) {
+          console.warn("⚠️ Failed to log checkout session/access claim (non-blocking):", (e as Error)?.message || e);
+        }
+      })();
+    } catch (dbErr) {
+      console.warn("⚠️ Failed to log checkout session/access claim (non-blocking):", dbErr);
     }
 
     // Para modo embedded devolvemos client_secret + chave publicável (pra montar <EmbeddedCheckoutProvider>).

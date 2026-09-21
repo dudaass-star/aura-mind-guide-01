@@ -31,13 +31,18 @@ Deno.serve(async (req) => {
     if (!url || !key) throw new Error("Configuração interna incompleta");
     const admin = createClient(url, key, { auth: { persistSession: false } });
     const tokenHash = await hashCheckoutAccessToken(token);
-    const { data: claim } = await admin.from("checkout_access_claims")
+    const { data: claims } = await admin.from("checkout_access_claims")
       .select("id,status,profile_id,name,plan,billing,expires_at")
-      .eq("token_hash", tokenHash).maybeSingle();
-    if (!claim || Date.parse(claim.expires_at) <= Date.now()) return json({ error: "invalid_or_expired" }, 400);
+      .eq("token_hash", tokenHash)
+      .order("created_at", { ascending: false });
+    const validClaims = (claims || []).filter((item) => Date.parse(item.expires_at) > Date.now());
+    if (validClaims.length === 0) return json({ error: "invalid_or_expired" }, 400);
+    const paidClaim = validClaims.find((item) => item.status === "paid");
+    const consumedClaim = validClaims.find((item) => item.status === "consumed");
+    const claim = paidClaim || consumedClaim || validClaims[0];
 
     if (body?.action === "status") {
-      return json({ status: claim.status, paid: claim.status === "paid" || claim.status === "consumed", name: claim.name, plan: claim.plan, billing: claim.billing });
+      return json({ status: claim.status, paid: Boolean(paidClaim || consumedClaim), name: claim.name, plan: claim.plan, billing: claim.billing });
     }
     if (body?.action !== "consume") return json({ error: "invalid_action" }, 400);
     if (claim.status === "consumed") return json({ error: "already_used" }, 409);

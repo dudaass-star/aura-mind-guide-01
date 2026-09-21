@@ -27,7 +27,7 @@ export async function saveCheckoutAccessClaim(
 ): Promise<string | null> {
   if (!isCheckoutAccessToken(input.token)) return null;
   const tokenHash = await hashCheckoutAccessToken(input.token);
-  const { data, error } = await supabase.from("checkout_access_claims").upsert({
+  const { data, error } = await supabase.from("checkout_access_claims").insert({
     token_hash: tokenHash,
     gateway: input.gateway,
     provider_reference: input.providerReference,
@@ -39,8 +39,16 @@ export async function saveCheckoutAccessClaim(
     billing: input.billing,
     status: "pending",
     expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  }, { onConflict: "token_hash" }).select("id").maybeSingle();
+  }).select("id").maybeSingle();
   if (error) {
+    if (error.code === "23505" && input.providerReference) {
+      const { data: existing } = await supabase.from("checkout_access_claims")
+        .select("id")
+        .eq("gateway", input.gateway)
+        .eq("provider_reference", input.providerReference)
+        .maybeSingle();
+      if (existing?.id) return existing.id;
+    }
     console.error("[checkout-access] Falha ao salvar intenção:", error.message);
     return null;
   }
