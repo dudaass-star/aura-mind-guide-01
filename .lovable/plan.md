@@ -1,43 +1,34 @@
-# Concluir telemetria e interrupção da conversa web
+# Elevar o aplicativo AURA ao nível premium
 
 ## Objetivo
 
-Fechar os dois pontos restantes da conversa web na Fase 1: medir a fluidez real sem armazenar conteúdo sensível e garantir que uma nova mensagem interrompa a resposta em andamento sem perder, duplicar ou entregar bolhas fora de contexto.
+Transformar a entrada do aplicativo em uma experiência familiar de mensagens: o cliente vê a conversa com a AURA, reconhece sua foto e nome, toca para entrar e encontra uma conversa fluida, elegante e acolhedora. A estrutura ficará pronta para receber novos recursos no futuro sem poluir a experiência principal.
+
+## Experiência
+
+- A primeira tela será **Conversas**, não a conversa já aberta.
+- A conversa da **AURA** aparecerá como o contato principal, com foto, nome, prévia da última mensagem, horário, indicador de novidade e presença.
+- Ao tocar, a conversa abre em tela inteira no celular, com cabeçalho próprio, botão de voltar, foto da AURA, nome e estado de resposta.
+- Em telas maiores, lista e conversa poderão aparecer lado a lado, mantendo familiaridade e aproveitando melhor o espaço.
+- A tela de conversas terá uma área discreta preparada para futuros recursos, sem inventar itens vazios agora.
+
+## Direção visual
+
+- Usar a familiaridade do WhatsApp na hierarquia e nos gestos, sem copiar sua marca ou parecer uma imitação.
+- Manter a identidade da AURA: tipografia editorial, tons naturais, contraste refinado, foto humana e detalhes de alta qualidade.
+- Reduzir o aspecto de painel e elevar a percepção de produto: melhor escala, respiro, divisores, estados de toque, transições e acabamento mobile.
+- Usar somente cores e sombras do sistema visual do projeto.
 
 ## Implementação
 
-### Princípio de reaproveitamento
+- Separar a lista de conversas da conversa aberta, preservando toda a lógica já validada de envio, áudio, histórico, tempo real, interrupção e reconexão.
+- Levar a navegação principal para uma estrutura própria de aplicativo, especialmente no celular, sem competir com a conversa.
+- Usar a foto existente da AURA e dados reais da última mensagem para compor a entrada.
+- Preservar as demais áreas atuais e preparar a tela inicial para novos espaços futuros.
 
-- Reutilizar o núcleo já maduro do WhatsApp: acumulação de mensagens, trava por usuário, nova fala durante a resposta, contexto pendente, preferências, sessões, limites, segurança e geração das bolhas.
-- Não duplicar essas regras no aplicativo. Corrigir o núcleo comum quando houver falha e manter somente a camada de entrega diferente por canal.
-- No aplicativo, acrescentar apenas o que o WhatsApp entrega pela própria plataforma: bolha otimista, estado visual imediato, tempo real, histórico na tela, rascunho, posição de leitura, reconexão, áudio pelo navegador e telemetria no aparelho.
-- Não copiar atrasos, templates, janela de 24 horas, provedores ou confirmações de entrega específicos do WhatsApp.
+## Validação
 
-### 1. Interrupção confiável de turnos
-
-- Ao aceitar qualquer nova mensagem, atualizar imediatamente o identificador do último envio do cliente, mesmo quando outro processamento já estiver ativo.
-- Fazer o processamento em andamento detectar essa mudança antes de cada bolha e interromper as bolhas restantes.
-- Preservar as partes ainda não entregues como contexto temporário e recompor a resposta usando também a nova mensagem.
-- Substituir o retorno passivo de concorrência por uma retomada persistente, para que o navegador possa fechar sem perder o novo turno.
-- Garantir que somente o processamento dono do turno possa liberar seu estado, evitando que um processamento antigo encerre o novo.
-
-### 2. Telemetria de latência
-
-- Registrar eventos técnicos por turno, sem texto, áudio, telefone ou outro conteúdo da conversa.
-- Medir: toque até bolha local, recebimento no servidor, início de processamento, primeira resposta persistida e conclusão do turno.
-- Calcular tempos por etapa a partir de timestamps do cliente e do servidor, vinculados apenas ao identificador técnico da mensagem.
-- Permitir consulta de p50, p75, p95, taxa de erro e turnos interrompidos para acompanhar os limites definidos no plano principal.
-- Tornar a gravação da telemetria não bloqueante: falha de medição nunca pode atrasar ou impedir a conversa.
-
-### 3. Validação obrigatória
-
-- Testar envio de texto e áudio, histórico e tempo real após as mudanças.
-- Enviar uma segunda mensagem durante o processamento e confirmar que nenhuma bolha antiga posterior é entregue.
-- Confirmar que a resposta recomposta considera as duas mensagens e que não há duplicidade.
-- Repetir com reconexão e fechamento da tela após o envio.
-- Verificar no banco os eventos e tempos do turno, sem conteúdo sensível.
-- Rodar os testes das funções, validação de tipos e checagem de alterações antes de publicar.
-
-## Critério de conclusão
-
-A Fase 1 só será marcada como concluída quando áudio, telemetria e interrupção tiverem evidência prática de funcionamento, inclusive após reconexão. Em seguida, o trabalho avança para a Fase 2: navegação do aplicativo, conta e instalação na tela inicial.
+- Conferir visual e navegação em celular e desktop.
+- Validar entrada na conversa, retorno à lista, envio de texto e áudio, histórico e indicador de resposta.
+- Confirmar que teclado, rolagem e campo de mensagem permanecem estáveis no celular.
+- Revisar contraste, cortes, sobreposições e sensação de velocidade antes de concluir.
