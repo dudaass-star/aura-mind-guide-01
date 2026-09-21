@@ -258,9 +258,9 @@ const UserPortal = () => {
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
-      <div className="min-h-screen bg-[#F5F0E8] text-[#2A2A2A] flex flex-col">
+      <div className="min-h-screen bg-background text-foreground flex flex-col">
         {/* Header — Deep Navy Anchor */}
-        <div className="bg-[#F5F0E8]">
+        <div className={activeTab === "conversar" ? "hidden" : "bg-background"}>
           <div className="max-w-2xl mx-auto px-5 pt-5 pb-3 flex items-center justify-between">
             <img src={logoOlaAura} alt="Olá AURA" className="h-11 w-auto" />
             <span className="text-[10px] uppercase tracking-[0.2em] text-[#87A878] font-bold font-['Nunito']">
@@ -270,7 +270,7 @@ const UserPortal = () => {
         </div>
 
         {/* Tabs — underline navy accent */}
-        <div className="bg-[#F5F0E8] sticky top-0 z-10">
+        <div className={activeTab === "conversar" ? "hidden" : "bg-background sticky top-0 z-10"}>
           <div className="max-w-2xl mx-auto px-3 sm:px-5 border-b border-[#87A878]/20 flex gap-1 sm:gap-1 w-full justify-between sm:justify-start sm:overflow-x-auto scrollbar-none">
             {TABS.map((tab) => {
               const Icon = tab.icon;
@@ -309,7 +309,7 @@ const UserPortal = () => {
         {/* Content */}
         <div className={activeTab === "conversar" ? "flex-1 w-full" : "flex-1 max-w-2xl mx-auto w-full px-5 py-6 pb-24"}>
           {activeTab !== "conversar" && <PlanTierBanner profile={profile} onChangePlan={() => setChangePlanOpen(true)} />}
-          {activeTab === "conversar" && <ConversarTab userId={userId!} firstName={firstName} />}
+          {activeTab === "conversar" && <ConversarTab userId={userId!} firstName={firstName} onNavigate={handleTabClick} />}
           {activeTab === "hoje" && (
             <HojeTab
               userId={userId!}

@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, Check, CheckCheck, Loader2, Mic, Send, Square, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, Check, CheckCheck, ChevronRight, Loader2, Mic, Send, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
+import avatarAura from "@/assets/avatar-aura.jpg";
 
 type ChatMessage = {
   id: string;
@@ -66,7 +67,15 @@ function audioStoragePath(message: ChatMessage) {
   return typeof path === "string" ? path : null;
 }
 
-export function ConversarTab({ userId, firstName }: { userId: string; firstName: string }) {
+export function ConversarTab({
+  userId,
+  firstName,
+  onNavigate,
+}: {
+  userId: string;
+  firstName: string;
+  onNavigate?: (tab: "hoje" | "sessoes" | "insights" | "meditacoes") => void;
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
@@ -78,6 +87,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
   const [recording, setRecording] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
   const [audioError, setAudioError] = useState("");
+  const [chatOpen, setChatOpen] = useState(() => window.matchMedia("(min-width: 768px)").matches);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const nearBottomRef = useRef(true);
@@ -384,17 +394,95 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
   };
 
   if (loading) {
-    return <div className="flex h-[70dvh] items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>;
+    return <div className="flex h-dvh items-center justify-center bg-background"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>;
   }
 
-  return (
-    <section className="relative mx-auto flex h-[calc(100dvh-8.75rem)] min-h-[32rem] max-w-2xl flex-col overflow-hidden bg-background">
-      <header className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-        <div>
-          <h1 className="font-display text-xl font-semibold text-foreground">Conversa com a AURA</h1>
-          <p className="text-xs text-muted-foreground">{responding ? "AURA está respondendo" : `Seu espaço, ${firstName}`}</p>
+  const latestMessage = messages[messages.length - 1];
+  const latestPreview = latestMessage?.is_audio
+    ? "Áudio"
+    : latestMessage?.content?.replace(/\s+/g, " ").trim() || "Seu espaço para conversar, no seu tempo.";
+
+  const conversationList = (
+    <aside className={cn(
+      "flex h-dvh min-h-[36rem] flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))] md:w-[23rem] md:border-r md:border-border/70",
+      chatOpen && "hidden md:flex",
+    )}>
+      <header className="border-b border-border/70 px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] md:pt-6">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Olá, {firstName}</p>
+            <h1 className="font-display text-[2rem] font-semibold leading-none text-foreground">Conversas</h1>
+          </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card font-display text-sm font-semibold text-foreground shadow-sm" aria-label={`Perfil de ${firstName}`}>
+            {firstName.slice(0, 1).toUpperCase()}
+          </div>
         </div>
-        <span className={cn("h-2 w-2 rounded-full", connected ? "bg-primary" : "bg-destructive")} aria-label={connected ? "Conectado" : "Reconectando"} />
+      </header>
+
+      <div className="px-3 py-2">
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => setChatOpen(true)}
+          className="group h-auto w-full justify-start gap-3 rounded-lg px-2 py-3 text-left hover:bg-secondary/70"
+          aria-label="Abrir conversa com a AURA"
+        >
+          <div className="relative shrink-0">
+            <img src={avatarAura} alt="AURA" className="h-14 w-14 rounded-full object-cover ring-1 ring-border" />
+            <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-background bg-primary" aria-label="AURA disponível" />
+          </div>
+          <div className="min-w-0 flex-1 border-b border-border/60 pb-3 pt-0.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="font-body text-base font-bold text-foreground">AURA</span>
+              <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{formatTime(latestMessage?.created_at || null)}</span>
+            </div>
+            <div className="mt-1 flex items-center gap-2">
+              <p className="min-w-0 flex-1 truncate text-sm font-normal text-muted-foreground">{latestPreview}</p>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            </div>
+          </div>
+        </Button>
+      </div>
+
+      <div className="mt-auto border-t border-border/60 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Seu espaço</p>
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {[
+            ["Hoje", "hoje"],
+            ["Sessões", "sessoes"],
+            ["Percurso", "insights"],
+            ["Áudios", "meditacoes"],
+          ].map(([label, tab]) => (
+            <Button
+              key={tab}
+              type="button"
+              variant="ghost"
+              onClick={() => onNavigate?.(tab as "hoje" | "sessoes" | "insights" | "meditacoes")}
+              className="h-auto min-w-0 flex-col gap-1 rounded-lg px-1 py-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground whitespace-normal"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
+              <span className="w-full truncate">{label}</span>
+            </Button>
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
+
+  const openConversation = (
+    <section className={cn(
+      "relative h-dvh min-h-[36rem] flex-1 flex-col overflow-hidden bg-background md:flex md:h-[min(820px,calc(100dvh-3rem))]",
+      chatOpen ? "flex" : "hidden",
+    )}>
+      <header className="flex min-h-[4.5rem] items-center gap-3 border-b border-border/70 bg-background/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur md:px-5 md:pt-0">
+        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full md:hidden" onClick={() => setChatOpen(false)} aria-label="Voltar para conversas">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover ring-1 ring-border" />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate font-body text-base font-bold text-foreground">AURA</h2>
+          <p className="truncate text-xs text-muted-foreground">{responding ? "respondendo…" : connected ? "presente com você" : "reconectando…"}</p>
+        </div>
       </header>
 
       <div
@@ -404,7 +492,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
           nearBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 150;
           if (nearBottomRef.current) setShowNew(false);
         }}
-        className="flex-1 overflow-y-auto overscroll-contain px-4 py-5"
+        className="flex-1 overflow-y-auto overscroll-contain bg-secondary/20 px-3 py-5 sm:px-5"
       >
         {hasOlder && (
           <Button type="button" variant="ghost" size="sm" className="mx-auto mb-5 flex" onClick={() => void loadOlder()}>
@@ -425,8 +513,8 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
             return (
               <div key={message.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
                 <div className={cn(
-                  "max-w-[86%] rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed shadow-sm",
-                  mine ? "bg-primary text-primary-foreground" : "border border-border/60 bg-card text-card-foreground",
+                  "max-w-[86%] rounded-lg px-3.5 py-2.5 text-[15px] leading-relaxed shadow-sm md:max-w-[76%]",
+                  mine ? "bg-primary text-primary-foreground" : "border border-border/60 bg-background text-foreground",
                   message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
                 )}>
                   <p className="whitespace-pre-wrap break-words">{message.content}</p>
@@ -443,7 +531,7 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
           })}
           {responding && (
             <div className="flex justify-start" aria-live="polite">
-              <div className="flex h-9 items-center gap-1 rounded-lg border border-border/60 bg-card px-4">
+               <div className="flex h-9 items-center gap-1 rounded-lg border border-border/60 bg-background px-4 shadow-sm">
                 {[0, 1, 2].map((dot) => <span key={dot} className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-muted-foreground" style={{ animationDelay: `${dot * 150}ms` }} />)}
               </div>
             </div>
@@ -457,8 +545,8 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
         </Button>
       )}
 
-      <form onSubmit={send} className="border-t border-border/60 bg-background px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-end gap-2 rounded-lg border border-input bg-card p-1.5 focus-within:ring-2 focus-within:ring-ring/30">
+       <form onSubmit={send} className="border-t border-border/60 bg-background px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+         <div className="flex items-end gap-2 rounded-lg border border-input bg-card p-1.5 shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
           {recording ? (
             <>
               <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" onClick={() => stopRecording(true)} aria-label="Cancelar gravação"><X /></Button>
@@ -499,6 +587,15 @@ export function ConversarTab({ userId, firstName }: { userId: string; firstName:
         {audioError && <p className="mt-1.5 text-center text-xs text-destructive">{audioError}</p>}
         {!connected && <p className="mt-1.5 text-center text-xs text-muted-foreground">Reconectando. Sua mensagem não será perdida.</p>}
       </form>
-    </section>
+     </section>
+  );
+
+  return (
+    <main className="min-h-dvh bg-secondary/35 md:flex md:items-center md:justify-center md:p-6">
+      <div className="mx-auto flex w-full max-w-6xl overflow-hidden bg-background md:rounded-lg md:border md:border-border/70 md:shadow-card">
+        {conversationList}
+        {openConversation}
+      </div>
+    </main>
   );
 }
