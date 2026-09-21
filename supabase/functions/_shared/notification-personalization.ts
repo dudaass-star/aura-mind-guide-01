@@ -57,6 +57,10 @@ function brtDayStartIso() {
   return new Date(`${read("year")}-${read("month")}-${read("day")}T03:00:00.000Z`).toISOString();
 }
 
+function nextBrtDayStartIso() {
+  return new Date(new Date(brtDayStartIso()).getTime() + 86_400_000).toISOString();
+}
+
 export async function evaluateNotificationPersonalization(
   supabase: any,
   context: NotificationContext,
@@ -104,7 +108,7 @@ export async function evaluateNotificationPersonalization(
       .eq("user_id", context.userId)
       .in("status", ["scheduled", "sent", "opened", "converted"])
       .not("category", "in", "(response,reminder,billing,security)")
-      .gte("created_at", brtDayStartIso());
+      .or(`and(created_at.gte.${brtDayStartIso()},created_at.lt.${nextBrtDayStartIso()}),and(scheduled_for.gte.${brtDayStartIso()},scheduled_for.lt.${nextBrtDayStartIso()})`);
     if (context.currentDeliveryId) {
       dailyDeliveries = dailyDeliveries.neq("id", context.currentDeliveryId);
     }

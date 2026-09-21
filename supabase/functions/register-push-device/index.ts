@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { z } from "npm:zod@3.25.76";
+import { canRecordPushEvent } from "../_shared/push-event-validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,20 +66,22 @@ Deno.serve(async (req) => {
       }
       if (parsed.data.deliveryId) {
         const { data: ownedDelivery } = await admin.from("notification_deliveries")
-          .select("id")
+          .select("id,selected_channel,status")
           .eq("id", parsed.data.deliveryId)
           .eq("user_id", userId)
           .maybeSingle();
         if (!ownedDelivery) return json({ error: "Entrega inválida" }, 403);
-      }
-      if (parsed.data.eventType === "converted" && parsed.data.deliveryId) {
-        const { data: existingConversion } = await admin.from("push_notification_events")
+        if (["opened", "converted"].includes(parsed.data.eventType)
+          && !canRecordPushEvent(parsed.data.eventType as "opened" | "converted", ownedDelivery)) {
+          return json({ error: "Estado da entrega incompatível" }, 409);
+        }
+        const { data: existingEvent } = await admin.from("push_notification_events")
           .select("id")
           .eq("user_id", userId)
           .eq("delivery_id", parsed.data.deliveryId)
-          .eq("event_type", "converted")
+          .eq("event_type", parsed.data.eventType)
           .maybeSingle();
-        if (existingConversion) return json({ recorded: true, duplicate: true });
+        if (existingEvent) return json({ recorded: true, duplicate: true });
       }
       await admin.from("push_notification_events").insert({
         user_id: userId,

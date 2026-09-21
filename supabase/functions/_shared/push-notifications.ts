@@ -22,6 +22,8 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
   if (error || !devices?.length) return { sent: 0, reason: "no_devices" };
 
   let sent = 0;
+  let failed = 0;
+  let staleTokens = 0;
   const separator = options.path.includes("?") ? "&" : "?";
   const deliveryParam = options.deliveryId ? `&delivery=${encodeURIComponent(options.deliveryId)}` : "";
   const trackedPath = `${options.path}${separator}push=open&type=${encodeURIComponent(options.type)}${deliveryParam}`;
@@ -60,6 +62,8 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
     const stale = (response.status === 404 && failure.includes("UNREGISTERED"))
       || (response.status === 400 && failure.includes("INVALID_ARGUMENT"));
     if (stale) await supabase.from("push_devices").update({ enabled: false }).eq("id", device.id);
+    failed += 1;
+    if (stale) staleTokens += 1;
     await supabase.from("push_notification_events").insert({
       user_id: userId,
       device_id: device.id,
@@ -71,5 +75,10 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
     });
     console.error(`Falha no push [${response.status}]: ${failure.slice(0, 500)}`);
   }));
-  return { sent };
+  return {
+    sent,
+    reason: sent > 0 ? undefined : staleTokens === backgroundDevices.length
+      ? "stale_devices"
+      : failed > 0 ? "delivery_failed" : undefined,
+  };
 }

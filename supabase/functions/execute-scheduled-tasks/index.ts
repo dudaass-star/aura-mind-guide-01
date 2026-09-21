@@ -1362,6 +1362,32 @@ Deno.serve(async (req) => {
         executed++;
 
       } catch (error) {
+        if (task.task_type === 'notification_delivery') {
+          const attempt = Number(task.payload?.delivery_retry_attempt || 0);
+          const scheduledDeliveryId = task.payload?.scheduledDeliveryId;
+          if (attempt < 2 && scheduledDeliveryId) {
+            const retryAt = new Date(Date.now() + (attempt + 1) * 10 * 60_000).toISOString();
+            await supabase.from('notification_deliveries').update({
+              status: 'scheduled',
+              scheduled_for: retryAt,
+              metadata: { reason: 'transient_delivery_failure', retry_attempt: attempt + 1 },
+            }).eq('id', scheduledDeliveryId).eq('user_id', task.user_id);
+            await supabase.from('scheduled_tasks').insert({
+              user_id: task.user_id,
+              task_type: 'notification_delivery',
+              execute_at: retryAt,
+              status: 'pending',
+              payload: { ...(task.payload || {}), delivery_retry_attempt: attempt + 1 },
+            });
+            await supabase.from('scheduled_tasks').update({
+              status: 'canceled',
+              executed_at: new Date().toISOString(),
+            }).eq('id', task.id);
+            console.warn(`⏳ notificação ${scheduledDeliveryId} reagendada após falha transitória`);
+            failed++;
+            continue;
+          }
+        }
         // Woovi indisponível (429/5xx) NÃO é falha da tarefa: é pergunta sem
         // resposta. Se marcássemos como 'failed', o débito do ciclo morreria
         // aqui — foi o que deixou clientes com mandato válido sem cobrança.
