@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Helmet } from "react-helmet-async";
@@ -20,6 +20,7 @@ const JourneyComplete = () => {
   const { journeyId, userId } = useParams<{ journeyId: string; userId: string }>();
   const [confirmed, setConfirmed] = useState(false);
   const [chosenJourneyId, setChosenJourneyId] = useState<string | null>(null);
+  const hasPlaceholderParams = journeyId?.startsWith(":") || userId?.startsWith(":");
 
   const { data: completedJourney, isLoading: loadingJourney } = useQuery({
     queryKey: ["journey", journeyId],
@@ -32,7 +33,7 @@ const JourneyComplete = () => {
       if (error) throw error;
       return data;
     },
-    enabled: !!journeyId,
+    enabled: !!journeyId && !hasPlaceholderParams,
   });
 
   const { data: availableJourneys, isLoading: loadingAll } = useQuery({
@@ -47,7 +48,7 @@ const JourneyComplete = () => {
       if (error) throw error;
       return data;
     },
-    enabled: !!journeyId,
+    enabled: !!journeyId && !hasPlaceholderParams,
   });
 
   const chooseMutation = useMutation({
@@ -71,6 +72,10 @@ const JourneyComplete = () => {
   });
 
   const isLoading = loadingJourney || loadingAll;
+
+  if (hasPlaceholderParams) {
+    return <Navigate to="/meu-espaco" replace />;
+  }
 
   if (isLoading) {
     return (
