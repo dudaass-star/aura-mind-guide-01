@@ -844,6 +844,7 @@ const CheckoutV2 = () => {
             name: name.trim(),
             email: email.trim(),
             phone,
+            accessToken: getCheckoutAccessToken(),
           },
         });
         if (error || !data?.url) {
