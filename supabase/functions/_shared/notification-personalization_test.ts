@@ -29,3 +29,11 @@ Deno.test("envia agora quando já está dentro da hora preferida", () => {
   const now = new Date("2026-09-21T22:35:00.000Z"); // 19h35 BRT
   assertEquals(nextPreferredDeliveryAt(19, "cliente-a", now).toISOString(), now.toISOString());
 });
+
+Deno.test("sessão mensal normal participa do limite diário", () => {
+  assertEquals(isNonUrgentNotification({ userId: "u", category: "session", priority: "normal" }), true);
+});
+
+Deno.test("resposta normal continua fora do limite diário de descoberta", () => {
+  assertEquals(isNonUrgentNotification({ userId: "u", category: "response", priority: "normal" }), false);
+});

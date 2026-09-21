@@ -101,8 +101,8 @@ export async function evaluateNotificationPersonalization(
     const { count } = await supabase.from("notification_deliveries")
       .select("id", { count: "exact", head: true })
       .eq("user_id", context.userId)
-      .in("status", ["sent", "opened", "converted"])
-      .not("category", "in", "(response,session,reminder,billing,security)")
+      .in("status", ["scheduled", "sent", "opened", "converted"])
+      .not("category", "in", "(response,reminder,billing,security)")
       .gte("created_at", brtDayStartIso());
     if ((count || 0) >= 1) {
       return {

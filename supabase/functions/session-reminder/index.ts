@@ -373,7 +373,6 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
             whatsappCategory: 'session_reminder',
             priority: 'high',
             expiresAt: session.scheduled_at,
-            fallback: 'none',
           });
 
           if (result.success) {
