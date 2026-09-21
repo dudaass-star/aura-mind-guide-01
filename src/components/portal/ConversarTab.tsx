@@ -437,7 +437,7 @@ export function ConversarTab({
                 <MoreVertical className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} className="w-64 rounded-lg p-1.5 shadow-lg">
+            <DropdownMenuContent align="end" sideOffset={8} collisionPadding={12} className="w-64 rounded-lg border-border bg-background p-1.5 shadow-card">
               <DropdownMenuItem onSelect={onOpenBilling} disabled={accountLoading} className="gap-3 px-3 py-3 font-body">
                 {accountLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
                 <span>{accountLoading ? "Abrindo…" : billingLabel}</span>
