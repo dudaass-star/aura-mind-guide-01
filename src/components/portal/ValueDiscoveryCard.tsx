@@ -76,7 +76,7 @@ export function ValueDiscoveryCard({
         supabasePortal.from("sessions").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "completed"),
         supabasePortal.from("user_journey_history").select("id", { count: "exact", head: true }).eq("user_id", userId),
         supabasePortal.from("user_meditation_history").select("id", { count: "exact", head: true }).eq("user_id", userId),
-        supabasePortal.from("user_evolution_summary").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabasePortal.from("user_evolution_summary").select("user_id", { count: "exact", head: true }).eq("user_id", userId),
       ]);
       return {
         events: events.data ?? [],
@@ -87,8 +87,18 @@ export function ValueDiscoveryCard({
       };
     },
     enabled: Boolean(userId && hasConversation),
-    staleTime: 60_000,
+    staleTime: 0,
   });
+
+  useEffect(() => {
+    if (!data) return;
+    const experienced: ValueFeature[] = [];
+    if (data.sessions > 0) experienced.push("session");
+    if (data.journeys > 0) experienced.push("journey");
+    if (data.practices > 0) experienced.push("practice");
+    if (data.progress > 0) experienced.push("progress");
+    for (const item of experienced) void recordValueEvent(userId, item, "experienced");
+  }, [data, userId]);
 
   const feature = useMemo<ValueFeature | null>(() => {
     if (!data || !hasConversation) return null;
