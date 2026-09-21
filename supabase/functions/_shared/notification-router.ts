@@ -165,7 +165,8 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     }
   }
 
-  const mayNotifyNow = !isSilentHours() || request.priority === "high";
+  const silentHours = isSilentHours();
+  const mayNotifyNow = !silentHours || request.priority === "high";
   // Lembretes de sessão de alta prioridade preservam a entrega no horário agendado.
   if (mayNotifyNow) {
     const safeCopy = SAFE_PUSH_COPY[request.type](request.firstName);
@@ -193,8 +194,10 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     }
   }
 
-  if (!mayNotifyNow || request.fallback === "none") {
-    const reason = mayNotifyNow ? "push_unavailable" : "silent_hours";
+  // Prioridade alta pode gerar push no horário do compromisso, mas nunca
+  // abre exceção para contato proativo pelo WhatsApp durante o silêncio.
+  if (silentHours || request.fallback === "none") {
+    const reason = silentHours ? "silent_hours" : "push_unavailable";
     await supabase.from("notification_deliveries").update({ selected_channel: "none", status: "suppressed", metadata: { reason } }).eq("id", delivery.id);
     return { success: true, channel: "none", reason };
   }
