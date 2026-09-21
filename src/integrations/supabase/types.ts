@@ -1715,6 +1715,7 @@ export type Database = {
           metadata: Json
           role: string
           sequence_no: number
+          source_message_id: string | null
           user_id: string
         }
         Insert: {
@@ -1729,6 +1730,7 @@ export type Database = {
           metadata?: Json
           role: string
           sequence_no?: number
+          source_message_id?: string | null
           user_id: string
         }
         Update: {
@@ -1743,6 +1745,7 @@ export type Database = {
           metadata?: Json
           role?: string
           sequence_no?: number
+          source_message_id?: string | null
           user_id?: string
         }
         Relationships: [
