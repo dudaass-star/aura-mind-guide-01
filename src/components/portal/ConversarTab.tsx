@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowLeft, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Sparkles, Square, Sun, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
 import avatarAura from "@/assets/avatar-aura.jpg";
+import { InstallAppMenuItem } from "@/components/portal/InstallAppMenuItem";
 
 type ChatMessage = {
   id: string;
@@ -99,6 +101,7 @@ export function ConversarTab({
   const [recordingMs, setRecordingMs] = useState(0);
   const [audioError, setAudioError] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const nearBottomRef = useRef(true);
@@ -446,6 +449,7 @@ export function ConversarTab({
                 <RefreshCw className="h-4 w-4" />
                 <span>Trocar de plano</span>
               </DropdownMenuItem>
+              <InstallAppMenuItem onShowIosGuide={() => setShowIosInstallGuide(true)} />
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={onSignOut} className="gap-3 px-3 py-3 font-body text-destructive focus:text-destructive">
                 <LogOut className="h-4 w-4" />
@@ -638,6 +642,26 @@ export function ConversarTab({
         {conversationList}
         {openConversation}
       </div>
+      <Dialog open={showIosInstallGuide} onOpenChange={setShowIosInstallGuide}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg border-border bg-background p-6 shadow-card">
+          <DialogHeader className="text-left">
+            <DialogTitle className="font-display text-xl text-foreground">Instalar a AURA no iPhone</DialogTitle>
+            <DialogDescription className="pt-1 font-body leading-relaxed">
+              Faça isso no Safari para deixar a AURA na sua tela inicial.
+            </DialogDescription>
+          </DialogHeader>
+          <ol className="space-y-4 pt-2 font-body text-sm text-foreground">
+            <li className="flex gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-primary"><Share2 className="h-4 w-4" /></span>
+              <span className="pt-1.5">Toque em <strong>Compartilhar</strong> na barra do Safari.</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-primary"><SquarePlus className="h-4 w-4" /></span>
+              <span className="pt-1.5">Escolha <strong>Adicionar à Tela de Início</strong> e confirme.</span>
+            </li>
+          </ol>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

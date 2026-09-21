@@ -27,7 +27,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Completar a Fase 1: áudio, telemetria, interrupção, fila durável e reconexão validados no aplicativo publicado
 - [x] Auditar e reaproveitar no aplicativo as regras maduras de fluidez e negociação de turnos já usadas no WhatsApp, separando apenas o que depende do canal
 - [x] Validar conversa web com conta isolada: envio, resposta, histórico, tempo real, idempotência, isolamento e reconexão entre três abas
-- [ ] Construir Fase 2 do aplicativo: navegação centrada na conversa, áudio, conta e instalação
+- [x] Construir Fase 2 do aplicativo: navegação centrada na conversa, áudio, conta e instalação
 - [ ] Executar piloto controlado e validar fluidez, segurança e continuidade antes da migração
 - [x] Redesenhar o aplicativo com entrada por conversas, perfil da AURA e experiência premium familiar ao WhatsApp
 - [x] Aplicar a direção Inbox-first: abertura sempre na lista, conversa principal e navegação premium para as demais áreas
@@ -36,3 +36,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 
 - [x] Validar o fluxo mobile completo: lista de conversas, conversa da AURA, retorno e acesso às demais áreas sem sobreposição
 - [x] Reunir pagamento, troca de plano e saída no menu de três pontos da tela inicial
+- [x] Fechar instalação do Meu Espaço na tela inicial com identidade AURA e orientação para iPhone
