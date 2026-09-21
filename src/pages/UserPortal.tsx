@@ -53,6 +53,18 @@ const UserPortal = () => {
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
+
+  useEffect(() => {
+    if (!userId || searchParams.get("push") !== "open") return;
+    void supabasePortal.functions.invoke("register-push-device", {
+      body: {
+        action: "event",
+        eventType: "opened",
+        notificationType: searchParams.get("type") || undefined,
+        path: window.location.pathname,
+      },
+    });
+  }, [searchParams, userId]);
   const { data: novidades, refetch: refetchNovidades } = usePortalNovidades(userId);
 
   // Ao abrir o portal, marca a aba inicial como vista.

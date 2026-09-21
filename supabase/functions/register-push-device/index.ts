@@ -15,6 +15,12 @@ const BodySchema = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("disable_current") }),
   z.object({ action: z.literal("permission_denied") }),
+  z.object({
+    action: z.literal("event"),
+    eventType: z.enum(["invite_shown", "activation_started", "opened"]),
+    notificationType: z.string().max(80).optional(),
+    path: z.string().max(300).optional(),
+  }),
 ]);
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -44,6 +50,15 @@ Deno.serve(async (req) => {
     if (!parsed.success) return json({ error: "Dados inválidos" }, 400);
 
     const admin = createClient(url, serviceKey);
+    if (parsed.data.action === "event") {
+      await admin.from("push_notification_events").insert({
+        user_id: userId,
+        event_type: parsed.data.eventType,
+        notification_type: parsed.data.notificationType || null,
+        path: parsed.data.path || null,
+      });
+      return json({ recorded: true });
+    }
     if (parsed.data.action === "permission_denied") {
       await admin.from("push_notification_events").insert({ user_id: userId, event_type: "permission_denied" });
       return json({ recorded: true });

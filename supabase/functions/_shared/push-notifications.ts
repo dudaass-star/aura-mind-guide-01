@@ -21,6 +21,8 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
   if (error || !devices?.length) return { sent: 0, reason: "no_devices" };
 
   let sent = 0;
+  const separator = options.path.includes("?") ? "&" : "?";
+  const trackedPath = `${options.path}${separator}push=open&type=${encodeURIComponent(options.type)}`;
   await Promise.all(devices.map(async (device: { id: string; token: string }) => {
     const response = await fetch(`${GATEWAY_URL}/v1/projects/_/messages:send`, {
       method: "POST",
@@ -33,10 +35,10 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
         message: {
           token: device.token,
           notification: { title: options.title, body: options.body },
-          data: { path: options.path, type: options.type },
+          data: { path: trackedPath, type: options.type },
           webpush: {
-            notification: { icon: "/aura-icon-192.png", badge: "/aura-icon-192.png", data: { path: options.path } },
-            fcm_options: { link: `https://olaaura.com.br${options.path}` },
+            notification: { icon: "/aura-icon-192.png", badge: "/aura-icon-192.png", data: { path: trackedPath } },
+            fcm_options: { link: `https://olaaura.com.br${trackedPath}` },
           },
         },
       }),
@@ -44,7 +46,7 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
     if (response.ok) {
       sent += 1;
       await supabase.from("push_notification_events").insert({
-        user_id: userId, device_id: device.id, event_type: "sent", notification_type: options.type, path: options.path,
+        user_id: userId, device_id: device.id, event_type: "sent", notification_type: options.type, path: trackedPath,
       });
       return;
     }
@@ -57,7 +59,7 @@ export async function sendPushToUser(supabase: any, userId: string, options: Pus
       device_id: device.id,
       event_type: "failed",
       notification_type: options.type,
-      path: options.path,
+      path: trackedPath,
       metadata: { status: response.status, stale },
     });
     console.error(`Falha no push [${response.status}]: ${failure.slice(0, 500)}`);

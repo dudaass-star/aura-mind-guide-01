@@ -3,6 +3,7 @@ import { Bell, BellOff, ExternalLink, Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { disablePushNotifications, enablePushNotifications, getPushPermission, isIosPushInstallRequired, type PushActivationResult } from "@/lib/push-notifications";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
 
 type Props = {
   open: boolean;
@@ -26,11 +27,15 @@ export function PushNotificationsDialog({ open, onOpenChange, onInstallNeeded }:
   const enabled = permission === "granted" && localStorage.getItem("aura-push-enabled") === "true";
 
   useEffect(() => {
-    if (open) setResult(null);
+    if (open) {
+      setResult(null);
+      void supabasePortal.functions.invoke("register-push-device", { body: { action: "event", eventType: "invite_shown" } });
+    }
   }, [open]);
 
   const activate = async () => {
     setLoading(true);
+    void supabasePortal.functions.invoke("register-push-device", { body: { action: "event", eventType: "activation_started" } });
     const next = await enablePushNotifications();
     setResult(next);
     setLoading(false);
