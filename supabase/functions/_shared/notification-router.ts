@@ -66,6 +66,7 @@ export async function routeNotification(supabase: any, request: NotificationRequ
       .update({ status: "pending", metadata: { privacy_safe: true, retry: true } })
       .eq("id", existing.id)
       .eq("status", existing.status)
+      .eq("updated_at", existing.updated_at)
       .select("id")
       .maybeSingle();
     if (!reclaimed) return { success: true, channel: "none", reason: "duplicate" };
