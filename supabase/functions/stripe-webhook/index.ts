@@ -9,7 +9,7 @@ import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
-import { markCheckoutAccessPaid } from "../_shared/checkout-access.ts";
+import { markCheckoutAccessPaid, markCheckoutAccessPaidByReference } from "../_shared/checkout-access.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1160,6 +1160,9 @@ Deno.serve(async (req) => {
       }
 
       await markCheckoutAccessPaid(supabase, checkoutAccessClaimId, profileUserId);
+      if (!checkoutAccessClaimId) {
+        await markCheckoutAccessPaidByReference(supabase, "stripe", session.id, profileUserId);
+      }
 
       // Generate portal token for paid users
       let portalLink = '';
