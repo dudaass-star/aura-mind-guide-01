@@ -15,7 +15,7 @@ export type NotificationPersonalization = {
 
 export function isNonUrgentNotification(context: NotificationContext) {
   return context.priority !== "high"
-    && !["response", "session", "reminder"].includes(context.category);
+    && !["response", "reminder"].includes(context.category);
 }
 
 export function nextPreferredDeliveryAt(preferredHourBrt: number, userId: string, now = new Date()) {

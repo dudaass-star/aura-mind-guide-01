@@ -1,15 +1,16 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { isNonUrgentNotification, nextPreferredDeliveryAt } from "./notification-personalization.ts";
 
-Deno.test("resposta e sessão nunca são adiadas pela personalização", () => {
+Deno.test("resposta e lembrete prioritário nunca são adiados pela personalização", () => {
   assertEquals(isNonUrgentNotification({ userId: "u", category: "response", priority: "normal" }), false);
-  assertEquals(isNonUrgentNotification({ userId: "u", category: "session", priority: "normal" }), false);
-  assertEquals(isNonUrgentNotification({ userId: "u", category: "journey", priority: "high" }), false);
+  assertEquals(isNonUrgentNotification({ userId: "u", category: "reminder", priority: "normal" }), false);
+  assertEquals(isNonUrgentNotification({ userId: "u", category: "session", priority: "high" }), false);
 });
 
 Deno.test("conteúdo não urgente pode aguardar o melhor horário", () => {
   assertEquals(isNonUrgentNotification({ userId: "u", category: "journey", priority: "normal" }), true);
   assertEquals(isNonUrgentNotification({ userId: "u", category: "report", priority: "low" }), true);
+  assertEquals(isNonUrgentNotification({ userId: "u", category: "session", priority: "normal" }), true);
 });
 
 Deno.test("agenda para hoje quando o horário preferido ainda não chegou", () => {

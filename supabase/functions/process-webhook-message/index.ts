@@ -1785,7 +1785,7 @@ Deno.serve(async (req) => {
         path: '/meu-espaco',
         whatsappText: '',
         whatsappCategory: 'checkin',
-        priority: 'high',
+        priority: 'normal',
         fallback: 'none',
         expiresAt: new Date(Date.now() + 6 * 60 * 60_000).toISOString(),
       }).catch((pushError) => console.error('Falha não bloqueante no aviso do aplicativo:', pushError));
