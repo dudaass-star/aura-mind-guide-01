@@ -1,95 +1,152 @@
-# Entrada normal integrada ao aplicativo
+# Entrada normal integrada ao aplicativo — plano revisado
 
-## Objetivo
+## Decisão de produto
 
-Transformar o checkout atual na porta de entrada do aplicativo: o cliente se identifica uma vez, paga pelos meios já disponíveis e chega ao Meu Espaço sem senha ou código. A sessão gratuita não faz parte desta entrega.
+Manter o **checkout atual como caminho principal de alta intenção** e transformar o aplicativo no destino natural depois da compra. O cliente informa seus dados uma vez, paga sem criar senha e entra automaticamente no aparelho usado. Antes da confirmação, poderá abrir e instalar apenas uma versão limitada do aplicativo, sem conversa ou consumo de IA.
+
+Não criar `profiles` nem uma conta autenticada antes do pagamento. Isso preserva a conversão simples do checkout, evita contas falsas e não contamina aquisição, Plano Semanal, Meta Purchase ou a distinção entre cliente novo e existente.
+
+## Por que este desenho
+
+- Checkouts móveis convertem melhor quando pedem somente os dados necessários, deixam preço e recorrência claros e não impõem criação de conta antes da compra ([Stripe](https://stripe.com/resources/more/checkout-flow-design-strategies-that-can-help-boost-conversion-and-customer-retention)).
+- Em apps de assinatura, paywalls diretos tendem a converter mais que freemium; a futura sessão gratuita deve ser um experimento separado, não uma mudança silenciosa no fluxo vencedor ([RevenueCat](https://www.revenuecat.com/state-of-subscription-apps/)).
+- Retenção começa na ativação inicial. Para a AURA, o primeiro valor é conversar e sentir continuidade, não preencher um onboarding longo.
+- Instalação e notificações funcionam melhor depois de valor percebido e de uma ação explícita; prompts prematuros aumentam recusas e bloqueios ([web.dev](https://web.dev/articles/permissions-best-practices)). No iPhone, web push exige o app adicionado à tela inicial ([Apple](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers)).
+- Recuperação de pagamento e cancelamento são alavancas diferentes de LTV; atraso, não uso, preço e insatisfação devem continuar separados. Pausa, troca de plano e recuperação contextual são práticas consolidadas ([Paddle](https://developer.paddle.com/concepts/retain/cancellation-flows-surveys)).
 
 ## Jornada do cliente
 
-1. O cliente informa nome, e-mail e WhatsApp no checkout atual.
-2. Ao continuar para o pagamento, a AURA cria ou reconhece o acesso daquele aparelho de forma silenciosa.
-3. Cartão e PIX seguem com a experiência e os preços atuais.
-4. Pagamento confirmado abre o Meu Espaço com o plano liberado e a conversa pronta.
-5. Se o pagamento ficar pendente ou for abandonado, o cliente permanece reconhecido, mas vê somente uma área limitada para retomar a compra.
-6. O convite para instalar aparece dentro do aplicativo, sem bloquear checkout ou pagamento.
-7. O código de oito dígitos e o link pelo WhatsApp permanecem como recuperação ou troca de aparelho.
+### 1. Checkout sem atrito
 
-## O que será construído
+1. A pessoa informa nome, e-mail e WhatsApp no checkout atual.
+2. A AURA mantém o prewarm já existente, preços, ciclos, Plano Semanal e gateways atuais.
+3. Ao iniciar cartão ou PIX, o servidor cria uma **intenção segura de acesso**, separada de `profiles`.
+4. O navegador guarda apenas um segredo aleatório de alta entropia; nome, e-mail ou telefone isolados nunca concedem acesso.
+5. O reconhecimento será explícito por token first-party/deep link, nunca por fingerprinting probabilístico do aparelho.
 
-### Identificação antes do pagamento
+### 2. Pagamento e retorno
 
-- Criar um acesso preliminar vinculado a nome, e-mail e WhatsApp somente após o cliente tocar no botão de pagamento.
-- Salvar a sessão nesse aparelho sem exigir senha ou código.
-- Reaproveitar cadastros preliminares em tentativas repetidas, evitando contas duplicadas.
-- Nunca entregar automaticamente o acesso de uma conta existente apenas porque alguém digitou o mesmo e-mail ou telefone; nesses casos, usar a recuperação segura existente.
+- **Cartão:** vincular a intenção ao `checkout_session` da Stripe e retornar ao aplicativo.
+- **PIX:** vincular a mesma intenção à cobrança do provedor e manter QR, polling e reconciliação específicos de Asaas, Inter ou Woovi.
+- A tela de retorno consulta o servidor e mostra somente estados verificáveis: `aguardando`, `confirmando`, `pago` ou `não concluído`.
+- Somente webhook/reconciliação idempotente concede o plano. A tela de agradecimento nunca libera acesso.
 
-### Separação entre cadastro e direito de uso
+### 3. Entrada automática depois de pago
 
-- Introduzir o estado de pagamento pendente para novos cadastros.
-- Manter conversa, sessões, áudios, jornadas, histórico e demais recursos protegidos até a confirmação financeira.
-- Reforçar o bloqueio também no envio de mensagens, impedindo que uma alteração visual ou chamada direta libere uso indevido.
-- Preservar clientes ativos, atrasados em recuperação e assinaturas existentes sem rebaixamento.
+- Em uma primeira compra legítima, o segredo do aparelho poderá ser trocado uma única vez por uma sessão persistente do portal, somente após a intenção estar paga e vinculada ao perfil criado pelo webhook.
+- Se já existir uma conta, o checkout não dará acesso ao histórico apenas por coincidência de e-mail ou telefone. A pessoa confirma a identidade pelo link seguro do WhatsApp ou código de oito dígitos.
+- Reaberturas no mesmo aparelho usam a sessão persistida. Código e WhatsApp ficam para recuperação, sessão encerrada ou troca de aparelho.
 
-### Área limitada
+### 4. Primeiro valor e instalação
 
-O cliente ainda não pago poderá:
+- Na primeira entrada paga, abrir o aplicativo pronto para conversar, sem questionário obrigatório.
+- Medir o tempo até a primeira mensagem e a primeira resposta útil da AURA.
+- Oferecer instalação depois da primeira interação de valor; manter “Instalar aplicativo” no menu e um lembrete discreto posterior para quem adiar.
+- Android/desktop usam o prompt nativo quando disponível; iPhone recebe o guia curto de “Adicionar à Tela de Início”.
 
-- ver que seu acesso foi criado;
-- instalar a AURA;
-- consultar o plano escolhido e o estado do pagamento;
-- retomar cartão ou PIX;
-- alterar plano antes da compra;
-- acessar recuperação de conta e suporte.
+### 5. Se não pagar
 
-Não poderá iniciar conversa, consumir áudio, marcar sessão ou acessar conteúdo pago.
+A pessoa poderá abrir e instalar uma área limitada, de custo operacional quase zero, para:
 
-### Confirmação e retorno
+- ver plano, ciclo e situação da tentativa;
+- retomar cartão ou PIX sem redigitar tudo;
+- trocar o plano antes da compra;
+- acessar suporte e recuperação segura.
 
-- Cartão: vincular a tentativa ao acesso preliminar e levar o cliente ao Meu Espaço após a confirmação.
-- PIX: manter o acompanhamento do pagamento e liberar somente quando o dinheiro for confirmado pelo provedor.
-- Fazer a tela de retorno aguardar uma confirmação curta quando necessário, sem declarar pagamento antes da hora.
-- Se a confirmação demorar, abrir a área limitada com estado “confirmando pagamento” e atualizar automaticamente.
-- Preservar contexto, plano, ciclo e origem da campanha durante todo o percurso.
+Não poderá conversar com a AURA, gerar áudio, iniciar sessão, acessar histórico, jornadas ou conteúdo pago. A área limitada não será chamada de plano Base/Lite, pois esses são produtos pagos de retenção.
 
-### Instrumentação
+## Especificação técnica
 
-Registrar as etapas:
+### Intenção e autorização
 
-`dados concluídos → acesso criado → pagamento iniciado → pagamento pendente → pagamento confirmado → app liberado → instalação oferecida → instalação concluída`
+- Manter `checkout_sessions` como registro de tentativa e acrescentar uma entidade específica de **claim de acesso** ligada à tentativa, com `token_hash`, estado, expiração, uso único, gateway e identificadores externos.
+- Não armazenar o segredo bruto no banco; aplicar rate limit, expiração e revogação após troca pela sessão.
+- Enquanto não houver pagamento, esse claim autoriza somente a tela limitada; ele não cria usuário no Supabase Auth e não permite consultar `profiles`.
+- Definir retenção curta e expurgo automático para claims e dados de tentativas nunca pagas, respeitando a finalidade informada e as obrigações de recuperação/antifraude.
+- Transportar somente o identificador opaco da intenção nos metadados de Stripe/PIX e no retorno.
+- Tornar as transições monotônicas e idempotentes: um estado pago não pode regredir por webhook atrasado.
+- Reutilizar o mecanismo seguro já existente em `portal-whatsapp-access` para gerar/verificar a sessão, adaptando-o para uma intenção paga.
 
-Separar cartão e PIX e distinguir falha interna, abandono, recusa e pagamento ainda em processamento.
+### Entitlements no servidor
 
-## Segurança e compatibilidade
+- Criar uma verificação central de direito de uso baseada em perfil, status, validade e produto efetivamente pago.
+- Aplicá-la no `app-chat` antes de persistir ou processar mensagens e nos endpoints de sessões, áudios, jornadas e links assinados.
+- Não confiar no bloqueio visual do `UserPortal`.
+- Preservar acesso de clientes `past_due`/`payment_failed` conforme as regras atuais de recuperação e período efetivamente pago; não rebaixar clientes existentes.
 
-- Links e credenciais preliminares serão de uso único, com validade curta e somente o resultado necessário será enviado ao navegador.
-- A liberação continuará baseada na confirmação financeira do servidor, nunca na tela de agradecimento.
-- O checkout atual permanecerá disponível durante a transição.
-- Clientes atuais continuarão entrando pelos métodos já existentes.
-- Nenhuma conversa será armazenada pelo mecanismo de instalação do aplicativo.
+### Compatibilidade financeira
 
-## Validação antes de liberar
+- Preservar a regra de primeira compra do Plano Semanal e a conversão para mensal no oitavo dia.
+- Não alterar preços, ciclos, gateways, idempotência, cobrança recorrente ou prazo de acesso.
+- Tratar cartão, PIX automático e PIX à vista como trilhos distintos; “mandato autorizado” não equivale a dinheiro confirmado.
+- Garantir que a intenção pré-pagamento não transforme uma primeira compra em upgrade/retorno nas funções e webhooks atuais.
 
-- Novo cliente por cartão: cadastro, pagamento, retorno e conversa liberada.
-- Novo cliente por PIX: cadastro, QR, confirmação e liberação.
-- Abandono em cartão e PIX: sessão mantida e área limitada correta.
-- Pagamento pendente: nenhuma função paga disponível.
-- Cliente já existente: sem duplicação de conta, perfil ou assinatura.
-- Reabertura e troca de aba: sessão preservada.
-- Celular Android e iPhone: checkout, retorno, instalação e reabertura.
-- Falha ou atraso do provedor: mensagem correta e retomada sem perda.
+### Instrumentação sem duplicidade
 
-## Implantação
+Usar o funil existente, acrescentando apenas eventos necessários:
 
-1. Publicar a base de identificação e proteção de acesso.
-2. Ativar o retorno integrado para cartão.
-3. Ativar o retorno integrado para PIX.
-4. Validar com contas isoladas e pagamentos de teste quando disponíveis.
-5. Fazer um piloto controlado antes de direcionar todo o tráfego.
+`dados válidos → pagamento iniciado → intenção criada → retorno recebido → pagamento confirmado → sessão concedida → primeira mensagem → primeira resposta útil → instalação oferecida → instalação concluída`
+
+- Remover a semântica de `purchase` disparada apenas por abrir `ThankYou`; esse evento vira visualização/retorno.
+- `Purchase` e `purchase_confirmed` continuam sendo emitidos pelo servidor somente para aquisição realmente confirmada, nunca para renovação, retorno ou simples autorização PIX.
+- Deduplicar navegador/CAPI com o mesmo identificador de evento.
+- Registrar abandono, recusa, erro interno e processamento demorado separadamente.
+
+## Métricas de conversão e LTV
+
+### Métrica principal
+
+- Receita e margem de contribuição por visitante/coorte, não apenas instalações ou contas criadas.
+
+### Conversão
+
+- dados válidos → pagamento iniciado;
+- pagamento iniciado → confirmado, por gateway/plano/ciclo;
+- retorno pago → sessão concedida;
+- abandono recuperado em 24 horas e 7 dias.
+
+### Ativação e retenção
+
+- tempo até primeira mensagem e primeira resposta útil;
+- compradores ativos em D1, D7, D30 e por mês de vida;
+- primeira sessão concluída e retorno após a sessão;
+- instalação concluída entre pagantes ativados;
+- churn voluntário por motivo, churn involuntário, recuperação e reativação;
+- LTV e margem por origem, plano, gateway e coorte.
+
+## Recuperação e LTV sem pressão
+
+- Retomar a tentativa exata, com plano e método preservados, em vez de mandar checkout genérico.
+- Recuperar abandono por canais consentidos e com frequência limitada; nunca transformar dado digitado no checkout em acesso a uma conta existente.
+- Respeitar opt-out e preferência de canal; a persona AURA não fará upsell dentro de uma conversa emocional.
+- Depois da ativação, usar sinais de não uso para lembretes úteis e mensuráveis, sem simular preocupação clínica.
+- Manter cancelamento simples, consentimento de recorrência claro e acesso até o fim do período efetivamente pago.
+- Push não entra nesta entrega: a base ficará pronta, mas a permissão será implantada depois, em contexto e com medição própria.
+
+## Testes obrigatórios de não regressão
+
+- Novo cliente: cartão aprovado, recusado e retorno atrasado.
+- PIX: QR abandonado, confirmação imediata, confirmação tardia, webhook duplicado e cada provedor ativo.
+- Plano Semanal: primeira compra, tentativa repetida e cliente inelegível.
+- Cliente existente: nenhuma exposição de histórico ou vinculação automática por dados digitados.
+- Área limitada: tentativa direta de chamar chat, áudio, sessão, jornada e storage assinada deve ser recusada pelo servidor.
+- Métricas: uma compra gera uma aquisição; retorno, renovação e refresh não geram outra.
+- Reabertura no mesmo aparelho, aba duplicada, token usado duas vezes, token expirado e troca de aparelho.
+- Android e iPhone: checkout, retorno, instalação e reabertura.
+
+## Implantação segura
+
+1. Registrar a linha de base atual de conversão, falhas, ativação e Purchase por gateway.
+2. Publicar schema, claim seguro, status e entitlement central com a funcionalidade desligada.
+3. Validar contas isoladas e cenários de ataque/duplicidade.
+4. Ativar por feature flag primeiro para equipe, depois para uma pequena parcela de novos clientes de cartão.
+5. Expandir cartão e só então cada trilho PIX separadamente.
+6. Interromper ou reverter se cair a confirmação de pagamento, surgir Purchase duplicado, houver acesso indevido ou aumentar erro no checkout.
+7. Depois de estabilidade, executar como campanha separada o experimento de sessão gratuita de 30 minutos.
 
 ## Fora desta entrega
 
-- Sessão gratuita de 30 minutos.
-- Campanha app-first gratuita.
-- Notificações push e campanhas promocionais.
-
-Esses itens entram depois que o fluxo normal estiver estável e mensurado.
+- sessão gratuita e campanha app-first;
+- notificações push e promoções;
+- mudança de preço, plano, gateway ou política de cobrança;
+- alteração do fluxo de clientes atuais além da recuperação segura.
