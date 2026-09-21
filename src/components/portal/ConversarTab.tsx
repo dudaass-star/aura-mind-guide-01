@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowLeft, Check, CheckCheck, ChevronRight, Loader2, Mic, Send, Square, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, CalendarDays, Check, CheckCheck, ChevronRight, Headphones, Loader2, Mic, Send, Sparkles, Square, Sun, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
@@ -74,7 +74,7 @@ export function ConversarTab({
 }: {
   userId: string;
   firstName: string;
-  onNavigate?: (tab: "hoje" | "sessoes" | "insights" | "meditacoes") => void;
+  onNavigate?: (tab: "hoje" | "sessoes" | "insights" | "sobre" | "meditacoes") => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -87,7 +87,7 @@ export function ConversarTab({
   const [recording, setRecording] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
   const [audioError, setAudioError] = useState("");
-  const [chatOpen, setChatOpen] = useState(() => window.matchMedia("(min-width: 768px)").matches);
+  const [chatOpen, setChatOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const nearBottomRef = useRef(true);
@@ -401,11 +401,18 @@ export function ConversarTab({
   const latestPreview = latestMessage?.is_audio
     ? "Áudio"
     : latestMessage?.content?.replace(/\s+/g, " ").trim() || "Seu espaço para conversar, no seu tempo.";
+  const appAreas = [
+    { label: "Hoje", detail: "O que te acompanha agora", tab: "hoje", icon: Sun },
+    { label: "Sessões", detail: "Seus encontros com a AURA", tab: "sessoes", icon: CalendarDays },
+    { label: "Percurso", detail: "O que vem mudando", tab: "insights", icon: Sparkles },
+    { label: "Áudios", detail: "Ouça no seu tempo", tab: "meditacoes", icon: Headphones },
+    { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound },
+  ] as const;
 
   const conversationList = (
     <aside className={cn(
-      "flex h-dvh min-h-[36rem] flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))] md:w-[23rem] md:border-r md:border-border/70",
-      chatOpen && "hidden md:flex",
+       "flex h-dvh min-h-[36rem] w-full flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))]",
+       chatOpen && "hidden",
     )}>
       <header className="border-b border-border/70 px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] md:pt-6">
         <div className="flex items-end justify-between gap-4">
@@ -419,19 +426,20 @@ export function ConversarTab({
         </div>
       </header>
 
-      <div className="px-3 py-2">
+      <div className="px-4 pb-3 pt-5">
+        <p className="mb-3 px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Conversa principal</p>
         <Button
           type="button"
           variant="ghost"
           onClick={() => setChatOpen(true)}
-          className="group h-auto w-full justify-start gap-3 rounded-lg px-2 py-3 text-left hover:bg-secondary/70"
+          className="group h-auto w-full justify-start gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-4 text-left shadow-sm hover:bg-primary/10"
           aria-label="Abrir conversa com a AURA"
         >
           <div className="relative shrink-0">
             <img src={avatarAura} alt="AURA" className="h-14 w-14 rounded-full object-cover ring-1 ring-border" />
             <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-background bg-primary" aria-label="AURA disponível" />
           </div>
-          <div className="min-w-0 flex-1 border-b border-border/60 pb-3 pt-0.5">
+           <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex items-baseline justify-between gap-3">
               <span className="font-body text-base font-bold text-foreground">AURA</span>
               <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{formatTime(latestMessage?.created_at || null)}</span>
@@ -444,24 +452,28 @@ export function ConversarTab({
         </Button>
       </div>
 
-      <div className="mt-auto border-t border-border/60 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Seu espaço</p>
-        <div className="mt-3 grid grid-cols-4 gap-2">
-          {[
-            ["Hoje", "hoje"],
-            ["Sessões", "sessoes"],
-            ["Percurso", "insights"],
-            ["Áudios", "meditacoes"],
-          ].map(([label, tab]) => (
+      <div className="flex-1 overflow-y-auto border-t border-border/50 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5">
+        <div className="mb-3 flex items-center justify-between px-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Seu espaço</p>
+          <p className="text-[11px] text-muted-foreground">Tudo em um só lugar</p>
+        </div>
+        <div className="space-y-1">
+          {appAreas.map(({ label, detail, tab, icon: Icon }) => (
             <Button
               key={tab}
               type="button"
               variant="ghost"
-              onClick={() => onNavigate?.(tab as "hoje" | "sessoes" | "insights" | "meditacoes")}
-              className="h-auto min-w-0 flex-col gap-1 rounded-lg px-1 py-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground whitespace-normal"
+              onClick={() => onNavigate?.(tab)}
+              className="group h-auto w-full justify-start gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-secondary/70"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
-              <span className="w-full truncate">{label}</span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary transition-colors group-hover:bg-primary/10">
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-foreground">{label}</span>
+                <span className="block truncate text-xs font-normal text-muted-foreground">{detail}</span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5" />
             </Button>
           ))}
         </div>
@@ -471,11 +483,11 @@ export function ConversarTab({
 
   const openConversation = (
     <section className={cn(
-      "relative h-dvh min-h-[36rem] flex-1 flex-col overflow-hidden bg-background md:flex md:h-[min(820px,calc(100dvh-3rem))]",
+       "relative h-dvh min-h-[36rem] flex-1 flex-col overflow-hidden bg-background md:h-[min(820px,calc(100dvh-3rem))]",
       chatOpen ? "flex" : "hidden",
     )}>
       <header className="flex min-h-[4.5rem] items-center gap-3 border-b border-border/70 bg-background/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur md:px-5 md:pt-0">
-        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full md:hidden" onClick={() => setChatOpen(false)} aria-label="Voltar para conversas">
+         <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => setChatOpen(false)} aria-label="Voltar para conversas">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover ring-1 ring-border" />
@@ -592,7 +604,7 @@ export function ConversarTab({
 
   return (
     <main className="min-h-dvh bg-secondary/35 md:flex md:items-center md:justify-center md:p-6">
-      <div className="mx-auto flex w-full max-w-6xl overflow-hidden bg-background md:rounded-lg md:border md:border-border/70 md:shadow-card">
+       <div className={cn("mx-auto flex w-full overflow-hidden bg-background md:rounded-lg md:border md:border-border/70 md:shadow-card", chatOpen ? "max-w-4xl" : "max-w-lg")}>
         {conversationList}
         {openConversation}
       </div>
