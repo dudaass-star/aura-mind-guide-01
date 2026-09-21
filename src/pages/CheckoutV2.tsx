@@ -1121,7 +1121,19 @@ const CheckoutV2 = () => {
              : {}),
         },
       });
-      if (error) throw new Error(error.message || "Erro ao gerar PIX");
+      if (error) {
+        let providerMessage = "Erro ao gerar PIX. Tente novamente.";
+        const response = (error as { context?: Response }).context;
+        if (response) {
+          try {
+            const payload = await response.clone().json() as { error?: string };
+            if (payload.error) providerMessage = payload.error;
+          } catch {
+            // Respostas HTML ou vazias do provedor nunca devem aparecer ao cliente.
+          }
+        }
+        throw new Error(providerMessage);
+      }
       // Assinatura já ativa: o backend recusa criar um 2º débito automático.
       if (data?.blocked) {
         logFunnel("pix_qr_error", {
