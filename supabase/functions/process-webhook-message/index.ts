@@ -1482,14 +1482,6 @@ Deno.serve(async (req) => {
           await logFailedMessage(supabase, profile.user_id, cleanPhone, responseText, 'tts_failed', 'process-webhook-message:audio');
         }
         if (audioUrl || audioContent) {
-          let audioResult: SendResult;
-          if (audioUrl) {
-            console.log(`🔗 Sending audio via public URL: ${audioUrl}`);
-            audioResult = await sendAudioUrl(cleanPhone, audioUrl);
-          } else {
-            console.log(`📦 No audioUrl available, attempting base64 fallback (Z-API only)`);
-            audioResult = await sendAudio(cleanPhone, audioContent!);
-          }
           if (isInApp && (audioUrl || audioContent)) {
             sentAnyResponse = true;
             await supabase.from('messages').insert({
@@ -1501,6 +1493,17 @@ Deno.serve(async (req) => {
               channel: 'in_app',
               delivery_status: 'delivered',
             });
+            continue;
+          }
+
+          let audioResult: SendResult;
+          if (audioUrl) {
+            console.log(`🔗 Sending audio via public URL: ${audioUrl}`);
+            audioResult = await sendAudioUrl(cleanPhone, audioUrl);
+          } else if (audioContent) {
+            console.log(`📦 No audioUrl available, attempting base64 fallback (Z-API only)`);
+            audioResult = await sendAudio(cleanPhone, audioContent);
+          } else {
             continue;
           }
           if (audioResult.success) {
