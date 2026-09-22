@@ -51,7 +51,7 @@ const UserPortal = () => {
   const initialTab: TabId = rawTab === "memoria"
     ? "sobre"
     : rawTab === "percurso"
-      ? "jornadas"
+      ? "insights"
       : rawTab && ["conversar", "hoje", "sessoes", "jornadas", "insights", "sobre", "meditacoes"].includes(rawTab)
         ? rawTab as TabId
         : "conversar";
@@ -384,7 +384,9 @@ const UserPortal = () => {
           {activeTab === "jornadas" && (
             <JornadasTab userId={userId!} profile={profile} onJourneyChanged={() => void refetchProfile()} />
           )}
-          {activeTab === "insights" && <InsightsTab userId={userId!} profile={profile} />}
+          {activeTab === "insights" && (
+            <InsightsTab userId={userId!} profile={profile} onOpenConversation={handleOpenConversation} />
+          )}
           {activeTab === "sobre" && <SobreVoceTab userId={userId!} onOpenConversation={handleOpenConversation} />}
           {activeTab === "meditacoes" && <MeditacoesTab userId={userId!} />}
         </div>
