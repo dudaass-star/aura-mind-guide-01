@@ -14,11 +14,6 @@ import { ConversarTab } from "@/components/portal/ConversarTab";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 import { rememberPushAttribution, reportPushConversion, reportPushPresence } from "@/lib/push-notifications";
-import {
-  usePortalNovidades,
-  markTabSeen,
-  type TabKey,
-} from "@/components/portal/hooks/usePortalNovidades";
 
 type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes";
 
@@ -51,13 +46,6 @@ const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebro
   insights: { label: "Percurso", eyebrow: "Sua evolução", icon: Sparkles, tone: "portal-area-journey" },
   meditacoes: { label: "Meditações", eyebrow: "Sua pausa", icon: Headphones, tone: "portal-area-audio" },
   sobre: { label: "Sobre você", eyebrow: "Sua história", icon: User, tone: "portal-area-profile" },
-};
-
-// Abas que exibem badge de novidade (subset do TabId).
-const NOVIDADE_TABS: Record<string, TabKey> = {
-  hoje: "hoje",
-  insights: "insights",
-  sobre: "sobre",
 };
 
 const UserPortal = () => {
@@ -109,15 +97,6 @@ const UserPortal = () => {
       window.removeEventListener("blur", report);
     };
   }, [linkStatus, userId]);
-  const { refetch: refetchNovidades } = usePortalNovidades(userId);
-
-  // Ao abrir o portal, marca a aba inicial como vista.
-  useEffect(() => {
-    const key = NOVIDADE_TABS[activeTab];
-    if (key && userId) markTabSeen(userId, key);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
   const handleTabClick = (id: TabId) => {
     setVisitedTabs((current) => current.has(id) ? current : new Set(current).add(id));
     setActiveTab(id);
@@ -144,12 +123,6 @@ const UserPortal = () => {
       }).then(({ error }) => {
         if (error && error.code !== "23505") console.warn("Não foi possível registrar a descoberta da área");
       });
-    }
-    const key = NOVIDADE_TABS[id];
-    if (key && userId) {
-      markTabSeen(userId, key);
-      // Re-avalia badges após marcar como visto.
-      setTimeout(() => refetchNovidades(), 100);
     }
   };
 
@@ -415,7 +388,7 @@ const UserPortal = () => {
           {visitedTabs.has("sessoes") && <div className={activeTab === "sessoes" ? "block" : "hidden"} aria-hidden={activeTab !== "sessoes"}><SessoesTab userId={userId} profile={profile} /></div>}
           {visitedTabs.has("jornadas") && <div className={activeTab === "jornadas" ? "block" : "hidden"} aria-hidden={activeTab !== "jornadas"}><JornadasTab userId={userId} profile={profile} onJourneyChanged={() => void refetchProfile()} /></div>}
           {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
-          {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} onOpenConversation={handleOpenConversation} /></div>}
+          {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("meditacoes") && <div className={activeTab === "meditacoes" ? "block" : "hidden"} aria-hidden={activeTab !== "meditacoes"}><MeditacoesTab userId={userId} /></div>}
           </Suspense>
         </div>
