@@ -1,7 +1,7 @@
 {
   "id": "/meu-espaco",
-  "name": "AURA — Meu Espaço",
-  "short_name": "AURA",
+  "name": "Olá Aura",
+  "short_name": "Olá Aura",
   "description": "Seu espaço pessoal para conversar com a AURA, acompanhar sessões, percurso e práticas.",
   "lang": "pt-BR",
   "start_url": "/meu-espaco",

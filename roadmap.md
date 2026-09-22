@@ -1,5 +1,6 @@
 [x] Padronizar episódios e conclusão de Jornadas com o visual atual do aplicativo e confirmar o acesso global isolado por cliente.
-- [x] Transformar a antiga entrada do Meu Espaço na entrada visual e textual do aplicativo AURA.
+- [x] Transformar a antiga entrada do Meu Espaço na entrada visual e textual do aplicativo Olá Aura.
+- [x] Padronizar Olá Aura como nome do aplicativo e AURA como a pessoa da conversa, deixando WhatsApp apenas como recuperação de acesso.
 # Roadmap
 
 - [x] Painel semanal do funil Taster no admin (TasterFunnelPanel em AdminWhatsappRecovery)

@@ -138,7 +138,7 @@ export default function PortalLogin() {
   return (
     <>
       <Helmet>
-        <title>Entrar no aplicativo | AURA</title>
+        <title>Entrar no aplicativo | Olá Aura</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
       <div className="portal-chat-theme portal-login-page min-h-dvh bg-background text-foreground flex flex-col">
@@ -148,7 +148,7 @@ export default function PortalLogin() {
               <img src={logoOlaAura} alt="Olá AURA" className="h-9 w-auto" />
             </Link>
             <span className="text-[10px] uppercase tracking-[0.18em] text-primary font-bold font-body">
-              Aplicativo AURA
+              Aplicativo Olá Aura
             </span>
           </div>
         </header>
@@ -160,9 +160,9 @@ export default function PortalLogin() {
                 <img src={avatarAura} alt="AURA" className="h-16 w-16 rounded-full object-cover ring-4 ring-secondary" />
                 <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-[3px] border-background bg-primary" aria-hidden="true" />
               </div>
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Sua AURA, sempre por perto</p>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Olá Aura, sempre por perto</p>
               <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">
-                Entre na AURA
+                Entre no Olá Aura
               </h1>
               <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground font-body">
                 Continue suas conversas e acesse tudo o que acompanha você.
@@ -185,30 +185,9 @@ export default function PortalLogin() {
 
             {step === "email" && (
               <>
-                <Button asChild type="button" className="w-full min-h-12 h-auto py-3 font-body shadow-sm">
-                  <a
-                    href={auraWhatsAppLink("Quero entrar no aplicativo da AURA pelo WhatsApp cadastrado.")}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <MessageCircle size={18} />
-                    <span className="ml-2">Entrar pelo WhatsApp</span>
-                  </a>
-                </Button>
-                <p className="mt-2 text-center text-xs text-muted-foreground font-body">
-                  Receba um link pessoal e entre sem precisar digitar código.
-                </p>
-
-                <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground font-body">ou entre de outra forma</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
-
                 <Button
                   type="button"
-                  variant="outline"
-                  className="w-full h-11 mb-4 bg-card font-body"
+                  className="w-full h-12 mb-4 font-body shadow-sm"
                   onClick={handleGoogle}
                 >
                   <GoogleIcon />
@@ -246,6 +225,23 @@ export default function PortalLogin() {
                     )}
                   </Button>
                 </form>
+
+                <div className="flex items-center gap-3 my-5">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground font-body">precisa de ajuda para entrar?</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                <Button asChild type="button" variant="ghost" className="w-full min-h-11 h-auto py-2.5 font-body text-muted-foreground">
+                  <a
+                    href={auraWhatsAppLink("Quero receber um link de acesso ao aplicativo Olá Aura no meu WhatsApp cadastrado.")}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <MessageCircle size={17} />
+                    <span className="ml-2">Receber link pelo WhatsApp</span>
+                  </a>
+                </Button>
               </>
             )}
 
@@ -310,7 +306,7 @@ export default function PortalLogin() {
 
                 <Button asChild type="button" variant="outline" className="w-full min-h-11 h-auto bg-card py-2.5 font-body">
                   <a
-                    href={auraWhatsAppLink("Não recebi o código. Quero entrar no aplicativo da AURA.")}
+                    href={auraWhatsAppLink("Não recebi o código. Quero entrar no aplicativo Olá Aura.")}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

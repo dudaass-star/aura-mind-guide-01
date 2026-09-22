@@ -13,10 +13,10 @@ type Props = {
 
 const messages: Record<Exclude<PushActivationResult["status"], "registered">, string> = {
   "not-configured": "As notificações ainda não estão disponíveis. Tente novamente mais tarde.",
-  unsupported: "Este navegador não aceita notificações. Abra a AURA no Safari ou Chrome atualizado.",
-  "open-in-new-tab": "Abra a AURA em uma aba própria ou pelo aplicativo instalado para ativar.",
+  unsupported: "Este navegador não aceita notificações. Abra o Olá Aura no Safari ou Chrome atualizado.",
+  "open-in-new-tab": "Abra o Olá Aura em uma aba própria ou pelo aplicativo instalado para ativar.",
   denied: "A permissão está bloqueada. Abra as configurações deste site no navegador e permita notificações.",
-  "install-first": "No iPhone, primeiro adicione a AURA à Tela de Início. Depois, abra pelo ícone e volte aqui.",
+  "install-first": "No iPhone, primeiro adicione o Olá Aura à Tela de Início. Depois, abra pelo ícone e volte aqui.",
   error: "Não foi possível ativar agora. Aguarde um instante e tente novamente.",
 };
 
