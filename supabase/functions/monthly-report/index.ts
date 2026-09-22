@@ -22,11 +22,12 @@ async function getMetrics(db: any, userId: string, start: Date, end: Date): Prom
   ]); return { messages, sessions, journeys, practices };
 }
 function compare(current: number, previous: number) { return current === previous ? "o mesmo ritmo do mês anterior" : current > previous ? `${current - previous} a mais que no mês anterior` : `${previous - current} a menos que no mês anterior`; }
+function amount(value: number, singular: string, plural: string) { return `${value} ${value === 1 ? singular : plural}`; }
 function reportText(name: string, current: Metrics, previous: Metrics) {
-  const rows = [["conversas", current.messages, previous.messages], ["sessões", current.sessions, previous.sessions], ["episódios de Jornadas", current.journeys, previous.journeys], ["práticas", current.practices, previous.practices]] as const;
-  const visible = rows.filter(([, a, b]) => a || b);
+  const rows = [["conversa", "conversas", current.messages, previous.messages], ["sessão", "sessões", current.sessions, previous.sessions], ["episódio de Jornada", "episódios de Jornadas", current.journeys, previous.journeys], ["prática", "práticas", current.practices, previous.practices]] as const;
+  const visible = rows.filter(([, , a, b]) => a || b);
   if (!visible.length) return `Seu mês em perspectiva, ${name}\n\nEste foi um mês mais silencioso na Olá Aura. Seu Percurso continua guardado, sem conclusões prontas, para você retomar quando fizer sentido.`;
-  return `Seu mês em perspectiva, ${name}\n\n${visible.map(([label, a, b]) => `• ${a} ${label} — ${compare(a, b)}`).join("\n")}\n\nEsses sinais mostram como você usou a Olá Aura; não definem como você se sentiu. Você pode confirmar ou corrigir qualquer leitura da AURA.`;
+  return `Seu mês em perspectiva, ${name}\n\n${visible.map(([singular, plural, a, b]) => `• ${amount(a, singular, plural)} — ${compare(a, b)}`).join("\n")}\n\nEsses sinais mostram como você usou a Olá Aura; não definem como você se sentiu. Você pode confirmar ou corrigir qualquer leitura da AURA.`;
 }
 async function next(offset: number, period: string) { await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/monthly-report`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` }, body: JSON.stringify({ offset, period_start: period }) }); }
 
