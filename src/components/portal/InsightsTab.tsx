@@ -162,7 +162,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         {hasLiveMaterial && (
           <div className="portal-progress-summary" aria-label="Resumo do seu percurso">
             <div><strong>{activeThemes.length}</strong><span>{activeThemes.length === 1 ? "tema presente" : "temas presentes"}</span></div>
-            <div><strong>{journeySignals}</strong><span>{journeySignals === 1 ? "sinal reconhecido" : "sinais reconhecidos"}</span></div>
+            <div><strong>{journeySignals}</strong><span>{journeySignals === 1 ? "ponto do percurso" : "pontos do percurso"}</span></div>
             <div><strong>{chapters.length}</strong><span>{chapters.length === 1 ? "capítulo" : "capítulos"}</span></div>
           </div>
         )}

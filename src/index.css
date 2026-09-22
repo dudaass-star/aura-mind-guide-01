@@ -309,6 +309,10 @@
   line-height: 1.08;
 }
 
+.portal-progress-page .font-display {
+  font-family: "Outfit", sans-serif;
+}
+
 .portal-progress-lead {
   max-width: 31rem;
   margin-top: 0.85rem;
