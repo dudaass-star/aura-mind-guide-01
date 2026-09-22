@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, MessageCircle, Sparkles, ArrowRight, BookOpen, CalendarDays } from "lucide-react";
+import { CheckCircle, MessageCircle, Sparkles, ArrowRight } from "lucide-react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 
 const TrialStarted = () => {

@@ -5,7 +5,6 @@ import {
 import type { TemplateEntry } from './registry.ts'
 
 const SITE_NAME = "Olá Aura"
-const WHATSAPP_LINK = "https://wa.me/16625255005?text=Oi%20AURA"
 
 interface WelcomeProps {
   name?: string
