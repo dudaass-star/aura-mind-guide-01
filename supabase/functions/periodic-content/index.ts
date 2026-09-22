@@ -263,7 +263,7 @@ serve(async (req) => {
 
               await supabase
                 .from('messages')
-                .insert({
+                .upsert({
                   user_id: user.user_id,
                   role: 'assistant',
                   content: cardText,
@@ -280,7 +280,7 @@ serve(async (req) => {
                     reading_minutes: readingMinutes,
                     cta: 'Abrir episódio',
                   }
-                });
+                }, { onConflict: 'client_message_id' });
 
               successCount++;
             } else {
