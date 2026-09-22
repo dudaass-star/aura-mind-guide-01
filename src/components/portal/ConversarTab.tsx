@@ -178,6 +178,14 @@ export function ConversarTab({
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
   const [showInstallInvite, setShowInstallInvite] = useState(false);
   const [showPushDialog, setShowPushDialog] = useState(false);
+  const [installInviteResolved, setInstallInviteResolved] = useState(() => {
+    const dismissedUntil = Number(localStorage.getItem(`aura-install-dismissed-until:${userId}`) || 0);
+    return dismissedUntil > Date.now();
+  });
+  const [installBannerHidden, setInstallBannerHidden] = useState(() => {
+    const dismissedUntil = Number(localStorage.getItem(`aura-install-banner-dismissed-until:${userId}`) || 0);
+    return dismissedUntil > Date.now();
+  });
   const installApp = useInstallApp();
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -216,6 +224,12 @@ export function ConversarTab({
   const postponeInstall = () => {
     localStorage.setItem(`aura-install-dismissed-until:${userId}`, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
     setShowInstallInvite(false);
+    setInstallInviteResolved(true);
+  };
+
+  const hideInstallBanner = () => {
+    localStorage.setItem(`aura-install-banner-dismissed-until:${userId}`, String(Date.now() + 3 * 24 * 60 * 60 * 1000));
+    setInstallBannerHidden(true);
   };
 
   const beginInstall = async () => {
@@ -616,6 +630,26 @@ export function ConversarTab({
           </DropdownMenu>
         </div>
       </header>
+
+      {installApp.available && !installApp.installed && installInviteResolved && !installBannerHidden && (
+        <div className="px-4 pt-4">
+          <div className="portal-area-content flex items-center gap-3 rounded-2xl border border-current/15 px-3 py-3 shadow-sm">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background/70" aria-hidden="true">
+              <Download className="h-5 w-5" />
+            </span>
+            <button type="button" className="min-w-0 flex-1 text-left" onClick={() => void beginInstall()}>
+              <span className="block text-sm font-bold text-foreground">Tenha a Olá Aura sempre por perto</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">Adicione à tela inicial para entrar com um toque.</span>
+            </button>
+            <Button type="button" size="sm" className="h-9 shrink-0 px-3 font-body" onClick={() => void beginInstall()}>
+              Instalar
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={hideInstallBanner} aria-label="Ocultar convite para instalar">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="px-4 pb-3 pt-5">
         <p className="mb-3 px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Conversa principal</p>
