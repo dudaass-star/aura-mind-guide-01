@@ -27,7 +27,7 @@ type Chapter = { key: string; monthLabel: string; anchorDate: string; headline: 
 
 const CONF_ORDER: Record<string, number> = { high: 2, low: 1 };
 const OPERATIONAL_THEME = /(agendar|reagendar|cancelar|organizar sess|setup mensal|preferência por áudio|mudança de assunto|recusa de)/i;
-const ACTIVITY_MILESTONE = /(sessão|jornada com a aura|mês de jornada|meses de jornada|ano de jornada|virou ritual)/i;
+const ACTIVITY_MILESTONE = /(sessão|jornada com a aura|mês de jornada|meses de jornada|ano de jornada|virou ritual|áudio|audio|organizar sess|agendar|reagendar|cancelar)/i;
 
 function normalizeWords(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((word) => word.length > 2);
@@ -121,7 +121,11 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
     data.letters.forEach((letter) => { const iso = letter.letter_month || letter.created_at; if (iso) ensure(iso).letter = letter; });
     data.snapshots.forEach((snapshot) => { const iso = snapshot.evidence_date || snapshot.period_end; if (iso) ensure(iso).snapshots.push(snapshot); });
     data.sessions.forEach((session) => { if (session.ended_at) ensure(session.ended_at).sessions.push(session); });
-    data.milestones.forEach((milestone) => { if (milestone.milestone_date) ensure(milestone.milestone_date).milestones.push(milestone); });
+    data.milestones.forEach((milestone) => {
+      if (milestone.milestone_date && milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)) {
+        ensure(milestone.milestone_date).milestones.push(milestone);
+      }
+    });
     return Array.from(map.values()).filter((chapter) => chapter.letter || chapter.snapshots.length || chapter.milestones.length).map((chapter) => {
       const best = [...chapter.snapshots].sort((a, b) => (CONF_ORDER[b.confidence ?? ""] ?? 0) - (CONF_ORDER[a.confidence ?? ""] ?? 0))[0];
       chapter.headline = truncate(chapter.letter?.preview_text || best?.snapshot_change || best?.snapshot_before || chapter.milestones[0]?.milestone_text || "", 180);
