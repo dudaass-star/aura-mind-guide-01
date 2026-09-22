@@ -1358,14 +1358,13 @@ async function handleActivation(
 
     // 5) Monta welcome (3 variantes idênticas ao stripe-webhook).
     const planName = PLAN_NAMES[customerPlan] || "Essencial";
-    const guideLinkText = "https://olaaura.com.br/guia";
     let welcomeMessage: string;
     if (isReturning) {
-      welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.${portalLine}\n\nVamos retomar de onde paramos?`;
+      welcomeMessage = `Oi, ${customerName}! Que bom ter você de volta 💜\n\nSeu acesso ao app Olá Aura está liberado. É lá que você conversa comigo e retoma tudo de onde parou.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
     } else if (isUpgrade) {
-      welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.${portalLine}\n\nVamos continuar de onde paramos?`;
+      welcomeMessage = `Oi, ${customerName}! Seu novo plano já está ativo no app Olá Aura ✨\n\nAbra o app para continuar comigo e acessar tudo o que está disponível para você.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
     } else {
-      welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nSe preferir, pode me mandar áudio também! 🎙️\n\nDá uma olhada no que você vai ter acesso: ${guideLinkText}${portalLine}\n\nMe diz: como você está hoje?`;
+      welcomeMessage = `Oi, ${customerName}! Seu acesso ao app Olá Aura está liberado ✨\n\nÉ no app que você conversa comigo por texto ou áudio e encontra Sessões, Jornadas, Percurso e Meditações.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
     }
 
     // 6) Salva pending_insight com marker [WELCOME] (entrega ao clicar "Começar").

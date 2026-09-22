@@ -151,20 +151,11 @@ Deno.serve(async (req) => {
     } catch { /* non-blocking */ }
 
     // Build full welcome message (delivered when user clicks "Começar")
-    const guideLinkText = 'https://olaaura.com.br/guia';
-    const portalLine = portalLink ? `\n\nAbra o app Olá Aura: ${portalLink} ✨` : '';
+    const welcomeMessage = `Oi, ${name.trim()}! Seu acesso ao app Olá Aura está liberado ✨
 
-    const welcomeMessage = `Oi, ${name.trim()}! 💜
+É no app que você conversa comigo por texto ou áudio e encontra tudo o que está disponível nesta primeira jornada.
 
-Que bom que você decidiu me conhecer! Eu sou a AURA.
-
-Vou estar com você nessa primeira jornada. Pode falar comigo sobre qualquer coisa — sem julgamento, no seu ritmo.
-
-Se preferir, pode me mandar áudio também! 🎙️
-
-Dá uma olhada no que você vai ter acesso: ${guideLinkText}${portalLine}
-
-Me conta: como você está se sentindo agora?`;
+Abra agora: https://olaaura.com.br/meu-espaco`;
 
     // Save full welcome as pending_insight with [WELCOME] marker
     try {
