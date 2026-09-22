@@ -15,7 +15,7 @@ const HeroV2 = () => (
         <div className="relative z-10 v2-fade-up">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs md:text-sm text-white/85 backdrop-blur">
             <Check className="w-3.5 h-3.5 text-primary" />
-            Acompanhamento emocional no WhatsApp
+            Acompanhamento emocional no app Olá Aura
           </span>
 
           <h1 className="mt-6 font-display text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] tracking-tight">
@@ -25,7 +25,7 @@ const HeroV2 = () => (
           </h1>
 
           <p className="mt-6 text-base md:text-lg text-white/70 max-w-lg leading-relaxed">
-            Pelo WhatsApp, a AURA conversa com você por texto e áudio, conecta o que
+            No app Olá Aura, a AURA conversa com você por texto e áudio, conecta o que
             acontece na sua vida e conduz encontros guiados de 45 minutos para
             transformar pensamentos confusos em clareza, direção e movimento.
           </p>

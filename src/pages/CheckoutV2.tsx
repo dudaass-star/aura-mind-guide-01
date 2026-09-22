@@ -716,7 +716,7 @@ const CheckoutV2 = () => {
           if (dupCode === "SUBSCRIPTION_PAST_DUE" || dupCode === "ACTIVE_SUBSCRIPTION_EXISTS") {
             toast.error(
               (data as any)?.error ||
-                "Você já tem uma assinatura da AURA. Acesse seu espaço para gerenciar o pagamento.",
+                "Você já tem uma assinatura ativa. Abra o app Olá Aura para gerenciar o pagamento.",
               { duration: 9000 },
             );
             logFunnel("duplicate_subscription_blocked", {

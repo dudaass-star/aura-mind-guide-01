@@ -9,7 +9,7 @@ import { trackFaqOpen } from "@/lib/ga4";
 const faqs = [
   {
     q: "O que é a AURA e como ela funciona?",
-    a: "A AURA é uma inteligência de acompanhamento emocional pelo WhatsApp. Você conversa por texto ou áudio sobre o que está vivendo. Ela faz perguntas, conecta acontecimentos e ajuda a transformar o que está confuso em clareza e direção. Quando quiser aprofundar um tema, há encontros guiados de 45 minutos com fechamento e resumo escrito.",
+    a: "A AURA é uma inteligência de acompanhamento emocional que conversa com você dentro do app Olá Aura, por texto ou áudio. Ela faz perguntas, conecta acontecimentos e ajuda a transformar o que está confuso em clareza e direção. Quando quiser aprofundar um tema, há encontros guiados de 45 minutos com fechamento e resumo escrito.",
   },
   {
     q: "Como é a primeira conversa?",
@@ -17,7 +17,7 @@ const faqs = [
   },
   {
     q: "O que a AURA constrói ao longo do tempo?",
-    a: "As conversas não ficam soltas. A AURA transforma o percurso em capítulos mensais com temas, mudanças percebidas, marcos e trechos das suas próprias palavras. Você também encontra resumos dos encontros, insights e experiências ligadas ao seu momento no seu espaço pessoal.",
+    a: "As conversas não ficam soltas. A AURA transforma o percurso em capítulos mensais com temas, mudanças percebidas, marcos e trechos das suas próprias palavras. No app Olá Aura, você também encontra resumos dos encontros, insights e experiências ligadas ao seu momento.",
   },
   {
     q: "A AURA substitui atendimento psicológico?",
@@ -33,7 +33,7 @@ const faqs = [
   },
   {
     q: "O que são os encontros guiados?",
-    a: "São 45 minutos dedicados a aprofundar um tema importante com método e continuidade. A AURA investiga com você, ajuda a construir uma nova perspectiva e encerra com um fechamento coerente com aquele momento. Depois, o encontro fica registrado com resumo escrito no seu espaço pessoal.",
+    a: "São 45 minutos dedicados a aprofundar um tema importante com método e continuidade. A AURA investiga com você, ajuda a construir uma nova perspectiva e encerra com um fechamento coerente com aquele momento. Depois, o encontro fica registrado no app Olá Aura com um resumo escrito.",
   },
   {
     q: "Posso enviar áudio?",

@@ -18,7 +18,7 @@ const FinalCTAV2 = () => (
             <br className="hidden md:block" /> dias difíceis. É sobre <span className="italic text-gradient-sage">quem você está se tornando.</span>
           </h2>
           <p className="mt-4 text-base text-white/70">
-            Comece pelo WhatsApp. Converse por texto ou áudio, aprofunde o que importa
+            Comece no app Olá Aura. Converse por texto ou áudio, aprofunde o que importa
             em encontros guiados e veja seu percurso ganhar forma ao longo do tempo.
           </p>
         </div>

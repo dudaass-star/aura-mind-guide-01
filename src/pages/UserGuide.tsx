@@ -72,7 +72,7 @@ const UserGuide = () => {
         <Section
           id="conversas"
           title="Como conversar com a AURA"
-          subtitle="Sua companheira está disponível 24/7 pelo WhatsApp"
+          subtitle="Sua companheira está disponível 24/7 no app Olá Aura"
           bg="bg-background">
           
           <div className="grid md:grid-cols-2 gap-6">
@@ -377,7 +377,7 @@ const UserGuide = () => {
           <div className="flex items-start gap-3 bg-sage-soft rounded-xl p-4 border border-primary/10">
             <Bell size={20} className="text-primary shrink-0 mt-0.5" />
             <p className="text-sm text-muted-foreground">
-              <strong className="text-foreground">Tudo pelo WhatsApp</strong> — sem precisar instalar outro app ou abrir outra tela. A AURA te avisa ali mesmo, na conversa.
+              <strong className="text-foreground">Tudo no app Olá Aura</strong> — conversa, lembretes e recursos reunidos em um só lugar. Você pode usar pelo navegador ou adicionar à tela inicial.
             </p>
           </div>
         </Section>
@@ -396,7 +396,7 @@ const UserGuide = () => {
                 Meditações Personalizadas
               </h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
-                Sem precisar de outro app. A AURA envia meditações guiadas direto no WhatsApp, escolhidas para o que você está vivendo.
+                A AURA reúne meditações guiadas no app Olá Aura, escolhidas para o que você está vivendo.
               </p>
             </div>
 
@@ -418,8 +418,8 @@ const UserGuide = () => {
               },
               {
                 icon: MessageCircle,
-                title: "Direto no WhatsApp",
-                desc: "Sem abrir outro app. Você ouve ali mesmo, no meio da conversa.",
+                title: "Dentro do Olá Aura",
+                desc: "Você ouve no app e encontra novamente quando quiser.",
                 bg: "bg-sky-soft",
                 iconColor: "text-sky"
               }].

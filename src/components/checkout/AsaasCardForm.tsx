@@ -142,8 +142,8 @@ export function AsaasCardForm({
         </div>
         <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5 space-y-4 text-sm text-white/80">
           <p>
-            Assim que aprovar, você recebe uma mensagem no WhatsApp em{" "}
-            <span className="font-semibold text-white">{phone}</span> e um email em{" "}
+            Assim que aprovar, seu acesso ao app Olá Aura será liberado. A confirmação também chega no WhatsApp em{" "}
+            <span className="font-semibold text-white">{phone}</span> e no email{" "}
             <span className="font-semibold text-white">{email}</span>.
           </p>
           <p className="text-white/60">

@@ -33,12 +33,12 @@ const PlanLimitEmail = ({ name, limit = 30, portalUrl = 'https://olaaura.com.br/
           </Text>
 
           <Text style={text}>
-            Se preferir voltar ao ritmo normal antes disso, você pode ajustar seu plano no seu espaço.
+            Se preferir voltar ao ritmo normal antes disso, você pode ajustar seu plano no app Olá Aura.
           </Text>
 
           <Section style={ctaSection}>
             <Button style={portalButton} href={portalUrl}>
-              Ver meu plano
+              Abrir meu plano no app
             </Button>
           </Section>
 

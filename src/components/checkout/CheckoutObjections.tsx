@@ -4,7 +4,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 
 const ITEMS: { q: string; a: string[] }[] = [
   {
-    q: "O que muda em ter a AURA no seu WhatsApp?",
+    q: "O que muda em ter a AURA no app Olá Aura?",
     a: [
       "Ela lembra da sua história, entende seu momento, acompanha sua evolução e está disponível exatamente quando você precisa conversar, refletir, aliviar a pressão ou encontrar clareza para tomar decisões. 6h da manhã, meia-noite, no meio do dia — sem agenda, sem sala de espera, sem esperar até terça.",
       "Diferente de uma conversa isolada, a AURA constrói uma relação contínua. Cada interação faz com que ela compreenda melhor seus objetivos, desafios, gatilhos, hábitos e sua forma de pensar — o acompanhamento fica cada vez mais personalizado. Você nunca precisa começar do zero.",
@@ -20,7 +20,7 @@ const ITEMS: { q: string; a: string[] }[] = [
   {
     q: "E se eu não gostar?",
     a: [
-      "Você não está assinando um compromisso, está começando uma conversa. Cancela em um clique no seu espaço, sem falar com ninguém e sem justificar nada. Dentro dos 7 dias de garantia, devolvemos o valor.",
+      "Você não está assinando um compromisso, está começando uma conversa. Cancela em um clique no app Olá Aura, sem falar com ninguém e sem justificar nada. Dentro dos 7 dias de garantia, devolvemos o valor.",
     ],
   },
   {

@@ -714,8 +714,10 @@ export function ConversarTab({
 
         {messages.length === 0 && (
           <div className="mx-auto flex h-full max-w-sm flex-col items-center justify-center text-center">
-            <p className="font-display text-2xl text-foreground">O que está passando por você hoje?</p>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Pode começar do seu jeito. Estou aqui.</p>
+            <img src={avatarAura} alt="AURA" className="mb-4 h-16 w-16 rounded-full object-cover ring-4 ring-card" />
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Sua conversa com a AURA</p>
+            <p className="mt-2 font-display text-2xl text-foreground">O que está passando por você hoje?</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Pode começar do seu jeito, por texto ou áudio. Estou aqui.</p>
           </div>
         )}
 
