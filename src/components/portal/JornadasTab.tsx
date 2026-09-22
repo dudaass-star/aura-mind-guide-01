@@ -1,8 +1,19 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowRight, BookOpen, Check, Circle, Clock, Loader2, Sparkles } from "lucide-react";
+import { ArrowRight, BookOpen, Check, ChevronDown, Circle, Clock, LockKeyhole, Loader2, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 
 type JornadasTabProps = {
@@ -17,6 +28,8 @@ type JornadasTabProps = {
 
 export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabProps) {
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null);
+  const [expandedJourneyId, setExpandedJourneyId] = useState<string | null>(null);
+  const [pendingJourneyId, setPendingJourneyId] = useState<string | null>(null);
   const currentJourneyId = profile?.current_journey_id ?? null;
   const currentEpisode = profile?.current_episode ?? 0;
 
@@ -26,7 +39,6 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
       const { data, error } = await supabasePortal
         .from("content_journeys")
         .select("id,title,description,topic,total_episodes")
-        .eq("is_active", true)
         .order("title");
       if (error) throw error;
       return data ?? [];
@@ -47,14 +59,17 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
     enabled: Boolean(userId),
   });
 
-  const { data: episodes = [], isLoading: loadingEpisodes } = useQuery({
-    queryKey: ["portal-journey-episodes", currentJourneyId],
+  const completedIds = useMemo(() => Array.from(new Set(history.map((item) => item.journey_id))), [history]);
+
+  const { data: releasedEpisodes = [], isLoading: loadingEpisodes } = useQuery({
+    queryKey: ["portal-journey-episodes", currentJourneyId, currentEpisode],
     queryFn: async () => {
       if (!currentJourneyId) return [];
       const { data, error } = await supabasePortal
         .from("journey_episodes")
         .select("id,episode_number,title,stage_title")
         .eq("journey_id", currentJourneyId)
+        .lte("episode_number", currentEpisode)
         .order("episode_number");
       if (error) throw error;
       return data ?? [];
@@ -62,14 +77,34 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
     enabled: Boolean(currentJourneyId),
   });
 
+  const { data: completedEpisodes = [], isLoading: loadingCompletedEpisodes } = useQuery({
+    queryKey: ["portal-completed-journey-episodes", completedIds],
+    queryFn: async () => {
+      if (completedIds.length === 0) return [];
+      const { data, error } = await supabasePortal
+        .from("journey_episodes")
+        .select("id,journey_id,episode_number,title,stage_title")
+        .in("journey_id", completedIds)
+        .order("episode_number");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: completedIds.length > 0,
+  });
+
   const currentJourney = journeys.find((journey) => journey.id === currentJourneyId) ?? null;
-  const completedIds = useMemo(() => new Set(history.map((item) => item.journey_id)), [history]);
-  const completedJourneys = history
-    .map((item) => ({ ...item, journey: journeys.find((journey) => journey.id === item.journey_id) }))
+  const completedSet = useMemo(() => new Set(completedIds), [completedIds]);
+  const completedJourneys = completedIds
+    .map((journeyId) => {
+      const latestCompletion = history.find((item) => item.journey_id === journeyId);
+      return { ...latestCompletion, journey_id: journeyId, journey: journeys.find((journey) => journey.id === journeyId) };
+    })
     .filter((item) => item.journey);
-  const availableJourneys = journeys.filter((journey) => journey.id !== currentJourneyId && !completedIds.has(journey.id));
-  const releasedEpisodes = episodes.filter((episode) => episode.episode_number <= currentEpisode);
+  const availableJourneys = journeys.filter((journey) => journey.id !== currentJourneyId && !completedSet.has(journey.id));
   const progress = currentJourney ? Math.min(100, Math.round((currentEpisode / currentJourney.total_episodes) * 100)) : 0;
+  const futureEpisodeNumbers = currentJourney
+    ? Array.from({ length: Math.max(0, currentJourney.total_episodes - currentEpisode) }, (_, index) => currentEpisode + index + 1)
+    : [];
 
   const chooseJourney = useMutation({
     mutationFn: async (journeyId: string) => {
@@ -79,11 +114,22 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
       });
       if (error || data?.error) throw new Error(data?.error || error?.message || "Não foi possível começar esta jornada");
     },
-    onSuccess: () => onJourneyChanged(),
+    onSuccess: () => {
+      setPendingJourneyId(null);
+      onJourneyChanged();
+    },
     onSettled: () => setSelectedJourneyId(null),
   });
 
-  if (loadingJourneys || loadingHistory || loadingEpisodes) {
+  const requestJourneyChange = (journeyId: string) => {
+    if (currentJourneyId || completedSet.has(journeyId)) {
+      setPendingJourneyId(journeyId);
+      return;
+    }
+    chooseJourney.mutate(journeyId);
+  };
+
+  if (loadingJourneys || loadingHistory || loadingEpisodes || loadingCompletedEpisodes) {
     return <div className="flex min-h-56 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>;
   }
 
@@ -124,13 +170,12 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
           <div className="mb-3 flex items-end justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Seus conteúdos</p>
-              <h2 className="mt-1 font-display text-xl font-semibold text-foreground">Episódios liberados</h2>
+              <h2 className="mt-1 font-display text-xl font-semibold text-foreground">Sua sequência</h2>
             </div>
             <span className="text-xs text-muted-foreground">{releasedEpisodes.length} disponível(is)</span>
           </div>
-          {releasedEpisodes.length > 0 ? (
-            <div className="space-y-2">
-              {[...releasedEpisodes].reverse().map((episode, index) => (
+          <div className="space-y-2">
+            {[...releasedEpisodes].reverse().map((episode, index) => (
                 <Button key={episode.id} variant="ghost" asChild className="h-auto w-full justify-start gap-3 rounded-xl border bg-card px-3 py-3 text-left shadow-sm">
                   <a href={`/episodio/${episode.id}?u=${userId}`}>
                     <span className="portal-area-content flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold">{episode.episode_number}</span>
@@ -141,21 +186,82 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   </a>
                 </Button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-              <Clock className="h-5 w-5 shrink-0 text-primary" />
-              O primeiro episódio será liberado em breve.
-            </div>
-          )}
+            ))}
+            {futureEpisodeNumbers.map((episodeNumber, index) => (
+              <div
+                key={`future-${episodeNumber}`}
+                className={`flex min-h-16 items-center gap-3 rounded-xl border px-3 py-3 ${index === 0 ? "border-primary/35 bg-primary/5" : "border-border/70 bg-muted/35"}`}
+              >
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${index === 0 ? "portal-area-content" : "bg-secondary text-muted-foreground"}`}>
+                  {episodeNumber}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-foreground">{index === 0 ? "Próximo episódio" : `Etapa ${episodeNumber}`}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{index === 0 ? "Será liberado ao longo da sua jornada" : "Ainda por vir"}</span>
+                </span>
+                {index === 0 ? <Clock className="h-4 w-4 text-primary" /> : <LockKeyhole className="h-4 w-4 text-muted-foreground/70" />}
+              </div>
+            ))}
+          </div>
         </section>
       )}
 
-      {!currentJourney && availableJourneys.length > 0 && (
+      {completedJourneys.length > 0 && (
         <section>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Biblioteca</p>
-          <h2 className="mb-3 mt-1 font-display text-xl font-semibold text-foreground">Jornadas disponíveis</h2>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Sua biblioteca</p>
+          <h2 className="mb-3 mt-1 font-display text-xl font-semibold text-foreground">Já concluídas</h2>
+          <div className="space-y-2">
+            {completedJourneys.map((item) => {
+              const journeyEpisodes = completedEpisodes.filter((episode) => episode.journey_id === item.journey_id);
+              const isOpen = expandedJourneyId === item.journey_id;
+              return (
+                <Collapsible key={item.journey_id} open={isOpen} onOpenChange={(open) => setExpandedJourneyId(open ? item.journey_id : null)}>
+                  <div className="rounded-xl border bg-card shadow-sm">
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="h-auto min-h-16 w-full justify-start gap-3 rounded-xl px-4 py-3 text-left">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Check className="h-4 w-4" /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-foreground">{item.journey?.title}</span>
+                          <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                            {item.completed_at ? `Concluída em ${new Date(item.completed_at).toLocaleDateString("pt-BR")}` : "Jornada concluída"} · Rever episódios
+                          </span>
+                        </span>
+                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="space-y-2 border-t px-3 pb-3 pt-3">
+                        {journeyEpisodes.map((episode) => (
+                          <Button key={episode.id} variant="ghost" asChild className="h-auto w-full justify-start gap-3 rounded-lg px-2 py-2 text-left">
+                            <a href={`/episodio/${episode.id}?u=${userId}`}>
+                              <span className="portal-area-content flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold">{episode.episode_number}</span>
+                              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{episode.stage_title || episode.title}</span>
+                              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                            </a>
+                          </Button>
+                        ))}
+                        <Button variant="outline" className="mt-2 w-full" onClick={() => requestJourneyChange(item.journey_id)}>
+                          <RotateCcw className="h-4 w-4" />
+                          Refazer jornada
+                        </Button>
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {availableJourneys.length > 0 && (
+        <section>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Para descobrir</p>
+          <div className="mb-3 mt-1 flex items-end justify-between gap-3">
+            <h2 className="font-display text-xl font-semibold text-foreground">Outras jornadas</h2>
+            <span className="text-xs text-muted-foreground">{availableJourneys.length} disponíveis</span>
+          </div>
+          <p className="mb-4 text-sm leading-relaxed text-muted-foreground">Novos episódios chegam ao longo de cada jornada. Veja tudo que ainda pode acompanhar você.</p>
           <div className="space-y-3">
             {availableJourneys.map((journey) => (
               <div key={journey.id} className="rounded-2xl border bg-card p-4 shadow-sm">
@@ -167,32 +273,16 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
                     <p className="mt-2 text-xs font-semibold text-primary">{journey.total_episodes} episódios</p>
                   </div>
                 </div>
-                <Button className="mt-4 w-full" disabled={chooseJourney.isPending} onClick={() => chooseJourney.mutate(journey.id)}>
-                  {selectedJourneyId === journey.id ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                  Começar esta jornada
-                </Button>
+                {!currentJourney && (
+                  <Button className="mt-4 w-full" disabled={chooseJourney.isPending} onClick={() => requestJourneyChange(journey.id)}>
+                    {selectedJourneyId === journey.id ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                    Começar esta jornada
+                  </Button>
+                )}
               </div>
             ))}
           </div>
           {chooseJourney.isError && <p className="mt-3 text-center text-sm text-destructive">{chooseJourney.error.message}</p>}
-        </section>
-      )}
-
-      {completedJourneys.length > 0 && (
-        <section>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Sua biblioteca</p>
-          <h2 className="mb-3 mt-1 font-display text-xl font-semibold text-foreground">Jornadas concluídas</h2>
-          <div className="space-y-2">
-            {completedJourneys.map((item) => (
-              <div key={`${item.journey_id}-${item.completed_at}`} className="flex items-center gap-3 rounded-xl border bg-card p-4">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Check className="h-4 w-4" /></span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-foreground">{item.journey?.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Concluída em {new Date(item.completed_at).toLocaleDateString("pt-BR")}</p>
-                </div>
-              </div>
-            ))}
-          </div>
         </section>
       )}
 
@@ -203,6 +293,32 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
           <p className="mt-1 text-sm">Você verá os próximos conteúdos aqui.</p>
         </div>
       )}
+
+      <AlertDialog open={Boolean(pendingJourneyId)} onOpenChange={(open) => !open && setPendingJourneyId(null)}>
+        <AlertDialogContent className="max-w-sm rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">{currentJourney ? "Trocar sua jornada atual?" : "Refazer esta jornada?"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {currentJourney
+                ? `Você está acompanhando “${currentJourney.title}”. Ao trocar, a nova jornada começará do primeiro episódio.`
+                : "Ela começará novamente pelo primeiro episódio. A versão concluída continuará registrada no seu histórico."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continuar como está</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={chooseJourney.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (pendingJourneyId) chooseJourney.mutate(pendingJourneyId);
+              }}
+            >
+              {chooseJourney.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {currentJourney ? "Trocar jornada" : "Refazer jornada"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
