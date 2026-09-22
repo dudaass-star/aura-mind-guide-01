@@ -30,3 +30,4 @@
 - [Pausas não silenciam quem quer entrar](mem://features/recovery/pausas-nao-silenciam-quem-quer-entrar) — escalated_email vira pausa de 6h, reabertura usa inbound anterior, pedido de experimentar fura pausas nossas
 
 - [Toque de Cuidado](mem://style/toque-de-cuidado) — Lembretes e follow-ups abrem com pergunta genuína; sem preço/condições/link colado; oferta só sob pedido
+- [Entrega de episódios no app](mem://features/journeys/episode-card-delivery) — A conversa mostra apenas cartão compacto do episódio; conteúdo completo vive em Jornadas

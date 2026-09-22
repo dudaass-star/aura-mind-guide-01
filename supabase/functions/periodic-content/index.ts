@@ -186,15 +186,23 @@ serve(async (req) => {
               continue;
             }
 
-            const message = manifestoResult.message;
             const teaser = manifestoResult.teaser as string | undefined;
+            const episodePath = `/episodio/${episode.id}?u=${encodeURIComponent(user.user_id)}`;
+            const episodeTitle = manifestoResult.stage_title || episode.stage_title || episode.title;
+            const journeyTitle = manifestoResult.journey_title || episode.content_journeys?.title || 'Sua jornada';
+            const totalEpisodes = manifestoResult.total_episodes || episode.content_journeys?.total_episodes || currentEpisode;
+            const readingMinutes = manifestoResult.reading_minutes || 1;
+            const cardText = `Um novo episódio de “${journeyTitle}” está disponível para você.`;
+            const whatsappTeaser = teaser && teaser.trim().length > 0
+              ? teaser
+              : `Seu novo episódio está pronto: EP ${currentEpisode}/${totalEpisodes} — ${episodeTitle}\n\nhttps://olaaura.com.br${episodePath}`;
 
             // Save TEASER (com link curto para o episódio) como pending_insight.
             // Quando a janela de 24h estiver fechada, o template `jornada_disponivel`
             // é enviado; ao clicar no botão "Acessar", o fast-path do aura-agent
             // entrega APENAS o teaser+link — o conteúdo completo está no /episodio/{id}.
-            // Fallback para `message` apenas se o teaser não foi gerado.
-            const pendingPayload = teaser && teaser.trim().length > 0 ? teaser : message;
+            // O conteúdo completo permanece na tela do episódio; nenhum canal recebe o manifesto inteiro.
+            const pendingPayload = whatsappTeaser;
             try {
               await supabase.from('profiles').update({
                 pending_insight: `[CONTENT]${pendingPayload}`,
@@ -210,10 +218,10 @@ serve(async (req) => {
               idempotencyKey: `journey:${episode.id}:${user.user_id}`,
               category: 'journey',
               type: 'journey_available',
-              path: '/meu-espaco?tab=jornadas',
-              whatsappText: message,
+              path: episodePath,
+              whatsappText: whatsappTeaser,
               whatsappCategory: 'content',
-              teaserText: manifestoResult.teaser || undefined,
+              teaserText: whatsappTeaser,
             });
 
             if (sendResult.success) {
@@ -258,7 +266,20 @@ serve(async (req) => {
                 .insert({
                   user_id: user.user_id,
                   role: 'assistant',
-                  content: message
+                  content: cardText,
+                  client_message_id: `journey:${episode.id}:${user.user_id}`,
+                  delivery_status: 'delivered',
+                  metadata: {
+                    kind: 'journey_episode_card',
+                    episode_id: episode.id,
+                    path: episodePath,
+                    journey_title: journeyTitle,
+                    episode_number: currentEpisode,
+                    total_episodes: totalEpisodes,
+                    title: episodeTitle,
+                    reading_minutes: readingMinutes,
+                    cta: 'Abrir episódio',
+                  }
                 });
 
               successCount++;
