@@ -38,11 +38,38 @@ type ReportCardMetadata = {
   cta?: string;
 };
 
+type JourneyEpisodeCardMetadata = {
+  kind: "journey_episode_card";
+  episode_id: string;
+  path: string;
+  journey_title: string;
+  episode_number: number;
+  total_episodes: number;
+  title: string;
+  reading_minutes?: number;
+  cta?: string;
+};
+
 function getReportCard(metadata: unknown): ReportCardMetadata | null {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
   const value = metadata as Record<string, unknown>;
   if (value.kind !== "report_card" || (value.report_type !== "weekly" && value.report_type !== "monthly")) return null;
   return value as ReportCardMetadata;
+}
+
+function getJourneyEpisodeCard(metadata: unknown): JourneyEpisodeCardMetadata | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const value = metadata as Record<string, unknown>;
+  if (
+    value.kind !== "journey_episode_card"
+    || typeof value.episode_id !== "string"
+    || typeof value.path !== "string"
+    || typeof value.journey_title !== "string"
+    || typeof value.title !== "string"
+    || typeof value.episode_number !== "number"
+    || typeof value.total_episodes !== "number"
+  ) return null;
+  return value as JourneyEpisodeCardMetadata;
 }
 
 type PendingMessage = {
@@ -93,16 +120,19 @@ const MessageTimeline = memo(function MessageTimeline({
   messages,
   responding,
   onOpenReport,
+  onOpenEpisode,
 }: {
   messages: ChatMessage[];
   responding: boolean;
   onOpenReport: (report: ReportCardMetadata) => void;
+  onOpenEpisode: (episode: JourneyEpisodeCardMetadata) => void;
 }) {
   return (
     <div className="space-y-5">
       {messages.map((message) => {
         const mine = message.role === "user";
         const reportCard = getReportCard(message.metadata);
+        const episodeCard = getJourneyEpisodeCard(message.metadata);
         return (
           <div key={message.id} data-chat-message className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
@@ -110,7 +140,24 @@ const MessageTimeline = memo(function MessageTimeline({
               mine ? "rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : "rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm",
               message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
             )} data-message-bubble>
-              {reportCard ? (
+              {episodeCard ? (
+                <div className="portal-chat-report-card w-[min(19rem,76vw)] max-w-full space-y-3">
+                  <div className="flex items-center justify-between gap-3 text-primary">
+                    <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /><span className="text-[10px] font-bold uppercase">Novo episódio</span></span>
+                    <span className="text-[10px] font-semibold">{episodeCard.episode_number} de {episodeCard.total_episodes}</span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground">{episodeCard.journey_title}</p>
+                    <p className="mt-1 font-display text-lg font-semibold leading-snug text-foreground">{episodeCard.title}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{message.content}</p>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{episodeCard.reading_minutes || 1} min de leitura</span>
+                    <span>EP {episodeCard.episode_number}/{episodeCard.total_episodes}</span>
+                  </div>
+                  <Button type="button" size="sm" className="w-full justify-between" onClick={() => onOpenEpisode(episodeCard)}>{episodeCard.cta || "Abrir episódio"}<ArrowRight className="h-4 w-4" /></Button>
+                </div>
+              ) : reportCard ? (
                 <div className="portal-chat-report-card w-[min(18rem,74vw)] max-w-full space-y-3">
                   <div className="flex items-center gap-2 text-primary"><Sparkles className="h-4 w-4" /><span className="text-[10px] font-bold uppercase">{reportCard.report_type === "weekly" ? "Resumo semanal" : "Relatório mensal"}</span></div>
                   <div><p className="font-display text-lg font-semibold text-foreground">{reportCard.title || (reportCard.report_type === "weekly" ? "Sua semana na Olá Aura" : "Seu mês em perspectiva")}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{message.content}</p></div>
@@ -203,6 +250,9 @@ export function ConversarTab({
     if (report.report_id) url.searchParams.set("id", report.report_id);
     window.history.replaceState({}, "", `${url.pathname}${url.search}`);
     onNavigate?.("insights");
+  };
+  const openEpisode = (episode: JourneyEpisodeCardMetadata) => {
+    window.location.assign(episode.path);
   };
 
   useEffect(() => {
@@ -767,7 +817,7 @@ export function ConversarTab({
           </div>
         )}
 
-        <MessageTimeline messages={messages} responding={responding} onOpenReport={openReport} />
+          <MessageTimeline messages={messages} responding={responding} onOpenReport={openReport} onOpenEpisode={openEpisode} />
       </div>
 
       {showNew && (

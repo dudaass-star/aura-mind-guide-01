@@ -56,6 +56,7 @@ serve(async (req) => {
     // Montar mensagem completa do episódio
     const essayContent = episode.essay_content || episode.content_prompt || '';
     const hookToNext = episode.hook_to_next || '';
+    const readingMinutes = Math.max(1, Math.ceil(essayContent.trim().split(/\s+/).filter(Boolean).length / 210));
 
     let message: string;
 
@@ -173,7 +174,10 @@ Seu episódio está pronto. Toque para ler:
       teaser,
       shortUrl,
       episode_number: episode.episode_number,
+      total_episodes: totalEpisodes,
+      journey_title: journeyTitle,
       stage_title: stageTitle,
+      reading_minutes: readingMinutes,
       is_last_episode: isLastEpisode
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
