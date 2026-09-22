@@ -62,4 +62,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [ ] Configurar os dados públicos do Web Push com o cliente e validar ativação, registro, envio, abertura e direcionamento em aparelho real.
 - [x] Refinar visual da conversa com direção grafite + jade, superfícies tonais e contraste premium, preservando a fluidez de digitação.
 - [x] Adicionar cor equilibrada à tela inicial, destacando a conversa e diferenciando cada área sem perder sobriedade.
-- [ ] Unificar Hoje, Sessões, Percurso, Meditações e Sobre você ao novo padrão visual e estrutural do aplicativo.
+- [x] Unificar Hoje, Sessões, Percurso, Meditações e Sobre você ao novo padrão visual e estrutural do aplicativo.
