@@ -27,9 +27,9 @@ import {
   PenLine,
 } from "lucide-react";
 import { EmptyState, PortalLoadingInline } from "./shared";
-import { auraWhatsAppLink } from "./whatsapp";
 import { sanitizePortalText } from "./sanitize";
 import { toast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -96,7 +96,7 @@ function normalizeThemeName(raw: string): string {
 
 // ---------- COMPONENTES ----------
 
-export function SobreVoceTab({ userId }: { userId: string }) {
+export function SobreVoceTab({ userId, onOpenConversation }: { userId: string; onOpenConversation: (prefilledMessage?: string) => void }) {
   const { data: profile } = useQuery({
     queryKey: ["portal-profile-name", userId],
     queryFn: async () => {
@@ -393,16 +393,15 @@ export function SobreVoceTab({ userId }: { userId: string }) {
         </div>
       )}
 
-      {/* Rodapé: corrigir no WhatsApp */}
-      <a
-        href={auraWhatsAppLink("Oi Aura, queria corrigir uma coisa no que você sabe sobre mim.")}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center justify-center gap-2 mt-2 px-4 py-3 rounded-xl border border-[#87A878]/20 bg-white/60 text-sm text-[#1B2A4E]/70 hover:text-[#1B2A4E] hover:border-[#87A878]/50 transition-colors font-['Nunito']"
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => onOpenConversation("Oi Aura, queria corrigir uma coisa no que você sabe sobre mim.")}
+        className="w-full min-h-12 h-auto gap-2 mt-2 rounded-xl border-[#87A878]/20 bg-white/60 text-sm text-[#1B2A4E]/70 hover:text-[#1B2A4E] hover:border-[#87A878]/50 font-['Nunito']"
       >
         <MessageCircle size={14} />
-        Algo aqui não bate? Me corrige no WhatsApp →
-      </a>
+        Algo aqui não bate? Me conta na conversa →
+      </Button>
     </div>
   );
 }

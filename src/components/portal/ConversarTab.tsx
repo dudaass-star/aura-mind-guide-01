@@ -149,7 +149,7 @@ export function ConversarTab({
   const [recording, setRecording] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
   const [audioError, setAudioError] = useState("");
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(() => localStorage.getItem(`aura-chat-open:${userId}`) === "true");
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
   const [showInstallInvite, setShowInstallInvite] = useState(false);
   const [showPushDialog, setShowPushDialog] = useState(false);
@@ -233,6 +233,7 @@ export function ConversarTab({
   }, [responding]);
 
   useEffect(() => {
+    localStorage.removeItem(`aura-chat-open:${userId}`);
     const saved = localStorage.getItem(`aura-chat-draft:${userId}`);
     if (saved) setDraft(saved);
 
