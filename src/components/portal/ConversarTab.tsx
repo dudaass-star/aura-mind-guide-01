@@ -637,10 +637,12 @@ export function ConversarTab({
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background/70" aria-hidden="true">
               <Download className="h-5 w-5" />
             </span>
-            <button type="button" className="min-w-0 flex-1 text-left" onClick={() => void beginInstall()}>
+            <Button type="button" variant="ghost" className="h-auto min-w-0 flex-1 justify-start p-0 text-left hover:bg-transparent" onClick={() => void beginInstall()}>
+              <span className="min-w-0 whitespace-normal">
               <span className="block text-sm font-bold text-foreground">Tenha a Olá Aura sempre por perto</span>
               <span className="mt-0.5 block text-xs text-muted-foreground">Adicione à tela inicial para entrar com um toque.</span>
-            </button>
+              </span>
+            </Button>
             <Button type="button" size="sm" className="h-9 shrink-0 px-3 font-body" onClick={() => void beginInstall()}>
               Instalar
             </Button>
