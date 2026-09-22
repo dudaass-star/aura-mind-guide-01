@@ -719,7 +719,7 @@ export function ConversarTab({
           </div>
         )}
 
-        <MessageTimeline messages={messages} responding={responding} />
+        <MessageTimeline messages={messages} responding={responding} onOpenReport={openReport} />
       </div>
 
       {showNew && (
