@@ -157,6 +157,29 @@
   border-color: hsl(var(--portal-conversation-border));
 }
 
+.portal-area-conversation {
+  background-color: hsl(var(--portal-conversation));
+  color: hsl(var(--foreground));
+}
+
+.portal-login-page main {
+  background-image: linear-gradient(180deg, hsl(var(--secondary) / 0.45), transparent 11rem);
+}
+
+@media (min-width: 768px) {
+  .portal-login-page {
+    background-color: hsl(var(--foreground) / 0.08);
+  }
+
+  .portal-login-page main > div {
+    border: 1px solid hsl(var(--border) / 0.7);
+    border-radius: 1rem;
+    background-color: hsl(var(--background));
+    box-shadow: var(--shadow-card);
+    padding: 2rem;
+  }
+}
+
 .portal-area-today {
   background-color: hsl(var(--portal-today));
   color: hsl(var(--portal-today-foreground));

@@ -1,4 +1,5 @@
 [x] Padronizar episódios e conclusão de Jornadas com o visual atual do aplicativo e confirmar o acesso global isolado por cliente.
+- [x] Transformar a antiga entrada do Meu Espaço na entrada visual e textual do aplicativo AURA.
 # Roadmap
 
 - [x] Painel semanal do funil Taster no admin (TasterFunnelPanel em AdminWhatsappRecovery)

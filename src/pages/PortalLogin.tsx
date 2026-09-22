@@ -6,9 +6,10 @@ import { lovable } from "@/integrations/lovable";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Mail, ArrowRight, MessageCircle, RefreshCw } from "lucide-react";
+import { Loader2, Mail, ArrowRight, MessageCircle, RefreshCw, MessagesSquare, BookOpen, CalendarDays, Headphones } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
+import avatarAura from "@/assets/avatar-aura.jpg";
 import { auraWhatsAppLink } from "@/components/portal/whatsapp";
 
 const GoogleIcon = () => (
@@ -137,35 +138,56 @@ export default function PortalLogin() {
   return (
     <>
       <Helmet>
-        <title>Entrar | Meu Espaço Aura</title>
+        <title>Entrar no aplicativo | AURA</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="bg-card border-b border-border/40">
-          <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
+      <div className="portal-chat-theme portal-login-page min-h-dvh bg-background text-foreground flex flex-col">
+        <header className="border-b border-border/70 bg-card/90 backdrop-blur-xl">
+          <div className="max-w-lg mx-auto px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
             <Link to="/">
-              <img src={logoOlaAura} alt="Olá AURA" className="h-12 w-auto" />
+              <img src={logoOlaAura} alt="Olá AURA" className="h-9 w-auto" />
             </Link>
-            <span className="text-xs uppercase tracking-widest text-accent font-semibold font-['Nunito']">
-              Meu Espaço
+            <span className="text-[10px] uppercase tracking-[0.18em] text-primary font-bold font-body">
+              Aplicativo AURA
             </span>
           </div>
-        </div>
+        </header>
 
-        <div className="flex-1 flex items-center justify-center px-5 py-10">
-          <div className="w-full max-w-sm">
-            <h1 className="font-['Fraunces'] text-2xl text-foreground text-center mb-2">
-              Entrar no Meu Espaço
-            </h1>
-            <p className="text-sm text-muted-foreground text-center mb-8 font-['Nunito']">
-              Acesso seguro às suas jornadas, resumos e cápsulas.
-            </p>
+        <main className="flex-1 px-5 py-7 sm:py-9">
+          <div className="mx-auto w-full max-w-sm">
+            <div className="mb-5 flex flex-col items-center text-center">
+              <div className="relative mb-3">
+                <img src={avatarAura} alt="AURA" className="h-16 w-16 rounded-full object-cover ring-4 ring-secondary" />
+                <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-[3px] border-background bg-primary" aria-hidden="true" />
+              </div>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Sua AURA, sempre por perto</p>
+              <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">
+                Entre na AURA
+              </h1>
+              <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground font-body">
+                Continue suas conversas e acesse tudo o que acompanha você.
+              </p>
+            </div>
+
+            <div className="mb-6 grid grid-cols-4 border-y border-border/70 py-3" aria-label="Recursos do aplicativo">
+              {[
+                { label: "Conversa", icon: MessagesSquare, tone: "portal-area-conversation" },
+                { label: "Jornadas", icon: BookOpen, tone: "portal-area-content" },
+                { label: "Sessões", icon: CalendarDays, tone: "portal-area-sessions" },
+                { label: "Meditações", icon: Headphones, tone: "portal-area-audio" },
+              ].map(({ label, icon: Icon, tone }) => (
+                <div key={label} className="flex min-w-0 flex-col items-center gap-1.5 px-1 text-center">
+                  <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tone}`}><Icon className="h-4 w-4" /></span>
+                  <span className="w-full truncate text-[10px] font-semibold text-muted-foreground">{label}</span>
+                </div>
+              ))}
+            </div>
 
             {step === "email" && (
               <>
-                <Button asChild type="button" className="w-full min-h-12 h-auto py-3 font-['Nunito']">
+                <Button asChild type="button" className="w-full min-h-12 h-auto py-3 font-body shadow-sm">
                   <a
-                    href={auraWhatsAppLink("Quero entrar no Meu Espaço pelo WhatsApp cadastrado.")}
+                    href={auraWhatsAppLink("Quero entrar no aplicativo da AURA pelo WhatsApp cadastrado.")}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -173,20 +195,20 @@ export default function PortalLogin() {
                     <span className="ml-2">Entrar pelo WhatsApp</span>
                   </a>
                 </Button>
-                <p className="mt-2 text-center text-xs text-muted-foreground font-['Nunito']">
-                  Envie a mensagem pronta e receba seu link pessoal de acesso.
+                <p className="mt-2 text-center text-xs text-muted-foreground font-body">
+                  Receba um link pessoal e entre sem precisar digitar código.
                 </p>
 
                 <div className="flex items-center gap-3 my-5">
                   <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground font-['Nunito']">ou use outra forma</span>
+                  <span className="text-xs text-muted-foreground font-body">ou entre de outra forma</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
 
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full h-11 mb-4 font-['Nunito']"
+                  className="w-full h-11 mb-4 bg-card font-body"
                   onClick={handleGoogle}
                 >
                   <GoogleIcon />
@@ -195,7 +217,7 @@ export default function PortalLogin() {
 
                 <form onSubmit={handleSendOtp} className="space-y-3">
                   <label className="block">
-                    <span className="text-sm text-muted-foreground font-['Nunito'] mb-1.5 block">
+                    <span className="text-sm text-muted-foreground font-body mb-1.5 block">
                       Seu email
                     </span>
                     <Input
@@ -206,13 +228,13 @@ export default function PortalLogin() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      className="h-11"
+                      className="h-11 bg-card"
                     />
                   </label>
                   <Button
                     type="submit"
                     disabled={sending}
-                    className="w-full h-11 font-['Nunito']"
+                    className="w-full h-11 font-body"
                   >
                     {sending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -230,7 +252,11 @@ export default function PortalLogin() {
             {step === "otp" && (
               <div className="space-y-4">
               <form onSubmit={handleVerify} className="space-y-4">
-                <p className="text-sm text-muted-foreground font-['Nunito'] text-center">
+                <div className="mb-2 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Entrada segura</p>
+                  <h2 className="mt-1 font-display text-xl font-semibold text-foreground">Confira seu email</h2>
+                </div>
+                <p className="text-sm text-muted-foreground font-body text-center">
                   Enviamos um <strong className="text-foreground">código de 8 dígitos</strong> e um <strong className="text-foreground">link</strong> para
                   <br />
                   <strong className="text-foreground">{email}</strong>
@@ -252,7 +278,7 @@ export default function PortalLogin() {
                 <Button
                   type="submit"
                   disabled={verifying || otp.length !== 8}
-                  className="w-full h-11 font-['Nunito']"
+                  className="w-full h-11 font-body"
                 >
                   {verifying ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -270,7 +296,7 @@ export default function PortalLogin() {
                   variant="ghost"
                   disabled={sending || resendIn > 0}
                   onClick={handleResend}
-                  className="w-full h-10 text-sm font-['Nunito']"
+                  className="w-full h-10 text-sm font-body"
                 >
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw size={15} />}
                   <span className="ml-2">{resendIn > 0 ? `Reenviar código em ${resendIn}s` : "Reenviar código"}</span>
@@ -278,13 +304,13 @@ export default function PortalLogin() {
 
                 <div className="flex items-center gap-3 py-1">
                   <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground font-['Nunito']">não recebeu?</span>
+                  <span className="text-xs text-muted-foreground font-body">não recebeu?</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
 
-                <Button asChild type="button" variant="outline" className="w-full min-h-11 h-auto py-2.5 font-['Nunito']">
+                <Button asChild type="button" variant="outline" className="w-full min-h-11 h-auto bg-card py-2.5 font-body">
                   <a
-                    href={auraWhatsAppLink("Não recebi o código. Quero entrar no Meu Espaço.")}
+                    href={auraWhatsAppLink("Não recebi o código. Quero entrar no aplicativo da AURA.")}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -292,30 +318,31 @@ export default function PortalLogin() {
                     <span className="ml-2">Entrar pelo WhatsApp cadastrado</span>
                   </a>
                 </Button>
-                <p className="text-xs text-muted-foreground text-center font-['Nunito']">
+                <p className="text-xs text-muted-foreground text-center font-body">
                   Envie a mensagem pronta. A Aura responderá com um link seguro para entrar.
                 </p>
 
-                <button
+                <Button
                   type="button"
+                  variant="link"
                   onClick={() => {
                     setStep("email");
                     setOtp("");
                   }}
-                  className="block text-xs text-muted-foreground hover:text-accent mx-auto font-['Nunito']"
+                  className="mx-auto flex h-auto text-xs text-muted-foreground font-body"
                 >
                   Usar outro email
-                </button>
+                </Button>
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground text-center mt-8 font-['Nunito']">
+            <p className="text-xs text-muted-foreground text-center mt-7 pb-[max(0.5rem,env(safe-area-inset-bottom))] font-body">
               Ao continuar, você concorda com nossos{" "}
               <Link to="/termos" className="underline">Termos</Link> e{" "}
               <Link to="/privacidade" className="underline">Política de Privacidade</Link>.
             </p>
           </div>
-        </div>
+        </main>
       </div>
     </>
   );
