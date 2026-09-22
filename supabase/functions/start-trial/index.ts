@@ -140,16 +140,6 @@ Deno.serve(async (req) => {
     // Lead CAPI event removed — trial flow now goes directly to /checkout (Stripe)
     // The start-trial function is only used as a legacy fallback
 
-    // Fetch portal token for welcome message
-    let portalLink = '';
-    try {
-      const { data: tokenData } = await supabase.from('user_portal_tokens')
-        .select('token').eq('user_id', userId).single();
-      if (tokenData?.token) {
-        portalLink = `https://olaaura.com.br/meu-espaco`;
-      }
-    } catch { /* non-blocking */ }
-
     // Build full welcome message (delivered when user clicks "Começar")
     const welcomeMessage = `Oi, ${name.trim()}! Seu acesso ao app Olá Aura está liberado ✨
 

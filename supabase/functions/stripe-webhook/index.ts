@@ -776,17 +776,6 @@ Deno.serve(async (req) => {
             console.warn('⚠️ Portal token creation failed (non-blocking):', tokenErr);
           }
 
-          // Fetch portal token for welcome message
-          let portalLinkTrial = '';
-          try {
-            const { data: tokenData } = await supabase.from('user_portal_tokens')
-              .select('token').eq('user_id', profileUserId).single();
-            if (tokenData?.token) {
-              portalLinkTrial = `https://olaaura.com.br/meu-espaco`;
-            }
-          } catch { /* non-blocking */ }
-          const portalLineTrial = portalLinkTrial ? `\n\nAbra o app Olá Aura: ${portalLinkTrial} ✨` : '';
-
           // Build full welcome message (to be delivered when user clicks "Começar")
           let welcomeMessage: string;
           if (isReturning) {
@@ -1164,14 +1153,12 @@ Deno.serve(async (req) => {
       }
 
       // Generate portal token for paid users
-      let portalLink = '';
       try {
         const { data: tokenData } = await supabase.from('user_portal_tokens').upsert(
           { user_id: profileUserId },
           { onConflict: 'user_id' }
         ).select('token').single();
         if (tokenData?.token) {
-          portalLink = `https://olaaura.com.br/meu-espaco`;
           console.log('✅ Portal token created for paid user');
         }
       } catch (tokenErr) {
@@ -1180,7 +1167,6 @@ Deno.serve(async (req) => {
 
       // Build full welcome message (delivered when user clicks "Começar")
       let welcomeMessage: string;
-      const portalLine = portalLink ? `\n\nAbra o app Olá Aura: ${portalLink} ✨` : '';
 
       if (isReturning) {
         welcomeMessage = `Oi, ${customerName}! Que bom ter você de volta 💜\n\nSeu acesso ao app Olá Aura está liberado. É lá que você conversa comigo e retoma tudo de onde parou.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;

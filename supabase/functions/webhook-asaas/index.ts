@@ -1338,7 +1338,6 @@ async function handleActivation(
     });
 
     // 4) Portal token.
-    let portalLink = "";
     try {
       await supabase
         .from("user_portal_tokens")
@@ -1349,15 +1348,12 @@ async function handleActivation(
         .eq("user_id", profileUserId)
         .single();
       if (tokenData?.token) {
-        portalLink = `https://olaaura.com.br/meu-espaco`;
+        console.log("[webhook-asaas] ✅ Token do app criado");
       }
     } catch (tokenErr) {
       console.warn("[webhook-asaas] ⚠️ Portal token falhou (non-blocking):", tokenErr);
     }
-    const portalLine = portalLink ? `\n\nAbra o app Olá Aura: ${portalLink} ✨` : "";
-
     // 5) Monta welcome (3 variantes idênticas ao stripe-webhook).
-    const planName = PLAN_NAMES[customerPlan] || "Essencial";
     let welcomeMessage: string;
     if (isReturning) {
       welcomeMessage = `Oi, ${customerName}! Que bom ter você de volta 💜\n\nSeu acesso ao app Olá Aura está liberado. É lá que você conversa comigo e retoma tudo de onde parou.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;

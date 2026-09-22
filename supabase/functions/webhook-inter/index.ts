@@ -459,7 +459,6 @@ async function activateAccess(
       console.warn("[webhook-inter] token do portal não criado:", (e as Error)?.message);
     }
 
-    const planName = PLAN_NAMES[plan] || "Essencial";
     const welcome = `Oi, ${name}! Seu acesso ao app Olá Aura está liberado ✨\n\nÉ no app que você conversa comigo por texto ou áudio e encontra Sessões, Jornadas, Percurso e Meditações.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
 
     await supabase.from("profiles")
