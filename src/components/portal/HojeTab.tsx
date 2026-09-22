@@ -10,15 +10,17 @@ import {
 } from "lucide-react";
 import { PortalLoadingInline } from "./shared";
 import { IntimacyLevel } from "./IntimacyLevel";
-import { auraWhatsAppLink, presentClosure } from "./whatsapp";
+import { presentClosure } from "./whatsapp";
 import { PerguntaDoDiaCard } from "./PerguntaDoDiaCard";
 import { sanitizePortalText } from "./sanitize";
+import { Button } from "@/components/ui/button";
 
 interface HojeTabProps {
   userId: string;
   firstName: string;
   profile: any;
   onNavigateTab: (tab: string) => void;
+  onOpenConversation: (prefilledMessage?: string) => void;
 }
 
 // Saudação pelo horário BRT
@@ -67,7 +69,7 @@ function formatScheduledBRT(iso: string): { label: string; countdown: string } {
   return { label, countdown };
 }
 
-export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabProps) {
+export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConversation }: HojeTabProps) {
   // Última sessão concluída
   const { data: lastSession, isLoading: loadingLast } = useQuery({
     queryKey: ["portal-hoje-last-session", userId],
@@ -245,23 +247,19 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
           <p className="text-sm text-[#2A2A2A]/70 font-['Nunito']">
             Manda a primeira mensagem — depois esse espaço começa a ganhar vida.
           </p>
-          <a
-            href={auraWhatsAppLink("Oi Aura, quero começar.")}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full bg-[#1B2A4E] text-white px-5 py-2.5 text-sm font-bold font-['Nunito'] hover:bg-[#1B2A4E]/90 transition-all"
-          >
+          <Button type="button" onClick={() => onOpenConversation("Oi Aura, quero começar.")} className="rounded-full px-5 font-['Nunito']">
             <MessageCircle size={16} />
-            Abrir WhatsApp
-          </a>
+            Conversar com a AURA
+          </Button>
         </div>
       )}
 
       {/* Sessões: Última + Próxima em grid 2 colunas (Última bege, Próxima navy) */}
       {!zeroConversa && (
-        <SessionsRow
+          <SessionsRow
           lastSession={lastSession}
           nextSession={nextSession}
+            onOpenConversation={onOpenConversation}
         />
       )}
 
@@ -274,15 +272,10 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
           <p className="text-sm text-[#2A2A2A]/70 font-['Nunito']">
             Quando vocês começarem a conversar, esse espaço ganha vida.
           </p>
-          <a
-            href={auraWhatsAppLink("Oi Aura, quero começar.")}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full bg-[#1B2A4E] text-white px-5 py-2.5 text-sm font-bold font-['Nunito'] hover:bg-[#1B2A4E]/90 transition-all"
-          >
+          <Button type="button" onClick={() => onOpenConversation("Oi Aura, quero começar.")} className="rounded-full px-5 font-['Nunito']">
             <MessageCircle size={16} />
             Falar com a Aura
-          </a>
+          </Button>
         </div>
       )}
 
@@ -298,12 +291,12 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
 
       {/* Card: O que ficou da última sessão (bloco de continuidade da conversa) */}
       {lastSession && (lastSession.closure_text || lastSession.session_summary) && (
-        <ClosureCard session={lastSession} />
+        <ClosureCard session={lastSession} onOpenConversation={onOpenConversation} />
       )}
 
       {/* Pergunta do dia — sage bg + navy CTA */}
       {!zeroConversa && (
-        <PerguntaDoDiaCard lastUserMessageAt={profile?.last_user_message_at} />
+        <PerguntaDoDiaCard lastUserMessageAt={profile?.last_user_message_at} onRespond={onOpenConversation} />
       )}
 
       {/* Card: Meditação sugerida (não mostrar pra zero-conversa) */}
@@ -343,9 +336,11 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
 function SessionsRow({
   lastSession,
   nextSession,
+  onOpenConversation,
 }: {
   lastSession: any;
   nextSession: any;
+  onOpenConversation: (prefilledMessage?: string) => void;
 }) {
   const lastLabel = lastSession?.ended_at ? relativeTime(lastSession.ended_at) : null;
   const lastTheme =
@@ -390,17 +385,14 @@ function SessionsRow({
         </p>
         <div className="flex gap-1">
           {REAGENDAR.map((d) => (
-            <a
+            <button
+              type="button"
               key={d}
-              href={auraWhatsAppLink(
-                `Oi Aura, quero remarcar minha próxima sessão para daqui a ${d} dias.`,
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
+              onClick={() => onOpenConversation(`Oi Aura, quero remarcar minha próxima sessão para daqui a ${d} dias.`)}
               className="px-2.5 py-1 bg-[#F5F0E8]/10 hover:bg-[#87A878] rounded text-[10px] font-bold border border-[#F5F0E8]/20 transition-colors font-['Nunito']"
             >
               {d}d
-            </a>
+            </button>
           ))}
         </div>
       </div>
@@ -408,7 +400,7 @@ function SessionsRow({
   );
 }
 
-function ClosureCard({ session }: { session: any }) {
+function ClosureCard({ session, onOpenConversation }: { session: any; onOpenConversation: (prefilledMessage?: string) => void }) {
   const { title, buttonLabel, prefilledMessage } = presentClosure(
     session.closure_type,
     session.closure_text,
@@ -438,15 +430,14 @@ function ClosureCard({ session }: { session: any }) {
       <p className="text-[#1B2A4E] font-['Fraunces'] text-base leading-relaxed italic">
         “{body}”
       </p>
-      <a
-        href={auraWhatsAppLink(prefilledMessage)}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={() => onOpenConversation(prefilledMessage)}
         className="inline-flex items-center gap-1.5 text-sm font-bold text-[#1B2A4E] hover:text-[#87A878] font-['Nunito'] transition-colors"
       >
         {buttonLabel}
         <ArrowRight size={14} />
-      </a>
+      </button>
     </div>
   );
 }

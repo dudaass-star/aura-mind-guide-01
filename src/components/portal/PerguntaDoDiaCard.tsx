@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react";
-import { auraWhatsAppLink } from "./whatsapp";
+import { Button } from "@/components/ui/button";
 
 // Perguntas rotacionadas de forma determinística por dia.
 // Mantidas curtas, abertas, sem julgamento — coerente com a postura da Aura.
@@ -43,9 +43,10 @@ function perguntaDoDia(): string {
 
 interface Props {
   lastUserMessageAt?: string | null;
+  onRespond: (message: string) => void;
 }
 
-export function PerguntaDoDiaCard({ lastUserMessageAt }: Props) {
+export function PerguntaDoDiaCard({ lastUserMessageAt, onRespond }: Props) {
   // Se conversou nas últimas 4h, não empurra a pergunta (já tá em conversa).
   if (lastUserMessageAt) {
     const diffMs = Date.now() - new Date(lastUserMessageAt).getTime();
@@ -53,8 +54,6 @@ export function PerguntaDoDiaCard({ lastUserMessageAt }: Props) {
   }
 
   const pergunta = perguntaDoDia();
-  const link = auraWhatsAppLink(pergunta);
-
   return (
     <div className="rounded-2xl bg-[#87A878]/12 border border-[#87A878]/30 p-6 space-y-4 animate-fade-up">
       <p className="text-[10px] uppercase tracking-[0.2em] text-[#87A878] font-bold font-['Nunito']">
@@ -63,15 +62,10 @@ export function PerguntaDoDiaCard({ lastUserMessageAt }: Props) {
       <p className="text-[#1B2A4E] font-['Fraunces'] text-xl leading-snug" style={{ fontWeight: 500 }}>
         {pergunta}
       </p>
-      <a
-        href={link}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 rounded-full bg-[#1B2A4E] text-white px-4 py-2 text-xs font-bold font-['Nunito'] uppercase tracking-wider hover:bg-[#1B2A4E]/90 transition-colors"
-      >
+      <Button type="button" onClick={() => onRespond(pergunta)} className="w-fit rounded-full px-4 text-xs font-bold font-['Nunito'] uppercase tracking-wider">
         Responder com a Aura
         <ArrowRight size={14} />
-      </a>
+      </Button>
     </div>
   );
 }

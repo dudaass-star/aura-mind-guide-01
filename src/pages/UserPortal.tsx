@@ -17,7 +17,6 @@ import { InsightsTab } from "@/components/portal/InsightsTab";
 import { SobreVoceTab } from "@/components/portal/SobreVoceTab";
 import { ConversarTab } from "@/components/portal/ConversarTab";
 import { JornadasTab } from "@/components/portal/JornadasTab";
-import { FloatingWhatsAppCTA } from "@/components/portal/FloatingWhatsAppCTA";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 import { rememberPushAttribution, reportPushConversion, reportPushPresence } from "@/lib/push-notifications";
@@ -134,6 +133,15 @@ const UserPortal = () => {
       // Re-avalia badges após marcar como visto.
       setTimeout(() => refetchNovidades(), 100);
     }
+  };
+
+  const handleOpenConversation = (prefilledMessage?: string) => {
+    if (!userId) return;
+    if (prefilledMessage?.trim()) {
+      localStorage.setItem(`aura-chat-draft:${userId}`, prefilledMessage.trim());
+    }
+    localStorage.setItem(`aura-chat-open:${userId}`, "true");
+    handleTabClick("conversar");
   };
 
   const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = useQuery({
@@ -369,6 +377,7 @@ const UserPortal = () => {
               firstName={firstName}
               profile={profile}
               onNavigateTab={(t) => handleTabClick(t as TabId)}
+              onOpenConversation={handleOpenConversation}
             />
           )}
           {activeTab === "sessoes" && <SessoesTab userId={userId!} profile={profile} />}
@@ -376,12 +385,9 @@ const UserPortal = () => {
             <JornadasTab userId={userId!} profile={profile} onJourneyChanged={() => void refetchProfile()} />
           )}
           {activeTab === "insights" && <InsightsTab userId={userId!} profile={profile} />}
-          {activeTab === "sobre" && <SobreVoceTab userId={userId!} />}
+          {activeTab === "sobre" && <SobreVoceTab userId={userId!} onOpenConversation={handleOpenConversation} />}
           {activeTab === "meditacoes" && <MeditacoesTab userId={userId!} />}
         </div>
-
-        {/* WhatsApp segue disponível para suporte, sem competir com a conversa principal. */}
-        {activeTab !== "conversar" && <FloatingWhatsAppCTA />}
 
         {/* Rodapé institucional; ações da conta ficam no menu da tela inicial. */}
         {activeTab !== "conversar" && <footer className="border-t border-border/40 py-6 text-center">
