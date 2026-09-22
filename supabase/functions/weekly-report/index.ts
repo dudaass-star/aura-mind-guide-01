@@ -76,12 +76,12 @@ async function invokeNext(offset: number, periodStart: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const nowParts = brtParts();
-    const hour = Number(nowParts.hour);
-    if (hour < 8 || hour >= 22) return new Response(JSON.stringify({ status: "skipped", reason: "quiet_hours" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const body = await req.json().catch(() => ({}));
     const offset = Number(body.offset || 0);
     const targetUserId = typeof body.target_user_id === "string" ? body.target_user_id : null;
+    const nowParts = brtParts();
+    const hour = Number(nowParts.hour);
+    if (!targetUserId && (hour < 8 || hour >= 22)) return new Response(JSON.stringify({ status: "skipped", reason: "quiet_hours" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const dryRun = body.dry_run === true;
     const periods = getWeeklyPeriods(body.period_start ? new Date(`${body.period_start}T12:00:00Z`) : new Date());
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
