@@ -6606,7 +6606,7 @@ ${welcomeContent}
 INSTRUÇÃO:
 1. Use EXATAMENTE o conteúdo acima como sua resposta (pode fazer pequenos ajustes de naturalidade)
 2. Esta é a primeira impressão do usuário — seja calorosa e acolhedora
-3. Inclua os links do guia e da área pessoal que estão na mensagem
+3. Preserve o link do app Olá Aura que está na mensagem
 4. Use [MODO_AUDIO] no início da resposta para enviar também um áudio de boas-vindas
 5. No áudio, dê as boas-vindas de forma breve e carinhosa (NÃO repita os links no áudio)`;
 

@@ -112,7 +112,7 @@ Te espero. 💜${optOutNotice}`;
       console.log('📎 Generating teaser + short link for episode');
 
       // Buscar (ou criar) o token do portal do usuário para que o link
-      // do episódio já abra com contexto e o botão "Meu Espaço" funcione.
+      // do episódio já abra com contexto e o botão de volta ao app funcione.
       let portalToken: string | null = null;
       try {
         const { data: existingToken } = await supabase

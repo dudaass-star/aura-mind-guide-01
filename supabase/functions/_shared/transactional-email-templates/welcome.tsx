@@ -4,8 +4,7 @@ import {
 } from 'npm:@react-email/components@0.0.22'
 import type { TemplateEntry } from './registry.ts'
 
-const SITE_NAME = "AURA"
-const WHATSAPP_LINK = "https://wa.me/16625255005?text=Oi%20AURA"
+const SITE_NAME = "Olá Aura"
 
 interface WelcomeProps {
   name?: string
@@ -17,11 +16,11 @@ const WelcomeEmail = ({ name, portalUrl }: WelcomeProps) => {
   return (
     <Html lang="pt-BR" dir="ltr">
       <Head />
-      <Preview>Bem-vindo à AURA — comece sua jornada agora</Preview>
+      <Preview>Seu acesso ao app Olá Aura está liberado</Preview>
       <Body style={main}>
         <Container style={container}>
           <Section style={logoSection}>
-            <Text style={logo}>💜 AURA</Text>
+            <Text style={logo}>Olá Aura</Text>
           </Section>
 
           <Heading style={h1}>
@@ -29,27 +28,14 @@ const WelcomeEmail = ({ name, portalUrl }: WelcomeProps) => {
           </Heading>
 
           <Text style={text}>
-            Sua jornada com a AURA está pronta para começar. Agora é só abrir o WhatsApp e mandar um oi.
+            Seu acesso ao app Olá Aura está liberado. É nele que você conversa com a AURA e encontra tudo o que acompanha sua jornada.
           </Text>
-
-          <Section style={ctaSection}>
-            <Button style={whatsappButton} href={WHATSAPP_LINK}>
-              💬 Chamar a AURA no WhatsApp
-            </Button>
-          </Section>
 
           {portalUrl && (
             <>
-              <Hr style={hr} />
-              <Heading as="h2" style={h2}>
-                🏠 Seu Espaço Pessoal
-              </Heading>
-              <Text style={tipText}>
-                Acesse seu painel para acompanhar jornadas, meditações e resumos mensais.
-              </Text>
               <Section style={ctaSection}>
                 <Button style={portalButton} href={portalUrl}>
-                  Acessar Meu Espaço
+                  Abrir o app Olá Aura
                 </Button>
               </Section>
             </>
@@ -58,23 +44,23 @@ const WelcomeEmail = ({ name, portalUrl }: WelcomeProps) => {
           <Hr style={hr} />
 
           <Heading as="h2" style={h2}>
-            ✨ Como aproveitar ao máximo
+            Tudo em um só lugar
           </Heading>
 
           <Text style={tipText}>
-            <strong>1.</strong> Responda as perguntas do onboarding com sinceridade
+            <strong>Conversa:</strong> fale com a AURA por texto ou áudio, no seu ritmo.
           </Text>
           <Text style={tipText}>
-            <strong>2.</strong> Converse com honestidade — sem filtros, sem julgamento
+            <strong>Sessões e Jornadas:</strong> aprofunde o que importa com encontros e conteúdos guiados.
           </Text>
           <Text style={tipText}>
-            <strong>3.</strong> Faça os check-ins diários para acompanhar seu progresso
+            <strong>Percurso e Meditações:</strong> acompanhe o que vem mudando e encontre práticas para diferentes momentos.
           </Text>
 
           <Hr style={hr} />
 
           <Text style={footerText}>
-            Se tiver qualquer dúvida, é só responder a AURA no WhatsApp.
+            Se precisar de ajuda para entrar, fale com a AURA pelo WhatsApp.
           </Text>
           <Text style={footerText}>
             Com carinho, Equipe {SITE_NAME}
@@ -87,7 +73,7 @@ const WelcomeEmail = ({ name, portalUrl }: WelcomeProps) => {
 
 export const template = {
   component: WelcomeEmail,
-  subject: 'Bem-vindo à AURA — comece sua jornada agora 💜',
+  subject: 'Seu acesso ao app Olá Aura está liberado',
   displayName: 'Boas-vindas',
   previewData: { name: 'Maria', portalUrl: 'https://olaaura.com.br/meu-espaco' },
 } satisfies TemplateEntry
@@ -101,16 +87,6 @@ const h2 = { fontSize: '18px', fontWeight: 'bold', color: '#2d3748', margin: '0 
 const text = { fontSize: '15px', color: '#4a5568', lineHeight: '1.6', margin: '0 0 24px', textAlign: 'center' as const }
 const tipText = { fontSize: '14px', color: '#4a5568', lineHeight: '1.6', margin: '0 0 8px', paddingLeft: '8px' }
 const ctaSection = { textAlign: 'center' as const, margin: '8px 0 32px' }
-const whatsappButton = {
-  backgroundColor: '#25D366',
-  color: '#ffffff',
-  fontSize: '16px',
-  fontWeight: 'bold',
-  padding: '14px 32px',
-  borderRadius: '8px',
-  textDecoration: 'none',
-  display: 'inline-block',
-}
 const portalButton = {
   backgroundColor: '#5a8a6e',
   color: '#ffffff',

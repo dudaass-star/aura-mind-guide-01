@@ -34,13 +34,13 @@ const IndexV3 = () => {
         <title>Olá AURA — Uma inteligência que escuta e ajuda você a seguir</title>
         <meta
           name="description"
-          content="Converse por texto ou áudio no WhatsApp e encontre direção em encontros guiados de 45 minutos. Experimente 7 dias por R$ 6,90."
+          content="Converse por texto ou áudio no app Olá Aura e encontre direção em encontros guiados de 45 minutos. Experimente 7 dias por R$ 6,90."
         />
         <meta name="robots" content="noindex, nofollow" />
         <link rel="canonical" href="https://olaaura.com.br/v3" />
         <meta property="og:url" content="https://olaaura.com.br/v3" />
         <meta property="og:title" content="Olá AURA — Uma inteligência que escuta e ajuda você a seguir" />
-        <meta property="og:description" content="Converse por texto ou áudio no WhatsApp e encontre direção em encontros guiados de 45 minutos. Experimente 7 dias por R$ 6,90." />
+        <meta property="og:description" content="Converse por texto ou áudio no app Olá Aura e encontre direção em encontros guiados de 45 minutos. Experimente 7 dias por R$ 6,90." />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
         <script type="application/ld+json">
@@ -48,7 +48,7 @@ const IndexV3 = () => {
             "@context": "https://schema.org",
             "@type": "FAQPage",
             "mainEntity": [
-              {"@type": "Question", "name": "O que muda em ter a AURA no seu WhatsApp?", "acceptedAnswer": {"@type": "Answer", "text": "Ela lembra da sua história, entende seu momento e vai te conhecendo mais a cada conversa. Está disponível 24/7, por texto ou áudio — e quando você precisa ir mais fundo, tem encontro guiado de 45 minutos com resumo escrito no final."}},
+              {"@type": "Question", "name": "O que muda em ter a AURA no app Olá Aura?", "acceptedAnswer": {"@type": "Answer", "text": "Ela lembra da sua história, entende seu momento e vai te conhecendo mais a cada conversa. Está disponível 24/7, por texto ou áudio — e quando você precisa ir mais fundo, tem encontro guiado de 45 minutos com resumo escrito no final."}},
               {"@type": "Question", "name": "Como é a primeira conversa?", "acceptedAnswer": {"@type": "Answer", "text": "Simples: você manda uma mensagem contando o que está sentindo, do jeito que sair. A AURA não aplica formulário nem entrega respostas prontas — ela pergunta, escuta e ajuda você a organizar o que está embaralhado."}},
               {"@type": "Question", "name": "A AURA substitui atendimento profissional?", "acceptedAnswer": {"@type": "Answer", "text": "Não. A AURA é apoio no dia a dia: conversa contínua, memória do seu percurso e direção prática. Ela não faz diagnóstico, não substitui atendimento profissional e não se apresenta como tratamento."}},
               {"@type": "Question", "name": "Como funciona o período de teste?", "acceptedAnswer": {"@type": "Answer", "text": "Você experimenta a AURA por 7 dias com acesso completo ao plano escolhido, pagando apenas uma taxa simbólica (a partir de R$ 6,90). Se não fizer sentido, cancele a qualquer momento antes do 8º dia e não será cobrado mais nada."}},

@@ -34,7 +34,7 @@ export async function sendWelcomeWhatsApp(
   supabase: Supa,
   args: { phone: string; name: string; userId: string; functionName: string; templateCategory?: string },
 ): Promise<boolean> {
-  const templateText = `Olá, ${args.name}. Sua assinatura da Aura foi ativada com sucesso.`;
+  const templateText = `Olá, ${args.name}. Seu acesso ao app Olá Aura foi liberado. Abra o app para conversar com a AURA e começar.`;
   const category = args.templateCategory || "welcome";
   let error: string | null = null;
 

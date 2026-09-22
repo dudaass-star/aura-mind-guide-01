@@ -11,8 +11,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, ArrowRight, CreditCard, Check, Shield, Lock, Gift, QrCode, Copy } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft, ArrowRight, CreditCard, Check, Shield, Lock, Gift, QrCode, Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -37,6 +37,7 @@ import { TrustRow } from "@/components/checkout/TrustRow";
 import { StickyMobileCta } from "@/components/checkout/StickyMobileCta";
 import { PaymentMethodToggle, type PayMethod } from "@/components/checkout/PaymentMethodToggle";
 import { CheckoutObjections } from "@/components/checkout/CheckoutObjections";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "quarterly" | "semestral" | "yearly";
@@ -200,6 +201,7 @@ function isValidCpf(cpf: string): boolean {
 
 const CheckoutV2 = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const searchParams = new URLSearchParams(location.search);
   const planFromUrl = searchParams.get("plan") as PlanId | null;
@@ -308,6 +310,7 @@ const CheckoutV2 = () => {
   const [resumedAuthId, setResumedAuthId] = useState<string | null>(null);
   const [resumedState, setResumedState] = useState<"pending" | "active" | "expired" | null>(null);
   const [resumedPlan, setResumedPlan] = useState<string | null>(null);
+  const [pixAccessReady, setPixAccessReady] = useState(false);
 
   // ViewContent + GA4 begin_checkout no mount.
   // O ViewContent passa pelo helper único (navegador + CAPI com o mesmo
@@ -713,7 +716,7 @@ const CheckoutV2 = () => {
           if (dupCode === "SUBSCRIPTION_PAST_DUE" || dupCode === "ACTIVE_SUBSCRIPTION_EXISTS") {
             toast.error(
               (data as any)?.error ||
-                "Você já tem uma assinatura da AURA. Acesse seu espaço para gerenciar o pagamento.",
+                "Você já tem uma assinatura ativa. Abra o app Olá Aura para gerenciar o pagamento.",
               { duration: 9000 },
             );
             logFunnel("duplicate_subscription_blocked", {
@@ -1340,6 +1343,57 @@ const CheckoutV2 = () => {
     };
   }, [pixOpen, pixStage, pixData?.authorizationId, authState, resumedAuthId, pixGateway]);
 
+  // Acompanha a confirmação real do pagamento em qualquer trilho PIX. Quando o
+  // webhook libera o acesso, autentica este aparelho e abre o app diretamente.
+  useEffect(() => {
+    if (!pixOpen || pixStage !== "qr" || !pixData) return;
+    const token = getCheckoutAccessToken();
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
+
+    const checkAccess = async () => {
+      attempts += 1;
+      try {
+        const status = await supabase.functions.invoke("checkout-app-access", {
+          body: { action: "status", token },
+        });
+        if (cancelled) return;
+        if (status.data?.paid) {
+          setPixAccessReady(true);
+          const consumed = await supabase.functions.invoke("checkout-app-access", {
+            body: { action: "consume", token },
+          });
+          if (cancelled) return;
+          if (consumed.error || !consumed.data?.token_hash) {
+            navigate("/obrigado", { replace: true });
+            return;
+          }
+          const verified = await supabasePortal.auth.verifyOtp({
+            token_hash: consumed.data.token_hash,
+            type: consumed.data.type || "magiclink",
+          });
+          if (!verified.error) {
+            localStorage.removeItem("aura_checkout_access");
+            navigate("/meu-espaco", { replace: true });
+          } else {
+            navigate("/obrigado", { replace: true });
+          }
+          return;
+        }
+      } catch {
+        // A confirmação continua pelos canais de apoio se esta consulta oscilar.
+      }
+      if (!cancelled && attempts < 120) timer = setTimeout(checkAccess, 3000);
+    };
+
+    timer = setTimeout(checkAccess, 3000);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [navigate, pixData, pixOpen, pixStage]);
+
   const inputCls =
     "ck-field mt-1.5 h-12 text-base sm:text-sm sm:h-11 focus-visible:ring-0 focus-visible:ring-offset-0";
 
@@ -1411,7 +1465,7 @@ const CheckoutV2 = () => {
                   <>
                     <p className="font-semibold">Cobrança automática autorizada</p>
                     <p className="mt-1 text-white/80">
-                      Sua assinatura está ativa. Pode continuar a conversa com a AURA no WhatsApp.
+                      Seu acesso está liberado. Abra o app Olá Aura para continuar.
                     </p>
                   </>
                 )}
@@ -2207,10 +2261,10 @@ const CheckoutV2 = () => {
                           3. <strong>Marque a autorização de cobrança automática</strong> na tela de
                           confirmação do banco.
                         </p>
-                        <p>4. Confirme o pagamento — a liberação chega no WhatsApp em segundos.</p>
+                         <p>4. Confirme o pagamento — o app Olá Aura abre assim que a liberação for reconhecida.</p>
                       </>
                     ) : (
-                      <p>3. Confirme o pagamento — você recebe a confirmação no WhatsApp em segundos.</p>
+                       <p>3. Confirme o pagamento — o app Olá Aura abre assim que a liberação for reconhecida.</p>
                     )}
                   </div>
 
@@ -2255,8 +2309,14 @@ const CheckoutV2 = () => {
 
                   {authState === "active" && (
                     <div className="bg-[hsl(140_30%_45%)]/20 border border-[hsl(140_30%_60%)]/40 rounded-xl p-3 text-xs text-white">
-                      ✅ Cobrança automática autorizada. Sua assinatura está ativa — o acesso chega no
-                      WhatsApp.
+                      ✅ Cobrança automática autorizada. Estamos confirmando o pagamento para abrir o app Olá Aura.
+                    </div>
+                  )}
+
+                  {pixAccessReady && (
+                    <div className="flex items-center justify-center gap-2 rounded-xl border border-[hsl(140_30%_60%)]/40 bg-[hsl(140_30%_45%)]/20 p-3 text-xs text-white">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Pagamento confirmado. Abrindo o app Olá Aura…
                     </div>
                   )}
 

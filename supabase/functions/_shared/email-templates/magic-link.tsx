@@ -26,12 +26,12 @@ export const MagicLinkEmail = ({
 }: MagicLinkEmailProps) => (
   <Html lang="pt-BR" dir="ltr">
     <Head />
-    <Preview>Seu código de acesso à Aura</Preview>
+    <Preview>Seu código de acesso ao app Olá Aura</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Seu acesso 💜</Heading>
+        <Heading style={h1}>Entre no app Olá Aura</Heading>
         <Text style={text}>
-          Use o código abaixo para entrar no seu espaço na Aura. Ele expira em alguns minutos.
+          Use o código abaixo para entrar no app Olá Aura. Ele expira em alguns minutos.
         </Text>
 
         {token && (
@@ -44,12 +44,12 @@ export const MagicLinkEmail = ({
 
         {!token && (
           <Text style={text}>
-            Toque no botão abaixo para entrar no seu espaço na Aura.
+            Toque no botão abaixo para entrar no app Olá Aura.
           </Text>
         )}
 
         <Button style={button} href={confirmationUrl}>
-          Entrar na Aura
+          Entrar no app Olá Aura
         </Button>
         <Text style={footer}>
           Se você não pediu este link, pode ignorar este e-mail tranquilamente.

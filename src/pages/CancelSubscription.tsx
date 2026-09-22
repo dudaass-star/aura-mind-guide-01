@@ -666,7 +666,7 @@ const CancelSubscription = () => {
                   )}
                   <div className="space-y-3">
                     <Link to={portalToken ? `/meu-espaco?t=${portalToken}` : "/meu-espaco"} className="block">
-                      <Button className="w-full">Ir para meu espaço</Button>
+                      <Button className="w-full">Abrir o app Olá Aura</Button>
                     </Link>
                     <a
                       href="https://wa.me/16625255005?text=Oi%2C%20preciso%20de%20ajuda%20com%20minha%20assinatura"

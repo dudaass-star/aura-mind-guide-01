@@ -357,7 +357,7 @@ export default function AdminUsers() {
       setPortalLinkCopied(true);
       toast({
         title: 'Link de acesso copiado!',
-        description: `Válido por 1h — envie para ${data.email}. Ao clicar, o cliente entra direto no Meu Espaço.`,
+        description: `Válido por 1h — envie para ${data.email}. Ao clicar, o cliente entra direto no app Olá Aura.`,
       });
       setTimeout(() => setPortalLinkCopied(false), 3000);
     } catch (err: any) {
@@ -833,7 +833,7 @@ export default function AdminUsers() {
 
               <Button variant="outline" size="sm" className="w-full" onClick={handleCopyPortalLink} disabled={portalLinkLoading}>
                 {portalLinkCopied ? <Check className="h-4 w-4 mr-2 text-green-600" /> : <Link className="h-4 w-4 mr-2" />}
-                {portalLinkLoading ? 'Gerando...' : portalLinkCopied ? 'Link copiado!' : 'Copiar link do Meu Espaço'}
+                {portalLinkLoading ? 'Gerando...' : portalLinkCopied ? 'Link copiado!' : 'Copiar link do app Olá Aura'}
               </Button>
 
               <div className="border-t pt-3 space-y-1">

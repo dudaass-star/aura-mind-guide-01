@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
 
     // Build full welcome message (delivered when user clicks "Começar")
     const guideLinkText = 'https://olaaura.com.br/guia';
-    const portalLine = portalLink ? `\n\nAcesse seu painel pessoal: ${portalLink} ✨` : '';
+    const portalLine = portalLink ? `\n\nAbra o app Olá Aura: ${portalLink} ✨` : '';
 
     const welcomeMessage = `Oi, ${name.trim()}! 💜
 
@@ -177,7 +177,7 @@ Me conta: como você está se sentindo agora?`;
     }
 
     // Send short template via WhatsApp
-    const templateText = `Olá, ${name.trim()}. Sua assinatura da Aura foi ativada com sucesso.`;
+    const templateText = `Olá, ${name.trim()}. Seu acesso ao app Olá Aura foi liberado.`;
     try {
       const result = await sendProactive(formattedPhone, templateText, 'welcome', userId);
       if (result.success) {

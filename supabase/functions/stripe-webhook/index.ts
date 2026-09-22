@@ -785,7 +785,7 @@ Deno.serve(async (req) => {
               portalLinkTrial = `https://olaaura.com.br/meu-espaco`;
             }
           } catch { /* non-blocking */ }
-          const portalLineTrial = portalLinkTrial ? `\n\nAcesse seu painel pessoal: ${portalLinkTrial} ✨` : '';
+          const portalLineTrial = portalLinkTrial ? `\n\nAbra o app Olá Aura: ${portalLinkTrial} ✨` : '';
 
           // Build full welcome message (to be delivered when user clicks "Começar")
           const guideLinkText = 'https://olaaura.com.br/guia';
@@ -1182,7 +1182,7 @@ Deno.serve(async (req) => {
       // Build full welcome message (delivered when user clicks "Começar")
       const guideLinkText2 = 'https://olaaura.com.br/guia';
       let welcomeMessage: string;
-      const portalLine = portalLink ? `\n\nAcesse seu painel pessoal: ${portalLink} ✨` : '';
+      const portalLine = portalLink ? `\n\nAbra o app Olá Aura: ${portalLink} ✨` : '';
 
       if (isReturning) {
         welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.${portalLine}\n\nVamos retomar de onde paramos?`;

@@ -31,14 +31,14 @@ export const SignupEmail = ({
 }: SignupEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>Confirme seu e-mail para acessar a Aura</Preview>
+    <Preview>Confirme seu e-mail para acessar o app Olá Aura</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Bem-vindo à Aura 💜</Heading>
+        <Heading style={h1}>Bem-vindo ao app Olá Aura</Heading>
         <Text style={text}>
           Que bom ter você por aqui. Antes de continuar, confirme seu e-mail (
           <Link href={`mailto:${recipient}`} style={link}>{recipient}</Link>
-          ) para liberar seu espaço pessoal.
+          ) para liberar seu acesso ao app.
         </Text>
         {token && (
           <>
@@ -48,10 +48,10 @@ export const SignupEmail = ({
           </>
         )}
         <Button style={button} href={confirmationUrl}>
-          Confirmar e-mail
+          Confirmar e entrar no app
         </Button>
         <Text style={footer}>
-          Se você não criou uma conta na Aura, pode ignorar este e-mail tranquilamente.
+          Se você não pediu acesso ao app Olá Aura, pode ignorar este e-mail tranquilamente.
         </Text>
       </Container>
     </Body>

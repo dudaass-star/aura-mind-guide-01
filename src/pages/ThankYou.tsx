@@ -1,11 +1,12 @@
 import { Helmet } from "react-helmet-async";
 import { useLocation, Link, useNavigate } from "react-router-dom";
-import { CheckCircle, Smartphone, Sparkles, BarChart3 } from "lucide-react";
+import { CheckCircle, Loader2, MessageCircle, BookOpen, CalendarDays, Headphones, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { logFunnel } from "@/lib/checkout-funnel";
 import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
+import logoOlaAura from "@/assets/logo-ola-aura.png";
 
 const ThankYou = () => {
   const location = useLocation();
@@ -118,109 +119,66 @@ const ThankYou = () => {
   return (
     <>
       <Helmet>
-        <title>Bem-vindo à AURA!</title>
-        <meta name="description" content="Sua assinatura foi confirmada. Comece sua jornada de evolução emocional agora." />
+        <title>Seu app está sendo liberado | Olá Aura</title>
+        <meta name="description" content="Seu acesso ao app Olá Aura está sendo liberado." />
         <meta property="og:url" content="https://olaaura.com.br/obrigado" />
-        <meta property="og:title" content="Bem-vindo à AURA!" />
-        <meta property="og:description" content="Sua assinatura foi confirmada. Comece sua jornada de evolução emocional agora." />
+        <meta property="og:title" content="Seu app está sendo liberado | Olá Aura" />
+        <meta property="og:description" content="Seu acesso ao app Olá Aura está sendo liberado." />
         <meta property="og:type" content="website" />
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
-        {/* Background effects */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-glow rounded-full blur-3xl opacity-50 animate-pulse-soft" />
-          <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-glow rounded-full blur-3xl opacity-30 animate-pulse-soft delay-200" />
-        </div>
+      <div className="portal-chat-theme min-h-dvh bg-background text-foreground">
+        <header className="border-b border-border/70 bg-card/90">
+          <div className="mx-auto flex max-w-lg justify-center px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+            <img src={logoOlaAura} alt="Olá Aura" className="h-12 w-auto" />
+          </div>
+        </header>
 
-        <div className="relative z-10 max-w-lg w-full text-center">
-          {/* Success icon */}
-          <div className="mb-8 animate-fade-up">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-teal/20 mb-4">
-              <CheckCircle className="w-10 h-10 text-teal" />
+        <main className="mx-auto flex w-full max-w-lg flex-col items-center px-5 py-8 text-center sm:py-12">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
+            {accessState === "ready" ? <CheckCircle className="h-8 w-8 text-primary" /> : <Loader2 className="h-7 w-7 animate-spin text-primary" />}
+          </div>
+          <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">App Olá Aura</p>
+          <h1 className="mt-2 font-display text-3xl font-semibold leading-tight">
+            {userData.returning ? `Que bom ter você de volta, ${firstName}` : `Seu app está quase pronto, ${firstName}`}
+          </h1>
+          <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
+            {accessState === "ready"
+              ? "Pagamento confirmado. Estamos abrindo o app Olá Aura neste aparelho."
+              : accessState === "unavailable"
+                ? "Seu pagamento retornou, mas a entrada automática não ficou disponível neste aparelho."
+                : "Estamos confirmando seu pagamento com segurança. Assim que estiver tudo certo, o app abre automaticamente."}
+          </p>
+
+          <div className="mt-8 w-full border-y border-border/70 py-5">
+            <p className="mb-4 text-left text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Tudo que acompanha você</p>
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { label: "Conversa", icon: MessageCircle, tone: "portal-area-conversation" },
+                { label: "Sessões", icon: CalendarDays, tone: "portal-area-sessions" },
+                { label: "Jornadas", icon: BookOpen, tone: "portal-area-content" },
+                { label: "Percurso", icon: Sparkles, tone: "portal-area-journey" },
+                { label: "Meditações", icon: Headphones, tone: "portal-area-audio" },
+              ].map(({ label, icon: Icon, tone }) => (
+                <div key={label} className="flex min-w-0 flex-col items-center gap-2">
+                  <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></span>
+                  <span className="w-full text-[10px] font-semibold text-muted-foreground">{label}</span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Content */}
-          <div className="animate-fade-up delay-100">
-            <h1 className="font-display text-4xl md:text-5xl font-semibold text-foreground mb-4">
-              {userData.returning ? <>Bem-vindo de volta, {firstName} 👋</> : <>Parabéns, {firstName}!</>}
-            </h1>
-            {userData.returning ? (
-              <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-                Como você já usou o período semanal na sua primeira assinatura, ativamos direto o
-                {" "}
-                <span className="text-primary font-medium">plano {userData.plan} mensal recorrente</span>.
-                <br />
-                Cancele quando quiser pelo seu painel.
-              </p>
-            ) : (
-              <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-                {accessState === "pending" || accessState === "checking"
-                  ? "Estamos confirmando seu pagamento."
-                  : accessState === "unavailable"
-                    ? "Recebemos seu retorno do pagamento."
-                    : <>Sua assinatura do plano <span className="text-primary font-medium">{userData.plan}</span> foi confirmada.</>}
-                <br />
-                {accessState === "ready" ? "Abrindo seu aplicativo…" : "Assim que confirmar, seu aplicativo abre automaticamente."}
-              </p>
-            )}
-          </div>
-
-          {/* Aviso WhatsApp */}
-          <div className="space-y-3 animate-fade-up delay-200 p-6 bg-teal/10 rounded-2xl border border-teal/20">
-            <div className="flex items-center justify-center gap-2">
-              <Smartphone className="w-6 h-6 text-teal" />
-              <span className="font-display text-lg font-semibold text-foreground">
-                Fique de olho no seu celular!
-              </span>
-            </div>
-            <p className="text-muted-foreground text-center">
-              A AURA vai te mandar uma mensagem no WhatsApp em instantes para iniciar sua jornada.
-            </p>
-            <p className="text-muted-foreground/70 text-center text-sm flex items-center justify-center gap-1.5">
-              <BarChart3 className="w-4 h-4 inline-block" />
-              Você também receberá o link do seu <strong>painel pessoal</strong> — onde poderá acompanhar jornadas, meditações e resumos mensais.
-            </p>
-          </div>
-
-          {/* Tips */}
-          <div className="mt-12 p-6 bg-card/50 rounded-2xl border border-border/50 text-left animate-fade-up delay-300">
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-primary" />
-              <h3 className="font-display text-lg font-semibold text-foreground">
-                Como aproveitar ao máximo
-              </h3>
-            </div>
-            <ul className="space-y-3 text-sm text-muted-foreground">
-              <li className="flex items-start gap-3">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">1</span>
-                <span>Responda as 4 perguntas do onboarding com sinceridade</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">2</span>
-                <span>Converse com honestidade — sem filtros, sem julgamento</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">3</span>
-                <span>Faça os check-ins diários para acompanhar seu progresso</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Back link */}
-          <div className="mt-8 animate-fade-up delay-400">
-            {accessState === "unavailable" ? (
-              <Button asChild variant="outline">
-                <Link to="/meu-espaco/entrar">Entrar com meu código</Link>
+          <div className="mt-7 w-full space-y-3">
+            {accessState === "unavailable" && (
+              <Button asChild className="h-11 w-full">
+                <Link to="/meu-espaco/entrar">Entrar no app Olá Aura</Link>
               </Button>
-            ) : (
-              <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Voltar para o site
-              </Link>
             )}
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Você também receberá uma confirmação pelo WhatsApp e por e-mail. Eles servem como alternativa caso precise entrar em outro aparelho.
+            </p>
           </div>
-        </div>
+        </main>
       </div>
     </>
   );
