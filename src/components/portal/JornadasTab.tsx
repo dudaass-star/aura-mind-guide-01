@@ -223,7 +223,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-bold text-foreground">{item.journey?.title}</span>
                           <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                            {item.completed_at ? `Concluída em ${new Date(item.completed_at).toLocaleDateString("pt-BR")}` : "Jornada concluída"} · Rever episódios
+                            {item.completed_at ? `Concluída em ${new Date(item.completed_at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : "Jornada concluída"} · Rever episódios
                           </span>
                         </span>
                         <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -240,10 +240,14 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
                             </a>
                           </Button>
                         ))}
-                        <Button variant="outline" className="mt-2 w-full" onClick={() => requestJourneyChange(item.journey_id)}>
-                          <RotateCcw className="h-4 w-4" />
-                          Refazer jornada
-                        </Button>
+                        {currentJourney ? (
+                          <p className="px-2 pb-1 pt-2 text-center text-xs text-muted-foreground">Você poderá refazer esta jornada quando concluir a atual.</p>
+                        ) : (
+                          <Button variant="outline" className="mt-2 w-full" onClick={() => requestJourneyChange(item.journey_id)}>
+                            <RotateCcw className="h-4 w-4" />
+                            Refazer jornada
+                          </Button>
+                        )}
                       </div>
                     </CollapsibleContent>
                   </div>
