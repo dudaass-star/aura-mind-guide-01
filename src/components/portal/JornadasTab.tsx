@@ -38,7 +38,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
     queryFn: async () => {
       const { data, error } = await supabasePortal
         .from("content_journeys")
-        .select("id,title,description,topic,total_episodes")
+        .select("id,title,description,topic,total_episodes,is_active")
         .order("title");
       if (error) throw error;
       return data ?? [];
@@ -100,7 +100,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
       return { ...latestCompletion, journey_id: journeyId, journey: journeys.find((journey) => journey.id === journeyId) };
     })
     .filter((item) => item.journey);
-  const availableJourneys = journeys.filter((journey) => journey.id !== currentJourneyId && !completedSet.has(journey.id));
+  const availableJourneys = journeys.filter((journey) => journey.is_active && journey.id !== currentJourneyId && !completedSet.has(journey.id));
   const progress = currentJourney ? Math.min(100, Math.round((currentEpisode / currentJourney.total_episodes) * 100)) : 0;
   const futureEpisodeNumbers = currentJourney
     ? Array.from({ length: Math.max(0, currentJourney.total_episodes - currentEpisode) }, (_, index) => currentEpisode + index + 1)
