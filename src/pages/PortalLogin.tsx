@@ -143,13 +143,10 @@ export default function PortalLogin() {
       </Helmet>
       <div className="portal-chat-theme portal-login-page min-h-dvh bg-background text-foreground flex flex-col">
         <header className="border-b border-border/70 bg-card/90 backdrop-blur-xl">
-          <div className="max-w-lg mx-auto px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
-            <Link to="/">
-              <img src={logoOlaAura} alt="Olá AURA" className="h-9 w-auto" />
+          <div className="max-w-lg mx-auto px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-center">
+            <Link to="/" aria-label="Olá Aura — página inicial">
+              <img src={logoOlaAura} alt="Olá Aura" className="h-12 w-auto" />
             </Link>
-            <span className="text-[10px] uppercase tracking-[0.18em] text-primary font-bold font-body">
-              Aplicativo Olá Aura
-            </span>
           </div>
         </header>
 
@@ -162,7 +159,7 @@ export default function PortalLogin() {
               </div>
               <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Olá Aura, sempre por perto</p>
               <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">
-                Entre no Olá Aura
+                Entre na Olá Aura
               </h1>
               <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground font-body">
                 Continue suas conversas e acesse tudo o que acompanha você.
