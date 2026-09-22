@@ -1,5 +1,5 @@
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowLeft, Bell, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -131,7 +131,7 @@ export function ConversarTab({
 }: {
   userId: string;
   firstName: string;
-  onNavigate?: (tab: "hoje" | "sessoes" | "insights" | "sobre" | "meditacoes") => void;
+  onNavigate?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes") => void;
   onOpenBilling: () => void;
   onChangePlan: () => void;
   onSignOut: () => void;
@@ -533,6 +533,7 @@ export function ConversarTab({
   const appAreas = [
     { label: "Hoje", detail: "O que te acompanha agora", tab: "hoje", icon: Sun, tone: "portal-area-today" },
     { label: "Sessões", detail: "Seus encontros com a AURA", tab: "sessoes", icon: CalendarDays, tone: "portal-area-sessions" },
+    { label: "Jornadas", detail: "Conteúdos para acompanhar você", tab: "jornadas", icon: BookOpen, tone: "portal-area-content" },
     { label: "Percurso", detail: "O que vem mudando", tab: "insights", icon: Sparkles, tone: "portal-area-journey" },
     { label: "Meditações", detail: "Pausas guiadas para você", tab: "meditacoes", icon: Headphones, tone: "portal-area-audio" },
     { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound, tone: "portal-area-profile" },
