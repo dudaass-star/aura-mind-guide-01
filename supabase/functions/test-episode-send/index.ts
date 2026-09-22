@@ -168,11 +168,12 @@ serve(async (req) => {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // Caminho normal: roteamento automático (janela 24h + provider ativo)
+    // Caminho normal: roteamento automático (janela 24h + provedor ativo).
+    // Mesmo em teste, o WhatsApp recebe apenas a chamada curta para o episódio.
     // ─────────────────────────────────────────────────────────────────────
     const sendResult = await sendProactive(
       cleanPhone,
-      manifestoData.message,
+      manifestoData.teaser || `Seu novo episódio está pronto. Abra para ler: ${manifestoData.shortUrl}`,
       'content',
       user_id,
       undefined,
