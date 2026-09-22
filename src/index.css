@@ -129,6 +129,18 @@
   --ring: 153 27% 43%;
   --radius: 0.75rem;
   --shadow-card: 0 18px 50px hsl(150 4% 13% / 0.14);
+  --portal-conversation: 216 45% 94%;
+  --portal-conversation-border: 216 32% 86%;
+  --portal-today: 42 70% 91%;
+  --portal-today-foreground: 35 64% 39%;
+  --portal-sessions: 201 58% 91%;
+  --portal-sessions-foreground: 201 48% 40%;
+  --portal-journey: 153 34% 89%;
+  --portal-journey-foreground: 153 34% 36%;
+  --portal-audio: 270 38% 92%;
+  --portal-audio-foreground: 270 31% 45%;
+  --portal-profile: 350 45% 92%;
+  --portal-profile-foreground: 350 34% 45%;
   font-family: "Figtree", ui-sans-serif, system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 
@@ -136,6 +148,36 @@
 .portal-chat-theme h2,
 .portal-chat-theme h3 {
   font-family: "Outfit", sans-serif;
+}
+
+.portal-primary-conversation {
+  background-color: hsl(var(--portal-conversation));
+  border-color: hsl(var(--portal-conversation-border));
+}
+
+.portal-area-today {
+  background-color: hsl(var(--portal-today));
+  color: hsl(var(--portal-today-foreground));
+}
+
+.portal-area-sessions {
+  background-color: hsl(var(--portal-sessions));
+  color: hsl(var(--portal-sessions-foreground));
+}
+
+.portal-area-journey {
+  background-color: hsl(var(--portal-journey));
+  color: hsl(var(--portal-journey-foreground));
+}
+
+.portal-area-audio {
+  background-color: hsl(var(--portal-audio));
+  color: hsl(var(--portal-audio-foreground));
+}
+
+.portal-area-profile {
+  background-color: hsl(var(--portal-profile));
+  color: hsl(var(--portal-profile-foreground));
 }
 
 @layer base {

@@ -531,11 +531,11 @@ export function ConversarTab({
     ? "Áudio"
     : latestMessage?.content?.replace(/\s+/g, " ").trim() || "Seu espaço para conversar, no seu tempo.";
   const appAreas = [
-    { label: "Hoje", detail: "O que te acompanha agora", tab: "hoje", icon: Sun },
-    { label: "Sessões", detail: "Seus encontros com a AURA", tab: "sessoes", icon: CalendarDays },
-    { label: "Percurso", detail: "O que vem mudando", tab: "insights", icon: Sparkles },
-    { label: "Áudios", detail: "Ouça no seu tempo", tab: "meditacoes", icon: Headphones },
-    { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound },
+    { label: "Hoje", detail: "O que te acompanha agora", tab: "hoje", icon: Sun, tone: "portal-area-today" },
+    { label: "Sessões", detail: "Seus encontros com a AURA", tab: "sessoes", icon: CalendarDays, tone: "portal-area-sessions" },
+    { label: "Percurso", detail: "O que vem mudando", tab: "insights", icon: Sparkles, tone: "portal-area-journey" },
+    { label: "Áudios", detail: "Ouça no seu tempo", tab: "meditacoes", icon: Headphones, tone: "portal-area-audio" },
+    { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound, tone: "portal-area-profile" },
   ] as const;
 
   const conversationList = (
@@ -590,7 +590,7 @@ export function ConversarTab({
           type="button"
           variant="ghost"
           onClick={() => setChatOpen(true)}
-          className="group h-auto w-full justify-start gap-3 rounded-xl border border-primary/25 bg-card px-3 py-4 text-left shadow-sm hover:border-primary/40 hover:bg-secondary/50"
+          className="portal-primary-conversation group h-auto w-full justify-start gap-3 rounded-2xl border px-3 py-4 text-left shadow-sm transition-transform active:scale-[0.99] hover:border-primary/30"
           aria-label="Abrir conversa com a AURA"
         >
           <div className="relative shrink-0">
@@ -622,15 +622,15 @@ export function ConversarTab({
           <p className="text-[11px] text-muted-foreground">Tudo em um só lugar</p>
         </div>
         <div className="space-y-1">
-          {appAreas.map(({ label, detail, tab, icon: Icon }) => (
+          {appAreas.map(({ label, detail, tab, icon: Icon, tone }) => (
             <Button
               key={tab}
               type="button"
               variant="ghost"
               onClick={() => onNavigate?.(tab)}
-              className="group h-auto w-full justify-start gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-secondary/70"
+              className="group h-auto w-full justify-start gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-card"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary transition-colors group-hover:bg-primary/10">
+              <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105", tone)}>
                 <Icon className="h-5 w-5" />
               </span>
               <span className="min-w-0 flex-1">
