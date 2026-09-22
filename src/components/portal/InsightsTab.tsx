@@ -4,6 +4,7 @@ import { ArrowRight, BarChart3, BookMarked, Calendar, Check, ChevronDown, Chevro
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { EmptyState, PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
 
