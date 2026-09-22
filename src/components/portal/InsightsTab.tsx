@@ -139,6 +139,8 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
 
   const hasLiveMaterial = activeThemes.length > 0 || recentMovements.length > 0 || !!lastSession || meaningfulMilestones.length > 0;
   const visibleChapters = showOlder ? chapters : chapters.slice(0, 12);
+  const firstName = typeof profile?.name === "string" ? profile.name.trim().split(/\s+/)[0] : "";
+  const journeySignals = activeThemes.length + recentMovements.length + meaningfulMilestones.length;
 
   const registerFeedback = (sourceKind: "thematic_snapshot" | "active_theme", sourceId: string, response: "agrees" | "corrects", context: string) => {
     feedbackMutation.mutate({ sourceKind, sourceId, response }, {
@@ -149,13 +151,29 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   };
 
   return (
-    <div className="portal-area-page space-y-7">
-      <p className="-mt-2 text-sm text-muted-foreground">O que tem aparecido, o que mudou e o que ainda merece atenção.</p>
+    <div className="portal-area-page portal-progress-page space-y-8">
+      <section className="portal-progress-intro" aria-labelledby="percurso-vivo">
+        <div className="portal-progress-intro-mark"><Sparkles className="h-5 w-5" /></div>
+        <p className="portal-progress-kicker">Sua história em movimento</p>
+        <h2 id="percurso-vivo" className="portal-progress-headline">
+          {hasLiveMaterial ? `${firstName ? `${firstName}, sua` : "Sua"} história já está ganhando forma.` : `${firstName ? `${firstName}, este` : "Este"} é o começo do seu percurso.`}
+        </h2>
+        <p className="portal-progress-lead">O que antes eram conversas soltas começa a revelar continuidade — sem conclusões prontas e sempre com a sua confirmação.</p>
+        {hasLiveMaterial && (
+          <div className="portal-progress-summary" aria-label="Resumo do seu percurso">
+            <div><strong>{activeThemes.length}</strong><span>{activeThemes.length === 1 ? "tema presente" : "temas presentes"}</span></div>
+            <div><strong>{journeySignals}</strong><span>{journeySignals === 1 ? "ponto do percurso" : "pontos do percurso"}</span></div>
+            <div><strong>{chapters.length}</strong><span>{chapters.length === 1 ? "capítulo" : "capítulos"}</span></div>
+          </div>
+        )}
+      </section>
+
+      <div className="portal-progress-flow">
 
       {activeThemes.length > 0 ? (
-        <section className="space-y-3" aria-labelledby="momento-atual">
+        <section className="portal-progress-step portal-progress-step-current space-y-3" aria-labelledby="momento-atual">
           <SectionTitle icon={Sparkles} eyebrow="Agora" title="Seu momento agora" />
-          <div className="rounded-2xl border bg-card p-5 space-y-4">
+          <div className="portal-progress-feature rounded-2xl border bg-card p-5 space-y-4">
             <p className="text-sm leading-relaxed text-muted-foreground">Pelo que você vem trazendo, estes parecem ser os temas mais presentes. Você pode confirmar ou corrigir a leitura.</p>
             <div className="space-y-3">
               {activeThemes.map((theme) => (
@@ -167,7 +185,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
           </div>
         </section>
       ) : (
-        <div className="rounded-2xl border bg-card p-5 space-y-3">
+        <div className="portal-progress-step rounded-2xl border bg-card p-5 space-y-3">
           <p className="font-display text-lg font-semibold text-foreground">Seu momento vai tomar forma aqui</p>
           <p className="text-sm leading-relaxed text-muted-foreground">Ainda não há material suficiente para uma leitura honesta. Conforme vocês conversarem, a AURA organiza os temas sem presumir o que você sente.</p>
           <Button variant="outline" onClick={() => onOpenConversation("Aura, quero te contar como estou agora.")}><MessageCircle /> Contar como estou</Button>
@@ -175,7 +193,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       )}
 
       {recentMovements.length > 0 && (
-        <section className="space-y-3" aria-labelledby="movimentos-recentes">
+        <section className="portal-progress-step space-y-3" aria-labelledby="movimentos-recentes">
           <SectionTitle icon={Quote} eyebrow="Nas suas palavras" title="Movimentos recentes" />
           <div className="space-y-3">
             {recentMovements.map((snapshot) => (
@@ -195,9 +213,9 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       )}
 
       {lastSession && (lastSession.closure_text || lastSession.session_summary || lastSession.focus_topic) && (
-        <section className="space-y-3">
+        <section className="portal-progress-step space-y-3">
           <SectionTitle icon={MessageCircle} eyebrow="Fio aberto" title="Para continuar" />
-          <div className="rounded-2xl border bg-secondary/70 p-5 space-y-3">
+          <div className="portal-progress-resume rounded-2xl border bg-secondary/70 p-5 space-y-3">
             <p className="text-sm leading-relaxed text-foreground">{sanitizePortalText(lastSession.closure_text || lastSession.session_summary || lastSession.focus_topic || "")}</p>
             <Button onClick={() => onOpenConversation(`Aura, quero retomar o assunto da minha última sessão: ${lastSession.focus_topic || lastSession.theme_label || "o que ficou em aberto"}.`)}>Retomar com a AURA <ArrowRight /></Button>
           </div>
@@ -205,7 +223,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       )}
 
       {meaningfulMilestones.length > 0 && (
-        <section className="space-y-3">
+        <section className="portal-progress-step space-y-3">
           <SectionTitle icon={Trophy} eyebrow="Reconhecer" title="Marcos que importam" />
           <div className="rounded-2xl border bg-card divide-y divide-border">
             {meaningfulMilestones.map((milestone) => (
@@ -221,7 +239,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       {!hasLiveMaterial && chapters.length === 0 && <EmptyState icon={BookMarked} title="Seu percurso está começando" description="Não vamos inventar uma história antes da hora. A primeira leitura aparece quando houver algo real para reconhecer." />}
 
       {chapters.length > 0 && (
-        <section className="space-y-3">
+        <section className="portal-progress-step portal-progress-archive space-y-3">
           <SectionTitle icon={BookMarked} eyebrow="Arquivo" title="Sua história por mês" />
           <div className="space-y-3">
             {visibleChapters.map((chapter) => <ChapterCard key={chapter.key} chapter={chapter} expanded={expandedKey === chapter.key} onToggle={() => setExpandedKey((current) => current === chapter.key ? null : chapter.key)} />)}
@@ -229,12 +247,13 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
           {chapters.length > 12 && !showOlder && <Button variant="outline" className="w-full" onClick={() => setShowOlder(true)}>Ver capítulos anteriores ({chapters.length - 12})</Button>}
         </section>
       )}
+      </div>
     </div>
   );
 }
 
 function SectionTitle({ icon: Icon, eyebrow, title }: { icon: typeof Sparkles; eyebrow: string; title: string }) {
-  return <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><div><p className="text-[10px] font-bold uppercase text-muted-foreground">{eyebrow}</p><h2 className="font-display text-lg font-semibold text-foreground">{title}</h2></div></div>;
+  return <div className="portal-progress-section-title flex items-center gap-3"><span className="portal-progress-node flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><div><p className="text-[10px] font-bold uppercase text-muted-foreground">{eyebrow}</p><h2 className="font-display text-lg font-semibold text-foreground">{title}</h2></div></div>;
 }
 
 function ReflectionRow({ title, feedback, busy, onAgree, onCorrect }: { title: string; feedback?: Feedback["response"]; busy: boolean; onAgree: () => void; onCorrect: () => void }) {
