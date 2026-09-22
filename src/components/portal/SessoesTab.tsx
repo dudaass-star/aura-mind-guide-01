@@ -57,7 +57,8 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: any }
       const { data, error } = await supabasePortal
         .from("session_ratings")
         .select("session_id, rating")
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .limit(100);
       if (error) return [];
       return data || [];
     },

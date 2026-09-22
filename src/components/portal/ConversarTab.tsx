@@ -297,12 +297,21 @@ export function ConversarTab({
           .maybeSingle(),
       ]);
       if (!error && data) {
-        const hydrated = await Promise.all((data as ChatMessage[]).map(async (message) => {
+        const initialMessages = data as ChatMessage[];
+        const audioPaths = initialMessages.map(audioStoragePath).filter((path): path is string => Boolean(path));
+        const signedByPath = new Map<string, string>();
+        if (audioPaths.length > 0) {
+          const { data: signedAudios } = await supabasePortal.storage.from("chat-audios").createSignedUrls(audioPaths, 3600);
+          signedAudios?.forEach((signed, index) => {
+            const path = audioPaths[index];
+            if (path && signed.signedUrl) signedByPath.set(path, signed.signedUrl);
+          });
+        }
+        const hydrated = initialMessages.map((message) => {
           const storagePath = audioStoragePath(message);
-          if (!storagePath) return message;
-          const { data: signed } = await supabasePortal.storage.from("chat-audios").createSignedUrl(storagePath, 3600);
-          return signed?.signedUrl ? { ...message, audio_url: signed.signedUrl } : message;
-        }));
+          const signedUrl = storagePath ? signedByPath.get(storagePath) : null;
+          return signedUrl ? { ...message, audio_url: signedUrl } : message;
+        });
         setMessages(orderMessages(hydrated));
         setHasOlder(data.length === PAGE_SIZE);
         setTimeout(() => scrollToBottom("auto"), 0);
@@ -346,7 +355,8 @@ export function ConversarTab({
         .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url,metadata")
         .eq("user_id", userId)
         .gt("sequence_no", latestSequenceRef.current)
-        .order("sequence_no", { ascending: true });
+        .order("sequence_no", { ascending: true })
+        .limit(PAGE_SIZE);
       if (data?.length) setMessages((current) => (data as ChatMessage[]).reduce<ChatMessage[]>((acc, message) => mergeMessage(acc, message), current));
     };
     const onFocus = () => void reconcile();

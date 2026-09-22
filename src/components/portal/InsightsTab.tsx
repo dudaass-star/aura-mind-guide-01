@@ -73,7 +73,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         supabasePortal.from("monthly_letters").select("id, letter_month, letter_text, preview_text, created_at").eq("user_id", userId).order("letter_month", { ascending: false }).limit(24),
         supabasePortal.from("user_milestones").select("id, milestone_text, milestone_date, context_excerpt, source").eq("user_id", userId).order("milestone_date", { ascending: false }).limit(60),
         supabasePortal.from("session_themes").select("id, theme_name, status, session_count, last_mentioned_at").eq("user_id", userId).neq("status", "resolved").order("last_mentioned_at", { ascending: false }).limit(20),
-        supabasePortal.from("journey_reflection_feedback").select("source_kind, source_id, response").eq("user_id", userId),
+        supabasePortal.from("journey_reflection_feedback").select("source_kind, source_id, response").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
         supabasePortal.from("weekly_reports").select("id, period_start, period_end, metrics_json, highlights_json, analysis_text, continuation_text, report_content").eq("user_id", userId).order("period_start", { ascending: false }).limit(12),
         supabasePortal.from("monthly_reports").select("id, report_month, metrics_json, analysis_text, report_html, created_at").eq("user_id", userId).order("report_month", { ascending: false }).limit(12),
       ]);

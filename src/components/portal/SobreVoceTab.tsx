@@ -96,20 +96,7 @@ function normalizeThemeName(raw: string): string {
 
 // ---------- COMPONENTES ----------
 
-export function SobreVoceTab({ userId, onOpenConversation }: { userId: string; onOpenConversation: (prefilledMessage?: string) => void }) {
-  const { data: profile } = useQuery({
-    queryKey: ["portal-profile-name", userId],
-    queryFn: async () => {
-      const { data } = await supabasePortal
-        .from("profiles")
-        .select("name")
-        .eq("user_id", userId)
-        .maybeSingle();
-      return data;
-    },
-    enabled: !!userId,
-  });
-
+export function SobreVoceTab({ userId, profile, onOpenConversation }: { userId: string; profile: { name?: string | null } | null | undefined; onOpenConversation: (prefilledMessage?: string) => void }) {
   const { data: portrait, isLoading, refetch } = useQuery({
     queryKey: ["portal-user-portrait", userId],
     queryFn: async () => {

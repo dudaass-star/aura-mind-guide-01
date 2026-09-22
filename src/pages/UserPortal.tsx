@@ -2,31 +2,42 @@ import { useSearchParams, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import { ArrowLeft, BookOpen, Sparkles, Headphones, Lock, Sun, Calendar, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
-import { PortalLoading } from "@/components/portal/shared";
-import { MeditacoesTab } from "@/components/portal/MeditacoesTab";
+import { PortalLoading, PortalLoadingInline } from "@/components/portal/shared";
 import { PhoneLinkPrompt } from "@/components/portal/PhoneLinkPrompt";
-import { HojeTab } from "@/components/portal/HojeTab";
-import { SessoesTab } from "@/components/portal/SessoesTab";
-import { InsightsTab } from "@/components/portal/InsightsTab";
-import { SobreVoceTab } from "@/components/portal/SobreVoceTab";
 import { ConversarTab } from "@/components/portal/ConversarTab";
-import { JornadasTab } from "@/components/portal/JornadasTab";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 import { rememberPushAttribution, reportPushConversion, reportPushPresence } from "@/lib/push-notifications";
-import {
-  usePortalNovidades,
-  markTabSeen,
-  type TabKey,
-} from "@/components/portal/hooks/usePortalNovidades";
 
 type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes";
+
+const loadHoje = () => import("@/components/portal/HojeTab");
+const loadSessoes = () => import("@/components/portal/SessoesTab");
+const loadJornadas = () => import("@/components/portal/JornadasTab");
+const loadInsights = () => import("@/components/portal/InsightsTab");
+const loadMeditacoes = () => import("@/components/portal/MeditacoesTab");
+const loadSobre = () => import("@/components/portal/SobreVoceTab");
+const HojeTab = lazy(() => loadHoje().then((module) => ({ default: module.HojeTab })));
+const SessoesTab = lazy(() => loadSessoes().then((module) => ({ default: module.SessoesTab })));
+const JornadasTab = lazy(() => loadJornadas().then((module) => ({ default: module.JornadasTab })));
+const InsightsTab = lazy(() => loadInsights().then((module) => ({ default: module.InsightsTab })));
+const MeditacoesTab = lazy(() => loadMeditacoes().then((module) => ({ default: module.MeditacoesTab })));
+const SobreVoceTab = lazy(() => loadSobre().then((module) => ({ default: module.SobreVoceTab })));
+
+const AREA_LOADERS: Record<Exclude<TabId, "conversar">, () => Promise<unknown>> = {
+  hoje: loadHoje,
+  sessoes: loadSessoes,
+  jornadas: loadJornadas,
+  insights: loadInsights,
+  meditacoes: loadMeditacoes,
+  sobre: loadSobre,
+};
 
 const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebrow: string; icon: React.ElementType; tone: string }> = {
   hoje: { label: "Hoje", eyebrow: "Seu momento", icon: Sun, tone: "portal-area-today" },
@@ -35,13 +46,6 @@ const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebro
   insights: { label: "Percurso", eyebrow: "Sua evolução", icon: Sparkles, tone: "portal-area-journey" },
   meditacoes: { label: "Meditações", eyebrow: "Sua pausa", icon: Headphones, tone: "portal-area-audio" },
   sobre: { label: "Sobre você", eyebrow: "Sua história", icon: User, tone: "portal-area-profile" },
-};
-
-// Abas que exibem badge de novidade (subset do TabId).
-const NOVIDADE_TABS: Record<string, TabKey> = {
-  hoje: "hoje",
-  insights: "insights",
-  sobre: "sobre",
 };
 
 const UserPortal = () => {
@@ -56,6 +60,7 @@ const UserPortal = () => {
         ? rawTab as TabId
         : "conversar";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+  const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => new Set(["conversar", initialTab]));
   const [portalLoading, setPortalLoading] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
@@ -92,16 +97,8 @@ const UserPortal = () => {
       window.removeEventListener("blur", report);
     };
   }, [linkStatus, userId]);
-  const { refetch: refetchNovidades } = usePortalNovidades(userId);
-
-  // Ao abrir o portal, marca a aba inicial como vista.
-  useEffect(() => {
-    const key = NOVIDADE_TABS[activeTab];
-    if (key && userId) markTabSeen(userId, key);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
   const handleTabClick = (id: TabId) => {
+    setVisitedTabs((current) => current.has(id) ? current : new Set(current).add(id));
     setActiveTab(id);
     if (id !== "conversar") void reportPushConversion(`/meu-espaco?tab=${id}`);
     const valueFeature = id === "sessoes"
@@ -127,13 +124,19 @@ const UserPortal = () => {
         if (error && error.code !== "23505") console.warn("Não foi possível registrar a descoberta da área");
       });
     }
-    const key = NOVIDADE_TABS[id];
-    if (key && userId) {
-      markTabSeen(userId, key);
-      // Re-avalia badges após marcar como visto.
-      setTimeout(() => refetchNovidades(), 100);
-    }
   };
+
+  useEffect(() => {
+    if (activeTab !== "conversar") return;
+    const schedule = window.requestIdleCallback ?? ((callback: IdleRequestCallback) => window.setTimeout(callback, 800));
+    const cancel = window.cancelIdleCallback ?? window.clearTimeout;
+    const task = schedule(() => {
+      void loadHoje();
+      void loadSessoes();
+      void loadJornadas();
+    });
+    return () => cancel(task);
+  }, [activeTab]);
 
   const handleOpenConversation = (prefilledMessage?: string) => {
     if (!userId) return;
@@ -147,12 +150,13 @@ const UserPortal = () => {
   const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = useQuery({
     queryKey: ["portal-profile", userId],
     queryFn: async () => {
+      if (!userId) return null;
       const { data, error } = await supabasePortal
         .from("profiles")
         .select(
           "name, status, payment_failed_at, current_journey_id, current_episode, journeys_completed, plan, plan_tier, billing_cycle, asaas_customer_id, card_gateway, last_user_message_at, last_proactive_insight_at, sessions_used_this_month, messages_used_this_month, messages_reset_month, created_at",
         )
-        .eq("user_id", userId!)
+        .eq("user_id", userId)
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -359,9 +363,9 @@ const UserPortal = () => {
         {/* Content */}
         <div className={activeTab === "conversar" ? "flex-1 w-full" : "portal-app-content flex-1 max-w-2xl mx-auto w-full px-5 py-6 pb-24"}>
           {activeTab !== "conversar" && <PlanTierBanner profile={profile} onChangePlan={() => setChangePlanOpen(true)} />}
-          {activeTab === "conversar" && (
+          <div className={activeTab === "conversar" ? "block" : "hidden"} aria-hidden={activeTab !== "conversar"}>
             <ConversarTab
-              userId={userId!}
+              userId={userId}
               firstName={firstName}
               onNavigate={handleTabClick}
               onOpenBilling={() => void handleOpenBillingPortal()}
@@ -370,25 +374,23 @@ const UserPortal = () => {
               billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
               accountLoading={portalLoading}
             />
-          )}
-          {activeTab === "hoje" && (
+          </div>
+          <Suspense fallback={<PortalLoadingInline />}>
+          {visitedTabs.has("hoje") && <div className={activeTab === "hoje" ? "block" : "hidden"} aria-hidden={activeTab !== "hoje"}>
             <HojeTab
-              userId={userId!}
+              userId={userId}
               firstName={firstName}
               profile={profile}
               onNavigateTab={(t) => handleTabClick(t as TabId)}
               onOpenConversation={handleOpenConversation}
             />
-          )}
-          {activeTab === "sessoes" && <SessoesTab userId={userId!} profile={profile} />}
-          {activeTab === "jornadas" && (
-            <JornadasTab userId={userId!} profile={profile} onJourneyChanged={() => void refetchProfile()} />
-          )}
-          {activeTab === "insights" && (
-            <InsightsTab userId={userId!} profile={profile} onOpenConversation={handleOpenConversation} />
-          )}
-          {activeTab === "sobre" && <SobreVoceTab userId={userId!} onOpenConversation={handleOpenConversation} />}
-          {activeTab === "meditacoes" && <MeditacoesTab userId={userId!} />}
+          </div>}
+          {visitedTabs.has("sessoes") && <div className={activeTab === "sessoes" ? "block" : "hidden"} aria-hidden={activeTab !== "sessoes"}><SessoesTab userId={userId} profile={profile} /></div>}
+          {visitedTabs.has("jornadas") && <div className={activeTab === "jornadas" ? "block" : "hidden"} aria-hidden={activeTab !== "jornadas"}><JornadasTab userId={userId} profile={profile} onJourneyChanged={() => void refetchProfile()} /></div>}
+          {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
+          {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
+          {visitedTabs.has("meditacoes") && <div className={activeTab === "meditacoes" ? "block" : "hidden"} aria-hidden={activeTab !== "meditacoes"}><MeditacoesTab userId={userId} /></div>}
+          </Suspense>
         </div>
 
         {/* Rodapé institucional; ações da conta ficam no menu da tela inicial. */}

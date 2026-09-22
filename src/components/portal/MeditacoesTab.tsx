@@ -39,7 +39,8 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
         .from("meditations")
         .select("id, title, category, duration_seconds, description")
         .eq("is_active", true)
-        .order("category");
+        .order("category")
+        .limit(200);
       if (error) throw error;
       return data;
     },
@@ -64,7 +65,8 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
         .from("user_meditation_history")
         .select("meditation_id, sent_at")
         .eq("user_id", userId)
-        .order("sent_at", { ascending: false });
+        .order("sent_at", { ascending: false })
+        .limit(500);
       if (error) return [];
       return data || [];
     },
