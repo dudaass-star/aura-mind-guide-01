@@ -210,6 +210,26 @@
   --portal-area-foreground: var(--portal-content-foreground);
 }
 
+.portal-journey-page .portal-episode-reading {
+  text-wrap: pretty;
+}
+
+.portal-journey-page .portal-episode-reading > div p:first-child::first-letter {
+  color: hsl(var(--portal-area-foreground));
+  float: left;
+  font-family: "Outfit", sans-serif;
+  font-size: 3.2rem;
+  font-weight: 600;
+  line-height: 0.82;
+  margin: 0.22rem 0.45rem 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-journey-page * {
+    scroll-behavior: auto !important;
+  }
+}
+
 .portal-app-area-insights {
   --portal-area-surface: var(--portal-journey);
   --portal-area-foreground: var(--portal-journey-foreground);
