@@ -76,4 +76,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Separar relatórios semanais e mensais, entregá-los na conversa e arquivá-los no Percurso.
 - [x] Elevar relatórios com evidências verificáveis, períodos fechados, síntese da AURA e correção pelo cliente; validar em clientes reais antes da publicação.
 - [x] Unificar o pós-pagamento no app Olá Aura: confirmação, PIX, WhatsApp, e-mail, acesso e remoção de “Meu Espaço” da experiência visível.
-- [ ] Otimizar abertura e navegação do app e validar capacidade controlada em 50, 100, 200 e 300 acessos simultâneos.
+- [x] Otimizar abertura e navegação do app e validar capacidade controlada em 50, 100, 200 e 300 acessos simultâneos (abertura e leitura autenticada; geração simultânea da AURA continua sendo uma capacidade separada).
