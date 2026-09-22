@@ -4,54 +4,64 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
-import Index from "./pages/Index";
-import IndexV2 from "./pages/IndexV2";
-import IndexV3 from "./pages/IndexV3";
-import CheckoutV2 from "./pages/CheckoutV2";
-import ThankYou from "./pages/ThankYou";
-import CancelSubscription from "./pages/CancelSubscription";
-import TermsOfService from "./pages/TermsOfService";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import StartTrial from "./pages/StartTrial";
-import TrialStarted from "./pages/TrialStarted";
-import AdminMeditations from "./pages/AdminMeditations";
-import AdminTests from "./pages/AdminTests";
-import AdminInstances from "./pages/AdminInstances";
-import AdminLogin from "./pages/AdminLogin";
-import AdminSettings from "./pages/AdminSettings";
-import AdminEngagement from "./pages/AdminEngagement";
-import AdminMessages from "./pages/AdminMessages";
-import AdminTemplates from "./pages/AdminTemplates";
-import AdminEmails from "./pages/AdminEmails";
-import AdminPopupPreview from "./pages/AdminPopupPreview";
-import AdminUsers from "./pages/AdminUsers";
-import AdminInstagram from "./pages/AdminInstagram";
-import AdminSupport from "./pages/AdminSupport";
-import AdminSupportKnowledge from "./pages/AdminSupportKnowledge";
-import AdminSupportGaps from "./pages/AdminSupportGaps";
-import AdminWhatsappRecovery from "./pages/AdminWhatsappRecovery";
-import AdminSessions from "./pages/AdminSessions";
-import AdminLayout from "./components/admin/AdminLayout";
-import UserGuide from "./pages/UserGuide";
-import Episode from "./pages/Episode";
-import JourneyComplete from "./pages/JourneyComplete";
-import Unsubscribe from "./pages/Unsubscribe";
-import UserPortal from "./pages/UserPortal";
-import PortalLogin from "./pages/PortalLogin";
-import PortalWhatsAppAccess from "./pages/PortalWhatsAppAccess";
-import PortalAuthCallback from "./pages/PortalAuthCallback";
-import ReautorizarPix from "./pages/ReautorizarPix";
-import PixTaster from "./pages/PixTaster";
+import { lazy, Suspense } from "react";
 import { PortalAuthProvider } from "./contexts/PortalAuthContext";
-import Blog from "./pages/Blog";
-import BlogPost from "./pages/BlogPost";
-import Pagamento from "./pages/Pagamento";
-import NotFound from "./pages/NotFound";
 import GA4RouteTracker from "./components/GA4RouteTracker";
 import MetaRouteTracker from "./components/MetaRouteTracker";
 import ScrollToTop from "./components/ScrollToTop";
 
-const queryClient = new QueryClient();
+const IndexV2 = lazy(() => import("./pages/IndexV2"));
+const IndexV3 = lazy(() => import("./pages/IndexV3"));
+const CheckoutV2 = lazy(() => import("./pages/CheckoutV2"));
+const ThankYou = lazy(() => import("./pages/ThankYou"));
+const CancelSubscription = lazy(() => import("./pages/CancelSubscription"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const StartTrial = lazy(() => import("./pages/StartTrial"));
+const TrialStarted = lazy(() => import("./pages/TrialStarted"));
+const AdminMeditations = lazy(() => import("./pages/AdminMeditations"));
+const AdminTests = lazy(() => import("./pages/AdminTests"));
+const AdminInstances = lazy(() => import("./pages/AdminInstances"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin"));
+const AdminSettings = lazy(() => import("./pages/AdminSettings"));
+const AdminEngagement = lazy(() => import("./pages/AdminEngagement"));
+const AdminMessages = lazy(() => import("./pages/AdminMessages"));
+const AdminTemplates = lazy(() => import("./pages/AdminTemplates"));
+const AdminEmails = lazy(() => import("./pages/AdminEmails"));
+const AdminPopupPreview = lazy(() => import("./pages/AdminPopupPreview"));
+const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const AdminInstagram = lazy(() => import("./pages/AdminInstagram"));
+const AdminSupport = lazy(() => import("./pages/AdminSupport"));
+const AdminSupportKnowledge = lazy(() => import("./pages/AdminSupportKnowledge"));
+const AdminSupportGaps = lazy(() => import("./pages/AdminSupportGaps"));
+const AdminWhatsappRecovery = lazy(() => import("./pages/AdminWhatsappRecovery"));
+const AdminSessions = lazy(() => import("./pages/AdminSessions"));
+const AdminLayout = lazy(() => import("./components/admin/AdminLayout"));
+const UserGuide = lazy(() => import("./pages/UserGuide"));
+const Episode = lazy(() => import("./pages/Episode"));
+const JourneyComplete = lazy(() => import("./pages/JourneyComplete"));
+const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
+const UserPortal = lazy(() => import("./pages/UserPortal"));
+const PortalLogin = lazy(() => import("./pages/PortalLogin"));
+const PortalWhatsAppAccess = lazy(() => import("./pages/PortalWhatsAppAccess"));
+const PortalAuthCallback = lazy(() => import("./pages/PortalAuthCallback"));
+const ReautorizarPix = lazy(() => import("./pages/ReautorizarPix"));
+const PixTaster = lazy(() => import("./pages/PixTaster"));
+const Blog = lazy(() => import("./pages/Blog"));
+const BlogPost = lazy(() => import("./pages/BlogPost"));
+const Pagamento = lazy(() => import("./pages/Pagamento"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 2 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 /**
  * Redireciona a raiz para /v2 preservando query string e hash.
@@ -86,6 +96,7 @@ const App = () => (
           <GA4RouteTracker />
           <MetaRouteTracker />
           <PortalAuthProvider>
+          <Suspense fallback={<div className="min-h-screen bg-background" aria-label="Abrindo Olá Aura" />}>
           <Routes>
             <Route path="/" element={<RootRedirect />} />
             <Route path="/v2" element={<IndexV2 />} />
@@ -133,6 +144,7 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
           </PortalAuthProvider>
         </BrowserRouter>
       </TooltipProvider>
