@@ -2,6 +2,7 @@
 - [x] Transformar a antiga entrada do Meu Espaço na entrada visual e textual do aplicativo Olá Aura.
 - [x] Padronizar Olá Aura como nome do aplicativo e AURA como a pessoa da conversa, deixando WhatsApp apenas como recuperação de acesso.
 - [x] Corrigir os destinos de Hoje e Sobre você para abrir a conversa interna com contexto, sem desviar o cliente ao WhatsApp.
+- [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
 - [x] Painel semanal do funil Taster no admin (TasterFunnelPanel em AdminWhatsappRecovery)
@@ -71,3 +72,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Transformar Jornadas em biblioteca viva, com releitura das concluídas e visão segura das próximas etapas e temas.
 - [x] Padronizar episódios e conclusão de Jornadas com o visual atual do aplicativo e confirmar o acesso global isolado por cliente.
 - [x] Transformar Percurso em acompanhamento vivo, corrigindo links, confiança, retomada, marcos e validação pelo cliente.
+
+- [ ] Separar relatórios semanais e mensais, entregá-los na conversa e arquivá-los no Percurso.

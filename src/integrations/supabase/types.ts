@@ -4327,6 +4327,65 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_reports: {
+        Row: {
+          analysis_text: string | null
+          continuation_text: string | null
+          created_at: string
+          evidence_json: Json
+          highlights_json: Json
+          id: string
+          metrics_json: Json
+          period_end: string
+          period_start: string
+          previous_period_end: string
+          previous_period_start: string
+          report_content: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analysis_text?: string | null
+          continuation_text?: string | null
+          created_at?: string
+          evidence_json?: Json
+          highlights_json?: Json
+          id?: string
+          metrics_json?: Json
+          period_end: string
+          period_start: string
+          previous_period_end: string
+          previous_period_start: string
+          report_content?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analysis_text?: string | null
+          continuation_text?: string | null
+          created_at?: string
+          evidence_json?: Json
+          highlights_json?: Json
+          id?: string
+          metrics_json?: Json
+          period_end?: string
+          period_start?: string
+          previous_period_end?: string
+          previous_period_start?: string
+          report_content?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_reports_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       whatsapp_instances: {
         Row: {
           created_at: string

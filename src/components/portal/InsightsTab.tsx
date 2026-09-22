@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, BookMarked, Calendar, Check, ChevronDown, ChevronUp, CircleHelp, Mail, MessageCircle, Quote, Sparkles, Trophy } from "lucide-react";
+import { ArrowRight, BarChart3, BookMarked, Calendar, Check, ChevronDown, ChevronUp, CircleHelp, Mail, MessageCircle, Quote, Sparkles, Trophy } from "lucide-react";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { EmptyState, PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
 
@@ -24,6 +25,8 @@ type SessionRow = { id: string; ended_at: string | null; focus_topic: string | n
 type ActiveTheme = { id: string; theme_name: string | null; status: string | null; session_count: number | null; last_mentioned_at: string | null };
 type Feedback = { source_kind: string; source_id: string; response: "agrees" | "corrects" };
 type Chapter = { key: string; monthLabel: string; anchorDate: string; headline: string; quote: string | null; themes: string[]; sessions: SessionRow[]; snapshots: Snapshot[]; letter: Letter | null; milestones: Milestone[] };
+type WeeklyReport = { id: string; period_start: string; period_end: string; metrics_json: unknown; highlights_json: unknown; analysis_text: string | null; continuation_text: string | null; report_content: string | null };
+type MonthlyReport = { id: string; report_month: string; metrics_json: unknown; analysis_text: string | null; report_html: string | null; created_at: string };
 
 const CONF_ORDER: Record<string, number> = { high: 2, low: 1 };
 const OPERATIONAL_THEME = /(agendar|reagendar|cancelar|organizar sess|setup mensal|preferência por áudio|mudança de assunto|recusa de)/i;
@@ -63,17 +66,20 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const { data, isLoading } = useQuery({
     queryKey: ["portal-live-journey", userId],
     queryFn: async () => {
-      const [sessionsRes, snapshotsRes, lettersRes, milestonesRes, themesRes, feedbackRes] = await Promise.all([
+      const [sessionsRes, snapshotsRes, lettersRes, milestonesRes, themesRes, feedbackRes, weeklyReportsRes, monthlyReportsRes] = await Promise.all([
         supabasePortal.from("sessions").select("id, ended_at, focus_topic, closure_text, session_summary, theme_label").eq("user_id", userId).eq("status", "completed").order("ended_at", { ascending: false }).limit(80),
         supabasePortal.from("thematic_snapshots").select("id, theme, snapshot_before, snapshot_change, evidence_quote, evidence_date, confidence, period_end").eq("user_id", userId).in("confidence", ["high", "low"]).order("period_end", { ascending: false }).limit(60),
         supabasePortal.from("monthly_letters").select("id, letter_month, letter_text, preview_text, created_at").eq("user_id", userId).order("letter_month", { ascending: false }).limit(24),
         supabasePortal.from("user_milestones").select("id, milestone_text, milestone_date, context_excerpt, source").eq("user_id", userId).order("milestone_date", { ascending: false }).limit(60),
         supabasePortal.from("session_themes").select("id, theme_name, status, session_count, last_mentioned_at").eq("user_id", userId).neq("status", "resolved").order("last_mentioned_at", { ascending: false }).limit(20),
         supabasePortal.from("journey_reflection_feedback").select("source_kind, source_id, response").eq("user_id", userId),
+        supabasePortal.from("weekly_reports").select("id, period_start, period_end, metrics_json, highlights_json, analysis_text, continuation_text, report_content").eq("user_id", userId).order("period_start", { ascending: false }).limit(12),
+        supabasePortal.from("monthly_reports").select("id, report_month, metrics_json, analysis_text, report_html, created_at").eq("user_id", userId).order("report_month", { ascending: false }).limit(12),
       ]);
       return {
         sessions: (sessionsRes.data ?? []) as SessionRow[], snapshots: (snapshotsRes.data ?? []) as Snapshot[], letters: (lettersRes.data ?? []) as Letter[],
         milestones: (milestonesRes.data ?? []) as Milestone[], themes: (themesRes.data ?? []) as ActiveTheme[], feedback: (feedbackRes.data ?? []) as Feedback[],
+        weeklyReports: (weeklyReportsRes.data ?? []) as WeeklyReport[], monthlyReports: (monthlyReportsRes.data ?? []) as MonthlyReport[],
       };
     },
     enabled: !!userId,
@@ -106,6 +112,8 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const recentMovements = useMemo(() => (data?.snapshots ?? []).filter((snapshot) => snapshot.snapshot_change || snapshot.snapshot_before || snapshot.evidence_quote).slice(0, 3), [data?.snapshots]);
   const meaningfulMilestones = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)).slice(0, 4), [data?.milestones]);
   const lastSession = data?.sessions?.[0] ?? null;
+  const weeklyReports = data?.weeklyReports ?? [];
+  const monthlyReports = data?.monthlyReports ?? [];
 
   const chapters = useMemo<Chapter[]>(() => {
     if (!data) return [];
@@ -236,6 +244,16 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         </section>
       )}
 
+      {(weeklyReports.length > 0 || monthlyReports.length > 0) && (
+        <section className="portal-progress-step space-y-3" aria-labelledby="relatorios-percurso">
+          <SectionTitle icon={BarChart3} eyebrow="Rever" title="Seus relatórios" />
+          <div id="relatorios-percurso" className="space-y-3">
+            {weeklyReports.map((report, index) => <ReportCard key={report.id} kind="weekly" report={report} featured={index === 0} onContinue={onOpenConversation} />)}
+            {monthlyReports.map((report) => <ReportCard key={report.id} kind="monthly" report={report} onContinue={onOpenConversation} />)}
+          </div>
+        </section>
+      )}
+
       {!hasLiveMaterial && chapters.length === 0 && <EmptyState icon={BookMarked} title="Seu percurso está começando" description="Não vamos inventar uma história antes da hora. A primeira leitura aparece quando houver algo real para reconhecer." />}
 
       {chapters.length > 0 && (
@@ -284,4 +302,22 @@ function ChapterCard({ chapter, expanded, onToggle }: { chapter: Chapter; expand
 
 function ChapterSection({ icon: Icon, title, children }: { icon: typeof Sparkles; title: string; children: React.ReactNode }) {
   return <section className="space-y-2"><div className="flex items-center gap-2 text-primary"><Icon className="h-4 w-4" /><h4 className="text-xs font-bold uppercase">{title}</h4></div>{children}</section>;
+}
+
+function ReportCard({ kind, report, featured = false, onContinue }: { kind: "weekly" | "monthly"; report: WeeklyReport | MonthlyReport; featured?: boolean; onContinue: (message?: string) => void }) {
+  const [expanded, setExpanded] = useState(() => new URLSearchParams(window.location.search).get("id") === report.id || (new URLSearchParams(window.location.search).get("report") === kind && featured));
+  const weekly = kind === "weekly" ? report as WeeklyReport : null;
+  const monthly = kind === "monthly" ? report as MonthlyReport : null;
+  const start = weekly?.period_start || monthly?.report_month || "";
+  const label = kind === "weekly"
+    ? `${new Date(`${start}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} a ${new Date(`${weekly?.period_end}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}`
+    : new Date(`${start}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const content = sanitizePortalText(weekly?.report_content || monthly?.analysis_text || monthly?.report_html || "Seu relatório está guardado aqui.");
+  return <article className={cn("overflow-hidden rounded-2xl border bg-card", featured && "portal-progress-feature")}>
+    <Button variant="ghost" className="h-auto w-full justify-between whitespace-normal rounded-none p-5 text-left" onClick={() => setExpanded((value) => !value)}>
+      <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-primary">{kind === "weekly" ? "Sua semana" : "Seu mês em perspectiva"}</p><h3 className="mt-1 font-display text-lg font-semibold capitalize text-foreground">{label}</h3></div>
+      {expanded ? <ChevronUp /> : <ChevronDown />}
+    </Button>
+    {expanded && <div className="space-y-4 border-t bg-secondary/40 p-5"><p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{content}</p><Button variant="outline" className="w-full" onClick={() => onContinue(kind === "weekly" ? "Aura, quero conversar sobre o que apareceu no meu resumo desta semana." : "Aura, quero conversar sobre o que apareceu no meu relatório deste mês.")}>Continuar com a AURA <ArrowRight /></Button></div>}
+  </article>;
 }
