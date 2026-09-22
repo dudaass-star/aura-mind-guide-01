@@ -29,6 +29,18 @@ const CONF_ORDER: Record<string, number> = { high: 2, low: 1 };
 const OPERATIONAL_THEME = /(agendar|reagendar|cancelar|organizar sess|setup mensal|preferência por áudio|mudança de assunto|recusa de)/i;
 const ACTIVITY_MILESTONE = /(sessão|jornada com a aura|mês de jornada|meses de jornada|ano de jornada|virou ritual)/i;
 
+function normalizeWords(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((word) => word.length > 2);
+}
+
+function themesOverlap(a: string, b: string) {
+  const aWords = new Set(normalizeWords(a));
+  const bWords = new Set(normalizeWords(b));
+  if (aWords.size === 0 || bWords.size === 0) return false;
+  const shared = [...aWords].filter((word) => bWords.has(word)).length;
+  return shared / Math.min(aWords.size, bWords.size) >= 0.6;
+}
+
 function monthKeyOf(iso: string) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -81,9 +93,18 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   });
 
   const feedbackMap = useMemo(() => new Map((data?.feedback ?? []).map((item) => [`${item.source_kind}:${item.source_id}`, item.response])), [data?.feedback]);
-  const activeThemes = useMemo(() => (data?.themes ?? []).filter((theme) => theme.theme_name?.trim() && !OPERATIONAL_THEME.test(theme.theme_name)).slice(0, 3), [data?.themes]);
+  const activeThemes = useMemo(() => {
+    const result: ActiveTheme[] = [];
+    for (const theme of data?.themes ?? []) {
+      if (!theme.theme_name?.trim() || OPERATIONAL_THEME.test(theme.theme_name)) continue;
+      if (result.some((current) => themesOverlap(current.theme_name || "", theme.theme_name || ""))) continue;
+      result.push(theme);
+      if (result.length === 3) break;
+    }
+    return result;
+  }, [data?.themes]);
   const recentMovements = useMemo(() => (data?.snapshots ?? []).filter((snapshot) => snapshot.snapshot_change || snapshot.snapshot_before || snapshot.evidence_quote).slice(0, 3), [data?.snapshots]);
-  const meaningfulMilestones = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.milestone_text && (!ACTIVITY_MILESTONE.test(milestone.milestone_text) || milestone.context_excerpt)).slice(0, 4), [data?.milestones]);
+  const meaningfulMilestones = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)).slice(0, 4), [data?.milestones]);
   const lastSession = data?.sessions?.[0] ?? null;
 
   const chapters = useMemo<Chapter[]>(() => {
