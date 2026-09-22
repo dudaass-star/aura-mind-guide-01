@@ -26,7 +26,7 @@ import {
   Sprout,
   PenLine,
 } from "lucide-react";
-import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
+import { EmptyState, PortalLoadingInline } from "./shared";
 import { auraWhatsAppLink } from "./whatsapp";
 import { sanitizePortalText } from "./sanitize";
 import { toast } from "@/hooks/use-toast";
@@ -225,8 +225,7 @@ export function SobreVoceTab({ userId }: { userId: string }) {
 
   if (!hasAny) {
     return (
-      <div className="space-y-5">
-        <SectionHeader icon={User} title="Sobre você" />
+      <div className="portal-area-page space-y-5">
         <EmptyState
           icon={Heart}
           title="A Aura ainda está te conhecendo"
@@ -240,7 +239,7 @@ export function SobreVoceTab({ userId }: { userId: string }) {
   const greeting = firstName ? `Oi, ${firstName}` : "Sobre você";
 
   return (
-    <div className="space-y-7">
+    <div className="portal-area-page space-y-7">
       {/* Hero navy — retrato narrativo */}
       <div className="relative overflow-hidden rounded-3xl bg-[#1B2A4E] p-6 animate-in fade-in slide-in-from-top-2 duration-500">
         <Sparkles size={16} className="text-[#B8A5D9] absolute top-5 right-5 opacity-70" />

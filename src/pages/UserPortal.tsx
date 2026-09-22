@@ -4,7 +4,8 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { useEffect, useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import { Sparkles, Headphones, Lock, Sun, Calendar, User, MessageCircle } from "lucide-react";
+import { ArrowLeft, Sparkles, Headphones, Lock, Sun, Calendar, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
 import { PortalLoading } from "@/components/portal/shared";
@@ -27,14 +28,13 @@ import {
 
 type TabId = "conversar" | "hoje" | "sessoes" | "insights" | "sobre" | "meditacoes";
 
-const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: "conversar", label: "Conversar", icon: MessageCircle },
-  { id: "hoje", label: "Hoje", icon: Sun },
-  { id: "sessoes", label: "Sessões", icon: Calendar },
-  { id: "insights", label: "Percurso", icon: Sparkles },
-  { id: "sobre", label: "Sobre você", icon: User },
-  { id: "meditacoes", label: "Meditações", icon: Headphones },
-];
+const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebrow: string; icon: React.ElementType; tone: string }> = {
+  hoje: { label: "Hoje", eyebrow: "Seu momento", icon: Sun, tone: "portal-area-today" },
+  sessoes: { label: "Sessões", eyebrow: "Seus encontros", icon: Calendar, tone: "portal-area-sessions" },
+  insights: { label: "Percurso", eyebrow: "Sua evolução", icon: Sparkles, tone: "portal-area-journey" },
+  meditacoes: { label: "Meditações", eyebrow: "Sua pausa", icon: Headphones, tone: "portal-area-audio" },
+  sobre: { label: "Sobre você", eyebrow: "Sua história", icon: User, tone: "portal-area-profile" },
+};
 
 // Abas que exibem badge de novidade (subset do TabId).
 const NOVIDADE_TABS: Record<string, TabKey> = {
@@ -85,7 +85,7 @@ const UserPortal = () => {
       window.removeEventListener("blur", report);
     };
   }, [linkStatus, userId]);
-  const { data: novidades, refetch: refetchNovidades } = usePortalNovidades(userId);
+  const { refetch: refetchNovidades } = usePortalNovidades(userId);
 
   // Ao abrir o portal, marca a aba inicial como vista.
   useEffect(() => {
@@ -214,6 +214,7 @@ const UserPortal = () => {
   if (profileLoading) return <PortalLoading />;
 
   const firstName = profile?.name?.split(" ")[0] || "você";
+  const areaMeta = activeTab === "conversar" ? null : APP_AREA_META[activeTab];
   // Trilho PIX Automático Bacen pelo Banco Inter (sem cartão, mandato Bacen).
   const isInterPix = (profile as any)?.card_gateway === "inter";
   // Trilho PIX Automático pela Woovi (jornada composta, mandato Bacen).
@@ -311,56 +312,34 @@ const UserPortal = () => {
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
-      <div className="min-h-screen bg-background text-foreground flex flex-col">
-        {/* Header — Deep Navy Anchor */}
-        <div className={activeTab === "conversar" ? "hidden" : "bg-background"}>
-          <div className="max-w-2xl mx-auto px-5 pt-5 pb-3 flex items-center justify-between">
-            <img src={logoOlaAura} alt="Olá AURA" className="h-11 w-auto" />
-            <span className="text-[10px] uppercase tracking-[0.2em] text-[#87A878] font-bold font-['Nunito']">
-              Meu Espaço
-            </span>
-          </div>
-        </div>
-
-        {/* Tabs — underline navy accent */}
-        <div className={activeTab === "conversar" ? "hidden" : "bg-background sticky top-0 z-10"}>
-          <div className="max-w-2xl mx-auto px-3 sm:px-5 border-b border-[#87A878]/20 flex gap-1 sm:gap-1 w-full justify-between sm:justify-start sm:overflow-x-auto scrollbar-none">
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              const novidadeKey = NOVIDADE_TABS[tab.id];
-              const hasNovidade =
-                !isActive && novidadeKey && (novidades as any)?.[novidadeKey];
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabClick(tab.id)}
-                  aria-label={tab.label}
-                  className={`relative flex items-center justify-center sm:justify-start gap-1.5 px-2 sm:px-4 py-3 text-xs sm:text-sm font-['Nunito'] whitespace-nowrap transition-all flex-1 sm:flex-none sm:shrink-0 ${
-                    isActive
-                      ? "text-[#1B2A4E] font-bold"
-                      : "text-[#2A2A2A]/50 font-semibold hover:text-[#1B2A4E]"
-                  }`}
-                >
-                  <Icon size={isActive ? 16 : 15} className="sm:!w-[14px] sm:!h-[14px] shrink-0" />
-                  <span className={`${isActive ? "inline" : "hidden"} sm:inline`}>{tab.label}</span>
-                  {hasNovidade && (
-                    <span
-                      aria-label="Novidade"
-                      className="absolute top-1.5 right-1.5 sm:static sm:ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-[#B8A5D9] animate-pulse-soft"
-                    />
-                  )}
-                  {isActive && (
-                    <span className="absolute -bottom-px left-1/2 -translate-x-1/2 h-[3px] w-8 sm:w-6 bg-[#1B2A4E] rounded-full" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      <div className={`min-h-screen bg-background text-foreground flex flex-col ${activeTab === "conversar" ? "" : `portal-chat-theme portal-app-theme portal-app-area-${activeTab}`}`}>
+        {areaMeta && (
+          <header className="portal-app-header sticky top-0 z-30 border-b border-border/70 bg-card/90 backdrop-blur-xl">
+            <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 shrink-0 rounded-full"
+                onClick={() => handleTabClick("conversar")}
+                aria-label="Voltar para Conversas"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${areaMeta.tone}`}>
+                <areaMeta.icon className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{areaMeta.eyebrow}</p>
+                <h1 className="truncate font-display text-xl font-semibold leading-tight text-foreground">{areaMeta.label}</h1>
+              </div>
+              <img src={logoOlaAura} alt="Olá AURA" className="h-7 w-auto opacity-75" />
+            </div>
+          </header>
+        )}
 
         {/* Content */}
-        <div className={activeTab === "conversar" ? "flex-1 w-full" : "flex-1 max-w-2xl mx-auto w-full px-5 py-6 pb-24"}>
+        <div className={activeTab === "conversar" ? "flex-1 w-full" : "portal-app-content flex-1 max-w-2xl mx-auto w-full px-5 py-6 pb-24"}>
           {activeTab !== "conversar" && <PlanTierBanner profile={profile} onChangePlan={() => setChangePlanOpen(true)} />}
           {activeTab === "conversar" && (
             <ConversarTab
@@ -393,12 +372,12 @@ const UserPortal = () => {
 
         {/* Rodapé institucional; ações da conta ficam no menu da tela inicial. */}
         {activeTab !== "conversar" && <footer className="border-t border-border/40 py-6 text-center">
-          <p className="text-sm text-muted-foreground font-['Nunito']">Conteúdo exclusivo da Aura</p>
+          <p className="text-sm text-muted-foreground font-body">Conteúdo exclusivo da AURA</p>
           <a
             href="https://olaaura.com.br"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block text-xs text-accent hover:text-accent/80 transition-colors font-['Nunito'] underline underline-offset-2 mt-1"
+            className="inline-block text-xs text-primary hover:text-primary/80 transition-colors font-body underline underline-offset-2 mt-1"
           >
             olaaura.com.br
           </a>

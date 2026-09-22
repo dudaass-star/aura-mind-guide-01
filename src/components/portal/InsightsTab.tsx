@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Sparkles, Trophy, Calendar, Mail, BookMarked, ChevronDown, ChevronUp } from "lucide-react";
 import { useMemo, useState } from "react";
-import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
+import { EmptyState, PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
 
 // "Percurso" como Capítulos mensais: um card por mês, síntese narrativa curta
@@ -253,8 +253,7 @@ export function InsightsTab({ userId, profile }: { userId: string; profile: any 
   const isBrandNew = daysSinceSignup !== null && daysSinceSignup < 30;
 
   return (
-    <div className="space-y-5">
-      <SectionHeader icon={BookMarked} title="Percurso" />
+    <div className="portal-area-page space-y-5">
       <p className="text-sm text-[#2A2A2A]/60 font-['Nunito'] -mt-2">
         Um capítulo por mês. Como as coisas foram mudando dentro de você.
       </p>

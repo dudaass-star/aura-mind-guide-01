@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Calendar, Star, MessageCircle } from "lucide-react";
-import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
+import { EmptyState, PortalLoadingInline } from "./shared";
 import { auraWhatsAppLink, presentClosure } from "./whatsapp";
 import { sanitizePortalText } from "./sanitize";
 
@@ -74,9 +74,7 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: any }
   const used = profile?.sessions_used_this_month ?? 0;
 
   return (
-    <div className="space-y-5">
-      <SectionHeader icon={Calendar} title="Sessões" />
-
+    <div className="portal-area-page space-y-5">
       {/* Próxima sessão */}
       {nextSession ? (
         <div className="rounded-3xl bg-[#1B2A4E] p-6 space-y-3 animate-fade-up shadow-lg">
@@ -121,7 +119,7 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: any }
       {/* Contador do mês */}
       {planLimit ? (
         <div className="text-xs text-[#2A2A2A]/60 font-['Nunito']">
-          {used} de {planLimit} sessão{planLimit > 1 ? "ões" : ""} no plano deste mês
+          {used} de {planLimit} {planLimit > 1 ? "sessões" : "sessão"} no plano deste mês
         </div>
       ) : null}
 
