@@ -73,4 +73,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Padronizar episódios e conclusão de Jornadas com o visual atual do aplicativo e confirmar o acesso global isolado por cliente.
 - [x] Transformar Percurso em acompanhamento vivo, corrigindo links, confiança, retomada, marcos e validação pelo cliente.
 
-- [ ] Separar relatórios semanais e mensais, entregá-los na conversa e arquivá-los no Percurso.
+- [x] Separar relatórios semanais e mensais, entregá-los na conversa e arquivá-los no Percurso.
+- [ ] Elevar relatórios com evidências verificáveis, períodos fechados, síntese da AURA e correção pelo cliente; validar em clientes reais antes da publicação.

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeNotification } from "../_shared/notification-router.ts";
+import { formatReport, generateReportAnalysis, type PeriodMetrics } from "../_shared/report-intelligence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,7 +8,6 @@ const corsHeaders = {
 };
 const BATCH_SIZE = 20;
 
-type PeriodMetrics = { messages: number; sessions: number; journeys: number; practices: number };
 type ReportMetrics = { current: PeriodMetrics; previous: PeriodMetrics };
 
 function brtParts(date = new Date()) {
@@ -22,7 +22,7 @@ function getWeeklyPeriods(now = new Date()) {
   const todayUtc = new Date(`${brt.year}-${brt.month}-${brt.day}T03:00:00.000Z`);
   const day = todayUtc.getUTCDay();
   const currentStart = new Date(todayUtc);
-  currentStart.setUTCDate(todayUtc.getUTCDate() - (day === 0 ? 6 : day - 1));
+  currentStart.setUTCDate(todayUtc.getUTCDate() - (day === 0 ? 13 : day + 6));
   const currentEndExclusive = new Date(currentStart); currentEndExclusive.setUTCDate(currentStart.getUTCDate() + 7);
   const previousStart = new Date(currentStart); previousStart.setUTCDate(currentStart.getUTCDate() - 7);
   return { previousStart, currentStart, currentEndExclusive };
@@ -44,7 +44,6 @@ async function fetchMetrics(supabase: any, userId: string, start: Date, end: Dat
   return { messages, sessions, journeys, practices };
 }
 
-function metricLabel(value: number, singular: string, plural: string) { return `${value} ${value === 1 ? singular : plural}`; }
 function deltaLabel(current: number, previous: number) {
   if (current === previous) return "mesmo ritmo da semana anterior";
   const diff = Math.abs(current - previous);
@@ -53,19 +52,12 @@ function deltaLabel(current: number, previous: number) {
 
 function buildHighlights(metrics: ReportMetrics) {
   const items = [
-    { key: "messages", label: "conversas", current: metrics.current.messages, previous: metrics.previous.messages },
+    { key: "messages", label: "mensagens enviadas", current: metrics.current.messages, previous: metrics.previous.messages },
     { key: "sessions", label: "sessões", current: metrics.current.sessions, previous: metrics.previous.sessions },
     { key: "journeys", label: "episódios de Jornadas", current: metrics.current.journeys, previous: metrics.previous.journeys },
     { key: "practices", label: "práticas", current: metrics.current.practices, previous: metrics.previous.practices },
   ];
   return items.filter((item) => item.current > 0 || item.previous > 0).map((item) => ({ ...item, comparison: deltaLabel(item.current, item.previous) }));
-}
-
-function buildReport(name: string, metrics: ReportMetrics, highlights: ReturnType<typeof buildHighlights>) {
-  const lines = highlights.map((item) => `• ${item.current} ${item.label} — ${item.comparison}`);
-  const total = Object.values(metrics.current).reduce((sum, value) => sum + value, 0);
-  if (total === 0) return `Sua semana na Olá Aura, ${name}\n\nEsta semana foi mais silenciosa por aqui. Seu Percurso continua guardado, pronto para quando você quiser retomar.`;
-  return `Sua semana na Olá Aura, ${name}\n\n${lines.join("\n")}\n\nMais importante que a quantidade é o fio que você escolhe continuar.`;
 }
 
 async function invokeNext(offset: number, periodStart: string) {
@@ -83,7 +75,9 @@ Deno.serve(async (req) => {
     const hour = Number(nowParts.hour);
     if (!targetUserId && (hour < 8 || hour >= 22)) return new Response(JSON.stringify({ status: "skipped", reason: "quiet_hours" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const dryRun = body.dry_run === true;
-    const periods = getWeeklyPeriods(body.period_start ? new Date(`${body.period_start}T12:00:00Z`) : new Date());
+    const periods = body.period_start
+      ? { currentStart: new Date(`${body.period_start}T03:00:00Z`), currentEndExclusive: new Date(new Date(`${body.period_start}T03:00:00Z`).getTime() + 7 * 86400000), previousStart: new Date(new Date(`${body.period_start}T03:00:00Z`).getTime() - 7 * 86400000) }
+      : getWeeklyPeriods();
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     let query = supabase.from("profiles").select("user_id,name,phone,status,do_not_disturb_until").eq("status", "active").order("created_at", { ascending: true });
     query = targetUserId ? query.eq("user_id", targetUserId) : query.range(offset, offset + BATCH_SIZE - 1);
@@ -99,9 +93,9 @@ Deno.serve(async (req) => {
         const metrics = { current, previous };
         const highlights = buildHighlights(metrics);
         const name = profile.name?.trim().split(/\s+/)[0] || "você";
-        const report = buildReport(name, metrics, highlights);
-        const continuation = current.messages + current.sessions + current.journeys + current.practices === 0 ? "Retomar quando fizer sentido" : "Escolher o próximo fio para continuar";
-        if (dryRun) { results.push({ user_id: profile.user_id, metrics, highlights, report }); continue; }
+        const analysis = await generateReportAnalysis(supabase, { kind: "weekly", userId: profile.user_id, firstName: name, start: periods.currentStart, end: periods.currentEndExclusive, previousStart: periods.previousStart, metrics });
+        const report = formatReport(analysis, current);
+        if (dryRun) { results.push({ user_id: profile.user_id, metrics, highlights, analysis, report }); continue; }
         const { data: saved, error: saveError } = await supabase.from("weekly_reports").upsert({
           user_id: profile.user_id,
           period_start: dateOnly(periods.currentStart),
@@ -110,9 +104,9 @@ Deno.serve(async (req) => {
           previous_period_end: dateOnly(new Date(periods.currentStart.getTime() - 1)),
           metrics_json: metrics,
           highlights_json: highlights,
-          evidence_json: [],
-          analysis_text: null,
-          continuation_text: continuation,
+          evidence_json: analysis.evidence,
+          analysis_text: analysis.observation,
+          continuation_text: analysis.continuation,
           report_content: report,
         }, { onConflict: "user_id,period_start" }).select("id").single();
         if (saveError) throw saveError;
