@@ -6604,11 +6604,10 @@ ${welcomeContent}
 """
 
 INSTRUÇÃO:
-1. Use EXATAMENTE o conteúdo acima como sua resposta (pode fazer pequenos ajustes de naturalidade)
-2. Esta é a primeira impressão do usuário — seja calorosa e acolhedora
-3. Preserve o link do app Olá Aura que está na mensagem
-4. Use [MODO_AUDIO] no início da resposta para enviar também um áudio de boas-vindas
-5. No áudio, dê as boas-vindas de forma breve e carinhosa (NÃO repita os links no áudio)`;
+1. Use EXATAMENTE o conteúdo acima como sua resposta
+2. Preserve o link do app Olá Aura que está na mensagem
+3. Não inicie conversa, não faça perguntas e não envie áudio neste turno
+4. O objetivo único desta resposta é levar o cliente ao app Olá Aura`;
 
         // Marca para convidar à 1ª sessão na PRÓXIMA mensagem do usuário (D0 fishing).
         // Ver mem://features/sessions/first-session-invite-d0

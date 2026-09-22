@@ -580,8 +580,7 @@ async function activateAccess(
       console.warn("[webhook-woovi] token do portal não criado:", (e as Error)?.message);
     }
 
-    const planName = PLAN_NAMES[plan] || "Essencial";
-    const welcome = `Oi, ${name}! 🌟 Seu acesso ao app Olá Aura está liberado.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nNo app, você pode falar comigo por texto ou áudio e acessar Sessões, Jornadas, Percurso e Meditações.\n\nAbra o app Olá Aura: https://olaaura.com.br/meu-espaco ✨\n\nMe diz: como você está hoje?`;
+    const welcome = `Oi, ${name}! Seu acesso ao app Olá Aura está liberado ✨\n\nÉ no app que você conversa comigo por texto ou áudio e encontra Sessões, Jornadas, Percurso e Meditações.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
 
     await supabase.from("profiles")
       .update({ pending_insight: `[WELCOME]${welcome}` }).eq("user_id", userId);

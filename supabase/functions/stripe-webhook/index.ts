@@ -776,26 +776,14 @@ Deno.serve(async (req) => {
             console.warn('⚠️ Portal token creation failed (non-blocking):', tokenErr);
           }
 
-          // Fetch portal token for welcome message
-          let portalLinkTrial = '';
-          try {
-            const { data: tokenData } = await supabase.from('user_portal_tokens')
-              .select('token').eq('user_id', profileUserId).single();
-            if (tokenData?.token) {
-              portalLinkTrial = `https://olaaura.com.br/meu-espaco`;
-            }
-          } catch { /* non-blocking */ }
-          const portalLineTrial = portalLinkTrial ? `\n\nAbra o app Olá Aura: ${portalLinkTrial} ✨` : '';
-
           // Build full welcome message (to be delivered when user clicks "Começar")
-          const guideLinkText = 'https://olaaura.com.br/guia';
           let welcomeMessage: string;
           if (isReturning) {
-            welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.${portalLineTrial}\n\nVamos retomar de onde paramos?`;
+            welcomeMessage = `Oi, ${customerName}! Que bom ter você de volta 💜\n\nSeu acesso ao app Olá Aura está liberado. É lá que você conversa comigo e retoma tudo de onde parou.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
           } else if (isUpgrade) {
-            welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.${portalLineTrial}\n\nVamos continuar de onde paramos?`;
+            welcomeMessage = `Oi, ${customerName}! Seu novo plano já está ativo no app Olá Aura ✨\n\nAbra o app para continuar comigo e acessar tudo o que está disponível para você.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
           } else {
-            welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nSe preferir, pode me mandar áudio também! 🎙️\n\nDá uma olhada no que você vai ter acesso: ${guideLinkText}${portalLineTrial}\n\nMe diz: como você está hoje?`;
+            welcomeMessage = `Oi, ${customerName}! Seu acesso ao app Olá Aura está liberado ✨\n\nÉ no app que você conversa comigo por texto ou áudio e encontra Sessões, Jornadas, Percurso e Meditações.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
           }
 
           // Save full welcome as pending_insight with [WELCOME] marker
@@ -1165,14 +1153,12 @@ Deno.serve(async (req) => {
       }
 
       // Generate portal token for paid users
-      let portalLink = '';
       try {
         const { data: tokenData } = await supabase.from('user_portal_tokens').upsert(
           { user_id: profileUserId },
           { onConflict: 'user_id' }
         ).select('token').single();
         if (tokenData?.token) {
-          portalLink = `https://olaaura.com.br/meu-espaco`;
           console.log('✅ Portal token created for paid user');
         }
       } catch (tokenErr) {
@@ -1180,16 +1166,14 @@ Deno.serve(async (req) => {
       }
 
       // Build full welcome message (delivered when user clicks "Começar")
-      const guideLinkText2 = 'https://olaaura.com.br/guia';
       let welcomeMessage: string;
-      const portalLine = portalLink ? `\n\nAbra o app Olá Aura: ${portalLink} ✨` : '';
 
       if (isReturning) {
-        welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.${portalLine}\n\nVamos retomar de onde paramos?`;
+        welcomeMessage = `Oi, ${customerName}! Que bom ter você de volta 💜\n\nSeu acesso ao app Olá Aura está liberado. É lá que você conversa comigo e retoma tudo de onde parou.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
       } else if (isUpgrade) {
-        welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.${portalLine}\n\nVamos continuar de onde paramos?`;
+        welcomeMessage = `Oi, ${customerName}! Seu novo plano já está ativo no app Olá Aura ✨\n\nAbra o app para continuar comigo e acessar tudo o que está disponível para você.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
       } else {
-        welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nSe preferir, pode me mandar áudio também! 🎙️\n\nDá uma olhada no que você vai ter acesso: ${guideLinkText2}${portalLine}\n\nMe diz: como você está hoje?`;
+        welcomeMessage = `Oi, ${customerName}! Seu acesso ao app Olá Aura está liberado ✨\n\nÉ no app que você conversa comigo por texto ou áudio e encontra Sessões, Jornadas, Percurso e Meditações.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
       }
 
       // Save full welcome as pending_insight with [WELCOME] marker
