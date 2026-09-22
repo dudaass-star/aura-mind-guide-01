@@ -4,9 +4,9 @@ import { Sparkles } from "lucide-react";
 // ==================== Section Header ====================
 export function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: string }) {
   return (
-    <div className="flex items-center gap-2.5 animate-fade-in">
-      <Icon size={20} className="text-[#87A878]" />
-      <h2 className="font-['Fraunces'] text-2xl font-semibold text-[#1B2A4E] tracking-tight">
+    <div className="portal-section-heading flex items-center gap-2.5 animate-fade-in">
+      <Icon size={20} className="text-primary" />
+      <h2 className="font-display text-2xl font-semibold text-foreground">
         {title}
       </h2>
     </div>
@@ -27,12 +27,12 @@ export function MetricCard({ icon: Icon, label, value }: { icon: React.ElementTy
 // ==================== Empty State ====================
 export function EmptyState({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
   return (
-    <div className="text-center py-14 px-6 space-y-4 animate-fade-in rounded-2xl bg-white/50 border border-[#87A878]/15">
-      <div className="bg-[#B8A5D9]/25 rounded-full p-4 w-16 h-16 mx-auto flex items-center justify-center">
-        <Icon size={28} className="text-[#1B2A4E]" />
+    <div className="text-center py-14 px-6 space-y-4 animate-fade-in rounded-2xl bg-card border border-border/70">
+      <div className="bg-secondary rounded-full p-4 w-16 h-16 mx-auto flex items-center justify-center">
+        <Icon size={28} className="text-primary" />
       </div>
-      <p className="text-[#1B2A4E] font-['Fraunces'] text-lg font-semibold">{title}</p>
-      <p className="text-[#2A2A2A]/70 font-['Nunito'] text-sm max-w-xs mx-auto leading-relaxed">
+      <p className="text-foreground font-display text-lg font-semibold">{title}</p>
+      <p className="text-muted-foreground font-body text-sm max-w-xs mx-auto leading-relaxed">
         {description}
       </p>
     </div>

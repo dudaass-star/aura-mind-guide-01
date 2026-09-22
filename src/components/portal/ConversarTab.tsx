@@ -534,7 +534,7 @@ export function ConversarTab({
     { label: "Hoje", detail: "O que te acompanha agora", tab: "hoje", icon: Sun, tone: "portal-area-today" },
     { label: "Sessões", detail: "Seus encontros com a AURA", tab: "sessoes", icon: CalendarDays, tone: "portal-area-sessions" },
     { label: "Percurso", detail: "O que vem mudando", tab: "insights", icon: Sparkles, tone: "portal-area-journey" },
-    { label: "Áudios", detail: "Ouça no seu tempo", tab: "meditacoes", icon: Headphones, tone: "portal-area-audio" },
+    { label: "Meditações", detail: "Pausas guiadas para você", tab: "meditacoes", icon: Headphones, tone: "portal-area-audio" },
     { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound, tone: "portal-area-profile" },
   ] as const;
 

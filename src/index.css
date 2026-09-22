@@ -180,6 +180,86 @@
   color: hsl(var(--portal-profile-foreground));
 }
 
+/* Demais áreas do aplicativo compartilham a mesma linguagem da conversa. */
+.portal-app-theme {
+  min-height: 100dvh;
+  background-color: hsl(var(--background));
+}
+
+.portal-app-theme [class*="font-['Fraunces']"] {
+  font-family: "Outfit", sans-serif !important;
+  letter-spacing: 0 !important;
+}
+
+.portal-app-theme [class*="font-['Nunito']"] {
+  font-family: "Figtree", ui-sans-serif, system-ui, sans-serif !important;
+}
+
+.portal-app-theme [class*="text-[#1B2A4E]"] {
+  color: hsl(var(--foreground)) !important;
+}
+
+.portal-app-theme [class*="text-[#2A2A2A]"] {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.portal-app-theme [class*="text-[#87A878]"] {
+  color: hsl(var(--primary)) !important;
+}
+
+.portal-app-theme [class*="bg-white"] {
+  background-color: hsl(var(--card)) !important;
+}
+
+.portal-app-theme [class*="border-[#87A878]"] {
+  border-color: hsl(var(--border)) !important;
+}
+
+.portal-app-theme [class*="bg-[#1B2A4E]"] {
+  background-color: hsl(var(--foreground)) !important;
+}
+
+.portal-app-theme [class*="bg-[#F5F0E8]"] {
+  background-color: hsl(var(--secondary)) !important;
+}
+
+.portal-app-theme [class*="bg-[#B8A5D9]"] {
+  background-color: hsl(var(--portal-audio)) !important;
+}
+
+.portal-app-theme [class*="border-[#B8A5D9]"] {
+  border-color: hsl(var(--portal-audio-foreground) / 0.55) !important;
+}
+
+.portal-app-theme [class*="text-[#B8A5D9]"] {
+  color: hsl(var(--portal-audio)) !important;
+}
+
+.portal-app-content > div {
+  animation: fade-in 0.25s ease-out;
+}
+
+@media (min-width: 768px) {
+  .portal-app-theme {
+    background-color: hsl(var(--foreground) / 0.08);
+  }
+
+  .portal-app-header,
+  .portal-app-theme > footer {
+    width: min(100%, 42rem);
+    margin-inline: auto;
+  }
+
+  .portal-app-content {
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid hsl(var(--border) / 0.7);
+    border-radius: 1rem;
+    background-color: hsl(var(--background));
+    box-shadow: var(--shadow-card);
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Calendar, Star, MessageCircle } from "lucide-react";
-import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
+import { EmptyState, PortalLoadingInline } from "./shared";
 import { auraWhatsAppLink, presentClosure } from "./whatsapp";
 import { sanitizePortalText } from "./sanitize";
 
@@ -75,8 +75,6 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: any }
 
   return (
     <div className="space-y-5">
-      <SectionHeader icon={Calendar} title="Sessões" />
-
       {/* Próxima sessão */}
       {nextSession ? (
         <div className="rounded-3xl bg-[#1B2A4E] p-6 space-y-3 animate-fade-up shadow-lg">

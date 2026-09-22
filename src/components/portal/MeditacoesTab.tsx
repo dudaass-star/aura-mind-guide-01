@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
+import { EmptyState, PortalLoadingInline } from "./shared";
 import AudioPlayer from "./AudioPlayer";
 
 interface MeditacoesTabProps {
@@ -145,8 +145,6 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
 
   return (
     <div className="space-y-6">
-      <SectionHeader icon={Headphones} title="Meditações" />
-
       {suggested.length > 0 && (
         <div className="space-y-3 animate-fade-in">
           <div className="flex items-center gap-2">
