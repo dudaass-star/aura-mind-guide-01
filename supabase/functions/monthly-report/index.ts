@@ -1,8 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeNotification } from "../_shared/notification-router.ts";
+import { formatReport, generateReportAnalysis, type PeriodMetrics as Metrics } from "../_shared/report-intelligence.ts";
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const BATCH_SIZE = 20;
-type Metrics = { messages: number; sessions: number; journeys: number; practices: number };
 
 function monthPeriods(now = new Date()) {
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit" }).formatToParts(now).map((x) => [x.type, x.value]));
@@ -21,14 +21,6 @@ async function getMetrics(db: any, userId: string, start: Date, end: Date): Prom
     count(db.from("user_meditation_history").select("id", { count: "exact", head: true }).eq("user_id", userId), "sent_at", start, end),
   ]); return { messages, sessions, journeys, practices };
 }
-function compare(current: number, previous: number) { return current === previous ? "o mesmo ritmo do mês anterior" : current > previous ? `${current - previous} a mais que no mês anterior` : `${previous - current} a menos que no mês anterior`; }
-function amount(value: number, singular: string, plural: string) { return `${value} ${value === 1 ? singular : plural}`; }
-function reportText(name: string, current: Metrics, previous: Metrics) {
-  const rows = [["conversa", "conversas", current.messages, previous.messages], ["sessão", "sessões", current.sessions, previous.sessions], ["episódio de Jornada", "episódios de Jornadas", current.journeys, previous.journeys], ["prática", "práticas", current.practices, previous.practices]] as const;
-  const visible = rows.filter(([, , a, b]) => a || b);
-  if (!visible.length) return `Seu mês em perspectiva, ${name}\n\nEste foi um mês mais silencioso na Olá Aura. Seu Percurso continua guardado, sem conclusões prontas, para você retomar quando fizer sentido.`;
-  return `Seu mês em perspectiva, ${name}\n\n${visible.map(([singular, plural, a, b]) => `• ${amount(a, singular, plural)} — ${compare(a, b)}`).join("\n")}\n\nEsses sinais mostram como você usou a Olá Aura; não definem como você se sentiu. Você pode confirmar ou corrigir qualquer leitura da AURA.`;
-}
 async function next(offset: number, period: string) { await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/monthly-report`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` }, body: JSON.stringify({ offset, period_start: period }) }); }
 
 Deno.serve(async (req) => {
@@ -46,13 +38,15 @@ Deno.serve(async (req) => {
     const results: unknown[] = [];
     for (const profile of profiles || []) try {
       const [current, previous] = await Promise.all([getMetrics(db, profile.user_id, periods.start, periods.end), getMetrics(db, profile.user_id, periods.previous, periods.start)]);
-      const name = profile.name?.trim().split(/\s+/)[0] || "você", report = reportText(name, current, previous), reportMonth = day(periods.start);
-      if (dryRun) { results.push({ user_id: profile.user_id, current, previous, report }); continue; }
-      const savedResult = await db.from("monthly_reports").upsert({ user_id: profile.user_id, report_month: reportMonth, metrics_json: { current, previous, previous_period_start: day(periods.previous), period_end: day(new Date(periods.end.getTime() - 1)) }, analysis_text: report, report_html: null }, { onConflict: "user_id,report_month" }).select("id").single();
+      const name = profile.name?.trim().split(/\s+/)[0] || "você", reportMonth = day(periods.start);
+      const analysis = await generateReportAnalysis(db, { kind: "monthly", userId: profile.user_id, firstName: name, start: periods.start, end: periods.end, previousStart: periods.previous, metrics: { current, previous } });
+      const report = formatReport(analysis, current);
+      if (dryRun) { results.push({ user_id: profile.user_id, current, previous, analysis, report }); continue; }
+      const savedResult = await db.from("monthly_reports").upsert({ user_id: profile.user_id, report_month: reportMonth, metrics_json: { current, previous, previous_period_start: day(periods.previous), period_end: day(new Date(periods.end.getTime() - 1)), evidence: analysis.evidence, confidence: analysis.confidence, continuation: analysis.continuation }, analysis_text: report, report_html: null }, { onConflict: "user_id,report_month" }).select("id").single();
       if (savedResult.error) throw savedResult.error;
       const path = `/meu-espaco?tab=percurso&report=monthly&id=${savedResult.data.id}`, teaser = `Seu relatório mensal está pronto, ${name}. Abra para rever o mês com calma e confirmar o que faz sentido para você.`;
       const notification = await routeNotification(db, { userId: profile.user_id, phone: profile.phone || "", idempotencyKey: `monthly-report:${reportMonth}:${profile.user_id}`, category: "report", type: "report_available", firstName: name, path, whatsappText: `${teaser}\n\nhttps://olaaura.com.br${path}`, whatsappCategory: "weekly_report", teaserText: teaser });
-      await db.from("messages").upsert({ user_id: profile.user_id, role: "assistant", content: teaser, client_message_id: `monthly-report:${savedResult.data.id}`, delivery_status: "delivered", metadata: { kind: "report_card", report_type: "monthly", report_id: savedResult.data.id, path, title: "Seu mês em perspectiva", cta: "Abrir meu relatório" } }, { onConflict: "client_message_id" });
+      await db.from("messages").upsert({ user_id: profile.user_id, role: "assistant", content: teaser, client_message_id: savedResult.data.id, delivery_status: "delivered", metadata: { kind: "report_card", report_type: "monthly", report_id: savedResult.data.id, path, title: "Seu mês em perspectiva", cta: "Abrir meu relatório" } }, { onConflict: "client_message_id" });
       results.push({ user_id: profile.user_id, report_id: savedResult.data.id, channel: notification.channel });
     } catch (profileError) { console.error("Falha no relatório mensal", profile.user_id, profileError); }
     if (!target && (profiles?.length || 0) === BATCH_SIZE) await next(offset + BATCH_SIZE, day(periods.start));
