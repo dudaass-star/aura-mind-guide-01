@@ -71,3 +71,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Transformar Jornadas em biblioteca viva, com releitura das concluídas e visão segura das próximas etapas e temas.
 - [x] Padronizar episódios e conclusão de Jornadas com o visual atual do aplicativo e confirmar o acesso global isolado por cliente.
 - [x] Transformar Percurso em acompanhamento vivo, corrigindo links, confiança, retomada, marcos e validação pelo cliente.
+
+- [ ] Separar relatórios semanais e mensais, entregá-los na conversa e arquivá-los no Percurso.
