@@ -64,3 +64,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Adicionar cor equilibrada à tela inicial, destacando a conversa e diferenciando cada área sem perder sobriedade.
 - [x] Unificar Hoje, Sessões, Percurso, Meditações e Sobre você ao novo padrão visual e estrutural do aplicativo.
 - [x] Reintegrar Jornadas de Conteúdo como área própria, com progresso, episódios liberados, histórico e escolha segura.
+- [x] Transformar Jornadas em biblioteca viva, com releitura das concluídas e visão segura das próximas etapas e temas.
