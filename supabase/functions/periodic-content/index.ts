@@ -210,7 +210,7 @@ serve(async (req) => {
               idempotencyKey: `journey:${episode.id}:${user.user_id}`,
               category: 'journey',
               type: 'journey_available',
-              path: '/meu-espaco?tab=percurso',
+              path: '/meu-espaco?tab=jornadas',
               whatsappText: message,
               whatsappCategory: 'content',
               teaserText: manifestoResult.teaser || undefined,

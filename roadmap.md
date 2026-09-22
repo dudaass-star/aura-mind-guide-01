@@ -63,3 +63,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Refinar visual da conversa com direção grafite + jade, superfícies tonais e contraste premium, preservando a fluidez de digitação.
 - [x] Adicionar cor equilibrada à tela inicial, destacando a conversa e diferenciando cada área sem perder sobriedade.
 - [x] Unificar Hoje, Sessões, Percurso, Meditações e Sobre você ao novo padrão visual e estrutural do aplicativo.
+- [x] Reintegrar Jornadas de Conteúdo como área própria, com progresso, episódios liberados, histórico e escolha segura.

@@ -135,6 +135,8 @@
   --portal-today-foreground: 35 64% 39%;
   --portal-sessions: 201 58% 91%;
   --portal-sessions-foreground: 201 48% 40%;
+  --portal-content: 24 60% 91%;
+  --portal-content-foreground: 24 48% 42%;
   --portal-journey: 153 34% 89%;
   --portal-journey-foreground: 153 34% 36%;
   --portal-audio: 270 38% 92%;
@@ -163,6 +165,11 @@
 .portal-area-sessions {
   background-color: hsl(var(--portal-sessions));
   color: hsl(var(--portal-sessions-foreground));
+}
+
+.portal-area-content {
+  background-color: hsl(var(--portal-content));
+  color: hsl(var(--portal-content-foreground));
 }
 
 .portal-area-journey {
@@ -196,6 +203,11 @@
 .portal-app-area-sessoes {
   --portal-area-surface: var(--portal-sessions);
   --portal-area-foreground: var(--portal-sessions-foreground);
+}
+
+.portal-app-area-jornadas {
+  --portal-area-surface: var(--portal-content);
+  --portal-area-foreground: var(--portal-content-foreground);
 }
 
 .portal-app-area-insights {

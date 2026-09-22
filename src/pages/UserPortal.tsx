@@ -4,7 +4,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { useEffect, useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import { ArrowLeft, Sparkles, Headphones, Lock, Sun, Calendar, User } from "lucide-react";
+import { ArrowLeft, BookOpen, Sparkles, Headphones, Lock, Sun, Calendar, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
@@ -16,6 +16,7 @@ import { SessoesTab } from "@/components/portal/SessoesTab";
 import { InsightsTab } from "@/components/portal/InsightsTab";
 import { SobreVoceTab } from "@/components/portal/SobreVoceTab";
 import { ConversarTab } from "@/components/portal/ConversarTab";
+import { JornadasTab } from "@/components/portal/JornadasTab";
 import { FloatingWhatsAppCTA } from "@/components/portal/FloatingWhatsAppCTA";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
@@ -26,11 +27,12 @@ import {
   type TabKey,
 } from "@/components/portal/hooks/usePortalNovidades";
 
-type TabId = "conversar" | "hoje" | "sessoes" | "insights" | "sobre" | "meditacoes";
+type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes";
 
 const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebrow: string; icon: React.ElementType; tone: string }> = {
   hoje: { label: "Hoje", eyebrow: "Seu momento", icon: Sun, tone: "portal-area-today" },
   sessoes: { label: "Sessões", eyebrow: "Seus encontros", icon: Calendar, tone: "portal-area-sessions" },
+  jornadas: { label: "Jornadas", eyebrow: "Conteúdos para você", icon: BookOpen, tone: "portal-area-content" },
   insights: { label: "Percurso", eyebrow: "Sua evolução", icon: Sparkles, tone: "portal-area-journey" },
   meditacoes: { label: "Meditações", eyebrow: "Sua pausa", icon: Headphones, tone: "portal-area-audio" },
   sobre: { label: "Sobre você", eyebrow: "Sua história", icon: User, tone: "portal-area-profile" },
@@ -45,9 +47,15 @@ const NOVIDADE_TABS: Record<string, TabKey> = {
 
 const UserPortal = () => {
   const [searchParams] = useSearchParams();
-  const rawTab = searchParams.get("tab") as TabId | "memoria" | null;
+  const rawTab = searchParams.get("tab") as TabId | "memoria" | "percurso" | null;
   // Legacy: aba "memoria" foi absorvida em "sobre".
-  const initialTab: TabId = (rawTab === "memoria" ? "sobre" : (rawTab as TabId)) || "conversar";
+  const initialTab: TabId = rawTab === "memoria"
+    ? "sobre"
+    : rawTab === "percurso"
+      ? "jornadas"
+      : rawTab && ["conversar", "hoje", "sessoes", "jornadas", "insights", "sobre", "meditacoes"].includes(rawTab)
+        ? rawTab as TabId
+        : "conversar";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [portalLoading, setPortalLoading] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
@@ -99,6 +107,8 @@ const UserPortal = () => {
     if (id !== "conversar") void reportPushConversion(`/meu-espaco?tab=${id}`);
     const valueFeature = id === "sessoes"
       ? "session"
+      : id === "jornadas"
+        ? "journey"
       : id === "insights"
         ? "progress"
         : id === "meditacoes"
@@ -362,6 +372,9 @@ const UserPortal = () => {
             />
           )}
           {activeTab === "sessoes" && <SessoesTab userId={userId!} profile={profile} />}
+          {activeTab === "jornadas" && (
+            <JornadasTab userId={userId!} profile={profile} onJourneyChanged={() => void refetchProfile()} />
+          )}
           {activeTab === "insights" && <InsightsTab userId={userId!} profile={profile} />}
           {activeTab === "sobre" && <SobreVoceTab userId={userId!} />}
           {activeTab === "meditacoes" && <MeditacoesTab userId={userId!} />}

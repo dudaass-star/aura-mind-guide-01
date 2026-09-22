@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 
 type ValueFeature = "session" | "journey" | "practice" | "progress";
-type Destination = "sessoes" | "insights" | "meditacoes";
+type Destination = "sessoes" | "jornadas" | "insights" | "meditacoes";
 
 const DISCOVERY: Record<ValueFeature, {
   eyebrow: string;
@@ -26,9 +26,9 @@ const DISCOVERY: Record<ValueFeature, {
   journey: {
     eyebrow: "Continue entre conversas",
     title: "Sua jornada também acontece fora do chat",
-    description: "O Percurso reúne conteúdos e movimentos para acompanhar seu momento.",
-    action: "Ver meu percurso",
-    destination: "insights",
+    description: "Encontre conteúdos em episódios para aprofundar um tema no seu ritmo.",
+    action: "Conhecer jornadas",
+    destination: "jornadas",
     icon: Sparkles,
   },
   practice: {
