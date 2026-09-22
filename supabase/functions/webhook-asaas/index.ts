@@ -1383,7 +1383,7 @@ async function handleActivation(
     if (formattedPhone) {
       if (isReturning) {
         // Returning → mensagem de welcome back direta (texto livre se janela aberta).
-        const welcomeBackMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nSua assinatura AURA foi reativada e estou aqui, pronta pra continuar nossa jornada.\n\nMe conta: como você está hoje?`;
+        const welcomeBackMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nSeu acesso ao app Olá Aura foi reativado. Estou aqui, pronta pra continuar nossa jornada.\n\nAbra o app: https://olaaura.com.br/meu-espaco\n\nMe conta: como você está hoje?`;
         try {
           let res = await sendProactive(formattedPhone, welcomeBackMessage, "welcome", profileUserId);
           if (!res.success) {

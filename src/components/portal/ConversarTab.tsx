@@ -561,7 +561,7 @@ export function ConversarTab({
   const latestMessage = messages[messages.length - 1];
   const latestPreview = latestMessage?.is_audio
     ? "Áudio"
-    : latestMessage?.content?.replace(/\s+/g, " ").trim() || "Seu espaço para conversar, no seu tempo.";
+    : latestMessage?.content?.replace(/\s+/g, " ").trim() || "Sua conversa com a AURA começa aqui.";
   const appAreas = [
     { label: "Hoje", detail: "O que te acompanha agora", tab: "hoje", icon: Sun, tone: "portal-area-today" },
     { label: "Sessões", detail: "Seus encontros com a AURA", tab: "sessoes", icon: CalendarDays, tone: "portal-area-sessions" },
@@ -651,7 +651,7 @@ export function ConversarTab({
 
       <div className="flex-1 overflow-y-auto border-t border-border/50 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5">
         <div className="mb-3 flex items-center justify-between px-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Seu espaço</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">No app Olá Aura</p>
           <p className="text-[11px] text-muted-foreground">Tudo em um só lugar</p>
         </div>
         <div className="space-y-1">

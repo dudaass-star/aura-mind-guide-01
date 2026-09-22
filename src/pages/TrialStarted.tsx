@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, MessageCircle, Sparkles, ArrowRight } from "lucide-react";
+import { CheckCircle, MessageCircle, Sparkles, ArrowRight, BookOpen, CalendarDays } from "lucide-react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 
 const TrialStarted = () => {
@@ -18,8 +18,8 @@ const TrialStarted = () => {
   return (
     <>
       <Helmet>
-        <title>Trial Iniciado | AURA</title>
-        <meta name="description" content="Seu trial gratuito da AURA foi iniciado! Olhe seu WhatsApp." />
+        <title>Seu acesso está pronto | Olá Aura</title>
+        <meta name="description" content="Seu acesso ao app Olá Aura está pronto." />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-hero flex flex-col">
@@ -49,39 +49,39 @@ const TrialStarted = () => {
               Prontinho{name ? `, ${name}` : ""}!
             </h1>
             <p className="text-muted-foreground mb-6">
-              Aguarda aí 💜 A AURA vai te mandar uma mensagem de boas-vindas no WhatsApp em instantes.
+              Seu acesso ao app Olá Aura está pronto. Entre para conversar com a AURA e conhecer tudo que acompanha você.
             </p>
 
             {/* What to expect */}
             <div className="bg-card rounded-2xl p-6 text-left mb-8 border border-border/50">
               <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <MessageCircle className="w-5 h-5 text-primary" />
-                O que esperar
+                 O que você encontra no app
               </h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">1</span>
-                  <span>Responda a mensagem da AURA no WhatsApp</span>
+                   <span>Converse com a AURA por texto ou áudio</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">2</span>
-                  <span>Converse sobre o que quiser, sem julgamento</span>
+                   <span>Acesse Sessões e aprofunde o que importa</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">3</span>
-                  <span>Converse o quanto quiser nessa primeira jornada</span>
+                   <span>Explore Jornadas e Meditações no seu ritmo</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">4</span>
-                  <span>Depois, escolha um plano pra continuar</span>
+                   <span>Acompanhe o que vem mudando no seu Percurso</span>
                 </li>
               </ul>
             </div>
 
             {/* CTA */}
-            <Link to="/">
+             <Link to="/meu-espaco">
               <Button variant="glass" size="lg" className="gap-2">
-                Voltar para o site
+                 Abrir o app Olá Aura
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>

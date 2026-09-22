@@ -134,7 +134,7 @@ export default function ReautorizarPix() {
               restabelecida. A Aura continua com você, sem interrupção.
             </p>
             <Button asChild className="mt-5">
-              <a href="/meu-espaco">Voltar ao meu espaço</a>
+              <a href="/meu-espaco">Voltar ao app Olá Aura</a>
             </Button>
           </Card>
         ) : qr ? (
