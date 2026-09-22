@@ -141,7 +141,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
         .from("thematic_snapshots")
         .select("theme, snapshot_change, snapshot_before, evidence_quote, period_end, confidence")
         .eq("user_id", userId)
-        .neq("confidence", "insufficient")
+        .neq("confidence", "insufficient_data")
         .order("period_end", { ascending: false })
         .limit(1)
         .maybeSingle();

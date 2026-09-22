@@ -1670,6 +1670,36 @@ export type Database = {
           },
         ]
       }
+      journey_reflection_feedback: {
+        Row: {
+          created_at: string
+          id: string
+          response: string
+          source_id: string
+          source_kind: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          response: string
+          source_id: string
+          source_kind: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          response?: string
+          source_id?: string
+          source_kind?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       meditation_audio_chunks: {
         Row: {
           chunk_index: number

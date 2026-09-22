@@ -1,13 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabasePortal } from "@/integrations/supabase/portal-client";
-import { Sparkles, Trophy, Calendar, Mail, BookMarked, ChevronDown, ChevronUp } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, BookMarked, Calendar, Check, ChevronDown, ChevronUp, CircleHelp, Mail, MessageCircle, Quote, Sparkles, Trophy } from "lucide-react";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
 import { EmptyState, PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
-
-// "Percurso" como Capítulos mensais: um card por mês, síntese narrativa curta
-// no topo (frase-resumo + citação + chips de tema + contadores). O detalhe
-// (carta, snapshots, marcos, sessões) só aparece quando o usuário expande.
 
 type Snapshot = {
   id: string;
@@ -20,44 +18,28 @@ type Snapshot = {
   period_end: string | null;
 };
 
-type Letter = {
-  id: string;
-  letter_month: string;
-  letter_text: string | null;
-  preview_text: string | null;
-  created_at: string | null;
-};
+type Letter = { id: string; letter_month: string; letter_text: string | null; preview_text: string | null; created_at: string | null };
+type Milestone = { id: string; milestone_text: string | null; milestone_date: string | null; context_excerpt: string | null; source?: string | null };
+type SessionRow = { id: string; ended_at: string | null; focus_topic: string | null; closure_text: string | null; session_summary: string | null; theme_label: string | null };
+type ActiveTheme = { id: string; theme_name: string | null; status: string | null; session_count: number | null; last_mentioned_at: string | null };
+type Feedback = { source_kind: string; source_id: string; response: "agrees" | "corrects" };
+type Chapter = { key: string; monthLabel: string; anchorDate: string; headline: string; quote: string | null; themes: string[]; sessions: SessionRow[]; snapshots: Snapshot[]; letter: Letter | null; milestones: Milestone[] };
 
-type Milestone = {
-  id: string;
-  milestone_text: string | null;
-  milestone_date: string | null;
-  context_excerpt: string | null;
-};
+const CONF_ORDER: Record<string, number> = { high: 2, low: 1 };
+const OPERATIONAL_THEME = /(agendar|reagendar|cancelar|organizar sess|setup mensal|preferência por áudio|mudança de assunto|recusa de)/i;
+const ACTIVITY_MILESTONE = /(sessão|jornada com a aura|mês de jornada|meses de jornada|ano de jornada|virou ritual|áudio|audio|organizar sess|agendar|reagendar|cancelar)/i;
 
-type SessionRow = {
-  id: string;
-  ended_at: string | null;
-  focus_topic: string | null;
-  closure_text: string | null;
-  session_summary: string | null;
-  theme_label: string | null;
-};
+function normalizeWords(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((word) => word.length > 2);
+}
 
-type Chapter = {
-  key: string; // yyyy-mm
-  monthLabel: string;
-  anchorDate: string;
-  headline: string;
-  quote: string | null;
-  themes: string[];
-  sessions: SessionRow[];
-  snapshots: Snapshot[];
-  letter: Letter | null;
-  milestones: Milestone[];
-};
-
-const CONF_ORDER: Record<string, number> = { high: 3, medium: 2, low: 1 };
+function themesOverlap(a: string, b: string) {
+  const aWords = new Set(normalizeWords(a));
+  const bWords = new Set(normalizeWords(b));
+  if (aWords.size === 0 || bWords.size === 0) return false;
+  const shared = [...aWords].filter((word) => bWords.has(word)).length;
+  return shared / Math.min(aWords.size, bWords.size) >= 0.6;
+}
 
 function monthKeyOf(iso: string) {
   const d = new Date(iso);
@@ -68,414 +50,219 @@ function monthLabelOf(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 }
 
-function truncate(txt: string, n: number) {
-  const clean = (txt || "").trim().replace(/\s+/g, " ");
-  return clean.length > n ? clean.slice(0, n).trimEnd() + "…" : clean;
+function truncate(text: string, max: number) {
+  const clean = sanitizePortalText(text).trim().replace(/\s+/g, " ");
+  return clean.length > max ? `${clean.slice(0, max).trimEnd()}…` : clean;
 }
 
-export function InsightsTab({ userId, profile }: { userId: string; profile: any }) {
+export function InsightsTab({ userId, profile, onOpenConversation }: { userId: string; profile: any; onOpenConversation: (prefilledMessage?: string) => void }) {
+  const queryClient = useQueryClient();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [showOlder, setShowOlder] = useState(false);
 
-  const { data: sessions, isLoading: l1 } = useQuery({
-    queryKey: ["capitulos-sessions", userId],
+  const { data, isLoading } = useQuery({
+    queryKey: ["portal-live-journey", userId],
     queryFn: async () => {
-      const { data } = await supabasePortal
-        .from("sessions")
-        .select("id, ended_at, focus_topic, closure_text, session_summary, theme_label")
-        .eq("user_id", userId)
-        .eq("status", "completed")
-        .order("ended_at", { ascending: false })
-        .limit(80);
-      return (data ?? []) as SessionRow[];
+      const [sessionsRes, snapshotsRes, lettersRes, milestonesRes, themesRes, feedbackRes] = await Promise.all([
+        supabasePortal.from("sessions").select("id, ended_at, focus_topic, closure_text, session_summary, theme_label").eq("user_id", userId).eq("status", "completed").order("ended_at", { ascending: false }).limit(80),
+        supabasePortal.from("thematic_snapshots").select("id, theme, snapshot_before, snapshot_change, evidence_quote, evidence_date, confidence, period_end").eq("user_id", userId).in("confidence", ["high", "low"]).order("period_end", { ascending: false }).limit(60),
+        supabasePortal.from("monthly_letters").select("id, letter_month, letter_text, preview_text, created_at").eq("user_id", userId).order("letter_month", { ascending: false }).limit(24),
+        supabasePortal.from("user_milestones").select("id, milestone_text, milestone_date, context_excerpt, source").eq("user_id", userId).order("milestone_date", { ascending: false }).limit(60),
+        supabasePortal.from("session_themes").select("id, theme_name, status, session_count, last_mentioned_at").eq("user_id", userId).neq("status", "resolved").order("last_mentioned_at", { ascending: false }).limit(20),
+        supabasePortal.from("journey_reflection_feedback").select("source_kind, source_id, response").eq("user_id", userId),
+      ]);
+      return {
+        sessions: (sessionsRes.data ?? []) as SessionRow[], snapshots: (snapshotsRes.data ?? []) as Snapshot[], letters: (lettersRes.data ?? []) as Letter[],
+        milestones: (milestonesRes.data ?? []) as Milestone[], themes: (themesRes.data ?? []) as ActiveTheme[], feedback: (feedbackRes.data ?? []) as Feedback[],
+      };
     },
     enabled: !!userId,
   });
 
-  const { data: snapshots, isLoading: l2 } = useQuery({
-    queryKey: ["capitulos-snapshots", userId],
-    queryFn: async () => {
-      const { data } = await supabasePortal
-        .from("thematic_snapshots")
-        .select("id, theme, snapshot_before, snapshot_change, evidence_quote, evidence_date, confidence, period_end")
-        .eq("user_id", userId)
-        .neq("confidence", "insufficient_data")
-        .order("period_end", { ascending: false })
-        .limit(60);
-      return (data ?? []) as Snapshot[];
+  const feedbackMutation = useMutation({
+    mutationFn: async ({ sourceKind, sourceId, response }: { sourceKind: "thematic_snapshot" | "active_theme"; sourceId: string; response: "agrees" | "corrects" }) => {
+      const { error } = await supabasePortal.from("journey_reflection_feedback").upsert({ user_id: userId, source_kind: sourceKind, source_id: sourceId, response }, { onConflict: "user_id,source_kind,source_id" });
+      if (error) throw error;
+      return { sourceKind, sourceId, response };
     },
-    enabled: !!userId,
+    onSuccess: ({ response }) => {
+      void queryClient.invalidateQueries({ queryKey: ["portal-live-journey", userId] });
+      if (response === "agrees") toast({ title: "Entendido", description: "A AURA vai considerar essa leitura como confirmada por você." });
+    },
+    onError: () => toast({ title: "Não foi possível registrar", description: "Tente novamente em instantes.", variant: "destructive" }),
   });
 
-  const { data: letters, isLoading: l3 } = useQuery({
-    queryKey: ["capitulos-letters", userId],
-    queryFn: async () => {
-      const { data } = await supabasePortal
-        .from("monthly_letters")
-        .select("id, letter_month, letter_text, preview_text, created_at")
-        .eq("user_id", userId)
-        .order("letter_month", { ascending: false })
-        .limit(24);
-      return (data ?? []) as Letter[];
-    },
-    enabled: !!userId,
-  });
-
-  const { data: milestones, isLoading: l4 } = useQuery({
-    queryKey: ["capitulos-milestones", userId],
-    queryFn: async () => {
-      const { data } = await supabasePortal
-        .from("user_milestones")
-        .select("id, milestone_text, milestone_date, context_excerpt")
-        .eq("user_id", userId)
-        .order("milestone_date", { ascending: false })
-        .limit(60);
-      return (data ?? []) as Milestone[];
-    },
-    enabled: !!userId,
-  });
-
-  const { data: profileMeta } = useQuery({
-    queryKey: ["capitulos-profile", userId],
-    queryFn: async () => {
-      const { data } = await supabasePortal
-        .from("profiles")
-        .select("created_at")
-        .eq("user_id", userId)
-        .maybeSingle();
-      return data;
-    },
-    enabled: !!userId,
-  });
+  const feedbackMap = useMemo(() => new Map((data?.feedback ?? []).map((item) => [`${item.source_kind}:${item.source_id}`, item.response])), [data?.feedback]);
+  const activeThemes = useMemo(() => {
+    const result: ActiveTheme[] = [];
+    for (const theme of data?.themes ?? []) {
+      if (!theme.theme_name?.trim() || OPERATIONAL_THEME.test(theme.theme_name)) continue;
+      if (result.some((current) => themesOverlap(current.theme_name || "", theme.theme_name || ""))) continue;
+      result.push(theme);
+      if (result.length === 3) break;
+    }
+    return result;
+  }, [data?.themes]);
+  const recentMovements = useMemo(() => (data?.snapshots ?? []).filter((snapshot) => snapshot.snapshot_change || snapshot.snapshot_before || snapshot.evidence_quote).slice(0, 3), [data?.snapshots]);
+  const meaningfulMilestones = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)).slice(0, 4), [data?.milestones]);
+  const lastSession = data?.sessions?.[0] ?? null;
 
   const chapters = useMemo<Chapter[]>(() => {
+    if (!data) return [];
     const map = new Map<string, Chapter>();
-
-    const ensure = (iso: string): Chapter => {
+    const ensure = (iso: string) => {
       const key = monthKeyOf(iso);
-      let c = map.get(key);
-      if (!c) {
-        c = {
-          key,
-          monthLabel: monthLabelOf(iso),
-          anchorDate: iso,
-          headline: "",
-          quote: null,
-          themes: [],
-          sessions: [],
-          snapshots: [],
-          letter: null,
-          milestones: [],
-        };
-        map.set(key, c);
-      } else if (new Date(iso).getTime() > new Date(c.anchorDate).getTime()) {
-        c.anchorDate = iso;
-      }
-      return c;
+      const existing = map.get(key);
+      if (existing) return existing;
+      const chapter: Chapter = { key, monthLabel: monthLabelOf(iso), anchorDate: iso, headline: "", quote: null, themes: [], sessions: [], snapshots: [], letter: null, milestones: [] };
+      map.set(key, chapter);
+      return chapter;
     };
-
-    for (const l of letters ?? []) {
-      const iso = l.letter_month || l.created_at;
-      if (!iso) continue;
-      const c = ensure(iso);
-      c.letter = l;
-    }
-    for (const sn of snapshots ?? []) {
-      const iso = sn.evidence_date || sn.period_end;
-      if (!iso) continue;
-      ensure(iso).snapshots.push(sn);
-    }
-    for (const s of sessions ?? []) {
-      if (!s.ended_at) continue;
-      ensure(s.ended_at).sessions.push(s);
-    }
-    for (const m of milestones ?? []) {
-      if (!m.milestone_date) continue;
-      ensure(m.milestone_date).milestones.push(m);
-    }
-
-    // Só cria capítulo se tem material minimamente narrável:
-    // pelo menos carta OU (snapshot com confiança) OU marco.
-    const list: Chapter[] = [];
-    for (const c of map.values()) {
-      const hasNarrative = !!c.letter || c.snapshots.length > 0 || c.milestones.length > 0;
-      if (!hasNarrative) continue;
-
-      // Headline: carta > melhor snapshot > marco
-      if (c.letter?.preview_text) {
-        c.headline = truncate(sanitizePortalText(c.letter.preview_text), 180);
-      } else if (c.snapshots.length > 0) {
-        const best = [...c.snapshots].sort(
-          (a, b) => (CONF_ORDER[b.confidence ?? ""] ?? 0) - (CONF_ORDER[a.confidence ?? ""] ?? 0),
-        )[0];
-        c.headline = truncate(
-          sanitizePortalText(best.snapshot_change || best.snapshot_before || ""),
-          180,
-        );
-        c.quote = sanitizePortalText(best.evidence_quote) || null;
-      } else if (c.milestones.length > 0) {
-        c.headline = truncate(sanitizePortalText(c.milestones[0].milestone_text), 180);
+    data.letters.forEach((letter) => { const iso = letter.letter_month || letter.created_at; if (iso) ensure(iso).letter = letter; });
+    data.snapshots.forEach((snapshot) => { const iso = snapshot.evidence_date || snapshot.period_end; if (iso) ensure(iso).snapshots.push(snapshot); });
+    data.sessions.forEach((session) => { if (session.ended_at) ensure(session.ended_at).sessions.push(session); });
+    data.milestones.forEach((milestone) => {
+      if (milestone.milestone_date && milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)) {
+        ensure(milestone.milestone_date).milestones.push(milestone);
       }
+    });
+    return Array.from(map.values()).filter((chapter) => chapter.letter || chapter.snapshots.length || chapter.milestones.length).map((chapter) => {
+      const best = [...chapter.snapshots].sort((a, b) => (CONF_ORDER[b.confidence ?? ""] ?? 0) - (CONF_ORDER[a.confidence ?? ""] ?? 0))[0];
+      chapter.headline = truncate(chapter.letter?.preview_text || best?.snapshot_change || best?.snapshot_before || chapter.milestones[0]?.milestone_text || "", 180);
+      chapter.quote = best?.evidence_quote ? sanitizePortalText(best.evidence_quote) : null;
+      chapter.themes = Array.from(new Set(chapter.snapshots.map((snapshot) => snapshot.theme?.trim()).filter(Boolean) as string[])).slice(0, 3);
+      return chapter;
+    }).sort((a, b) => new Date(b.anchorDate).getTime() - new Date(a.anchorDate).getTime());
+  }, [data]);
 
-      // Citação (se não veio do snapshot acima)
-      if (!c.quote) {
-        const withQuote = c.snapshots.find((s) => s.evidence_quote?.trim());
-        if (withQuote) c.quote = sanitizePortalText(withQuote.evidence_quote);
-      }
+  if (isLoading) return <PortalLoadingInline />;
 
-      // Temas (até 3, dedup)
-      const seen = new Set<string>();
-      for (const s of c.snapshots) {
-        const t = (s.theme || "").trim();
-        if (!t) continue;
-        const k = t.toLowerCase();
-        if (seen.has(k)) continue;
-        seen.add(k);
-        c.themes.push(t);
-        if (c.themes.length >= 3) break;
-      }
+  const hasLiveMaterial = activeThemes.length > 0 || recentMovements.length > 0 || !!lastSession || meaningfulMilestones.length > 0;
+  const visibleChapters = showOlder ? chapters : chapters.slice(0, 12);
 
-      list.push(c);
-    }
-
-    list.sort((a, b) => new Date(b.anchorDate).getTime() - new Date(a.anchorDate).getTime());
-    return list;
-  }, [sessions, snapshots, letters, milestones]);
-
-  if (l1 || l2 || l3 || l4) return <PortalLoadingInline />;
-
-  const visible = showOlder ? chapters : chapters.slice(0, 12);
-  const hasMore = chapters.length > 12;
-
-  const daysSinceSignup = profileMeta?.created_at
-    ? Math.floor((Date.now() - new Date(profileMeta.created_at).getTime()) / 86_400_000)
-    : null;
-  const isBrandNew = daysSinceSignup !== null && daysSinceSignup < 30;
+  const registerFeedback = (sourceKind: "thematic_snapshot" | "active_theme", sourceId: string, response: "agrees" | "corrects", context: string) => {
+    feedbackMutation.mutate({ sourceKind, sourceId, response }, {
+      onSuccess: () => {
+        if (response === "corrects") onOpenConversation(`Aura, não foi bem assim: ${context}. Quero te explicar melhor.`);
+      },
+    });
+  };
 
   return (
-    <div className="portal-area-page space-y-5">
-      <p className="text-sm text-[#2A2A2A]/60 font-['Nunito'] -mt-2">
-        Um capítulo por mês. Como as coisas foram mudando dentro de você.
-      </p>
+    <div className="portal-area-page space-y-7">
+      <p className="-mt-2 text-sm text-muted-foreground">O que tem aparecido, o que mudou e o que ainda merece atenção.</p>
 
-      {chapters.length === 0 && (
-        <EmptyState
-          icon={BookMarked}
-          title={isBrandNew ? "Seu primeiro capítulo vem no fim do mês" : "Ainda sem capítulo por aqui"}
-          description={
-            isBrandNew
-              ? "A cada mês a Aura escreve um capítulo sobre o que mudou em você — com trechos das suas próprias palavras."
-              : "Quando houver material suficiente, um capítulo aparece automaticamente aqui."
-          }
-        />
+      {activeThemes.length > 0 ? (
+        <section className="space-y-3" aria-labelledby="momento-atual">
+          <SectionTitle icon={Sparkles} eyebrow="Agora" title="Seu momento agora" />
+          <div className="rounded-2xl border bg-card p-5 space-y-4">
+            <p className="text-sm leading-relaxed text-muted-foreground">Pelo que você vem trazendo, estes parecem ser os temas mais presentes. Você pode confirmar ou corrigir a leitura.</p>
+            <div className="space-y-3">
+              {activeThemes.map((theme) => (
+                <ReflectionRow key={theme.id} title={sanitizePortalText(theme.theme_name)} feedback={feedbackMap.get(`active_theme:${theme.id}`)} busy={feedbackMutation.isPending}
+                  onAgree={() => registerFeedback("active_theme", theme.id, "agrees", theme.theme_name || "essa leitura")}
+                  onCorrect={() => registerFeedback("active_theme", theme.id, "corrects", theme.theme_name || "essa leitura")} />
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : (
+        <div className="rounded-2xl border bg-card p-5 space-y-3">
+          <p className="font-display text-lg font-semibold text-foreground">Seu momento vai tomar forma aqui</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">Ainda não há material suficiente para uma leitura honesta. Conforme vocês conversarem, a AURA organiza os temas sem presumir o que você sente.</p>
+          <Button variant="outline" onClick={() => onOpenConversation("Aura, quero te contar como estou agora.")}><MessageCircle /> Contar como estou</Button>
+        </div>
       )}
 
-      <div className="space-y-4">
-        {visible.map((c, i) => (
-          <ChapterCard
-            key={c.key}
-            chapter={c}
-            idx={i}
-            expanded={expandedKey === c.key}
-            onToggle={() => setExpandedKey((cur) => (cur === c.key ? null : c.key))}
-          />
-        ))}
-      </div>
+      {recentMovements.length > 0 && (
+        <section className="space-y-3" aria-labelledby="movimentos-recentes">
+          <SectionTitle icon={Quote} eyebrow="Nas suas palavras" title="Movimentos recentes" />
+          <div className="space-y-3">
+            {recentMovements.map((snapshot) => (
+              <article key={snapshot.id} className="rounded-2xl border bg-card p-5 space-y-3">
+                <div>
+                  {snapshot.theme && <p className="text-xs font-bold uppercase text-primary">{sanitizePortalText(snapshot.theme)}</p>}
+                  <p className="mt-1 text-[15px] leading-relaxed text-foreground">Talvez exista um movimento aqui: {sanitizePortalText(snapshot.snapshot_change || snapshot.snapshot_before || "")}</p>
+                </div>
+                {snapshot.evidence_quote && <blockquote className="border-l-2 border-primary/40 pl-3 text-sm italic text-muted-foreground">“{sanitizePortalText(snapshot.evidence_quote)}”</blockquote>}
+                <FeedbackActions value={feedbackMap.get(`thematic_snapshot:${snapshot.id}`)} busy={feedbackMutation.isPending}
+                  onAgree={() => registerFeedback("thematic_snapshot", snapshot.id, "agrees", snapshot.theme || snapshot.snapshot_change || "essa leitura")}
+                  onCorrect={() => registerFeedback("thematic_snapshot", snapshot.id, "corrects", snapshot.theme || snapshot.snapshot_change || "essa leitura")} />
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
-      {hasMore && !showOlder && (
-        <button
-          onClick={() => setShowOlder(true)}
-          className="w-full py-3 text-sm text-muted-foreground hover:text-accent font-['Nunito'] border border-border rounded-xl transition-colors"
-        >
-          Ver capítulos anteriores ({chapters.length - 12})
-        </button>
+      {lastSession && (lastSession.closure_text || lastSession.session_summary || lastSession.focus_topic) && (
+        <section className="space-y-3">
+          <SectionTitle icon={MessageCircle} eyebrow="Fio aberto" title="Para continuar" />
+          <div className="rounded-2xl border bg-secondary/70 p-5 space-y-3">
+            <p className="text-sm leading-relaxed text-foreground">{sanitizePortalText(lastSession.closure_text || lastSession.session_summary || lastSession.focus_topic || "")}</p>
+            <Button onClick={() => onOpenConversation(`Aura, quero retomar o assunto da minha última sessão: ${lastSession.focus_topic || lastSession.theme_label || "o que ficou em aberto"}.`)}>Retomar com a AURA <ArrowRight /></Button>
+          </div>
+        </section>
+      )}
+
+      {meaningfulMilestones.length > 0 && (
+        <section className="space-y-3">
+          <SectionTitle icon={Trophy} eyebrow="Reconhecer" title="Marcos que importam" />
+          <div className="rounded-2xl border bg-card divide-y divide-border">
+            {meaningfulMilestones.map((milestone) => (
+              <div key={milestone.id} className="p-4">
+                <p className="text-sm leading-relaxed text-foreground">{sanitizePortalText(milestone.milestone_text)}</p>
+                {milestone.context_excerpt && <p className="mt-1 text-xs text-muted-foreground">{truncate(milestone.context_excerpt, 150)}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!hasLiveMaterial && chapters.length === 0 && <EmptyState icon={BookMarked} title="Seu percurso está começando" description="Não vamos inventar uma história antes da hora. A primeira leitura aparece quando houver algo real para reconhecer." />}
+
+      {chapters.length > 0 && (
+        <section className="space-y-3">
+          <SectionTitle icon={BookMarked} eyebrow="Arquivo" title="Sua história por mês" />
+          <div className="space-y-3">
+            {visibleChapters.map((chapter) => <ChapterCard key={chapter.key} chapter={chapter} expanded={expandedKey === chapter.key} onToggle={() => setExpandedKey((current) => current === chapter.key ? null : chapter.key)} />)}
+          </div>
+          {chapters.length > 12 && !showOlder && <Button variant="outline" className="w-full" onClick={() => setShowOlder(true)}>Ver capítulos anteriores ({chapters.length - 12})</Button>}
+        </section>
       )}
     </div>
   );
 }
 
-function ChapterCard({
-  chapter,
-  idx,
-  expanded,
-  onToggle,
-}: {
-  chapter: Chapter;
-  idx: number;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const { monthLabel, headline, quote, themes, sessions, snapshots, letter, milestones } = chapter;
-  const sessionsCount = sessions.length;
-  const milestonesCount = milestones.length;
-  const canExpand = !!letter?.letter_text || snapshots.length > 0 || milestones.length > 0 || sessionsCount > 0;
+function SectionTitle({ icon: Icon, eyebrow, title }: { icon: typeof Sparkles; eyebrow: string; title: string }) {
+  return <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><div><p className="text-[10px] font-bold uppercase text-muted-foreground">{eyebrow}</p><h2 className="font-display text-lg font-semibold text-foreground">{title}</h2></div></div>;
+}
 
-  return (
-    <div
-      className="rounded-2xl border border-[#87A878]/15 bg-white/60 overflow-hidden animate-fade-up shadow-sm"
-      style={{ animationDelay: `${idx * 60}ms` }}
-    >
-      <button
-        onClick={canExpand ? onToggle : undefined}
-        className={`w-full text-left p-5 space-y-3 transition-colors ${
-          canExpand ? "hover:bg-[#F5F0E8]/60" : "cursor-default"
-        }`}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#87A878] font-['Nunito']">
-              Capítulo
-            </p>
-            <p className="font-['Fraunces'] text-xl font-semibold text-[#1B2A4E] mt-0.5 capitalize tracking-tight">
-              {monthLabel}
-            </p>
-          </div>
-          {canExpand && (
-            <span className="text-[#1B2A4E]/50 shrink-0 mt-1">
-              {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </span>
-          )}
-        </div>
+function ReflectionRow({ title, feedback, busy, onAgree, onCorrect }: { title: string; feedback?: Feedback["response"]; busy: boolean; onAgree: () => void; onCorrect: () => void }) {
+  return <div className="border-t border-border pt-3 first:border-0 first:pt-0"><p className="font-display text-base font-semibold text-foreground">{title}</p><FeedbackActions value={feedback} busy={busy} onAgree={onAgree} onCorrect={onCorrect} /></div>;
+}
 
-        {headline && (
-          <p className="text-[15px] text-[#2A2A2A] font-['Nunito'] leading-relaxed">
-            {headline}
-          </p>
-        )}
+function FeedbackActions({ value, busy, onAgree, onCorrect }: { value?: Feedback["response"]; busy: boolean; onAgree: () => void; onCorrect: () => void }) {
+  if (value) return <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary"><Check className="h-3.5 w-3.5" />{value === "agrees" ? "Confirmado por você" : "Correção enviada à conversa"}</p>;
+  return <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={onAgree}><Check /> Faz sentido</Button><Button size="sm" variant="ghost" disabled={busy} onClick={onCorrect}><CircleHelp /> Não foi bem assim</Button></div>;
+}
 
-        {quote && (
-          <blockquote className="border-l-[3px] border-[#B8A5D9] pl-4 py-1 text-[15px] text-[#1B2A4E]/85 italic font-['Fraunces'] leading-relaxed">
-            “{quote}”
-          </blockquote>
-        )}
+function ChapterCard({ chapter, expanded, onToggle }: { chapter: Chapter; expanded: boolean; onToggle: () => void }) {
+  const canExpand = !!chapter.letter?.letter_text || chapter.snapshots.length > 0 || chapter.milestones.length > 0 || chapter.sessions.length > 0;
+  return <article className="overflow-hidden rounded-2xl border bg-card">
+    <Button variant="ghost" className="h-auto w-full justify-between whitespace-normal rounded-none p-5 text-left" onClick={canExpand ? onToggle : undefined}>
+      <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-primary">Capítulo</p><h3 className="mt-0.5 font-display text-xl font-semibold capitalize text-foreground">{chapter.monthLabel}</h3>{chapter.headline && <p className="mt-2 text-sm font-normal leading-relaxed text-muted-foreground">{chapter.headline}</p>}</div>
+      {canExpand && (expanded ? <ChevronUp /> : <ChevronDown />)}
+    </Button>
+    {expanded && <div className="space-y-5 border-t bg-secondary/40 p-5">
+      {chapter.quote && <blockquote className="border-l-2 border-primary/40 pl-3 text-sm italic text-muted-foreground">“{chapter.quote}”</blockquote>}
+      {chapter.letter?.letter_text && <ChapterSection icon={Mail} title="Carta do mês"><p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{sanitizePortalText(chapter.letter.letter_text)}</p></ChapterSection>}
+      {chapter.snapshots.length > 0 && <ChapterSection icon={Sparkles} title="O que mudou">{chapter.snapshots.map((snapshot) => <div key={snapshot.id} className="rounded-lg border bg-card p-3 text-sm leading-relaxed text-foreground">{sanitizePortalText(snapshot.snapshot_change || snapshot.snapshot_before || "")}</div>)}</ChapterSection>}
+      {chapter.milestones.length > 0 && <ChapterSection icon={Trophy} title="Marcos"><ul className="space-y-2">{chapter.milestones.map((milestone) => <li key={milestone.id} className="text-sm text-foreground">• {sanitizePortalText(milestone.milestone_text)}</li>)}</ul></ChapterSection>}
+      {chapter.sessions.length > 0 && <ChapterSection icon={Calendar} title="Sessões do mês"><ul className="space-y-1">{chapter.sessions.map((session) => <li key={session.id} className="text-sm text-muted-foreground">{session.theme_label || session.focus_topic || "Sessão"}</li>)}</ul></ChapterSection>}
+    </div>}
+  </article>;
+}
 
-        {themes.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {themes.map((t) => (
-              <span
-                key={t}
-                className="inline-flex items-center px-2.5 py-1 rounded-full bg-[#87A878]/12 text-[#1B2A4E] text-[11px] font-semibold font-['Nunito']"
-              >
-                {t}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {(sessionsCount > 0 || milestonesCount > 0) && (
-          <div className="flex gap-4 text-[11px] text-[#2A2A2A]/55 font-['Nunito'] pt-1">
-            {sessionsCount > 0 && (
-              <span className="flex items-center gap-1">
-                <Calendar size={11} /> {sessionsCount} {sessionsCount === 1 ? "sessão" : "sessões"}
-              </span>
-            )}
-            {milestonesCount > 0 && (
-              <span className="flex items-center gap-1">
-                <Trophy size={11} /> {milestonesCount} {milestonesCount === 1 ? "marco" : "marcos"}
-              </span>
-            )}
-          </div>
-        )}
-      </button>
-
-      {expanded && (
-        <div className="border-t border-[#87A878]/15 p-5 space-y-5 bg-[#F5F0E8]/50 animate-fade-in">
-          {letter?.letter_text && (
-            <section className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Mail size={13} className="text-[#87A878]" />
-                <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-[#1B2A4E] font-['Nunito']">
-                  Carta do mês
-                </p>
-              </div>
-              <p className="text-sm text-[#2A2A2A] font-['Nunito'] leading-relaxed whitespace-pre-line">
-                {sanitizePortalText(letter.letter_text)}
-              </p>
-            </section>
-          )}
-
-          {snapshots.length > 0 && (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Sparkles size={13} className="text-[#87A878]" />
-                <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-[#1B2A4E] font-['Nunito']">
-                  O que mudou
-                </p>
-              </div>
-              <div className="space-y-3">
-                {snapshots.map((s) => (
-                  <div key={s.id} className="rounded-xl border border-[#87A878]/15 bg-white/70 p-3 space-y-1.5">
-                    {s.theme && (
-                      <p className="text-xs font-bold text-[#87A878] font-['Nunito'] uppercase tracking-wider">{s.theme}</p>
-                    )}
-                    {s.snapshot_before && (
-                      <p className="text-sm text-[#2A2A2A]/70 font-['Nunito'] leading-relaxed">
-                        <span className="text-[10px] uppercase tracking-wider text-[#2A2A2A]/50 mr-1 font-bold">Antes:</span>
-                        {sanitizePortalText(s.snapshot_before)}
-                      </p>
-                    )}
-                    {s.snapshot_change && (
-                      <p className="text-sm text-[#1B2A4E] font-['Nunito'] leading-relaxed">
-                        <span className="text-[10px] uppercase tracking-wider text-[#87A878] mr-1 font-bold">Mudou:</span>
-                        {sanitizePortalText(s.snapshot_change)}
-                      </p>
-                    )}
-                    {s.evidence_quote && (
-                      <blockquote className="border-l-[3px] border-[#B8A5D9] pl-3 text-sm text-[#1B2A4E]/80 italic font-['Fraunces']">
-                        “{sanitizePortalText(s.evidence_quote)}”
-                      </blockquote>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {milestones.length > 0 && (
-            <section className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Trophy size={13} className="text-[#87A878]" />
-                <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-[#1B2A4E] font-['Nunito']">
-                  Marcos
-                </p>
-              </div>
-              <ul className="space-y-2">
-                {milestones.map((m) => (
-                  <li key={m.id} className="text-sm text-[#2A2A2A] font-['Nunito'] leading-relaxed flex gap-2">
-                    <span className="text-[#87A878] mt-1.5 select-none leading-none">•</span>
-                    <span>{sanitizePortalText(m.milestone_text)}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {sessions.length > 0 && (
-            <section className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Calendar size={13} className="text-[#87A878]" />
-                <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-[#1B2A4E] font-['Nunito']">
-                  Sessões do mês
-                </p>
-              </div>
-              <ul className="space-y-1.5">
-                {sessions.map((s) => (
-                  <li key={s.id} className="text-xs text-[#2A2A2A]/60 font-['Nunito']">
-                    <span className="text-[#1B2A4E]/85">
-                      {s.theme_label || s.focus_topic || "Sessão"}
-                    </span>
-                    {s.ended_at && (
-                      <span className="ml-2">
-                        · {new Date(s.ended_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </div>
-      )}
-    </div>
-  );
+function ChapterSection({ icon: Icon, title, children }: { icon: typeof Sparkles; title: string; children: React.ReactNode }) {
+  return <section className="space-y-2"><div className="flex items-center gap-2 text-primary"><Icon className="h-4 w-4" /><h4 className="text-xs font-bold uppercase">{title}</h4></div>{children}</section>;
 }
