@@ -40,7 +40,7 @@ export default function PortalAuthCallback() {
   return (
     <div className="portal-chat-theme min-h-dvh bg-background flex items-center justify-center px-5">
       <Helmet>
-        <title>Confirmando acesso | Aplicativo AURA</title>
+        <title>Confirmando acesso | Olá Aura</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
       <div className="w-full max-w-sm text-center">
@@ -60,7 +60,7 @@ export default function PortalAuthCallback() {
         ) : (
           <>
             <Loader2 className="h-7 w-7 animate-spin text-primary mx-auto mb-4" />
-            <h1 className="font-display text-2xl font-semibold text-foreground mb-2">Abrindo a AURA</h1>
+            <h1 className="font-display text-2xl font-semibold text-foreground mb-2">Abrindo o Olá Aura</h1>
             <p className="text-sm text-muted-foreground font-body">Confirmando sua entrada com segurança…</p>
           </>
         )}

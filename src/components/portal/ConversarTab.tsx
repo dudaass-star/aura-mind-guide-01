@@ -752,9 +752,9 @@ export function ConversarTab({
       <Dialog open={showIosInstallGuide} onOpenChange={setShowIosInstallGuide}>
         <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg border-border bg-background p-6 shadow-card">
           <DialogHeader className="text-left">
-            <DialogTitle className="font-display text-xl text-foreground">Instalar a AURA no iPhone</DialogTitle>
+            <DialogTitle className="font-display text-xl text-foreground">Instalar o Olá Aura no iPhone</DialogTitle>
             <DialogDescription className="pt-1 font-body leading-relaxed">
-              Faça isso no Safari para deixar a AURA na sua tela inicial.
+              Faça isso no Safari para deixar o Olá Aura na sua tela inicial.
             </DialogDescription>
           </DialogHeader>
           <ol className="space-y-4 pt-2 font-body text-sm text-foreground">
@@ -772,15 +772,15 @@ export function ConversarTab({
       <Dialog open={showInstallInvite} onOpenChange={(open) => open ? setShowInstallInvite(true) : postponeInstall()}>
         <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg border-border bg-background p-6 shadow-card">
           <DialogHeader className="text-left">
-            <DialogTitle className="font-display text-2xl text-foreground">Deixe a AURA mais perto</DialogTitle>
+            <DialogTitle className="font-display text-2xl text-foreground">Deixe o Olá Aura mais perto</DialogTitle>
             <DialogDescription className="pt-1 font-body leading-relaxed">
-              Adicione a AURA à sua tela inicial. Depois, é só tocar no ícone para voltar às suas conversas.
+              Adicione o Olá Aura à sua tela inicial. Depois, é só tocar no ícone para voltar às suas conversas com a AURA.
             </DialogDescription>
           </DialogHeader>
           <div className="mt-2 space-y-2">
             <Button type="button" className="h-11 w-full font-body" onClick={() => void beginInstall()}>
               <Download className="h-4 w-4" />
-              {installApp.ios ? "Ver como adicionar" : "Instalar AURA"}
+              {installApp.ios ? "Ver como adicionar" : "Instalar Olá Aura"}
             </Button>
             <Button type="button" variant="ghost" className="h-10 w-full font-body text-muted-foreground" onClick={postponeInstall}>
               Agora não

@@ -317,8 +317,8 @@ const UserPortal = () => {
   return (
     <>
       <Helmet>
-        <title>Meu Espaço | Aura</title>
-        <meta name="description" content="Seu painel pessoal da Aura" />
+        <title>Olá Aura | Seu aplicativo</title>
+        <meta name="description" content="Converse com a AURA e acompanhe suas jornadas, sessões e práticas no aplicativo Olá Aura." />
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
