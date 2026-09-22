@@ -24,6 +24,7 @@ type Milestone = { id: string; milestone_text: string | null; milestone_date: st
 type SessionRow = { id: string; ended_at: string | null; focus_topic: string | null; closure_text: string | null; session_summary: string | null; theme_label: string | null };
 type ActiveTheme = { id: string; theme_name: string | null; status: string | null; session_count: number | null; last_mentioned_at: string | null };
 type Feedback = { source_kind: string; source_id: string; response: "agrees" | "corrects" };
+type FeedbackSource = "thematic_snapshot" | "active_theme" | "weekly_report" | "monthly_report";
 type Chapter = { key: string; monthLabel: string; anchorDate: string; headline: string; quote: string | null; themes: string[]; sessions: SessionRow[]; snapshots: Snapshot[]; letter: Letter | null; milestones: Milestone[] };
 type WeeklyReport = { id: string; period_start: string; period_end: string; metrics_json: unknown; highlights_json: unknown; analysis_text: string | null; continuation_text: string | null; report_content: string | null };
 type MonthlyReport = { id: string; report_month: string; metrics_json: unknown; analysis_text: string | null; report_html: string | null; created_at: string };
@@ -86,7 +87,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   });
 
   const feedbackMutation = useMutation({
-    mutationFn: async ({ sourceKind, sourceId, response }: { sourceKind: "thematic_snapshot" | "active_theme"; sourceId: string; response: "agrees" | "corrects" }) => {
+    mutationFn: async ({ sourceKind, sourceId, response }: { sourceKind: FeedbackSource; sourceId: string; response: "agrees" | "corrects" }) => {
       const { error } = await supabasePortal.from("journey_reflection_feedback").upsert({ user_id: userId, source_kind: sourceKind, source_id: sourceId, response }, { onConflict: "user_id,source_kind,source_id" });
       if (error) throw error;
       return { sourceKind, sourceId, response };
@@ -150,7 +151,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const firstName = typeof profile?.name === "string" ? profile.name.trim().split(/\s+/)[0] : "";
   const journeySignals = activeThemes.length + recentMovements.length + meaningfulMilestones.length;
 
-  const registerFeedback = (sourceKind: "thematic_snapshot" | "active_theme", sourceId: string, response: "agrees" | "corrects", context: string) => {
+  const registerFeedback = (sourceKind: FeedbackSource, sourceId: string, response: "agrees" | "corrects", context: string) => {
     feedbackMutation.mutate({ sourceKind, sourceId, response }, {
       onSuccess: () => {
         if (response === "corrects") onOpenConversation(`Aura, não foi bem assim: ${context}. Quero te explicar melhor.`);
@@ -248,8 +249,8 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         <section className="portal-progress-step space-y-3" aria-labelledby="relatorios-percurso">
           <SectionTitle icon={BarChart3} eyebrow="Rever" title="Seus relatórios" />
           <div id="relatorios-percurso" className="space-y-3">
-            {weeklyReports.map((report, index) => <ReportCard key={report.id} kind="weekly" report={report} featured={index === 0} onContinue={onOpenConversation} />)}
-            {monthlyReports.map((report) => <ReportCard key={report.id} kind="monthly" report={report} onContinue={onOpenConversation} />)}
+             {weeklyReports.map((report, index) => <ReportCard key={report.id} kind="weekly" report={report} featured={index === 0} feedback={feedbackMap.get(`weekly_report:${report.id}`)} busy={feedbackMutation.isPending} onFeedback={(response, context) => registerFeedback("weekly_report", report.id, response, context)} onContinue={onOpenConversation} />)}
+             {monthlyReports.map((report) => <ReportCard key={report.id} kind="monthly" report={report} feedback={feedbackMap.get(`monthly_report:${report.id}`)} busy={feedbackMutation.isPending} onFeedback={(response, context) => registerFeedback("monthly_report", report.id, response, context)} onContinue={onOpenConversation} />)}
           </div>
         </section>
       )}
@@ -304,7 +305,7 @@ function ChapterSection({ icon: Icon, title, children }: { icon: typeof Sparkles
   return <section className="space-y-2"><div className="flex items-center gap-2 text-primary"><Icon className="h-4 w-4" /><h4 className="text-xs font-bold uppercase">{title}</h4></div>{children}</section>;
 }
 
-function ReportCard({ kind, report, featured = false, onContinue }: { kind: "weekly" | "monthly"; report: WeeklyReport | MonthlyReport; featured?: boolean; onContinue: (message?: string) => void }) {
+function ReportCard({ kind, report, featured = false, feedback, busy, onFeedback, onContinue }: { kind: "weekly" | "monthly"; report: WeeklyReport | MonthlyReport; featured?: boolean; feedback?: Feedback["response"]; busy: boolean; onFeedback: (response: "agrees" | "corrects", context: string) => void; onContinue: (message?: string) => void }) {
   const [expanded, setExpanded] = useState(() => new URLSearchParams(window.location.search).get("id") === report.id || (new URLSearchParams(window.location.search).get("report") === kind && featured));
   const weekly = kind === "weekly" ? report as WeeklyReport : null;
   const monthly = kind === "monthly" ? report as MonthlyReport : null;
@@ -318,6 +319,6 @@ function ReportCard({ kind, report, featured = false, onContinue }: { kind: "wee
       <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-primary">{kind === "weekly" ? "Sua semana" : "Seu mês em perspectiva"}</p><h3 className="mt-1 font-display text-lg font-semibold capitalize text-foreground">{label}</h3></div>
       {expanded ? <ChevronUp /> : <ChevronDown />}
     </Button>
-    {expanded && <div className="space-y-4 border-t bg-secondary/40 p-5"><p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{content}</p><Button variant="outline" className="w-full" onClick={() => onContinue(kind === "weekly" ? "Aura, quero conversar sobre o que apareceu no meu resumo desta semana." : "Aura, quero conversar sobre o que apareceu no meu relatório deste mês.")}>Continuar com a AURA <ArrowRight /></Button></div>}
+    {expanded && <div className="space-y-4 border-t bg-secondary/40 p-5"><p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{content}</p><FeedbackActions value={feedback} busy={busy} onAgree={() => onFeedback("agrees", kind === "weekly" ? "a leitura do meu resumo semanal" : "a leitura do meu relatório mensal")} onCorrect={() => onFeedback("corrects", kind === "weekly" ? "a leitura do meu resumo semanal" : "a leitura do meu relatório mensal")} /><Button variant="outline" className="w-full" onClick={() => onContinue(kind === "weekly" ? "Aura, quero conversar sobre o que apareceu no meu resumo desta semana." : "Aura, quero conversar sobre o que apareceu no meu relatório deste mês.")}>Continuar com a AURA <ArrowRight /></Button></div>}
   </article>;
 }
