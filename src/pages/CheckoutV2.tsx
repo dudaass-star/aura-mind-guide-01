@@ -1364,7 +1364,11 @@ const CheckoutV2 = () => {
           const consumed = await supabase.functions.invoke("checkout-app-access", {
             body: { action: "consume", token },
           });
-          if (cancelled || consumed.error || !consumed.data?.token_hash) return;
+          if (cancelled) return;
+          if (consumed.error || !consumed.data?.token_hash) {
+            navigate("/obrigado", { replace: true });
+            return;
+          }
           const verified = await supabasePortal.auth.verifyOtp({
             token_hash: consumed.data.token_hash,
             type: consumed.data.type || "magiclink",
@@ -1372,6 +1376,8 @@ const CheckoutV2 = () => {
           if (!verified.error) {
             localStorage.removeItem("aura_checkout_access");
             navigate("/meu-espaco", { replace: true });
+          } else {
+            navigate("/obrigado", { replace: true });
           }
           return;
         }

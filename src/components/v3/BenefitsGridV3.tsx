@@ -43,7 +43,7 @@ const BenefitsGridV3 = () => (
 
       <div className="mt-12 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-xs text-white/65">
         <span className="inline-flex items-center gap-2"><MessageSquare className="w-4 h-4 text-primary" /> Texto e áudio</span>
-        <span>WhatsApp</span>
+        <span>App Olá Aura</span>
         <span>Disponível 24/7</span>
         <span>Continuidade entre conversas</span>
       </div>
