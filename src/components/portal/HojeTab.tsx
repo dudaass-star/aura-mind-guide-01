@@ -216,7 +216,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
   if (loadingLast) return <PortalLoadingInline />;
 
   return (
-    <div className="space-y-6">
+    <div className="portal-area-page space-y-6">
       {/* Saudação — Deep Navy Anchor */}
       <header className="space-y-1 animate-fade-in">
         <h1

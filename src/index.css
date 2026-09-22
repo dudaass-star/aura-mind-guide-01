@@ -182,8 +182,35 @@
 
 /* Demais áreas do aplicativo compartilham a mesma linguagem da conversa. */
 .portal-app-theme {
+  --portal-area-surface: var(--secondary);
+  --portal-area-foreground: var(--primary);
   min-height: 100dvh;
   background-color: hsl(var(--background));
+}
+
+.portal-app-area-hoje {
+  --portal-area-surface: var(--portal-today);
+  --portal-area-foreground: var(--portal-today-foreground);
+}
+
+.portal-app-area-sessoes {
+  --portal-area-surface: var(--portal-sessions);
+  --portal-area-foreground: var(--portal-sessions-foreground);
+}
+
+.portal-app-area-insights {
+  --portal-area-surface: var(--portal-journey);
+  --portal-area-foreground: var(--portal-journey-foreground);
+}
+
+.portal-app-area-meditacoes {
+  --portal-area-surface: var(--portal-audio);
+  --portal-area-foreground: var(--portal-audio-foreground);
+}
+
+.portal-app-area-sobre {
+  --portal-area-surface: var(--portal-profile);
+  --portal-area-foreground: var(--portal-profile-foreground);
 }
 
 .portal-app-theme [class*="font-['Fraunces']"] {
@@ -237,6 +264,28 @@
 
 .portal-app-content > div {
   animation: fade-in 0.25s ease-out;
+}
+
+.portal-area-page > [class*="rounded-2xl"] {
+  border-color: hsl(var(--portal-area-foreground) / 0.18) !important;
+}
+
+.portal-area-page > [class*="rounded-3xl"] {
+  border-color: hsl(var(--portal-area-foreground) / 0.2) !important;
+}
+
+.portal-area-page details,
+.portal-area-page input,
+.portal-area-page button[role="combobox"] {
+  border-color: hsl(var(--portal-area-foreground) / 0.18) !important;
+}
+
+.portal-app-area-insights .portal-area-page > div > div[class*="rounded-2xl"] {
+  background-color: hsl(var(--portal-area-surface) / 0.58) !important;
+}
+
+.portal-app-area-meditacoes .portal-area-page > div > div[class*="rounded-2xl"] {
+  border-color: hsl(var(--portal-area-foreground) / 0.2) !important;
 }
 
 @media (min-width: 768px) {

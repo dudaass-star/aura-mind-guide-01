@@ -253,7 +253,7 @@ export function InsightsTab({ userId, profile }: { userId: string; profile: any 
   const isBrandNew = daysSinceSignup !== null && daysSinceSignup < 30;
 
   return (
-    <div className="space-y-5">
+    <div className="portal-area-page space-y-5">
       <p className="text-sm text-[#2A2A2A]/60 font-['Nunito'] -mt-2">
         Um capítulo por mês. Como as coisas foram mudando dentro de você.
       </p>

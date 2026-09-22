@@ -144,7 +144,7 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
   }, {});
 
   return (
-    <div className="space-y-6">
+    <div className="portal-area-page space-y-6">
       {suggested.length > 0 && (
         <div className="space-y-3 animate-fade-in">
           <div className="flex items-center gap-2">

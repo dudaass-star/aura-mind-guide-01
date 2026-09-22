@@ -28,15 +28,6 @@ import {
 
 type TabId = "conversar" | "hoje" | "sessoes" | "insights" | "sobre" | "meditacoes";
 
-const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: "conversar", label: "Conversar", icon: MessageCircle },
-  { id: "hoje", label: "Hoje", icon: Sun },
-  { id: "sessoes", label: "Sessões", icon: Calendar },
-  { id: "insights", label: "Percurso", icon: Sparkles },
-  { id: "sobre", label: "Sobre você", icon: User },
-  { id: "meditacoes", label: "Meditações", icon: Headphones },
-];
-
 const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebrow: string; icon: React.ElementType; tone: string }> = {
   hoje: { label: "Hoje", eyebrow: "Seu momento", icon: Sun, tone: "portal-area-today" },
   sessoes: { label: "Sessões", eyebrow: "Seus encontros", icon: Calendar, tone: "portal-area-sessions" },
@@ -94,7 +85,7 @@ const UserPortal = () => {
       window.removeEventListener("blur", report);
     };
   }, [linkStatus, userId]);
-  const { data: novidades, refetch: refetchNovidades } = usePortalNovidades(userId);
+  const { refetch: refetchNovidades } = usePortalNovidades(userId);
 
   // Ao abrir o portal, marca a aba inicial como vista.
   useEffect(() => {
@@ -321,7 +312,7 @@ const UserPortal = () => {
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
-      <div className={`min-h-screen bg-background text-foreground flex flex-col ${activeTab === "conversar" ? "" : "portal-chat-theme portal-app-theme"}`}>
+      <div className={`min-h-screen bg-background text-foreground flex flex-col ${activeTab === "conversar" ? "" : `portal-chat-theme portal-app-theme portal-app-area-${activeTab}`}`}>
         {areaMeta && (
           <header className="portal-app-header sticky top-0 z-30 border-b border-border/70 bg-card/90 backdrop-blur-xl">
             <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5">
