@@ -459,7 +459,7 @@ Deno.serve(async (req) => {
         // Get portal token and create short link
         const portalToken = await getOrCreatePortalToken(supabase, profile.user_id);
         const portalUrl = portalToken
-          ? `https://olaaura.com.br/meu-espaco?tab=insights`
+          ? `https://olaaura.com.br/meu-espaco?tab=insights&report=monthly`
           : 'https://olaaura.com.br';
         
         const shortLink = await createShortLink(supabaseUrl, supabaseServiceKey, portalUrl, profile.phone) || portalUrl;
@@ -491,7 +491,7 @@ Deno.serve(async (req) => {
           category: 'report',
           type: 'report_available',
           firstName: userName,
-          path: '/meu-espaco?tab=percurso',
+          path: `/meu-espaco?tab=percurso&report=monthly`,
           whatsappText: teaser,
           whatsappCategory: 'weekly_report',
           teaserText: teaser,
@@ -503,11 +503,20 @@ Deno.serve(async (req) => {
 
           // Save message and mark as sent (dedup)
           await Promise.all([
-            supabase.from('messages').insert({
+            supabase.from('messages').upsert({
               user_id: profile.user_id,
               role: 'assistant',
-              content: teaser,
-            }),
+              content: `Seu relatório mensal está pronto, ${userName}. Abra para rever o mês com calma e confirmar o que faz sentido para você.`,
+              client_message_id: `monthly-report:${reportMonthStr}:${profile.user_id}`,
+              delivery_status: 'delivered',
+              metadata: {
+                kind: 'report_card',
+                report_type: 'monthly',
+                path: `/meu-espaco?tab=percurso&report=monthly`,
+                title: 'Seu mês em perspectiva',
+                cta: 'Abrir meu relatório',
+              },
+            }, { onConflict: 'client_message_id' }),
             supabase.from('weekly_plans').upsert({
               user_id: profile.user_id,
               week_start: weekStart.toISOString().split('T')[0],

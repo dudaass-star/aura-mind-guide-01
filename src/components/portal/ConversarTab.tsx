@@ -1,5 +1,5 @@
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowLeft, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,6 +28,22 @@ type ChatMessage = {
 
 const PAGE_SIZE = 50;
 const MAX_AUDIO_MS = 120_000;
+
+type ReportCardMetadata = {
+  kind: "report_card";
+  report_type: "weekly" | "monthly";
+  report_id?: string;
+  path?: string;
+  title?: string;
+  cta?: string;
+};
+
+function getReportCard(metadata: unknown): ReportCardMetadata | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const value = metadata as Record<string, unknown>;
+  if (value.kind !== "report_card" || (value.report_type !== "weekly" && value.report_type !== "monthly")) return null;
+  return value as ReportCardMetadata;
+}
 
 type PendingMessage = {
   clientId: string;
@@ -76,14 +92,17 @@ function audioStoragePath(message: ChatMessage) {
 const MessageTimeline = memo(function MessageTimeline({
   messages,
   responding,
+  onOpenReport,
 }: {
   messages: ChatMessage[];
   responding: boolean;
+  onOpenReport: (report: ReportCardMetadata) => void;
 }) {
   return (
     <div className="space-y-5">
       {messages.map((message) => {
         const mine = message.role === "user";
+        const reportCard = getReportCard(message.metadata);
         return (
           <div key={message.id} data-chat-message className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
@@ -91,7 +110,13 @@ const MessageTimeline = memo(function MessageTimeline({
               mine ? "rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : "rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm",
               message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
             )} data-message-bubble>
-              {(!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+              {reportCard ? (
+                <div className="portal-chat-report-card w-[min(18rem,74vw)] max-w-full space-y-3">
+                  <div className="flex items-center gap-2 text-primary"><Sparkles className="h-4 w-4" /><span className="text-[10px] font-bold uppercase">{reportCard.report_type === "weekly" ? "Resumo semanal" : "Relatório mensal"}</span></div>
+                  <div><p className="font-display text-lg font-semibold text-foreground">{reportCard.title || (reportCard.report_type === "weekly" ? "Sua semana na Olá Aura" : "Seu mês em perspectiva")}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{message.content}</p></div>
+                  <Button type="button" size="sm" className="w-full justify-between" onClick={() => onOpenReport(reportCard)}>{reportCard.cta || "Ver no Percurso"}<ArrowRight className="h-4 w-4" /></Button>
+                </div>
+              ) : (!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
               {message.is_audio && message.audio_url && (
                 <div className="w-[min(16rem,72vw)] max-w-full">
                   <p className={cn("mb-1.5 text-xs font-semibold", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>Mensagem de voz</p>
@@ -165,6 +190,12 @@ export function ConversarTab({
   const recordingTimerRef = useRef<number | null>(null);
   const discardRecordingRef = useRef(false);
   const outboxKey = `aura-chat-outbox:${userId}`;
+  const openReport = (report: ReportCardMetadata) => {
+    const url = new URL(report.path || "/meu-espaco?tab=percurso", window.location.origin);
+    if (report.report_id) url.searchParams.set("id", report.report_id);
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    onNavigate?.("insights");
+  };
 
   useEffect(() => {
     if (!installApp.available || installApp.installed) return;

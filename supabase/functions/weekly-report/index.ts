@@ -39,7 +39,7 @@ async function fetchMetrics(supabase: any, userId: string, start: Date, end: Dat
     countBetween(supabase.from("messages").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("role", "user"), "created_at", start, end),
     countBetween(supabase.from("sessions").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "completed"), "ended_at", start, end),
     countBetween(supabase.from("user_journey_history").select("id", { count: "exact", head: true }).eq("user_id", userId), "completed_at", start, end),
-    countBetween(supabase.from("user_meditation_history").select("id", { count: "exact", head: true }).eq("user_id", userId), "completed_at", start, end),
+    countBetween(supabase.from("user_meditation_history").select("id", { count: "exact", head: true }).eq("user_id", userId), "sent_at", start, end),
   ]);
   return { messages, sessions, journeys, practices };
 }
@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
           whatsappCategory: "weekly_report",
           teaserText: teaser,
         });
-        if (notification.success) await supabase.from("messages").upsert({
+        await supabase.from("messages").upsert({
           user_id: profile.user_id,
           role: "assistant",
           content: teaser,
