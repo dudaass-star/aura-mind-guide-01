@@ -74,4 +74,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Transformar Percurso em acompanhamento vivo, corrigindo links, confiança, retomada, marcos e validação pelo cliente.
 
 - [x] Separar relatórios semanais e mensais, entregá-los na conversa e arquivá-los no Percurso.
-- [ ] Elevar relatórios com evidências verificáveis, períodos fechados, síntese da AURA e correção pelo cliente; validar em clientes reais antes da publicação.
+- [x] Elevar relatórios com evidências verificáveis, períodos fechados, síntese da AURA e correção pelo cliente; validar em clientes reais antes da publicação.

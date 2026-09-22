@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
           user_id: profile.user_id,
           role: "assistant",
           content: teaser,
-          client_message_id: `weekly-report:${saved.id}`,
+          client_message_id: saved.id,
           metadata: { kind: "report_card", report_type: "weekly", report_id: saved.id, path, title: "Sua semana na Olá Aura", cta: "Ver minha semana" },
           delivery_status: "delivered",
         }, { onConflict: "client_message_id" });

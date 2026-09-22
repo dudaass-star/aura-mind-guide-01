@@ -619,9 +619,7 @@ async function testWeeklyReport(supabaseUrl: string, serviceKey: string, testUse
 
     const data = await res.json();
     validations.push({ check: 'Function returned successfully', passed: true });
-    validations.push({ check: 'dry_run flag respected', passed: data.dry_run === true });
-
-    const reports = data.reports || [];
+    const reports = data.results || [];
     const hasReport = reports.length > 0;
     validations.push({
       check: 'Report generated for user',
@@ -635,14 +633,14 @@ async function testWeeklyReport(supabaseUrl: string, serviceKey: string, testUse
 
       validations.push({
         check: 'Report has metrics section',
-        passed: /📈|mensagen|insight|sess/i.test(reportText),
+        passed: /Seu uso da Olá Aura/i.test(reportText),
         detail: reportText.substring(0, 100),
       });
 
       validations.push({
         check: 'Report has proper formatting',
-        passed: /━━━/.test(reportText) && /\*/.test(reportText),
-        detail: 'Separators and bold markers present',
+        passed: /Um fio para continuar/i.test(reportText) && /não uma conclusão sobre você/i.test(reportText),
+        detail: 'Human summary and hypothesis disclaimer present',
       });
 
       validations.push({

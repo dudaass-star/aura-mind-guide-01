@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
       if (savedResult.error) throw savedResult.error;
       const path = `/meu-espaco?tab=percurso&report=monthly&id=${savedResult.data.id}`, teaser = `Seu relatório mensal está pronto, ${name}. Abra para rever o mês com calma e confirmar o que faz sentido para você.`;
       const notification = await routeNotification(db, { userId: profile.user_id, phone: profile.phone || "", idempotencyKey: `monthly-report:${reportMonth}:${profile.user_id}`, category: "report", type: "report_available", firstName: name, path, whatsappText: `${teaser}\n\nhttps://olaaura.com.br${path}`, whatsappCategory: "weekly_report", teaserText: teaser });
-      await db.from("messages").upsert({ user_id: profile.user_id, role: "assistant", content: teaser, client_message_id: `monthly-report:${savedResult.data.id}`, delivery_status: "delivered", metadata: { kind: "report_card", report_type: "monthly", report_id: savedResult.data.id, path, title: "Seu mês em perspectiva", cta: "Abrir meu relatório" } }, { onConflict: "client_message_id" });
+      await db.from("messages").upsert({ user_id: profile.user_id, role: "assistant", content: teaser, client_message_id: savedResult.data.id, delivery_status: "delivered", metadata: { kind: "report_card", report_type: "monthly", report_id: savedResult.data.id, path, title: "Seu mês em perspectiva", cta: "Abrir meu relatório" } }, { onConflict: "client_message_id" });
       results.push({ user_id: profile.user_id, report_id: savedResult.data.id, channel: notification.channel });
     } catch (profileError) { console.error("Falha no relatório mensal", profile.user_id, profileError); }
     if (!target && (profiles?.length || 0) === BATCH_SIZE) await next(offset + BATCH_SIZE, day(periods.start));
