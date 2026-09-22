@@ -1354,7 +1354,7 @@ async function handleActivation(
     } catch (tokenErr) {
       console.warn("[webhook-asaas] ⚠️ Portal token falhou (non-blocking):", tokenErr);
     }
-    const portalLine = portalLink ? `\n\nAcesse seu painel pessoal: ${portalLink} ✨` : "";
+    const portalLine = portalLink ? `\n\nAbra o app Olá Aura: ${portalLink} ✨` : "";
 
     // 5) Monta welcome (3 variantes idênticas ao stripe-webhook).
     const planName = PLAN_NAMES[customerPlan] || "Essencial";

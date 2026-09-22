@@ -460,7 +460,7 @@ async function activateAccess(
     }
 
     const planName = PLAN_NAMES[plan] || "Essencial";
-    const welcome = `Oi, ${name}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nSe preferir, pode me mandar áudio também! 🎙️\n\nDá uma olhada no que você vai ter acesso: https://olaaura.com.br/guia\n\nAcesse seu painel pessoal: https://olaaura.com.br/meu-espaco ✨\n\nMe diz: como você está hoje?`;
+    const welcome = `Oi, ${name}! 🌟 Seu acesso ao app Olá Aura está liberado.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nNo app, você pode falar comigo por texto ou áudio e acessar Sessões, Jornadas, Percurso e Meditações.\n\nAbra o app Olá Aura: https://olaaura.com.br/meu-espaco ✨\n\nMe diz: como você está hoje?`;
 
     await supabase.from("profiles")
       .update({ pending_insight: `[WELCOME]${welcome}` })
