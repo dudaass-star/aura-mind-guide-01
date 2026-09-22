@@ -8,7 +8,7 @@ import { ArrowLeft, BookOpen, Sparkles, Headphones, Lock, Sun, Calendar, User } 
 import { Button } from "@/components/ui/button";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
-import { PortalLoading } from "@/components/portal/shared";
+import { PortalLoading, PortalLoadingInline } from "@/components/portal/shared";
 import { PhoneLinkPrompt } from "@/components/portal/PhoneLinkPrompt";
 import { ConversarTab } from "@/components/portal/ConversarTab";
 import { toast } from "@/hooks/use-toast";
