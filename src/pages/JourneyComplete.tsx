@@ -4,18 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
-import logoOlaAura from "@/assets/logo-ola-aura.png";
-
-const topicEmoji: Record<string, string> = {
-  ansiedade: "🌊",
-  autoconfianca: "💪",
-  procrastinacao: "⏳",
-  relacionamentos: "💞",
-  estresse: "🧘",
-  luto: "🕊️",
-  medo_mudanca: "🦋",
-  inteligencia_emocional: "🧠",
-};
+import { BookOpen, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { JourneyPageShell } from "@/components/portal/JourneyPageShell";
 
 const JourneyComplete = () => {
   const { journeyId, userId } = useParams<{ journeyId: string; userId: string }>();
@@ -67,6 +58,9 @@ const JourneyComplete = () => {
   });
 
   const isLoading = loadingJourney || loadingAll;
+  const backHref = portalToken
+    ? `/meu-espaco?t=${encodeURIComponent(portalToken)}&tab=jornadas`
+    : "/meu-espaco?tab=jornadas";
 
   if (hasPlaceholderParams) {
     return <Navigate to="/meu-espaco" replace />;
@@ -74,51 +68,45 @@ const JourneyComplete = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground font-['Nunito']">Carregando...</div>
-      </div>
+      <JourneyPageShell eyebrow="Conteúdos para você" title="Jornadas" backHref={backHref}>
+        <div className="flex flex-1 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+      </JourneyPageShell>
     );
   }
 
   if (!completedJourney) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="py-4 px-6 flex justify-center border-b border-border/50">
-          <img src={logoOlaAura} alt="Olá AURA" className="h-16 w-auto" />
-        </div>
-        <div className="flex-1 flex items-center justify-center px-6">
+      <JourneyPageShell eyebrow="Conteúdos para você" title="Jornadas" backHref={backHref}>
+        <div className="flex flex-1 items-center justify-center px-6">
           <div className="text-center max-w-md">
-            <p className="text-4xl mb-4">🌿</p>
-            <h1 className="text-xl font-semibold text-foreground mb-2 font-['Fraunces']">Jornada não encontrada</h1>
-            <p className="text-muted-foreground font-['Nunito']">Este link pode ter expirado.</p>
+            <span className="portal-area-content mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl"><BookOpen className="h-6 w-6" /></span>
+            <h2 className="mb-2 font-display text-xl font-semibold text-foreground">Jornada não encontrada</h2>
+            <p className="text-muted-foreground">Este conteúdo não está disponível neste link.</p>
+            <Button asChild variant="outline" className="mt-5"><a href={backHref}>Voltar para Jornadas</a></Button>
           </div>
         </div>
-      </div>
+      </JourneyPageShell>
     );
   }
 
   if (confirmed) {
     const chosen = availableJourneys?.find(j => j.id === chosenJourneyId);
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="bg-card border-b border-border/50">
-          <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
-            <img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto" />
-          </div>
-        </div>
+      <JourneyPageShell eyebrow="Jornada concluída" title="Jornadas" backHref={backHref}>
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="text-center max-w-md space-y-4">
-            <p className="text-5xl">🎯</p>
-            <h1 className="font-['Fraunces'] text-2xl font-semibold text-foreground">Pronto!</h1>
-            <p className="text-foreground/80 font-['Nunito'] text-lg">
+            <span className="portal-area-content mx-auto flex h-14 w-14 items-center justify-center rounded-xl"><CheckCircle2 className="h-6 w-6" /></span>
+            <h2 className="font-display text-2xl font-semibold text-foreground">Pronto!</h2>
+            <p className="text-lg text-foreground/80">
               Sua próxima jornada será <strong>{chosen?.title || "a escolhida"}</strong>.
             </p>
-            <p className="text-muted-foreground font-['Nunito'] text-sm">
-              O primeiro episódio chegará em breve no seu WhatsApp. 💜
+            <p className="text-sm text-muted-foreground">
+              O primeiro episódio aparecerá em breve nas suas Jornadas.
             </p>
+            <Button asChild className="mt-2"><a href={backHref}>Ver minhas Jornadas</a></Button>
           </div>
         </div>
-      </div>
+      </JourneyPageShell>
     );
   }
 
@@ -129,67 +117,59 @@ const JourneyComplete = () => {
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="bg-card border-b border-border/50">
-          <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
-            <img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto" />
-            <span className="text-xs uppercase tracking-wider text-accent font-semibold font-['Nunito']">
-              Jornada concluída
-            </span>
-          </div>
-        </div>
-
-        <div className="max-w-2xl mx-auto w-full px-5 py-8 text-center space-y-4">
-          <p className="text-5xl">🎉</p>
-          <h1 className="font-['Fraunces'] text-2xl md:text-3xl font-semibold text-foreground leading-tight">
+      <JourneyPageShell eyebrow="Jornada concluída" title="Jornadas" backHref={backHref}>
+        <main className="portal-app-content mx-auto w-full max-w-2xl flex-1 px-5 py-7 pb-12">
+        <div className="space-y-4 text-center">
+          <span className="portal-area-content mx-auto flex h-14 w-14 items-center justify-center rounded-xl"><CheckCircle2 className="h-6 w-6" /></span>
+          <h1 className="font-display text-2xl font-semibold leading-tight text-foreground md:text-3xl">
             Parabéns! Você concluiu a jornada
           </h1>
-          <p className="text-accent font-['Fraunces'] text-xl font-medium">
+          <p className="font-display text-xl font-medium text-primary">
             {completedJourney.title}
           </p>
-          <p className="text-muted-foreground font-['Nunito'] text-base max-w-md mx-auto">
+          <p className="mx-auto max-w-md text-base text-muted-foreground">
             Foram {completedJourney.total_episodes} episódios de reflexão e crescimento.
-            Cada manifesto que você leu plantou uma semente. 💜
+            Cada conteúdo que você leu passa a fazer parte da sua biblioteca.
           </p>
         </div>
 
-        <div className="max-w-2xl mx-auto w-full px-5 pb-8">
-          <h2 className="font-['Fraunces'] text-lg font-semibold text-foreground mb-4 text-center">
+        <div className="mt-9 w-full">
+          <h2 className="mb-4 text-center font-display text-lg font-semibold text-foreground">
             Toque na sua próxima jornada
           </h2>
 
           <div className="space-y-3">
             {availableJourneys?.map((journey) => {
-              const emoji = topicEmoji[journey.topic] || "✨";
               const isSelecting = chooseMutation.isPending && chosenJourneyId === journey.id;
               return (
-                <button
+                <Button
                   key={journey.id}
+                  variant="ghost"
                   onClick={() => chooseMutation.mutate(journey.id)}
                   disabled={chooseMutation.isPending}
-                  className={`w-full text-left rounded-xl border-2 p-4 transition-all duration-200 ${
+                  className={`h-auto w-full justify-start rounded-xl border p-4 text-left transition-colors ${
                     isSelecting
-                      ? "border-accent bg-accent/10 shadow-md opacity-70"
-                      : "border-border bg-card hover:border-accent/40 hover:bg-card/80"
+                      ? "border-primary/40 bg-primary/10 opacity-70"
+                      : "border-border bg-card hover:border-primary/35 hover:bg-card"
                   } disabled:opacity-50`}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="text-2xl mt-0.5">{emoji}</span>
+                    <span className="portal-area-content mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"><BookOpen className="h-4 w-4" /></span>
                     <div className="flex-1 min-w-0">
-                      <p className="font-['Fraunces'] font-semibold text-foreground text-base">
+                      <p className="font-display text-base font-semibold text-foreground">
                         {journey.title}
                       </p>
                       {journey.description && (
-                        <p className="text-sm text-muted-foreground font-['Nunito'] mt-1 line-clamp-2">
+                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                           {journey.description}
                         </p>
                       )}
                     </div>
                     {isSelecting && (
-                      <span className="text-accent text-sm font-['Nunito']">Salvando...</span>
+                      <span className="text-sm text-primary">Salvando...</span>
                     )}
                   </div>
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -200,23 +180,13 @@ const JourneyComplete = () => {
             </p>
           )}
 
-          <p className="text-xs text-muted-foreground font-['Nunito'] text-center mt-6">
+          <p className="mt-6 text-center text-xs text-muted-foreground">
             Se não escolher, a próxima jornada será selecionada automaticamente em 48h.
           </p>
         </div>
-
-        <footer className="mt-auto py-6 border-t border-border/50 text-center space-y-2">
-          <p className="text-accent text-lg">💜</p>
-          <a
-            href="https://olaaura.com.br"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block text-xs text-accent hover:text-accent/80 transition-colors font-['Nunito'] underline underline-offset-2"
-          >
-            olaaura.com.br
-          </a>
-        </footer>
-      </div>
+        <div className="mt-9 text-center"><Button asChild variant="outline"><a href={backHref}>Voltar para minhas Jornadas</a></Button></div>
+        </main>
+      </JourneyPageShell>
     </>
   );
 };

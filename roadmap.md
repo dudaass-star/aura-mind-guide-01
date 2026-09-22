@@ -1,3 +1,4 @@
+[x] Padronizar episódios e conclusão de Jornadas com o visual atual do aplicativo e confirmar o acesso global isolado por cliente.
 # Roadmap
 
 - [x] Painel semanal do funil Taster no admin (TasterFunnelPanel em AdminWhatsappRecovery)
