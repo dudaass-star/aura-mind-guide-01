@@ -116,7 +116,9 @@ export default function Episode() {
             <Textarea value={reflection} onChange={(event) => { setReflection(event.target.value); setSavedReflection(false); }} maxLength={2000} placeholder="Uma frase, pergunta ou percepção..." className="mt-4 min-h-28 resize-none rounded-xl" />
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Button variant="outline" disabled={!reflection.trim() || action.isPending} onClick={() => action.mutate({ type: "reflect", text: reflection.trim() })}>{action.isPending ? <Loader2 className="animate-spin" /> : <Heart />} {savedReflection ? "Reflexão guardada" : "Guardar reflexão"}</Button>
-              <Button variant="ghost" onClick={() => { action.mutate({ type: "discuss" }); navigate(talkPath); }}><MessageCircle /> Conversar sobre este episódio</Button>
+              <Button variant="ghost" disabled={action.isPending} onClick={() => action.mutate({ type: "discuss" }, { onSuccess: () => navigate(talkPath) })}>
+                {action.isPending ? <Loader2 className="animate-spin" /> : <MessageCircle />} Conversar sobre este episódio
+              </Button>
             </div>
           </section>
 

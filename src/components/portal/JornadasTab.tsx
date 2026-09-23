@@ -177,7 +177,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
                 <BookOpen className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">{journeyPaused ? "Pausada no seu ponto" : "Em andamento"}</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">{journeyPaused ? "Pausada no seu ponto" : "Em andamento"}</p>
                 <h2 className="mt-1 font-display text-xl font-semibold leading-tight text-foreground">{currentJourney.title}</h2>
                 {currentJourney.description && <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{currentJourney.description}</p>}
               </div>
@@ -190,8 +190,9 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
               <Progress value={progress} className="h-2 bg-secondary" />
             </div>
             <Button variant="ghost" size="sm" className="mt-3" disabled={pauseJourney.isPending} onClick={() => pauseJourney.mutate()}>
-              {journeyPaused ? <Play /> : <Pause />} {journeyPaused ? "Retomar jornada" : "Pausar jornada"}
+              {pauseJourney.isPending ? <Loader2 className="animate-spin" /> : journeyPaused ? <Play /> : <Pause />} {journeyPaused ? "Retomar jornada" : "Pausar jornada"}
             </Button>
+            {pauseJourney.isError && <p className="mt-2 text-sm text-destructive">Não foi possível atualizar agora. Tente novamente.</p>}
           </>
         ) : (
           <div className="text-center">
@@ -246,7 +247,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
                   {episodeNumber}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-foreground">{index === 0 ? "Próximo episódio" : `Etapa ${episodeNumber}`}</span>
+                  <span className="block text-sm font-semibold text-foreground">{index === 0 ? "Próximo episódio" : `Episódio ${episodeNumber}`}</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">{index === 0 ? "Será liberado ao longo da sua jornada" : "Ainda por vir"}</span>
                 </span>
                 {index === 0 ? <Clock className="h-4 w-4 text-primary" /> : <LockKeyhole className="h-4 w-4 text-muted-foreground/70" />}
