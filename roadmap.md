@@ -88,4 +88,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Auditar e simular o agendamento de ponta a ponta: concorrência, limites, segurança, reagendamento, cancelamento, lembretes e tela móvel.
 - [x] Permitir que o cliente agende uma, algumas ou todas as sessões do mês até a cota do plano, com gestão individual e upgrade contextual ao esgotar a cota.
 - [x] Unificar as regras de cota, conflito e concorrência entre o aplicativo e todos os agendamentos feitos pela conversa, usando as sessões reais do mês em Brasília.
-- [ ] Evoluir Sessões para continuidade dos encontros: confiabilidade app-first, agenda mensal, entrada direta, preparação, pós-sessão, hipóteses verificáveis e métricas.
+- [x] Evoluir Sessões para continuidade dos encontros: confiabilidade app-first, agenda mensal, entrada direta, preparação, pós-sessão, hipóteses verificáveis e métricas.
