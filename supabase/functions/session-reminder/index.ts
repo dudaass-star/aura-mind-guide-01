@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
           .eq('user_id', session.user_id)
           .maybeSingle();
 
-        const userName = profile.name || 'você';
+        const userName = profile?.name || 'você';
         const sessionDate = new Date(session.scheduled_at);
         const sessionTime = sessionDate.toLocaleTimeString('pt-BR', {
           hour: '2-digit',
@@ -337,7 +337,7 @@ ${previewSection}
 Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar reagendar! ✨`;
 
         try {
-          const cleanPhone = profile.phone ? cleanPhoneNumber(profile.phone) : '';
+          const cleanPhone = profile?.phone ? cleanPhoneNumber(profile.phone) : '';
           const result = await routeNotification(supabase, {
             userId: session.user_id,
             phone: cleanPhone,
@@ -397,11 +397,11 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
           .eq('user_id', session.user_id)
           .maybeSingle();
 
-        const userName = profile.name || 'você';
+        const userName = profile?.name || 'você';
         const message = `Faltam 5 minutinhos pra nossa sessão, ${userName}! ✨\n\nJá estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensagem que a gente começa. 💜`;
 
         try {
-          const cleanPhone = profile.phone ? cleanPhoneNumber(profile.phone) : '';
+          const cleanPhone = profile?.phone ? cleanPhoneNumber(profile.phone) : '';
 
           // Salva pending_insight com [SESSION_START] para iniciar sessão no clique do botão.
           // Só sobrescreve se estiver vazio OU se já contiver [SESSION_PREARM] da mesma sessão.
