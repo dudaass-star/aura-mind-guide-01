@@ -288,7 +288,7 @@ serve(async (req) => {
           return new Response(JSON.stringify({
             error: isOverdue
               ? "Você já tem uma assinatura da AURA com pagamento pendente. Atualize a forma de pagamento no seu espaço em vez de assinar de novo — assim você não é cobrado duas vezes."
-              : "Você já possui uma assinatura ativa da AURA. Acesse seu WhatsApp ou entre em contato com o suporte.",
+              : "Você já possui uma assinatura ativa da AURA. Entre no aplicativo Olá Aura ou fale com o suporte.",
             code: isOverdue ? "SUBSCRIPTION_PAST_DUE" : "ACTIVE_SUBSCRIPTION_EXISTS",
             subscription_status: activeSub.status,
           }), {

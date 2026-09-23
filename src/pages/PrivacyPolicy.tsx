@@ -22,7 +22,7 @@ const PrivacyPolicy = () => {
         <div className="container mx-auto px-4 max-w-4xl">
           <h1 className="text-4xl font-bold text-center mb-8">Política de Privacidade</h1>
           <p className="text-muted-foreground text-center mb-12">
-            Última atualização: Janeiro de 2025
+            Última atualização: Setembro de 2026
           </p>
 
           <div className="space-y-8 text-foreground/90">
@@ -39,7 +39,7 @@ const PrivacyPolicy = () => {
               <h2 className="text-2xl font-semibold mb-4">2. Dados Coletados</h2>
               <p className="leading-relaxed mb-4">Coletamos os seguintes tipos de dados:</p>
               <ul className="list-disc list-inside space-y-2 leading-relaxed">
-                <li><strong>Dados de identificação:</strong> nome, número de telefone (WhatsApp)</li>
+                <li><strong>Dados de identificação:</strong> nome, email e número de telefone</li>
                 <li><strong>Dados de uso:</strong> histórico de conversas, preferências de sessão, horários de uso</li>
                 <li><strong>Dados de pagamento:</strong> processados de forma segura pelo Stripe (não armazenamos dados de cartão)</li>
                 <li><strong>Dados de bem-estar:</strong> informações compartilhadas durante as sessões para personalização do serviço</li>

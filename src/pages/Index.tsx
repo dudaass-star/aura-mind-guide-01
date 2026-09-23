@@ -31,14 +31,14 @@ const Index = () => {
   return (
     <>
       <Helmet>
-        <title>AURA - Acompanhamento Emocional Acessível no WhatsApp</title>
+        <title>Olá AURA — Acompanhamento emocional no seu aplicativo</title>
         <meta
           name="description"
-          content="Acompanhamento emocional profundo por menos de R$2/dia. Suporte 24/7 no WhatsApp com memória de longo prazo, sessões estruturadas e metodologia. Experimente por 7 dias."
+          content="Converse por texto ou áudio no app Olá Aura, conecte o que acontece na sua vida e encontre clareza em encontros guiados. Experimente por 7 dias."
         />
         <meta
           name="keywords"
-          content="acompanhamento emocional, saúde mental acessível, WhatsApp, ansiedade, autoconhecimento, clareza mental, terapia acessível, suporte emocional"
+          content="acompanhamento emocional, aplicativo de bem-estar, ansiedade, autoconhecimento, clareza mental, direção prática, suporte emocional"
         />
         <link rel="canonical" href="https://olaaura.com.br" />
       </Helmet>
