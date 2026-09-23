@@ -100,6 +100,7 @@ type PendingMessage = {
   audioBase64?: string;
   audioMime?: string;
   audioDurationMs?: number;
+  journeyEpisodeId?: string;
   createdAt: string;
 };
 
@@ -312,6 +313,7 @@ export function ConversarTab({
   isActive = true,
   initialChatOpen = false,
   initialDraft,
+  discussionEpisodeId,
 }: {
   userId: string;
   firstName: string;
@@ -324,6 +326,7 @@ export function ConversarTab({
   isActive?: boolean;
   initialChatOpen?: boolean;
   initialDraft?: string;
+  discussionEpisodeId?: string;
 }) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -409,7 +412,11 @@ export function ConversarTab({
   useEffect(() => {
     if (!initialDraft || appliedInitialDraftRef.current === initialDraft) return;
     appliedInitialDraftRef.current = initialDraft;
-    setDraft((current) => current.trim() ? current : initialDraft);
+    setDraft((current) => {
+      if (!current.trim()) return initialDraft;
+      if (current.includes(initialDraft)) return current;
+      return `${initialDraft}\n\n${current}`;
+    });
     setChatOpen(true);
     window.setTimeout(() => composerRef.current?.focus(), 0);
   }, [initialDraft]);
@@ -705,6 +712,7 @@ export function ConversarTab({
         audio_base64: pending.audioBase64,
         audio_mime: pending.audioMime,
         audio_duration_ms: pending.audioDurationMs,
+        journey_episode_id: pending.journeyEpisodeId,
         client_sent_at: pending.createdAt,
       },
     });
@@ -807,7 +815,7 @@ export function ConversarTab({
 
     const clientId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    const pending: PendingMessage = { clientId, text, createdAt };
+    const pending: PendingMessage = { clientId, text, journeyEpisodeId: discussionEpisodeId, createdAt };
     const optimistic: ChatMessage = {
       id: `local:${clientId}`,
       user_id: userId,

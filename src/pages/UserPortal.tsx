@@ -407,6 +407,7 @@ const UserPortal = () => {
               isActive={activeTab === "conversar"}
               initialChatOpen={shouldOpenConversation}
               initialDraft={discussionPrompt}
+              discussionEpisodeId={discussionEpisode?.id}
             />
           </div>
           <Suspense fallback={<PortalLoadingInline />}>
