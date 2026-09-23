@@ -11,7 +11,7 @@ type NotificationCategory = "response" | "session" | "journey" | "practice" | "r
 
 type NotificationRequest = {
   userId: string;
-  phone: string;
+  phone?: string;
   idempotencyKey: string;
   category: NotificationCategory;
   type: keyof typeof SAFE_PUSH_COPY;
@@ -257,6 +257,15 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     const reason = silentHours ? "silent_hours" : "push_unavailable";
     await supabase.from("notification_deliveries").update({ selected_channel: "none", status: "suppressed", metadata: { reason } }).eq("id", delivery.id);
     return { success: true, channel: "none", reason };
+  }
+
+  if (!request.phone?.trim()) {
+    await supabase.from("notification_deliveries").update({
+      selected_channel: "none",
+      status: "suppressed",
+      metadata: { reason: "whatsapp_unavailable" },
+    }).eq("id", delivery.id);
+    return { success: true, channel: "none", reason: "whatsapp_unavailable" };
   }
 
   const whatsapp = await sendProactive(
