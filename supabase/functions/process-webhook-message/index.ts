@@ -456,6 +456,7 @@ Deno.serve(async (req) => {
   let agentData: any = null;
   let turnOwnerToken: string | null = null;
   let currentMessageId: string | null = null;
+  let currentInboundMessageDbId: string | null = null;
   let isInApp = false;
   let shouldResumeInterruptedTurn = false;
   let firstResponseRecorded = false;
@@ -473,6 +474,7 @@ Deno.serve(async (req) => {
     } = workerPayload;
 
     isInApp = channel === 'in_app';
+    currentInboundMessageDbId = typeof inboundMessageDbId === 'string' ? inboundMessageDbId : null;
 
     contingencyPhone = cleanPhone;
 
@@ -1085,7 +1087,7 @@ Deno.serve(async (req) => {
         .eq('user_id', profile.user_id)
         .maybeSingle();
       inboundMessageCreatedAt = persistedInbound?.created_at ?? null;
-      (globalThis as any).__inboundMessageDbId = inboundMessageDbId;
+      currentInboundMessageDbId = inboundMessageDbId;
     } else if (messageText) {
       try {
         const resultadoPersistencia = await persistirMensagemRecebidaWhatsapp(
@@ -1097,7 +1099,7 @@ Deno.serve(async (req) => {
         const insertedMsg = resultadoPersistencia.mensagem;
         inboundSaved = true;
         inboundMessageCreatedAt = insertedMsg.created_at;
-        (globalThis as any).__inboundMessageDbId = insertedMsg.id;
+        currentInboundMessageDbId = insertedMsg.id;
         console.log(`💾 Inbound message persisted for user ${profile.user_id} (id: ${insertedMsg.id}, criada: ${resultadoPersistencia.criada})`);
       } catch (persistErr) {
         const persistMessage = persistErr instanceof Error ? persistErr.message : String(persistErr);
@@ -2004,7 +2006,7 @@ Deno.serve(async (req) => {
 
     if (supabase && isInApp && profile?.user_id && !sentAnyResponse) {
       try {
-        const replyToMessageId = (globalThis as any).__inboundMessageDbId || null;
+        const replyToMessageId = currentInboundMessageDbId;
         const { data: existingFailure } = await supabase
           .from('messages')
           .select('id')
