@@ -7,6 +7,7 @@ interface VoiceMessagePlayerProps {
   src: string;
   mine: boolean;
   durationMs?: number | null;
+  mimeType?: string;
 }
 
 const SPEEDS = [1, 1.5, 2] as const;
@@ -18,7 +19,7 @@ function formatDuration(seconds: number) {
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function VoiceMessagePlayer({ src, mine, durationMs }: VoiceMessagePlayerProps) {
+export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMessagePlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -124,7 +125,9 @@ export function VoiceMessagePlayer({ src, mine, durationMs }: VoiceMessagePlayer
 
   return (
     <div className="flex min-h-12 w-[min(17rem,76vw)] max-w-full items-center gap-2.5" data-voice-message>
-      <audio ref={audioRef} src={src} preload="metadata" playsInline />
+      <audio ref={audioRef} preload="metadata" playsInline>
+        <source src={src} type={mimeType} />
+      </audio>
       <Button
         type="button"
         size="icon"

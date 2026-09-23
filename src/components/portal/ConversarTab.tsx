@@ -147,6 +147,12 @@ function audioDurationMs(message: ChatMessage) {
   return typeof duration === "number" && duration > 0 ? duration : null;
 }
 
+function audioMimeType(message: ChatMessage) {
+  if (!message.metadata || typeof message.metadata !== "object" || Array.isArray(message.metadata)) return undefined;
+  const mime = (message.metadata as Record<string, unknown>).audio_mime;
+  return typeof mime === "string" && mime ? mime : undefined;
+}
+
 async function hydrateAudioUrls(messages: ChatMessage[]) {
   const paths = [...new Set(messages.map(audioStoragePath).filter((path): path is string => Boolean(path)))];
   if (!paths.length) return messages;
@@ -213,7 +219,7 @@ const MessageTimeline = memo(function MessageTimeline({
                 </div>
               ) : (!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
               {message.is_audio && message.audio_url && (
-                <VoiceMessagePlayer src={message.audio_url} mine={mine} durationMs={audioDurationMs(message)} />
+                <VoiceMessagePlayer src={message.audio_url} mine={mine} durationMs={audioDurationMs(message)} mimeType={audioMimeType(message)} />
               )}
             </div>
             <div className={cn("mt-1.5 flex items-center gap-1 px-1 text-[10px] font-medium text-muted-foreground", mine && "justify-end")}>
@@ -679,6 +685,7 @@ export function ConversarTab({
           id: `local:${clientId}`, user_id: userId, role: "user", content: "Áudio enviado",
           created_at: createdAt, sequence_no: null, client_message_id: clientId,
           delivery_status: "sending", is_audio: true, audio_url: localUrl, optimistic: true,
+           metadata: { audio_duration_ms: duration, audio_mime: blob.type },
         }]);
         setSending(true);
         enqueueOutbox(pending);
