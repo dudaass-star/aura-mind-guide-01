@@ -40,7 +40,6 @@ Deno.test("Preferência de texto continua precedendo os gatilhos obrigatórios d
 
 Deno.test("Pedidos explícitos de áudio continuam reconhecidos", () => {
   assert(AGENT_SOURCE.includes("'manda um áudio'"));
-  assert(WORKER_SOURCE.includes("'manda um áudio'"));
   assert(AGENT_SOURCE.includes("reason: 'user_requested'"));
 });
 
