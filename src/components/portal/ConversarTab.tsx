@@ -316,6 +316,12 @@ export function ConversarTab({
   }, [installApp.available, installApp.installed, userId]);
 
   useEffect(() => {
+    const openPush = () => setShowPushDialog(true);
+    window.addEventListener("aura:open-push", openPush);
+    return () => window.removeEventListener("aura:open-push", openPush);
+  }, []);
+
+  useEffect(() => {
     if (chatOpen || recording || draft.trim() || showInstallInvite || installApp.available || localStorage.getItem("aura-push-enabled") === "true") return;
     const dismissedUntil = Number(localStorage.getItem(`aura-push-dismissed-until:${userId}`) || 0);
     if (dismissedUntil > Date.now()) return;

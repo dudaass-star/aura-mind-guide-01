@@ -386,7 +386,7 @@ const UserPortal = () => {
               onOpenConversation={handleOpenConversation}
             />
           </div>}
-          {visitedTabs.has("sessoes") && <div className={activeTab === "sessoes" ? "block" : "hidden"} aria-hidden={activeTab !== "sessoes"}><SessoesTab userId={userId} profile={profile} onChangePlan={(limit) => { setMinimumSessionLimit(limit); setChangePlanOpen(true); }} /></div>}
+          {visitedTabs.has("sessoes") && <div className={activeTab === "sessoes" ? "block" : "hidden"} aria-hidden={activeTab !== "sessoes"}><SessoesTab userId={userId} profile={profile} onChangePlan={(limit) => { setMinimumSessionLimit(limit); setChangePlanOpen(true); }} onOpenConversation={handleOpenConversation} onOpenNotifications={() => { handleTabClick("conversar"); window.setTimeout(() => window.dispatchEvent(new Event("aura:open-push")), 100); }} /></div>}
           {visitedTabs.has("jornadas") && <div className={activeTab === "jornadas" ? "block" : "hidden"} aria-hidden={activeTab !== "jornadas"}><JornadasTab userId={userId} profile={profile} onJourneyChanged={() => void refetchProfile()} /></div>}
           {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}

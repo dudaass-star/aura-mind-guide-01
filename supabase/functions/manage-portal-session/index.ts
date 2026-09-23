@@ -7,9 +7,11 @@ const corsHeaders = {
 };
 
 const BodySchema = z.object({
-  action: z.enum(["schedule", "reschedule", "cancel"]),
+  action: z.enum(["schedule", "reschedule", "cancel", "start", "save_preparation", "rate", "confirm_reframe", "correct_reframe"]),
   scheduledAt: z.string().datetime().nullable().optional(),
   sessionId: z.string().uuid().nullable().optional(),
+  value: z.string().max(800).nullable().optional(),
+  rating: z.number().int().min(1).max(5).nullable().optional(),
 });
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -29,6 +31,12 @@ function publicError(message: string) {
     "monthly_limit_reached",
     "session_not_available",
     "session_already_started",
+    "session_required",
+    "session_start_unavailable",
+    "invalid_rating",
+    "reframe_not_available",
+    "correction_required",
+    "value_too_long",
   ];
   const code = known.find((candidate) => message.includes(candidate));
   return code === "duplicate_session_window" ? "session_time_conflict" : code || "session_update_failed";
@@ -54,7 +62,7 @@ Deno.serve(async (req) => {
 
     const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return json({ error: "invalid_request" }, 400);
-    if (parsed.data.action !== "cancel") {
+    if (["schedule", "reschedule"].includes(parsed.data.action)) {
       if (!parsed.data.scheduledAt) return json({ error: "future_time_required" }, 400);
       const scheduled = new Date(parsed.data.scheduledAt);
       if (!Number.isFinite(scheduled.getTime()) || scheduled.getUTCMinutes() % 15 !== 0 || scheduled.getUTCSeconds() !== 0) {
@@ -63,12 +71,21 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(url, serviceKey);
-    const { data, error } = await admin.rpc("manage_portal_session_internal", {
-      _user_id: userId,
-      _action: parsed.data.action,
-      _scheduled_at: parsed.data.scheduledAt || null,
-      _session_id: parsed.data.sessionId || null,
-    });
+    const experienceActions = ["save_preparation", "rate", "confirm_reframe", "correct_reframe"];
+    const { data, error } = experienceActions.includes(parsed.data.action)
+      ? await admin.rpc("record_portal_session_experience", {
+          _user_id: userId,
+          _session_id: parsed.data.sessionId || null,
+          _action: parsed.data.action,
+          _value: parsed.data.value || null,
+          _rating: parsed.data.rating || null,
+        })
+      : await admin.rpc("manage_portal_session_internal", {
+          _user_id: userId,
+          _action: parsed.data.action,
+          _scheduled_at: parsed.data.scheduledAt || null,
+          _session_id: parsed.data.sessionId || null,
+        });
     if (error) return json({ error: publicError(error.message) }, 409);
 
     return json({ result: data });

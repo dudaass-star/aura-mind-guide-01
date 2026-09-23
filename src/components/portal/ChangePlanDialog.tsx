@@ -127,6 +127,13 @@ export function ChangePlanDialog({
       if ((data as any)?.error) throw new Error((data as any).error);
 
       await queryClient.invalidateQueries({ queryKey: ["portal-profile", userId] });
+      void supabasePortal.from("portal_value_events").insert({
+        user_id: userId,
+        feature: "session",
+        event_type: "upgrade_completed",
+        source: "app",
+        metadata: { target_plan: selected, billing, gateway: paymentGateway },
+      });
 
       if (showsNextCharge) {
         // Asaas: mostra tela de sucesso com data + valor da próxima cobrança
