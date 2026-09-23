@@ -177,6 +177,15 @@ function recordConversationEvent(userId: string, eventType: string, metadata: Re
   });
 }
 
+function dayKeyBrt() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 async function hydrateAudioUrls(messages: ChatMessage[]) {
   const paths = [...new Set(messages.map(audioStoragePath).filter((path): path is string => Boolean(path)))];
   if (!paths.length) return messages;
@@ -390,6 +399,20 @@ export function ConversarTab({
   useEffect(() => {
     if (initialChatOpen) setChatOpen(true);
   }, [initialChatOpen]);
+
+  useEffect(() => {
+    const openChat = () => setChatOpen(true);
+    window.addEventListener("aura:open-chat", openChat);
+    return () => window.removeEventListener("aura:open-chat", openChat);
+  }, []);
+
+  useEffect(() => {
+    if (!chatOpen || !isActive) return;
+    const key = `aura-conversation-opened:${userId}:${dayKeyBrt()}`;
+    if (sessionStorage.getItem(key) === "true") return;
+    sessionStorage.setItem(key, "true");
+    recordConversationEvent(userId, "conversation_opened", { day_brt: dayKeyBrt() });
+  }, [chatOpen, isActive, userId]);
 
   const postponeInstall = () => {
     localStorage.setItem(`aura-install-dismissed-until:${userId}`, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
@@ -886,6 +909,10 @@ export function ConversarTab({
     { label: "Meditações", detail: "Pausas guiadas para você", tab: "meditacoes", icon: Headphones, tone: "portal-area-audio" },
     { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound, tone: "portal-area-profile" },
   ] as const;
+  const navigateFromConversation = (tab: typeof appAreas[number]["tab"]) => {
+    recordConversationEvent(userId, "area_opened_from_conversation", { destination: tab });
+    onNavigate?.(tab);
+  };
 
   const conversationList = (
     <aside className={cn(
@@ -998,7 +1025,7 @@ export function ConversarTab({
               key={tab}
               type="button"
               variant="ghost"
-              onClick={() => onNavigate?.(tab)}
+              onClick={() => navigateFromConversation(tab)}
               className="group h-auto w-full justify-start gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-card"
             >
               <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105", tone)}>

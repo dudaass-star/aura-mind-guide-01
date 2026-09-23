@@ -148,6 +148,7 @@ const UserPortal = () => {
     }
     localStorage.setItem(`aura-chat-open:${userId}`, "true");
     handleTabClick("conversar");
+    window.setTimeout(() => window.dispatchEvent(new Event("aura:open-chat")), 0);
   };
 
   const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = useQuery({
