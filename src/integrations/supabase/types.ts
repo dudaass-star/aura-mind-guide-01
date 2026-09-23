@@ -1605,6 +1605,81 @@ export type Database = {
         }
         Relationships: []
       }
+      journey_episode_progress: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          discussed_at: string | null
+          episode_id: string
+          episode_number: number
+          id: string
+          journey_id: string
+          last_read_at: string | null
+          opened_at: string | null
+          progress_percent: number
+          reflection_saved_at: string | null
+          reflection_text: string | null
+          released_at: string
+          reminder_sent_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          discussed_at?: string | null
+          episode_id: string
+          episode_number: number
+          id?: string
+          journey_id: string
+          last_read_at?: string | null
+          opened_at?: string | null
+          progress_percent?: number
+          reflection_saved_at?: string | null
+          reflection_text?: string | null
+          released_at?: string
+          reminder_sent_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          discussed_at?: string | null
+          episode_id?: string
+          episode_number?: number
+          id?: string
+          journey_id?: string
+          last_read_at?: string | null
+          opened_at?: string | null
+          progress_percent?: number
+          reflection_saved_at?: string | null
+          reflection_text?: string | null
+          released_at?: string
+          reminder_sent_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_episode_progress_episode_id_fkey"
+            columns: ["episode_id"]
+            isOneToOne: false
+            referencedRelation: "journey_episodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_episode_progress_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "content_journeys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journey_episodes: {
         Row: {
           content_prompt: string
@@ -2231,6 +2306,8 @@ export type Database = {
           extractor_pending_at: string | null
           first_session_invite_attempts: number
           id: string
+          journey_paused: boolean
+          journey_selected_goal: string | null
           journeys_completed: number | null
           last_app_invite_sent_at: string | null
           last_checkin_sent_at: string | null
@@ -2319,6 +2396,8 @@ export type Database = {
           extractor_pending_at?: string | null
           first_session_invite_attempts?: number
           id?: string
+          journey_paused?: boolean
+          journey_selected_goal?: string | null
           journeys_completed?: number | null
           last_app_invite_sent_at?: string | null
           last_checkin_sent_at?: string | null
@@ -2407,6 +2486,8 @@ export type Database = {
           extractor_pending_at?: string | null
           first_session_invite_attempts?: number
           id?: string
+          journey_paused?: boolean
+          journey_selected_goal?: string | null
           journeys_completed?: number | null
           last_app_invite_sent_at?: string | null
           last_checkin_sent_at?: string | null
@@ -4064,20 +4145,29 @@ export type Database = {
       user_journey_history: {
         Row: {
           completed_at: string
+          confirmation_source: string
+          episode_reached: number | null
           id: string
           journey_id: string
+          status: string
           user_id: string
         }
         Insert: {
           completed_at?: string
+          confirmation_source?: string
+          episode_reached?: number | null
           id?: string
           journey_id: string
+          status?: string
           user_id: string
         }
         Update: {
           completed_at?: string
+          confirmation_source?: string
+          episode_reached?: number | null
           id?: string
           journey_id?: string
+          status?: string
           user_id?: string
         }
         Relationships: []
