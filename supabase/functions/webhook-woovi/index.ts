@@ -461,7 +461,7 @@ async function activateAccess(
         needs_schedule_setup: sessionsCount > 0,
         trial_started_at: now.toISOString(),
         trial_phase: "listening",
-        current_journey_id: "j1-ansiedade",
+        current_journey_id: null,
         current_episode: 0,
         plan_expires_at: newExpiry,
         whatsapp_provider: "meta",

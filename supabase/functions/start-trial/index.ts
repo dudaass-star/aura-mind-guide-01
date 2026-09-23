@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
         trial_started_at: new Date().toISOString(),
         trial_conversations_count: 0,
         plan: null,
-        current_journey_id: 'j1-ansiedade',
+        current_journey_id: null,
         current_episode: 0,
         last_content_sent_at: null,
         whatsapp_instance_id: instanceId,
