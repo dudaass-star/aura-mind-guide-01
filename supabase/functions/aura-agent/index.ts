@@ -7661,42 +7661,32 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           _capturedAt = null;
         }
 
-        // Se capturou horário → cria sessão (anti-duplicação ±30min)
+        // Se capturou horário → cria sessão pelas mesmas regras da agenda do app
         let _createdSessionAt: Date | null = null;
         if (_capturedAt && profile.user_id) {
           try {
-            const wStart = new Date(_capturedAt.getTime() - 30 * 60 * 1000).toISOString();
-            const wEnd = new Date(_capturedAt.getTime() + 30 * 60 * 1000).toISOString();
-            const { data: existingNearby } = await supabase
-              .from('sessions')
-              .select('id')
-              .eq('user_id', profile.user_id)
-              .in('status', ['scheduled', 'in_progress'])
-              .gte('scheduled_at', wStart)
-              .lte('scheduled_at', wEnd)
-              .limit(1)
-              .maybeSingle();
-            if (existingNearby) {
-              console.log(`🎯 [D0_REFUSAL] sessão já existe próxima de ${_capturedAt.toISOString()} — ignorando`);
-            } else {
-              const { data: newSess, error: sessErr } = await supabase
+            const { data: schedulingResult, error: sessErr } = await supabase.rpc(
+              'manage_portal_session_internal',
+              {
+                _user_id: profile.user_id,
+                _action: 'schedule',
+                _scheduled_at: _capturedAt.toISOString(),
+                _session_id: null,
+              },
+            );
+            const scheduledSessionId = typeof schedulingResult?.session_id === 'string'
+              ? schedulingResult.session_id
+              : null;
+            if (scheduledSessionId) {
+              await supabase
                 .from('sessions')
-                .insert({
-                  user_id: profile.user_id,
-                  scheduled_at: _capturedAt.toISOString(),
-                  session_type: 'livre',
-                  status: 'scheduled',
-                  duration_minutes: 45,
-                  created_by: 'backend_regex',
-                })
-                .select('id')
-                .single();
-              if (newSess) {
-                _createdSessionAt = _capturedAt;
-                console.log(`🎯 [D0_REFUSAL] sessão criada via regex: ${newSess.id} @ ${_capturedAt.toISOString()}`);
-              } else if (sessErr) {
-                console.error('🎯 [D0_REFUSAL] falha ao criar sessão:', sessErr);
-              }
+                .update({ created_by: 'backend_regex' })
+                .eq('id', scheduledSessionId)
+                .eq('user_id', profile.user_id);
+              _createdSessionAt = _capturedAt;
+              console.log(`🎯 [D0_REFUSAL] sessão criada via regex: ${scheduledSessionId} @ ${_capturedAt.toISOString()}`);
+            } else if (sessErr) {
+              console.error('🎯 [D0_REFUSAL] falha ao criar sessão:', sessErr);
             }
           } catch (insertErr) {
             console.error('🎯 [D0_REFUSAL] exceção ao criar sessão:', insertErr);
