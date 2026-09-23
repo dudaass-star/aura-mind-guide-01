@@ -144,16 +144,15 @@ function detectChannelPreference(message: string): 'audio' | 'texto' | null {
   if (textPhrases.some(p => lower.includes(p))) return 'texto';
   if (/(fala|fale|responde|responder|manda|mande|escreve|escreva)\s+(em|por|no|na|de)\s+texto/i.test(lower)) return 'texto';
 
-  const audioPhrases = [
-    'manda um áudio', 'manda um audio', 'me manda áudio', 'me manda audio',
-    'em áudio', 'em audio', 'mensagem de voz', 'quero ouvir sua voz',
-    'por áudio', 'por audio', 'no áudio', 'no audio', 'em voz',
-    'me responde em áudio', 'me responde em audio',
-    'responde em áudio', 'responde em audio', 'grava um áudio', 'grava um audio',
-    'prefiro áudio', 'prefiro audio',
+  const persistentAudioPhrases = [
+    'prefiro áudio', 'prefiro audio', 'sempre por áudio', 'sempre por audio',
+    'sempre em áudio', 'sempre em audio', 'só por áudio', 'so por audio',
+    'só em áudio', 'so em audio', 'de agora em diante por áudio',
+    'de agora em diante por audio', 'continue mandando áudio',
+    'continue mandando audio', 'continua mandando áudio', 'continua mandando audio',
+    'quero receber suas respostas em áudio', 'quero receber suas respostas em audio',
   ];
-  if (audioPhrases.some(p => lower.includes(p))) return 'audio';
-  if (/(fala|fale|responde|responder|conversa|conversar|manda|mande)\s+(em|por|no|na|de)\s+(á?udio|voz)/i.test(lower)) return 'audio';
+  if (persistentAudioPhrases.some(p => lower.includes(p))) return 'audio';
 
   return null;
 }

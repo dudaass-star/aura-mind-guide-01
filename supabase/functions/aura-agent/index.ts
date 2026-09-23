@@ -3800,6 +3800,21 @@ function userWantsAudio(message: string): boolean {
   return audioIntentRegex.test(lowerMsg);
 }
 
+// Só transforma áudio em preferência contínua quando a pessoa deixa essa
+// duração explícita. Um pedido pontual (inclusive teste) vale apenas no turno.
+function userSetsPersistentAudioPreference(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  const persistentPhrases = [
+    'prefiro áudio', 'prefiro audio', 'sempre por áudio', 'sempre por audio',
+    'sempre em áudio', 'sempre em audio', 'só por áudio', 'so por audio',
+    'só em áudio', 'so em audio', 'de agora em diante por áudio',
+    'de agora em diante por audio', 'continue mandando áudio',
+    'continue mandando audio', 'continua mandando áudio', 'continua mandando audio',
+    'quero receber suas respostas em áudio', 'quero receber suas respostas em audio',
+  ];
+  return persistentPhrases.some((phrase) => lowerMsg.includes(phrase));
+}
+
 // Detecta crise emocional (inclui ideação passiva — para forçar áudio de acolhimento)
 function isCrisis(message: string): boolean {
   return isLifeThreatening(message) || isEmotionalCrisis(message);
@@ -8429,8 +8444,9 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
 
     // Persiste o combinado de canal quando o usuário pede explicitamente.
     // (O worker também grava antes dos handlers; aqui cobre chamadas diretas.)
-    if (wantsAudio || wantsText) {
-      const newMode = wantsAudio ? 'audio' : 'texto';
+    const wantsPersistentAudio = userSetsPersistentAudioPreference(message);
+    if (wantsPersistentAudio || wantsText) {
+      const newMode = wantsPersistentAudio ? 'audio' : 'texto';
       if (profile?.voice_mode !== newMode) {
         supabase.from('profiles')
           .update({ voice_mode: newMode, voice_mode_set_at: new Date().toISOString() })

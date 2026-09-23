@@ -70,8 +70,8 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Unificar Hoje, Sessões, Percurso, Meditações e Sobre você ao novo padrão visual e estrutural do aplicativo.
 - [x] Reintegrar Jornadas de Conteúdo como área própria, com progresso, episódios liberados, histórico e escolha segura.
 - [x] Transformar Jornadas em biblioteca viva, com releitura das concluídas e visão segura das próximas etapas e temas.
-- [ ] Corrigir o desenquadramento da conversa ao abrir o teclado, com validação em iOS e Android.
-- [ ] Separar pedido pontual de áudio de preferência contínua e restaurar o modo automático do perfil afetado.
+- [x] Corrigir o desenquadramento da conversa ao abrir o teclado, com validação em iOS e Android.
+- [x] Separar pedido pontual de áudio de preferência contínua e restaurar o modo automático do perfil afetado.
 - [x] Padronizar episódios e conclusão de Jornadas com o visual atual do aplicativo e confirmar o acesso global isolado por cliente.
 - [x] Transformar Percurso em acompanhamento vivo, corrigindo links, confiança, retomada, marcos e validação pelo cliente.
 
