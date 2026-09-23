@@ -160,13 +160,13 @@ function replyTargetId(message: ChatMessage) {
 }
 
 function recordConversationEvent(userId: string, eventType: string, metadata: Record<string, unknown> = {}) {
-  void supabasePortal.from("portal_value_events").insert({
+  void supabasePortal.from("portal_value_events").insert([{
     user_id: userId,
     feature: "conversation",
     event_type: eventType,
     source: "app",
     metadata,
-  }).then(({ error }) => {
+  }]).then(({ error }) => {
     if (error && error.code !== "23505") console.warn("Não foi possível registrar a interação na conversa");
   });
 }
