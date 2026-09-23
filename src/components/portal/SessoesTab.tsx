@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EmptyState, PortalLoadingInline } from "./shared";
 import { presentClosure } from "./whatsapp";
 import { sanitizePortalText } from "./sanitize";
+import type { Json } from "@/integrations/supabase/types";
 
 const PLAN_SESSION_LIMITS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8 };
 type SessionProfile = { plan?: string | null; plan_tier?: string | null } | null;
@@ -178,7 +179,7 @@ export function SessoesTab({
   }, [activeSessions, date, selectedSession?.id]);
 
   const track = (eventType: string, metadata: Record<string, unknown> = {}) => {
-    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type: eventType, source: "app", metadata });
+    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type: eventType, source: "app", metadata: metadata as Json });
   };
 
   const refresh = async () => {
