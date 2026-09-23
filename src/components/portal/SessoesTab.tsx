@@ -19,7 +19,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_time_interval: "Escolha um horário em intervalos de 15 minutos.",
   session_time_conflict: "Esse horário fica muito perto de outra sessão já agendada.",
   monthly_limit_reached: "Você já usou todas as sessões disponíveis nesse mês.",
-  sessions_paused: "Suas sessões estão pausadas neste período.",
   session_not_available: "Essa sessão não está mais disponível para alteração.",
   session_required: "Essa sessão não está mais disponível. Atualize a tela e tente novamente.",
   session_already_started: "O horário dessa sessão já chegou e ela não pode mais ser alterada.",
