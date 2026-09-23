@@ -236,6 +236,7 @@ export function ConversarTab({
   const installApp = useInstallApp();
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const [mobileViewport, setMobileViewport] = useState<{ height: number; top: number } | null>(null);
   const nearBottomRef = useRef(true);
   const latestSequenceRef = useRef(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -301,6 +302,36 @@ export function ConversarTab({
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior }));
     setShowNew(false);
   };
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    let frame = 0;
+    const syncViewport = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        setMobileViewport({
+          height: Math.round(viewport.height),
+          top: Math.round(viewport.offsetTop),
+        });
+        if (document.activeElement === composerRef.current) {
+          scrollToBottom("auto");
+        }
+      });
+    };
+
+    syncViewport();
+    viewport.addEventListener("resize", syncViewport);
+    viewport.addEventListener("scroll", syncViewport);
+    window.addEventListener("orientationchange", syncViewport);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      viewport.removeEventListener("resize", syncViewport);
+      viewport.removeEventListener("scroll", syncViewport);
+      window.removeEventListener("orientationchange", syncViewport);
+    };
+  }, []);
 
   useEffect(() => {
     if (!chatOpen) return;
@@ -856,7 +887,10 @@ export function ConversarTab({
              placeholder="Mensagem..."
             className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-base text-foreground outline-none placeholder:text-muted-foreground"
             aria-label="Mensagem para a AURA"
-            onFocus={() => setTimeout(() => scrollToBottom(), 250)}
+            onFocus={() => {
+              setTimeout(() => scrollToBottom("auto"), 120);
+              setTimeout(() => scrollToBottom("auto"), 350);
+            }}
           />
           {!draft.trim() && (
             <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" disabled={sending} onClick={() => void startRecording()} aria-label="Gravar áudio"><Mic /></Button>
@@ -874,7 +908,10 @@ export function ConversarTab({
   );
 
   return (
-    <main className="portal-chat-theme min-h-dvh bg-foreground/10 md:flex md:items-center md:justify-center md:p-6">
+    <main
+      className="portal-chat-theme fixed inset-x-0 min-h-0 overflow-hidden bg-foreground/10 md:relative md:inset-auto md:min-h-dvh md:overflow-visible md:flex md:items-center md:justify-center md:p-6"
+      style={mobileViewport ? { height: `${mobileViewport.height}px`, top: `${mobileViewport.top}px` } : { height: "100dvh", top: 0 }}
+    >
        <div className={cn("mx-auto flex w-full overflow-hidden bg-background md:rounded-2xl md:border md:border-border/70 md:shadow-card", chatOpen ? "max-w-4xl" : "max-w-lg")}>
         {conversationList}
         {openConversation}

@@ -1,13 +1,14 @@
 ---
 name: Preferência de canal persistente (voice_mode)
-description: profiles.voice_mode ('auto'|'audio'|'texto') + voice_mode_set_at guardam o combinado de áudio/texto por 7 dias; gravado no worker antes de qualquer handler e lido por determineAudioMode.
+description: profiles.voice_mode ('auto'|'audio'|'texto') + voice_mode_set_at guardam somente preferências contínuas explícitas por 7 dias; pedidos pontuais valem um turno.
 type: feature
 ---
 **Problema:** `wantsAudio` era recalculado a cada turno pelo texto da mensagem. O usuário pedia áudio uma vez, a AURA prometia, e no turno seguinte "esquecia" — promessa quebrada repetidamente na mesma sessão. Pior: estados como a Cápsula do Tempo interceptavam a mensagem e o pedido nem chegava ao agente.
 
 **Solução:**
 - Colunas `profiles.voice_mode` ('auto' | 'audio' | 'texto') e `profiles.voice_mode_set_at`.
-- `process-webhook-message`: `detectChannelPreference()` roda ANTES de qualquer handler de estado e persiste a preferência no perfil sempre.
+- `process-webhook-message`: `detectChannelPreference()` roda ANTES de qualquer handler de estado, mas só persiste áudio quando há duração explícita (ex.: “prefiro áudio”, “sempre por áudio”, “continue mandando áudio”).
+- Pedidos pontuais como “manda um áudio”, “um áudio por favor” ou “um áudio para teste” geram áudio apenas naquela resposta e não alteram `voice_mode`.
 - `aura-agent > determineAudioMode`: preferência vale 7 dias (`voice_mode_set_at`). `texto` fresco = respeita texto (exceto risco de vida); `audio` fresco = `reason: 'voice_mode_audio'` e entra no bypass de `splitIntoMessages`, respeitando o teto de orçamento do plano.
 - Sai do modo por pedido contrário explícito ou pela expiração de 7 dias.
 

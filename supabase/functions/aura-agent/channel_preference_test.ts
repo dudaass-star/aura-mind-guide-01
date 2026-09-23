@@ -43,3 +43,24 @@ Deno.test("Pedidos explícitos de áudio continuam reconhecidos", () => {
   assert(WORKER_SOURCE.includes("'manda um áudio'"));
   assert(AGENT_SOURCE.includes("reason: 'user_requested'"));
 });
+
+Deno.test("Pedido pontual de áudio não vira preferência contínua", () => {
+  const workerDetectorStart = WORKER_SOURCE.indexOf("function detectChannelPreference");
+  const workerDetectorEnd = WORKER_SOURCE.indexOf("\nasync function ", workerDetectorStart);
+  const workerDetector = WORKER_SOURCE.slice(workerDetectorStart, workerDetectorEnd);
+  const persistenceStart = AGENT_SOURCE.indexOf("function userSetsPersistentAudioPreference");
+  const persistenceEnd = AGENT_SOURCE.indexOf("\nfunction ", persistenceStart + 1);
+  const persistenceDetector = AGENT_SOURCE.slice(persistenceStart, persistenceEnd);
+
+  for (const phrase of ["manda um áudio", "áudio por favor", "um áudio", "para fazermos um teste"]) {
+    assert(!workerDetector.includes(`'${phrase}'`), `worker persiste pedido pontual: ${phrase}`);
+    assert(!persistenceDetector.includes(`'${phrase}'`), `agente persiste pedido pontual: ${phrase}`);
+  }
+});
+
+Deno.test("Preferência contínua de áudio exige duração explícita", () => {
+  for (const phrase of ["prefiro áudio", "sempre por áudio", "continue mandando áudio"]) {
+    assert(AGENT_SOURCE.includes(`'${phrase}'`), `agente não reconhece preferência contínua: ${phrase}`);
+    assert(WORKER_SOURCE.includes(`'${phrase}'`), `worker não reconhece preferência contínua: ${phrase}`);
+  }
+});
