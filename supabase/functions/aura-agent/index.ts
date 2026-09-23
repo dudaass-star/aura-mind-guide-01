@@ -5323,29 +5323,32 @@ serve(async (req) => {
       }
     }
 
-    // Verificar se precisa resetar sessões mensais
-    const nowDate = new Date();
-    const currentMonth = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}-01`;
-    
-    if (profile && profile.sessions_reset_date !== currentMonth) {
-      console.log('🔄 Resetting monthly sessions. Old date:', profile.sessions_reset_date, 'New date:', currentMonth);
-      await supabase
-        .from('profiles')
-        .update({
-          sessions_used_this_month: 0,
-          sessions_reset_date: currentMonth
-        })
-        .eq('id', profile.id);
-      
-      profile.sessions_used_this_month = 0;
-      profile.sessions_reset_date = currentMonth;
+    // A cota usa as sessões reais do mês em Brasília, a mesma fonte do aplicativo.
+    const brtMonthParts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit',
+    }).formatToParts(new Date());
+    const brtYear = brtMonthParts.find((part) => part.type === 'year')?.value || '';
+    const brtMonth = brtMonthParts.find((part) => part.type === 'month')?.value || '';
+    const monthStart = new Date(`${brtYear}-${brtMonth}-01T00:00:00-03:00`);
+    const nextMonthStart = new Date(monthStart);
+    nextMonthStart.setUTCMonth(nextMonthStart.getUTCMonth() + 1);
+    let monthlySessionsUsed = 0;
+    if (profile?.user_id) {
+      const { count, error: monthlyUsageError } = await supabase
+        .from('sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', profile.user_id)
+        .in('status', ['scheduled', 'in_progress', 'completed', 'no_show'])
+        .gte('scheduled_at', monthStart.toISOString())
+        .lt('scheduled_at', nextMonthStart.toISOString());
+      if (monthlyUsageError) throw monthlyUsageError;
+      monthlySessionsUsed = count || 0;
     }
 
     // Calcular sessões disponíveis
     let sessionsAvailable = 0;
     if (planConfig.sessions > 0 && profile) {
-      const sessionsUsed = profile.sessions_used_this_month || 0;
-      sessionsAvailable = Math.max(0, planConfig.sessions - sessionsUsed);
+      sessionsAvailable = Math.max(0, planConfig.sessions - monthlySessionsUsed);
     }
 
     // ========================================================================
@@ -5379,39 +5382,30 @@ serve(async (req) => {
       if (_d0Msg.length > 0 && _d0Msg.length <= 40 && _d0AcceptRegex.test(_d0Msg)) {
         console.log(`🎯 [D0_ACCEPT] Aceite determinístico detectado para user ${profile.user_id} (msg="${_d0Msg}")`);
         try {
-          const _nowIso = new Date().toISOString();
-          const { data: newD0Session, error: d0Err } = await supabase
-            .from('sessions')
-            .insert({
-              user_id: profile.user_id,
-              scheduled_at: _nowIso,
-              started_at: _nowIso,
-              status: 'in_progress',
-              session_type: 'livre',
-              duration_minutes: 45,
-              created_by: 'backend_d0_accept',
-            })
-            .select()
-            .single();
+          const { data: d0Result, error: d0Err } = await supabase.rpc('manage_portal_session_internal', {
+            _user_id: profile.user_id,
+            _action: 'start_now',
+            _scheduled_at: null,
+            _session_id: null,
+          });
+          const newD0SessionId = typeof d0Result?.session_id === 'string' ? d0Result.session_id : null;
 
-          if (newD0Session) {
+          if (newD0SessionId) {
             await supabase
               .from('profiles')
               .update({
-                current_session_id: newD0Session.id,
-                sessions_used_this_month: (profile.sessions_used_this_month || 0) + 1,
                 pending_first_session_invite: false,
                 first_session_invite_attempts: 0,
               })
               .eq('id', profile.id);
 
             // Atualiza objeto em memória para o resto do fluxo
-            (profile as any).current_session_id = newD0Session.id;
+            (profile as any).current_session_id = newD0SessionId;
             (profile as any).pending_first_session_invite = false;
             (profile as any).first_session_invite_attempts = 0;
-            (profile as any).sessions_used_this_month = (profile.sessions_used_this_month || 0) + 1;
+            monthlySessionsUsed += 1;
             sessionsAvailable = Math.max(0, sessionsAvailable - 1);
-            console.log(`✅ [D0_ACCEPT] Sessão D0 criada e iniciada: ${newD0Session.id}`);
+            console.log(`✅ [D0_ACCEPT] Sessão D0 criada e iniciada: ${newD0SessionId}`);
           } else {
             console.error('❌ [D0_ACCEPT] Falha ao criar sessão D0:', d0Err);
           }
@@ -5747,33 +5741,18 @@ serve(async (req) => {
         console.warn(`🛑 BLOQUEADO início precoce de sessão ${pendingScheduledSession.id}: diff=${diffMin.toFixed(1)}min, notified=false`);
         shouldStartSession = false;
       }
-      // GUARDA DE COTA MENSAL: não iniciar sessão se usuário já estourou o limite do plano.
-      if (shouldStartSession && planConfig.sessions > 0 && sessionsAvailable <= 0) {
-        console.warn(`🛑 BLOQUEADO início de sessão ${pendingScheduledSession.id}: cota mensal esgotada (plano=${userPlan}, usadas=${profile.sessions_used_this_month})`);
-        shouldStartSession = false;
-      }
     }
 
     if (shouldStartSession && pendingScheduledSession && profile) {
       const now = new Date().toISOString();
       
-      // Atualizar sessão para in_progress
-      await supabase
-        .from('sessions')
-        .update({
-          status: 'in_progress',
-          started_at: now
-        })
-        .eq('id', pendingScheduledSession.id);
-
-      // Atualizar profile com current_session_id e incrementar sessões usadas
-      await supabase
-        .from('profiles')
-        .update({
-          current_session_id: pendingScheduledSession.id,
-          sessions_used_this_month: (profile.sessions_used_this_month || 0) + 1
-        })
-        .eq('id', profile.id);
+      const { error: startSessionError } = await supabase.rpc('manage_portal_session_internal', {
+        _user_id: profile.user_id,
+        _action: 'start',
+        _scheduled_at: null,
+        _session_id: pendingScheduledSession.id,
+      });
+      if (startSessionError) throw startSessionError;
 
       sessionActive = true;
       currentSession = { ...pendingScheduledSession, status: 'in_progress', started_at: now };
@@ -5795,31 +5774,16 @@ serve(async (req) => {
       const lowerMsg = message.toLowerCase().trim();
       const userWantsToStartMissedSession = confirmPhrasesMissed.some(p => lowerMsg.includes(p));
 
-      // GUARDA DE COTA MENSAL: não reativar sessão perdida se já estourou o plano.
-      const quotaOk = !(planConfig.sessions > 0 && sessionsAvailable <= 0);
-      if (!quotaOk) {
-        console.warn(`🛑 BLOQUEADO reativação de sessão perdida ${recentMissedSession.id}: cota mensal esgotada (plano=${userPlan}, usadas=${profile.sessions_used_this_month})`);
-        recentMissedSession = null;
-      } else if (userWantsToStartMissedSession) {
+      if (userWantsToStartMissedSession) {
         const now = new Date().toISOString();
 
-        // Reativar sessão: mudar status para in_progress
-        await supabase
-          .from('sessions')
-          .update({
-            status: 'in_progress',
-            started_at: now
-          })
-          .eq('id', recentMissedSession.id);
-
-        // Atualizar profile com current_session_id e incrementar sessões usadas
-        await supabase
-          .from('profiles')
-          .update({
-            current_session_id: recentMissedSession.id,
-            sessions_used_this_month: (profile.sessions_used_this_month || 0) + 1
-          })
-          .eq('id', profile.id);
+        const { error: reactivateError } = await supabase.rpc('manage_portal_session_internal', {
+          _user_id: profile.user_id,
+          _action: 'start',
+          _scheduled_at: null,
+          _session_id: recentMissedSession.id,
+        });
+        if (reactivateError) throw reactivateError;
 
         sessionActive = true;
         currentSession = { ...recentMissedSession, status: 'in_progress', started_at: now };
@@ -6386,7 +6350,7 @@ REGRA: ${behaviorInstruction}`;
         }
       }
 
-      const sessionsUsed = profile?.sessions_used_this_month || 0;
+      const sessionsUsed = monthlySessionsUsed;
       const totalSessions = planConfig.sessions;
       if (totalSessions > 0) {
         const remaining = Math.max(0, totalSessions - sessionsUsed);
@@ -6569,17 +6533,18 @@ INSTRUÇÃO: Retome de onde pararam naturalmente. Diga algo como "Que bom que vo
             await supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id);
           } else {
             // INICIAR SESSÃO AGORA
-            const startNow = new Date().toISOString();
-            await supabase.from('sessions').update({
-              status: 'in_progress',
-              started_at: startNow,
-              session_start_notified: true,
-            }).eq('id', sessionId);
+            const { error: prearmStartError } = await supabase.rpc('manage_portal_session_internal', {
+              _user_id: profile.user_id,
+              _action: 'start',
+              _scheduled_at: null,
+              _session_id: sessionId,
+            });
+            if (prearmStartError) throw prearmStartError;
 
-            await supabase.from('profiles').update({
-              current_session_id: sessionId,
-              pending_insight: null,
-            }).eq('id', profile.id);
+            await Promise.all([
+              supabase.from('sessions').update({ session_start_notified: true }).eq('id', sessionId),
+              supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id),
+            ]);
 
             const sessionType = prearmSession.session_type || 'livre';
             const focusTopic = prearmSession.focus_topic;
