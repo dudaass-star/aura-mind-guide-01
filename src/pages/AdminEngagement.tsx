@@ -11,7 +11,7 @@ import PixAutomaticoDiaPanel from '@/components/admin/PixAutomaticoDiaPanel';
 import DisputasPixPanel from '@/components/admin/DisputasPixPanel';
 import PaymentDunningPanel from '@/components/admin/PaymentDunningPanel';
 
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard, Mail, ChevronDown, MessageCircle, Heart } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard, Mail, ChevronDown, MessageCircle, Heart, BookOpen } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
@@ -189,6 +189,11 @@ interface Metrics {
   conversationWithin30Seconds?: number;
   conversationOpenings?: number;
   conversationCorrectionsPer100?: number;
+  journeyReleased?: number;
+  journeyOpened?: number;
+  journeyCompleted?: number;
+  journeyReflections?: number;
+  journeyDiscussion?: number;
   // 🧭 Fechamento de sessão
   closureTotal?: number;
   closureDialogada?: number;
@@ -1011,6 +1016,19 @@ export default function AdminEngagement() {
                         R$ {(metrics.arrBRL ?? metrics.mrrTotalBRL * 12).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
                       </div>
                       <p className="text-[11px] text-muted-foreground">projeção anualizada (MRR × 12)</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">Jornadas</CardTitle>
+                      <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="space-y-1 p-3 pt-0">
+                      <div className="text-xl font-bold text-foreground">{metrics.journeyOpened ?? 0}</div>
+                      <p className="text-[11px] text-muted-foreground">episódios abertos · {metrics.journeyReleased ?? 0} liberados</p>
+                      <p className="text-[11px] text-muted-foreground">{metrics.journeyCompleted ?? 0} concluídos · {metrics.journeyReflections ?? 0} reflexões</p>
+                      <p className="text-[10px] text-muted-foreground">{metrics.journeyDiscussion ?? 0} levaram o tema à conversa</p>
                     </CardContent>
                   </Card>
 
