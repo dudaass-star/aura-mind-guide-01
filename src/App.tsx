@@ -40,7 +40,12 @@ const AdminLayout = lazy(() => import("./components/admin/AdminLayout"));
 const UserGuide = lazy(() => import("./pages/UserGuide"));
 const Episode = lazy(() => import("./pages/Episode"));
 const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
-const UserPortal = lazy(() => import("./pages/UserPortal"));
+// O aplicativo instalado abre sempre por esta tela. Começar a baixá-la antes
+// de o roteador terminar reduz a espera visual sem aumentar o trabalho das outras páginas.
+const userPortalModule = window.location.pathname.startsWith("/meu-espaco")
+  ? import("./pages/UserPortal")
+  : null;
+const UserPortal = lazy(() => userPortalModule ?? import("./pages/UserPortal"));
 const PortalLogin = lazy(() => import("./pages/PortalLogin"));
 const PortalWhatsAppAccess = lazy(() => import("./pages/PortalWhatsAppAccess"));
 const PortalAuthCallback = lazy(() => import("./pages/PortalAuthCallback"));

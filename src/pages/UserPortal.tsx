@@ -162,7 +162,9 @@ const UserPortal = () => {
   };
 
   const prefetchArea = (id: TabId) => {
-    if (id !== "conversar") void AREA_LOADERS[id]();
+    if (id === "conversar") return;
+    void AREA_LOADERS[id]();
+    setVisitedTabs((current) => current.has(id) ? current : new Set(current).add(id));
   };
 
   useEffect(() => {

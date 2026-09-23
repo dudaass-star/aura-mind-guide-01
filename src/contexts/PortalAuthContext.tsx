@@ -42,7 +42,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
   const [linkStatus, setLinkStatus] = useState<LinkStatus>("idle");
   const linkPromiseRef = useRef<Promise<LinkStatus> | null>(null);
 
-  const runLink = async (phone?: string): Promise<LinkStatus> => {
+  const runLink = async (phone?: string, expectedUserId?: string): Promise<LinkStatus> => {
     if (linkPromiseRef.current) return linkPromiseRef.current;
     const request = (async (): Promise<LinkStatus> => {
       setLinkStatus("linking");
@@ -61,7 +61,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
             ? "phone_taken"
             : "needs_phone";
         setLinkStatus(next);
-        const linkedUserId = data?.user_id || session?.user?.id;
+        const linkedUserId = expectedUserId || session?.user?.id;
         if (next === "linked" && linkedUserId) {
           localStorage.setItem(`aura-portal-linked:${linkedUserId}`, String(Date.now()));
         }
@@ -84,7 +84,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       if (s?.user) {
         if (linkedRecently(s.user.id)) setLinkStatus("linked");
-        else void runLink();
+        else void runLink(undefined, s.user.id);
       } else {
         setLinkStatus("idle");
       }
@@ -102,7 +102,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       if (data.session?.user) {
         if (linkedRecently(data.session.user.id)) setLinkStatus("linked");
-        else void runLink();
+        else void runLink(undefined, data.session.user.id);
       }
     })();
 
@@ -132,7 +132,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
         loading,
         signOut,
         linkStatus,
-        linkByPhone: (phone: string) => runLink(phone),
+        linkByPhone: (phone: string) => runLink(phone, session?.user?.id),
       }}
     >
       {children}
