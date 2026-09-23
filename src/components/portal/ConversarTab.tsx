@@ -578,7 +578,22 @@ export function ConversarTab({
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "aura_response_state", filter: `user_id=eq.${userId}` },
-        (payload) => setResponding(Boolean(payload.new.is_responding)),
+        (payload) => {
+          const isResponding = Boolean(payload.new.is_responding);
+          setResponding(isResponding);
+          if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
+          if (!isResponding) return;
+
+          const startedAt = typeof payload.new.response_started_at === "string"
+            ? new Date(payload.new.response_started_at).getTime()
+            : Date.now();
+          const remainingMs = Math.max(0, 40_000 - Math.max(0, Date.now() - startedAt));
+          responseTimerRef.current = window.setTimeout(() => {
+            setResponding(false);
+            setResponseIssue("A resposta demorou mais que o esperado.");
+            recordConversationEvent(userId, "response_timeout", { seconds: 40, source: "response_state" });
+          }, remainingMs);
+        },
       )
       .subscribe((status) => {
         const subscribed = status === "SUBSCRIBED";
