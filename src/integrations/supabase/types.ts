@@ -2232,6 +2232,7 @@ export type Database = {
           first_session_invite_attempts: number
           id: string
           journeys_completed: number | null
+          last_app_invite_sent_at: string | null
           last_checkin_sent_at: string | null
           last_content_sent_at: string | null
           last_interaction_closure_at: string | null
@@ -2319,6 +2320,7 @@ export type Database = {
           first_session_invite_attempts?: number
           id?: string
           journeys_completed?: number | null
+          last_app_invite_sent_at?: string | null
           last_checkin_sent_at?: string | null
           last_content_sent_at?: string | null
           last_interaction_closure_at?: string | null
@@ -2406,6 +2408,7 @@ export type Database = {
           first_session_invite_attempts?: number
           id?: string
           journeys_completed?: number | null
+          last_app_invite_sent_at?: string | null
           last_checkin_sent_at?: string | null
           last_content_sent_at?: string | null
           last_interaction_closure_at?: string | null
