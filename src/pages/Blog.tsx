@@ -166,8 +166,8 @@ const Blog = () => {
                     Quer falar com alguém agora?
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    A Aura tá no seu WhatsApp 24/7. Acompanhamento emocional contínuo, R$ 6,90 nos
-                    7 primeiros dias.
+                    Converse por texto ou áudio no app Olá Aura. Acompanhamento emocional contínuo,
+                    R$ 6,90 nos 7 primeiros dias.
                   </p>
                 </div>
                 <Button asChild className="w-full">
