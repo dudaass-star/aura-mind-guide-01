@@ -10,6 +10,7 @@ import { InstallAppMenuItem, useInstallApp } from "@/components/portal/InstallAp
 import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDialog";
 import { ValueDiscoveryCard } from "@/components/portal/ValueDiscoveryCard";
 import { reportPushConversion } from "@/lib/push-notifications";
+import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
 
 type ChatMessage = {
   id: string;
@@ -136,7 +137,8 @@ const MessageTimeline = memo(function MessageTimeline({
         return (
           <div key={message.id} data-chat-message className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
-              "min-w-0 max-w-[86%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed md:max-w-[76%]",
+              "min-w-0 max-w-[86%] rounded-2xl text-[15px] leading-relaxed md:max-w-[76%]",
+              message.is_audio && message.audio_url ? "px-2.5 py-2" : "px-4 py-3",
               mine ? "rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : "rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm",
               message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
             )} data-message-bubble>
@@ -165,10 +167,7 @@ const MessageTimeline = memo(function MessageTimeline({
                 </div>
               ) : (!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
               {message.is_audio && message.audio_url && (
-                <div className="w-[min(16rem,72vw)] max-w-full">
-                  <p className={cn("mb-1.5 text-xs font-semibold", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>Mensagem de voz</p>
-                  <audio controls controlsList="nodownload" preload="metadata" playsInline className="block h-10 w-full max-w-full" src={message.audio_url} />
-                </div>
+                <VoiceMessagePlayer src={message.audio_url} mine={mine} />
               )}
             </div>
             <div className={cn("mt-1.5 flex items-center gap-1 px-1 text-[10px] font-medium text-muted-foreground", mine && "justify-end")}>

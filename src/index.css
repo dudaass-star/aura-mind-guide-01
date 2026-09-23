@@ -152,6 +152,66 @@
   font-family: "Outfit", sans-serif;
 }
 
+.portal-voice-progress {
+  appearance: none;
+  background: transparent;
+}
+
+.portal-voice-progress::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background-color: hsl(var(--border));
+}
+
+.portal-voice-progress::-webkit-slider-thumb {
+  width: 11px;
+  height: 11px;
+  margin-top: -4px;
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background-color: hsl(var(--primary));
+  box-shadow: 0 1px 3px hsl(var(--foreground) / 0.2);
+}
+
+.portal-voice-progress::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background-color: hsl(var(--border));
+}
+
+.portal-voice-progress::-moz-range-progress {
+  height: 3px;
+  border-radius: 999px;
+  background-color: hsl(var(--primary));
+}
+
+.portal-voice-progress::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 0;
+  border-radius: 999px;
+  background-color: hsl(var(--primary));
+  box-shadow: 0 1px 3px hsl(var(--foreground) / 0.2);
+}
+
+.portal-voice-progress-mine::-webkit-slider-runnable-track {
+  background-color: hsl(var(--primary-foreground) / 0.42);
+}
+
+.portal-voice-progress-mine::-webkit-slider-thumb,
+.portal-voice-progress-mine::-moz-range-thumb {
+  background-color: hsl(var(--primary-foreground));
+}
+
+.portal-voice-progress-mine::-moz-range-track {
+  background-color: hsl(var(--primary-foreground) / 0.42);
+}
+
+.portal-voice-progress-mine::-moz-range-progress {
+  background-color: hsl(var(--primary-foreground));
+}
+
 .portal-primary-conversation {
   background-color: hsl(var(--portal-conversation));
   border-color: hsl(var(--portal-conversation-border));
