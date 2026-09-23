@@ -27,6 +27,7 @@ function publicError(message: string) {
     "active_session_exists",
     "duplicate_session_window",
     "monthly_limit_reached",
+    "sessions_paused",
     "session_not_available",
     "session_already_started",
   ];
