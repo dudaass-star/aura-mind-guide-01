@@ -13,6 +13,7 @@ import { ValueDiscoveryCard } from "@/components/portal/ValueDiscoveryCard";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
 import type { Json } from "@/integrations/supabase/types";
+import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 
 type ChatMessage = {
   id: string;
@@ -305,6 +306,7 @@ export function ConversarTab({
   userId,
   firstName,
   onNavigate,
+  onPrefetch,
   onOpenBilling,
   onChangePlan,
   onSignOut,
@@ -318,6 +320,7 @@ export function ConversarTab({
   userId: string;
   firstName: string;
   onNavigate?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes") => void;
+  onPrefetch?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes") => void;
   onOpenBilling: () => void;
   onChangePlan: () => void;
   onSignOut: () => void;
@@ -329,9 +332,14 @@ export function ConversarTab({
   discussionEpisodeId?: string;
 }) {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messageCacheKey = `aura-chat-messages:${userId}`;
+  const cachedMessages = useMemo(
+    () => readPortalCache<ChatMessage[]>(messageCacheKey, 7 * 24 * 60 * 60 * 1000)?.value ?? [],
+    [messageCacheKey],
+  );
+  const [messages, setMessages] = useState<ChatMessage[]>(cachedMessages);
   const [draft, setDraft] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(cachedMessages.length === 0);
   const [sending, setSending] = useState(false);
   const [responding, setResponding] = useState(false);
   const [responseIssue, setResponseIssue] = useState<string | null>(null);
@@ -548,7 +556,13 @@ export function ConversarTab({
       ]);
       if (!error && data) {
         const hydrated = await hydrateAudioUrls(data as ChatMessage[]);
-        setMessages(orderMessages(hydrated));
+        const ordered = orderMessages(hydrated);
+        setMessages(ordered);
+        writePortalCache(messageCacheKey, ordered.map((message) => ({
+          ...message,
+          audio_url: message.audio_url?.startsWith("blob:") ? null : message.audio_url,
+          optimistic: false,
+        })));
         setHasOlder(data.length === PAGE_SIZE);
         setTimeout(() => scrollToBottom("auto"), 0);
       }
@@ -655,7 +669,19 @@ export function ConversarTab({
       document.removeEventListener("visibilitychange", onVisibility);
       void supabasePortal.removeChannel(channel);
     };
-  }, [userId]);
+  }, [messageCacheKey, userId]);
+
+  useEffect(() => {
+    if (loading || messages.length === 0) return;
+    const timer = window.setTimeout(() => {
+      writePortalCache(messageCacheKey, messages.slice(-PAGE_SIZE).map((message) => ({
+        ...message,
+        audio_url: message.audio_url?.startsWith("blob:") ? null : message.audio_url,
+        optimistic: false,
+      })));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [loading, messageCacheKey, messages]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -1086,6 +1112,9 @@ export function ConversarTab({
               type="button"
               variant="ghost"
               onClick={() => navigateFromConversation(tab)}
+              onPointerEnter={() => onPrefetch?.(tab)}
+              onFocus={() => onPrefetch?.(tab)}
+              onTouchStart={() => onPrefetch?.(tab)}
               className="group h-auto w-full justify-start gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-card"
             >
               <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105", tone)}>
