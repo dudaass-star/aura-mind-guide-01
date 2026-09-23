@@ -76,7 +76,7 @@ const benefits = [
 {
   icon: Bell,
   title: "Lembretes na hora certa",
-  description: "Pediu pra lembrar de algo? A AURA agenda e te avisa no horário exato pelo WhatsApp.",
+  description: "Pediu pra lembrar de algo? A AURA agenda e te avisa no horário exato pelo aplicativo.",
   color: "bg-sky-soft",
   iconColor: "text-sky"
 }];
