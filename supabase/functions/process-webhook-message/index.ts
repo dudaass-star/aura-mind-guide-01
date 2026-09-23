@@ -38,6 +38,61 @@ async function logFailedMessage(
   }
 }
 
+type MensagemRecebidaPersistida = {
+  id: string;
+  created_at: string;
+};
+
+async function persistirMensagemRecebidaWhatsapp(
+  supabase: any,
+  userId: string,
+  content: string,
+  sourceMessageId: string | null,
+): Promise<{ mensagem: MensagemRecebidaPersistida; criada: boolean }> {
+  if (!sourceMessageId) {
+    throw new Error('Mensagem recebida sem identificador de origem');
+  }
+
+  const buscarExistente = async (): Promise<MensagemRecebidaPersistida | null> => {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('id, created_at')
+      .eq('user_id', userId)
+      .eq('channel', 'whatsapp')
+      .eq('source_message_id', sourceMessageId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data ?? null;
+  };
+
+  const existente = await buscarExistente();
+  if (existente) return { mensagem: existente, criada: false };
+
+  const { data: inserida, error: insertError } = await supabase
+    .from('messages')
+    .insert({
+      user_id: userId,
+      role: 'user',
+      content,
+      channel: 'whatsapp',
+      source_message_id: sourceMessageId,
+    })
+    .select('id, created_at')
+    .maybeSingle();
+
+  if (!insertError && inserida) return { mensagem: inserida, criada: true };
+
+  // Dois workers podem consultar antes de qualquer um inserir. Nesse caso, o
+  // índice único mantém a deduplicação e recuperamos a linha criada pelo vencedor.
+  if (insertError?.code === '23505') {
+    const criadaPorOutroWorker = await buscarExistente();
+    if (criadaPorOutroWorker) return { mensagem: criadaPorOutroWorker, criada: false };
+  }
+
+  throw insertError || new Error('A mensagem recebida não foi gravada');
+}
+
 // ============================================================================
 // PREFERÊNCIA DE CANAL — detecta pedido explícito de áudio ou texto
 // ----------------------------------------------------------------------------
@@ -841,13 +896,12 @@ Deno.serve(async (req) => {
       if (respondingAge < 240000) {
         // PERSIST message BEFORE aborting so the winning worker can accumulate it
         if (!isInApp && messageText) {
-          await supabase.from('messages').upsert({
-            user_id: profile.user_id,
-            role: 'user',
-            content: messageText,
-            channel: 'whatsapp',
-            source_message_id: currentMessageId,
-          }, { onConflict: 'user_id,channel,source_message_id', ignoreDuplicates: true });
+          await persistirMensagemRecebidaWhatsapp(
+            supabase,
+            profile.user_id,
+            messageText,
+            currentMessageId,
+          );
           console.log(`💾 Pre-lock: persisted message for accumulation by winning worker`);
         }
         await supabase.from('aura_response_state')
@@ -928,25 +982,28 @@ Deno.serve(async (req) => {
       (globalThis as any).__inboundMessageDbId = inboundMessageDbId;
     } else if (messageText) {
       try {
-        const { data: insertedMsg } = await supabase
-          .from('messages')
-          .upsert({
-            user_id: profile.user_id,
-            role: 'user',
-            content: messageText,
-            channel: 'whatsapp',
-            source_message_id: currentMessageId,
-          }, { onConflict: 'user_id,channel,source_message_id', ignoreDuplicates: true })
-          .select('id, created_at')
-          .maybeSingle();
-        inboundSaved = Boolean(insertedMsg);
-        inboundMessageCreatedAt = insertedMsg?.created_at ?? null;
-        if (insertedMsg?.id) {
-          (globalThis as any).__inboundMessageDbId = insertedMsg.id;
-        }
-        console.log(`💾 Inbound message persisted for user ${profile.user_id} (id: ${insertedMsg?.id})`);
+        const resultadoPersistencia = await persistirMensagemRecebidaWhatsapp(
+          supabase,
+          profile.user_id,
+          messageText,
+          currentMessageId,
+        );
+        const insertedMsg = resultadoPersistencia.mensagem;
+        inboundSaved = true;
+        inboundMessageCreatedAt = insertedMsg.created_at;
+        (globalThis as any).__inboundMessageDbId = insertedMsg.id;
+        console.log(`💾 Inbound message persisted for user ${profile.user_id} (id: ${insertedMsg.id}, criada: ${resultadoPersistencia.criada})`);
       } catch (persistErr) {
-        console.warn('⚠️ Failed to persist inbound message:', persistErr);
+        const persistMessage = persistErr instanceof Error ? persistErr.message : String(persistErr);
+        console.error('❌ Failed to persist inbound message:', persistErr);
+        await logFailedMessage(
+          supabase,
+          profile.user_id,
+          cleanPhone,
+          messageText,
+          `Falha ao gravar mensagem recebida: ${persistMessage}`,
+        );
+        throw persistErr;
       }
     }
 
