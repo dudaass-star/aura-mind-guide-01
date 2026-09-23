@@ -85,7 +85,7 @@ export default function Episode() {
     };
     const timer = window.setInterval(onScroll, 5000);
     return () => window.clearInterval(timer);
-  }, [id, progress?.progress_percent]);
+  }, [id, progress?.progress_percent, action]);
 
   const journey = episode?.content_journeys;
   const totalEpisodes = journey?.total_episodes || 8;
