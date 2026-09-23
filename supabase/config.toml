@@ -190,6 +190,8 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.monthly-report]
     verify_jwt = false
+  [functions.manage-portal-session]
+    verify_jwt = false
   [functions.winback-canceled-users]
     verify_jwt = false
   [functions.debug-openai]

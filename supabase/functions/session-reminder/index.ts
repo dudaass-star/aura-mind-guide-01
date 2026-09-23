@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
     const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
     // Janela ampliada para o lembrete T-5min: aceita sessões com scheduled_at
     // entre now-2min e now+10min — tolerante a atrasos do cron (até ~5min).
-    const tenMinutesFromNow = new Date(now.getTime() + 10 * 60 * 1000);
+    const sixMinutesFromNow = new Date(now.getTime() + 6 * 60 * 1000);
     const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
     const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const twentyThreeHoursFromNow = new Date(now.getTime() + 23 * 60 * 60 * 1000);
@@ -364,7 +364,7 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
           const result = await routeNotification(supabase, {
             userId: session.user_id,
             phone: cleanPhone,
-            idempotencyKey: `session:24h:${session.id}`,
+            idempotencyKey: `session:24h:${session.id}:${session.scheduled_at}`,
             category: 'session',
             type: 'session_reminder_24h',
             firstName: userName,
@@ -403,7 +403,7 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
       .select(`id, user_id, scheduled_at, session_type, focus_topic`)
       .eq('status', 'scheduled')
       .eq('reminder_5m_sent', false)
-      .lte('scheduled_at', tenMinutesFromNow.toISOString())
+      .lte('scheduled_at', sixMinutesFromNow.toISOString())
       .gte('scheduled_at', twoMinutesAgo.toISOString());
 
     if (error5m) {
@@ -465,11 +465,11 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
           const result = await routeNotification(supabase, {
             userId: session.user_id,
             phone: cleanPhone,
-            idempotencyKey: `session:5m:${session.id}`,
+            idempotencyKey: `session:5m:${session.id}:${session.scheduled_at}`,
             category: 'session',
             type: 'session_reminder_5m',
             firstName: userName,
-            path: '/meu-espaco?tab=sessoes',
+            path: '/meu-espaco?tab=conversar',
             whatsappText: message,
             whatsappCategory: 'session_reminder',
             priority: 'high',

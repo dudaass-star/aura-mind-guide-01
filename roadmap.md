@@ -84,3 +84,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Unificar o pós-pagamento no app Olá Aura: confirmação, PIX, WhatsApp, e-mail, acesso e remoção de “Meu Espaço” da experiência visível.
 - [x] Otimizar abertura e navegação do app e validar capacidade controlada em 50, 100, 200 e 300 acessos simultâneos (abertura e leitura autenticada; geração simultânea da AURA continua sendo uma capacidade separada).
 - [x] Substituir Jornadas completas na conversa por cartões compactos que abrem diretamente o episódio no app.
+- [x] Permitir agendar, reagendar e cancelar sessões diretamente no aplicativo, com lembretes de 24h e 5min.
