@@ -311,6 +311,7 @@ export function ConversarTab({
   accountLoading = false,
   isActive = true,
   initialChatOpen = false,
+  initialDraft,
 }: {
   userId: string;
   firstName: string;
@@ -322,6 +323,7 @@ export function ConversarTab({
   accountLoading?: boolean;
   isActive?: boolean;
   initialChatOpen?: boolean;
+  initialDraft?: string;
 }) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -363,6 +365,7 @@ export function ConversarTab({
   const discardRecordingRef = useRef(false);
   const awaitingResponseRef = useRef<{ clientId: string; messageId: string; createdAt: number } | null>(null);
   const responseTimerRef = useRef<number | null>(null);
+  const appliedInitialDraftRef = useRef<string | null>(null);
   const outboxKey = `aura-chat-outbox:${userId}`;
   const openReport = (report: ReportCardMetadata) => {
     const url = new URL(report.path || "/meu-espaco?tab=percurso", window.location.origin);
@@ -402,6 +405,14 @@ export function ConversarTab({
   useEffect(() => {
     if (initialChatOpen) setChatOpen(true);
   }, [initialChatOpen]);
+
+  useEffect(() => {
+    if (!initialDraft || appliedInitialDraftRef.current === initialDraft) return;
+    appliedInitialDraftRef.current = initialDraft;
+    setDraft((current) => current.trim() ? current : initialDraft);
+    setChatOpen(true);
+    window.setTimeout(() => composerRef.current?.focus(), 0);
+  }, [initialDraft]);
 
   useEffect(() => {
     const openChat = () => setChatOpen(true);
