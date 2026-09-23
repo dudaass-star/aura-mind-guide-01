@@ -2145,6 +2145,7 @@ async function processExtractedActions(
           .select('journey_id')
           .eq('user_id', userId)
           .eq('journey_id', actions.journey_id)
+          .eq('status', 'completed')
           .limit(1);
         if (alreadyDone && alreadyDone.length > 0) {
           console.warn(`🚫 [MICRO-AGENT] Switch ignorado: ${actions.journey_id} já está no histórico do usuário.`);
@@ -7947,6 +7948,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
     const trocarJornadaMatch = assistantMessage.match(/\[TROCAR_JORNADA:([^\]]+)\]/i);
     if (trocarJornadaMatch && profile?.user_id) {
       const journeyId = trocarJornadaMatch[1].trim();
+      const explicitJourneyIntent = hasExplicitJourneyIntent(userMessage || '');
       console.log('🔄 Switching journey to:', journeyId);
       
       // Verificar se a jornada existe
@@ -7956,13 +7958,14 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
         .eq('id', journeyId)
         .single();
       
-      if (journey) {
+      if (journey && explicitJourneyIntent.switch) {
         // Bloqueia troca para uma jornada já concluída — evita reentregar conteúdo antigo.
         const { data: alreadyDone } = await supabase
           .from('user_journey_history')
           .select('journey_id')
           .eq('user_id', profile.user_id)
           .eq('journey_id', journeyId)
+          .eq('status', 'completed')
           .limit(1);
         if (alreadyDone && alreadyDone.length > 0) {
           console.warn(`🚫 [TROCAR_JORNADA] Ignorada — ${journeyId} já está no histórico do usuário ${profile.user_id}.`);
@@ -7970,8 +7973,10 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           await supabase.rpc('manage_portal_journey_internal', { _user_id: profile.user_id, _action: 'switch', _journey_id: journeyId, _episode_id: null, _progress_percent: null, _reflection_text: null, _goal: null });
           console.log('✅ Journey switched to:', journey.title);
         }
-      } else {
+      } else if (!journey) {
         console.log('⚠️ Journey not found:', journeyId);
+      } else {
+        console.warn('🚫 [TROCAR_JORNADA] Ignorada — mensagem sem pedido explícito do usuário.');
       }
       
       // Limpar tag da resposta
@@ -7981,10 +7986,13 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
     // Processar [PAUSAR_JORNADAS]
     if (assistantMessage.includes('[PAUSAR_JORNADAS]') && profile?.user_id) {
       console.log('⏸️ Pausing journeys for user');
-      
-      await supabase.rpc('manage_portal_journey_internal', { _user_id: profile.user_id, _action: 'pause', _journey_id: null, _episode_id: null, _progress_percent: null, _reflection_text: null, _goal: null });
-      
-      console.log('✅ Journeys paused - user will not receive periodic content');
+      const explicitJourneyIntent = hasExplicitJourneyIntent(userMessage || '');
+      if (explicitJourneyIntent.pause) {
+        await supabase.rpc('manage_portal_journey_internal', { _user_id: profile.user_id, _action: 'pause', _journey_id: null, _episode_id: null, _progress_percent: null, _reflection_text: null, _goal: null });
+        console.log('✅ Journeys paused - user will not receive periodic content');
+      } else {
+        console.warn('🚫 [PAUSAR_JORNADAS] Ignorada — mensagem sem pedido explícito do usuário.');
+      }
       
       // Limpar tag da resposta
       assistantMessage = assistantMessage.replace(/\[PAUSAR_JORNADAS\]/gi, '');
