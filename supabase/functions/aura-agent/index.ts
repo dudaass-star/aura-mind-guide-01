@@ -8009,6 +8009,13 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           closure_mode: 'dialogada',
         })
         .eq('id', sessionIdToExtract);
+      await supabase.from('portal_value_events').insert({
+        user_id: profile.user_id,
+        feature: 'session',
+        event_type: 'completed',
+        source: 'backend',
+        metadata: { session_id: sessionIdToExtract, reason: 'dialogue_completion' }
+      });
       console.log(`🏁 Session ${sessionIdToExtract} marcada como completed — extração será feita pelo session-extractor`);
 
       // Dispara o micro-agent em background (não bloqueia a despedida).

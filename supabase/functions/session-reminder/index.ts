@@ -580,6 +580,13 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
             closure_mode: 'no_show'
           })
           .eq('id', session.id);
+        await supabase.from('portal_value_events').insert({
+          user_id: session.user_id,
+          feature: 'session',
+          event_type: 'no_show',
+          source: 'backend',
+          metadata: { session_id: session.id, reason: 'not_started' }
+        });
         
         // Enviar mensagem oferecendo reagendamento (suprimido em quiet hours)
         if (profile?.phone && !isQuietHours) {
@@ -701,6 +708,13 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
             .from('sessions')
             .update({ status: 'completed', ended_at: now.toISOString() })
             .eq('id', session.id);
+          await supabase.from('portal_value_events').insert({
+            user_id: session.user_id,
+            feature: 'session',
+            event_type: 'completed',
+            source: 'backend',
+            metadata: { session_id: session.id, reason: 'inactivity_after_participation' }
+          });
           const extracted = await runSessionExtractor(supabase, session.id);
           statusToSet = 'completed';
           summaryToSet = extracted?.summary
@@ -767,6 +781,15 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
             closure_mode: statusToSet === 'no_show' ? 'no_show' : 'unilateral'
           })
           .eq('id', session.id);
+        if (statusToSet === 'no_show') {
+          await supabase.from('portal_value_events').insert({
+            user_id: session.user_id,
+            feature: 'session',
+            event_type: 'no_show',
+            source: 'backend',
+            metadata: { session_id: session.id, reason: 'insufficient_participation', user_message_count: userMsgsInSession || 0 }
+          });
+        }
         
         // Limpar current_session_id do profile
         await supabase

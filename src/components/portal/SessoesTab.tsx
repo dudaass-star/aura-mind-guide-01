@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ArrowUpRight, Bell, Calendar, CalendarDays, Check, ChevronLeft, ChevronRight, Clock, MessageCircle, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
@@ -133,6 +133,7 @@ export function SessoesTab({
   const [correction, setCorrection] = useState("");
   const [saving, setSaving] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(() => localStorage.getItem("aura-push-enabled") === "true");
+  const trackedViews = useRef(new Set<string>());
 
   const { data: allSessions = [], isLoading } = useQuery({
     queryKey: ["portal-sessions", userId],
@@ -184,6 +185,29 @@ export function SessoesTab({
     void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type: eventType, source: "app", metadata: metadata as Json });
   };
 
+  useEffect(() => {
+    if (isLoading || trackedViews.current.has("area_opened")) return;
+    trackedViews.current.add("area_opened");
+    track("area_opened", { month: selectedMonth });
+  }, [isLoading, selectedMonth]);
+
+  useEffect(() => {
+    const nextSession = upcomingSessions[0];
+    if (!nextSession) return;
+    const key = `next_session_viewed:${nextSession.id}`;
+    if (trackedViews.current.has(key)) return;
+    trackedViews.current.add(key);
+    track("next_session_viewed", { session_id: nextSession.id, status: nextSession.status });
+  }, [upcomingSessions]);
+
+  useEffect(() => {
+    if (planLimit <= 0 || monthUsed < planLimit) return;
+    const key = `quota_reached:${selectedMonth}:${planLimit}`;
+    if (trackedViews.current.has(key)) return;
+    trackedViews.current.add(key);
+    track("quota_reached", { month: selectedMonth, limit: planLimit, used: monthUsed });
+  }, [monthUsed, planLimit, selectedMonth]);
+
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["portal-sessions", userId] }),
@@ -227,6 +251,9 @@ export function SessoesTab({
       setSelectedSession(null);
       await refresh();
       track(action === "schedule" ? "scheduled" : action === "reschedule" ? "rescheduled" : "cancelled", { month: selectedMonth });
+      if (action === "schedule" && completedSessions.length > 0) {
+        track("repeat_session_scheduled", { month: selectedMonth, previous_completed_count: completedSessions.length });
+      }
       toast({
         title: action === "schedule" ? "Sessão agendada" : action === "reschedule" ? "Novo horário confirmado" : "Sessão cancelada",
         description: action === "cancel" ? "Ela não contará no limite do seu plano." : "A AURA vai lembrar você 24 horas e 5 minutos antes.",
@@ -357,7 +384,7 @@ export function SessoesTab({
         </section>
       )}
 
-      <Dialog open={schedulerOpen} onOpenChange={(open) => !saving && setSchedulerOpen(open)}><DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg bg-card"><DialogHeader className="text-left"><DialogTitle>{editing ? "Escolher um novo horário" : "Agendar sessão"}</DialogTitle><DialogDescription>Horários de Brasília em {monthLabel(selectedMonth)}. Opções próximas de outra sessão já ficam ocultas.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><label className="block text-sm font-medium">Dia<Input className="mt-1.5" type="date" min={minDate} max={maxDate} value={date} onChange={(event) => { setDate(event.target.value); setTime(""); }} /></label><label className="block text-sm font-medium">Horário<select className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm" value={time} onChange={(event) => setTime(event.target.value)}><option value="">Selecione</option>{availableTimes.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></label>{availableTimes.length === 0 && <p className="text-sm text-muted-foreground">Não há horários disponíveis neste dia.</p>}</div><DialogFooter className="gap-2"><Button type="button" variant="outline" onClick={() => setSchedulerOpen(false)} disabled={saving}>Voltar</Button><Button type="button" onClick={() => void manageSession(editing ? "reschedule" : "schedule")} disabled={!date || !time || saving}>{saving ? "Confirmando..." : "Confirmar horário"}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={schedulerOpen} onOpenChange={(open) => { if (saving) return; if (!open && schedulerOpen) track("scheduling_abandoned", { month: selectedMonth, action: editing ? "reschedule" : "schedule", date_selected: Boolean(date), time_selected: Boolean(time) }); setSchedulerOpen(open); }}><DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg bg-card"><DialogHeader className="text-left"><DialogTitle>{editing ? "Escolher um novo horário" : "Agendar sessão"}</DialogTitle><DialogDescription>Horários de Brasília em {monthLabel(selectedMonth)}. Opções próximas de outra sessão já ficam ocultas.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><label className="block text-sm font-medium">Dia<Input className="mt-1.5" type="date" min={minDate} max={maxDate} value={date} onChange={(event) => { setDate(event.target.value); setTime(""); }} /></label><label className="block text-sm font-medium">Horário<select className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm" value={time} onChange={(event) => setTime(event.target.value)}><option value="">Selecione</option>{availableTimes.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></label>{availableTimes.length === 0 && <p className="text-sm text-muted-foreground">Não há horários disponíveis neste dia.</p>}</div><DialogFooter className="gap-2"><Button type="button" variant="outline" onClick={() => { track("scheduling_abandoned", { month: selectedMonth, action: editing ? "reschedule" : "schedule", date_selected: Boolean(date), time_selected: Boolean(time) }); setSchedulerOpen(false); }} disabled={saving}>Voltar</Button><Button type="button" onClick={() => void manageSession(editing ? "reschedule" : "schedule")} disabled={!date || !time || saving}>{saving ? "Confirmando..." : "Confirmar horário"}</Button></DialogFooter></DialogContent></Dialog>
 
       <Dialog open={preparationOpen} onOpenChange={(open) => !saving && setPreparationOpen(open)}><DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg bg-card"><DialogHeader className="text-left"><DialogTitle>Preparar este encontro</DialogTitle><DialogDescription>Opcional. O que você não quer esquecer de levar para esta sessão?</DialogDescription></DialogHeader><Textarea className="bg-background" value={preparation} onChange={(event) => setPreparation(event.target.value)} maxLength={500} rows={5} placeholder="Pode ser uma situação, dúvida ou algo que ficou da última conversa." /><p className="text-right text-xs text-muted-foreground">{preparation.length}/500</p><DialogFooter className="gap-2"><Button type="button" variant="outline" onClick={() => setPreparationOpen(false)}>Voltar</Button><Button type="button" disabled={saving || !selectedSession} onClick={() => selectedSession && void saveExperience("save_preparation", selectedSession, preparation)}>{saving ? "Guardando..." : "Guardar preparação"}</Button></DialogFooter></DialogContent></Dialog>
 
