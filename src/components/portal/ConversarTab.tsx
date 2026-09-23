@@ -832,13 +832,19 @@ export function ConversarTab({
   };
 
   useEffect(() => {
-    const queue = readOutbox(outboxKey);
-    if (!queue.length || !navigator.onLine) return;
-    setSending(true);
-    void queue.reduce(
-      (chain, pending) => chain.then(() => submitMessage(pending)).catch(() => undefined),
-      Promise.resolve(),
-    ).finally(() => setSending(false));
+    const flushOutbox = () => {
+      const queue = readOutbox(outboxKey);
+      if (!queue.length || !navigator.onLine) return;
+      setSending(true);
+      void queue.reduce(
+        (chain, pending) => chain.then(() => submitMessage(pending)).catch(() => undefined),
+        Promise.resolve(),
+      ).finally(() => setSending(false));
+    };
+
+    flushOutbox();
+    window.addEventListener("online", flushOutbox);
+    return () => window.removeEventListener("online", flushOutbox);
   }, [outboxKey]);
 
   const blobToBase64 = (blob: Blob) => new Promise<string>((resolve, reject) => {
