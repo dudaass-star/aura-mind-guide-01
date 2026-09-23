@@ -63,6 +63,7 @@ const UserPortal = () => {
   const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => new Set(["conversar", initialTab]));
   const [portalLoading, setPortalLoading] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
+  const [minimumSessionLimit, setMinimumSessionLimit] = useState<number | undefined>();
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
@@ -385,7 +386,7 @@ const UserPortal = () => {
               onOpenConversation={handleOpenConversation}
             />
           </div>}
-          {visitedTabs.has("sessoes") && <div className={activeTab === "sessoes" ? "block" : "hidden"} aria-hidden={activeTab !== "sessoes"}><SessoesTab userId={userId} profile={profile} /></div>}
+          {visitedTabs.has("sessoes") && <div className={activeTab === "sessoes" ? "block" : "hidden"} aria-hidden={activeTab !== "sessoes"}><SessoesTab userId={userId} profile={profile} onChangePlan={(limit) => { setMinimumSessionLimit(limit); setChangePlanOpen(true); }} /></div>}
           {visitedTabs.has("jornadas") && <div className={activeTab === "jornadas" ? "block" : "hidden"} aria-hidden={activeTab !== "jornadas"}><JornadasTab userId={userId} profile={profile} onJourneyChanged={() => void refetchProfile()} /></div>}
           {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
@@ -431,6 +432,7 @@ const UserPortal = () => {
                 ? "asaas-card"
                 : "stripe-card"
           }
+          minimumSessionLimit={minimumSessionLimit}
         />
       )}
     </>

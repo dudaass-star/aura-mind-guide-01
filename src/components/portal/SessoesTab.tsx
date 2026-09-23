@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calendar, CalendarDays, Clock3, Pencil, Star, Trash2 } from "lucide-react";
+import { ArrowUpRight, Calendar, CalendarDays, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +18,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   future_time_required: "Escolha um horário que ainda não passou.",
   invalid_time_interval: "Escolha um horário em intervalos de 15 minutos.",
   active_session_exists: "Você já tem uma próxima sessão agendada.",
+  session_time_conflict: "Esse horário fica muito perto de outra sessão já agendada.",
   monthly_limit_reached: "Você já usou todas as sessões disponíveis nesse mês.",
   session_not_available: "Essa sessão não está mais disponível para alteração.",
   session_required: "Essa sessão não está mais disponível. Atualize a tela e tente novamente.",
@@ -46,13 +47,16 @@ function sessionLimit(profile: SessionProfile) {
   return PLAN_SESSION_LIMITS[String(profile?.plan || "").toLowerCase()] || 0;
 }
 
-export function SessoesTab({ userId, profile }: { userId: string; profile: SessionProfile }) {
+type UpcomingSession = { id: string; scheduled_at: string; focus_topic: string | null; status: string };
+
+export function SessoesTab({ userId, profile, onChangePlan }: { userId: string; profile: SessionProfile; onChangePlan: (currentLimit: number) => void }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const today = brtParts().date;
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<UpcomingSession | null>(null);
   const [date, setDate] = useState(today);
   const [time, setTime] = useState("");
   const [saving, setSaving] = useState(false);
@@ -68,14 +72,14 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: Sessi
     }, enabled: !!userId,
   });
 
-  const { data: nextSession } = useQuery({
-    queryKey: ["portal-sessions-next", userId],
+  const { data: upcomingSessions = [] } = useQuery({
+    queryKey: ["portal-sessions-upcoming", userId],
     queryFn: async () => {
       const { data, error } = await supabasePortal.from("sessions")
         .select("id, scheduled_at, focus_topic, status").eq("user_id", userId)
-        .in("status", ["scheduled", "in_progress"]).order("scheduled_at", { ascending: true }).limit(1).maybeSingle();
+        .in("status", ["scheduled", "in_progress"]).order("scheduled_at", { ascending: true }).limit(12);
       if (error) throw error;
-      return data;
+      return data || [];
     }, enabled: !!userId,
   });
 
@@ -118,19 +122,21 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: Sessi
 
   const refresh = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["portal-sessions-next", userId] }),
+      queryClient.invalidateQueries({ queryKey: ["portal-sessions-upcoming", userId] }),
       queryClient.invalidateQueries({ queryKey: ["portal-sessions-history", userId] }),
       queryClient.invalidateQueries({ queryKey: ["portal-sessions-month-used", userId] }),
     ]);
   };
 
-  const openScheduler = (reschedule = false) => {
+  const openScheduler = (session?: UpcomingSession) => {
+    const reschedule = Boolean(session);
     setEditing(reschedule);
-    if (reschedule && nextSession?.scheduled_at) {
+    setSelectedSession(session || null);
+    if (session?.scheduled_at) {
       const formatter = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
       });
-      const parts = formatter.formatToParts(new Date(nextSession.scheduled_at));
+      const parts = formatter.formatToParts(new Date(session.scheduled_at));
       const get = (type: string) => parts.find((part) => part.type === type)?.value || "";
       setDate(`${get("year")}-${get("month")}-${get("day")}`);
       setTime(`${get("hour")}:${get("minute")}`);
@@ -143,7 +149,7 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: Sessi
 
   const manageSession = async (action: "schedule" | "reschedule" | "cancel") => {
     if (action !== "cancel" && (!date || !time)) return;
-    if (action !== "schedule" && !nextSession?.id) {
+    if (action !== "schedule" && !selectedSession?.id) {
       toast({ title: "Sessão indisponível", description: ERROR_MESSAGES.session_required, variant: "destructive" });
       await refresh();
       return;
@@ -154,13 +160,14 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: Sessi
         body: {
           action,
           scheduledAt: action === "cancel" ? null : new Date(brtIso(date, time)).toISOString(),
-          sessionId: action === "schedule" ? null : nextSession?.id,
+          sessionId: action === "schedule" ? null : selectedSession?.id,
         },
       });
       const code = data?.error || (error ? "session_update_failed" : null);
       if (code) throw new Error(code);
       setSchedulerOpen(false);
       setCancelOpen(false);
+      setSelectedSession(null);
       await refresh();
       toast({
         title: action === "schedule" ? "Sessão agendada" : action === "reschedule" ? "Novo horário confirmado" : "Sessão cancelada",
@@ -178,30 +185,34 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: Sessi
 
   return (
     <div className="portal-area-page space-y-6">
-      {nextSession ? (
-        <section className="rounded-lg bg-foreground p-5 text-background shadow-card animate-fade-up">
-          <p className="text-xs font-bold uppercase text-accent">Próxima sessão</p>
-          <p className="mt-2 text-xl font-semibold capitalize leading-snug">
-            {new Date(nextSession.scheduled_at).toLocaleString("pt-BR", {
-              weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo",
-            })}
-          </p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {nextSession.status === "scheduled" ? (
-              <>
-                <Button type="button" variant="secondary" size="sm" onClick={() => openScheduler(true)}><Pencil /> Reagendar</Button>
-                <Button type="button" variant="ghost" size="sm" className="text-background hover:text-foreground" onClick={() => setCancelOpen(true)}><Trash2 /> Cancelar</Button>
-              </>
-            ) : <p className="text-sm text-background/75">Sua sessão está em andamento.</p>}
-          </div>
-        </section>
-      ) : (
+      {upcomingSessions.length === 0 ? (
         <section className="border-y border-border py-6 text-center animate-fade-in">
           <CalendarDays className="mx-auto h-7 w-7 text-primary" />
           <p className="mt-3 text-sm text-muted-foreground">Nenhuma sessão agendada agora.</p>
-          <Button type="button" className="mt-4" onClick={() => openScheduler(false)} disabled={planLimit === 0}>
+          <Button type="button" className="mt-4" onClick={() => openScheduler()} disabled={planLimit === 0}>
             <Calendar /> Agendar sessão
           </Button>
+        </section>
+      ) : (
+        <section className="space-y-3 animate-fade-up">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-foreground">Próximas sessões</h2>
+            {monthUsed < planLimit && <Button type="button" size="sm" onClick={() => openScheduler()}><Plus /> Agendar</Button>}
+          </div>
+          {upcomingSessions.map((session, index) => (
+            <article key={session.id} className={index === 0 ? "rounded-lg bg-foreground p-5 text-background shadow-card" : "rounded-lg border border-border bg-card p-4 shadow-sm"}>
+              <p className={`text-xs font-bold uppercase ${index === 0 ? "text-accent" : "text-primary"}`}>{index === 0 ? "Próxima sessão" : "Sessão agendada"}</p>
+              <p className={`mt-2 font-semibold capitalize leading-snug ${index === 0 ? "text-xl" : "text-base text-foreground"}`}>
+                {new Date(session.scheduled_at).toLocaleString("pt-BR", { weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+              </p>
+              {session.status === "scheduled" ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button type="button" variant={index === 0 ? "secondary" : "outline"} size="sm" onClick={() => openScheduler(session)}><Pencil /> Reagendar</Button>
+                  <Button type="button" variant="ghost" size="sm" className={index === 0 ? "text-background hover:text-foreground" : "text-muted-foreground"} onClick={() => { setSelectedSession(session); setCancelOpen(true); }}><Trash2 /> Cancelar</Button>
+                </div>
+              ) : <p className={`mt-3 text-sm ${index === 0 ? "text-background/75" : "text-muted-foreground"}`}>Sua sessão está em andamento.</p>}
+            </article>
+          ))}
         </section>
       )}
 
@@ -213,6 +224,17 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: Sessi
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${Math.min(100, (monthUsed / planLimit) * 100)}%` }} /></div>
         </div>
+      ) : null}
+
+      {planLimit > 0 && monthUsed >= planLimit ? (
+        <section className="border-y border-border py-5">
+          <p className="text-sm font-semibold text-foreground">Sua agenda deste mês está completa.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Você ainda pode organizar sessões dos próximos meses.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => openScheduler()}><CalendarDays /> Agendar em outro mês</Button>
+            {planLimit < 8 && <Button type="button" onClick={() => onChangePlan(planLimit)}><ArrowUpRight /> Quero mais sessões</Button>}
+          </div>
+        </section>
       ) : null}
 
       {(!sessions || sessions.length === 0) && <EmptyState icon={Calendar} title="Nenhuma sessão concluída ainda" description="Depois do primeiro encontro, seu resumo fica guardado aqui." />}

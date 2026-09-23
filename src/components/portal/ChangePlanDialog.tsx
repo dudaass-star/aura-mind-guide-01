@@ -35,7 +35,10 @@ interface Props {
   currentTier?: string | null;
   /** Gateway ativo — roteia para a edge function correta e ajusta copy. */
   paymentGateway: "stripe-card" | "asaas-pix" | "asaas-card" | "inter-pix" | "woovi-pix";
+  minimumSessionLimit?: number;
 }
+
+const PLAN_SESSION_LIMITS: Record<PlanId, number> = { essencial: 1, direcao: 4, transformacao: 8 };
 
 export function ChangePlanDialog({
   open,
@@ -45,6 +48,7 @@ export function ChangePlanDialog({
   currentBilling,
   currentTier,
   paymentGateway,
+  minimumSessionLimit,
 }: Props) {
   const [billing, setBilling] = useState<BillingCycle>(currentBilling ?? "monthly");
   const [selected, setSelected] = useState<PlanId | null>(null);
@@ -241,7 +245,7 @@ export function ChangePlanDialog({
             </div>
 
             <div className="space-y-2.5">
-              {PLAN_IDS.map((p) => {
+              {PLAN_IDS.filter((plan) => !minimumSessionLimit || PLAN_SESSION_LIMITS[plan] > minimumSessionLimit).map((p) => {
                 // Em tier de retenção (lite/base) o usuário está num preço reduzido:
                 // o Essencial mensal cheio precisa continuar selecionável.
                 const isCurrent =
