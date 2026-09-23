@@ -17,7 +17,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   access_not_available: "Seu plano não permite agendar uma sessão agora.",
   future_time_required: "Escolha um horário que ainda não passou.",
   invalid_time_interval: "Escolha um horário em intervalos de 15 minutos.",
-  active_session_exists: "Você já tem uma próxima sessão agendada.",
   session_time_conflict: "Esse horário fica muito perto de outra sessão já agendada.",
   monthly_limit_reached: "Você já usou todas as sessões disponíveis nesse mês.",
   session_not_available: "Essa sessão não está mais disponível para alteração.",
@@ -197,7 +196,7 @@ export function SessoesTab({ userId, profile, onChangePlan }: { userId: string; 
         <section className="space-y-3 animate-fade-up">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-foreground">Próximas sessões</h2>
-            {monthUsed < planLimit && <Button type="button" size="sm" onClick={() => openScheduler()}><Plus /> Agendar</Button>}
+            <Button type="button" size="sm" onClick={() => openScheduler()}><Plus /> Agendar</Button>
           </div>
           {upcomingSessions.map((session, index) => (
             <article key={session.id} className={index === 0 ? "rounded-lg bg-foreground p-5 text-background shadow-card" : "rounded-lg border border-border bg-card p-4 shadow-sm"}>
