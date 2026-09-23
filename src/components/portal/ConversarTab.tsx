@@ -1,5 +1,5 @@
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, Send, Share2, Sparkles, Square, SquarePlus, Sun, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Sun, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,6 +11,7 @@ import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDi
 import { ValueDiscoveryCard } from "@/components/portal/ValueDiscoveryCard";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
+import type { Json } from "@/integrations/supabase/types";
 
 type ChatMessage = {
   id: string;
@@ -87,6 +88,11 @@ function getJourneyEpisodeCard(metadata: unknown): JourneyEpisodeCardMetadata | 
   return value as JourneyEpisodeCardMetadata;
 }
 
+function isResponseFailure(message: ChatMessage) {
+  if (!message.metadata || typeof message.metadata !== "object" || Array.isArray(message.metadata)) return false;
+  return (message.metadata as Record<string, unknown>).kind === "response_failure";
+}
+
 type PendingMessage = {
   clientId: string;
   text?: string;
@@ -153,6 +159,33 @@ function audioMimeType(message: ChatMessage) {
   return typeof mime === "string" && mime ? mime : undefined;
 }
 
+function replyTargetId(message: ChatMessage) {
+  if (!message.metadata || typeof message.metadata !== "object" || Array.isArray(message.metadata)) return null;
+  const value = (message.metadata as Record<string, unknown>).reply_to_message_id;
+  return typeof value === "string" ? value : null;
+}
+
+function recordConversationEvent(userId: string, eventType: string, metadata: Record<string, unknown> = {}) {
+  void supabasePortal.from("portal_value_events").insert([{
+    user_id: userId,
+    feature: "conversation",
+    event_type: eventType,
+    source: "app",
+    metadata: metadata as Json,
+  }]).then(({ error }) => {
+    if (error && error.code !== "23505") console.warn("Não foi possível registrar a interação na conversa");
+  });
+}
+
+function dayKeyBrt() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 async function hydrateAudioUrls(messages: ChatMessage[]) {
   const paths = [...new Set(messages.map(audioStoragePath).filter((path): path is string => Boolean(path)))];
   if (!paths.length) return messages;
@@ -174,11 +207,15 @@ const MessageTimeline = memo(function MessageTimeline({
   responding,
   onOpenReport,
   onOpenEpisode,
+  onRetry,
+  onDelete,
 }: {
   messages: ChatMessage[];
   responding: boolean;
   onOpenReport: (report: ReportCardMetadata) => void;
   onOpenEpisode: (episode: JourneyEpisodeCardMetadata) => void;
+  onRetry: (message: ChatMessage) => void;
+  onDelete: (message: ChatMessage) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -217,6 +254,15 @@ const MessageTimeline = memo(function MessageTimeline({
                   <div><p className="font-display text-lg font-semibold text-foreground">{reportCard.title || (reportCard.report_type === "weekly" ? "Sua semana na Olá Aura" : "Seu mês em perspectiva")}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{message.content}</p></div>
                   <Button type="button" size="sm" className="w-full justify-between" onClick={() => onOpenReport(reportCard)}>{reportCard.cta || "Ver no Percurso"}<ArrowRight className="h-4 w-4" /></Button>
                 </div>
+              ) : isResponseFailure(message) ? (
+                <div className="space-y-2">
+                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                  {replyTargetId(message) && (
+                    <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => onRetry({ ...message, id: replyTargetId(message) || message.id })}>
+                      <RotateCcw className="h-3.5 w-3.5" /> Tentar responder novamente
+                    </Button>
+                  )}
+                </div>
               ) : (!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
               {message.is_audio && message.audio_url && (
                 <VoiceMessagePlayer src={message.audio_url} mine={mine} durationMs={audioDurationMs(message)} mimeType={audioMimeType(message)} />
@@ -228,6 +274,17 @@ const MessageTimeline = memo(function MessageTimeline({
               {mine && message.delivery_status === "delivered" && <CheckCheck className="h-3 w-3 text-primary" />}
               {mine && message.delivery_status === "failed" && <AlertCircle className="h-3 w-3 text-destructive" />}
             </div>
+            {mine && message.delivery_status === "failed" && (
+              <div className="mt-1 flex items-center gap-1" aria-label="Mensagem não enviada">
+                <span className="mr-1 text-xs font-semibold text-destructive">Não enviada</span>
+                <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={() => onRetry(message)}>
+                  <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+                </Button>
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => onDelete(message)} aria-label="Excluir mensagem não enviada">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </div>
         );
       })}
@@ -252,6 +309,7 @@ export function ConversarTab({
   billingLabel,
   accountLoading = false,
   isActive = true,
+  initialChatOpen = false,
 }: {
   userId: string;
   firstName: string;
@@ -262,19 +320,22 @@ export function ConversarTab({
   billingLabel: string;
   accountLoading?: boolean;
   isActive?: boolean;
+  initialChatOpen?: boolean;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [responding, setResponding] = useState(false);
+  const [responseIssue, setResponseIssue] = useState<string | null>(null);
+  const [retryingResponse, setRetryingResponse] = useState(false);
   const [connected, setConnected] = useState(true);
   const [hasOlder, setHasOlder] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
   const [audioError, setAudioError] = useState("");
-  const [chatOpen, setChatOpen] = useState(() => localStorage.getItem(`aura-chat-open:${userId}`) === "true");
+  const [chatOpen, setChatOpen] = useState(() => initialChatOpen || localStorage.getItem(`aura-chat-open:${userId}`) === "true");
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
   const [showInstallInvite, setShowInstallInvite] = useState(false);
   const [showPushDialog, setShowPushDialog] = useState(false);
@@ -298,6 +359,8 @@ export function ConversarTab({
   const recordingStartedRef = useRef(0);
   const recordingTimerRef = useRef<number | null>(null);
   const discardRecordingRef = useRef(false);
+  const awaitingResponseRef = useRef<{ clientId: string; messageId: string; createdAt: number } | null>(null);
+  const responseTimerRef = useRef<number | null>(null);
   const outboxKey = `aura-chat-outbox:${userId}`;
   const openReport = (report: ReportCardMetadata) => {
     const url = new URL(report.path || "/meu-espaco?tab=percurso", window.location.origin);
@@ -310,12 +373,13 @@ export function ConversarTab({
   };
 
   useEffect(() => {
-    if (!installApp.available || installApp.installed) return;
+    if (!installApp.available || installApp.installed || chatOpen || responding || draft.trim() || recording) return;
+    if (!messages.some((message) => message.role === "assistant")) return;
     const dismissedUntil = Number(localStorage.getItem(`aura-install-dismissed-until:${userId}`) || 0);
     if (dismissedUntil > Date.now()) return;
-    const timer = window.setTimeout(() => setShowInstallInvite(true), 1200);
+    const timer = window.setTimeout(() => setShowInstallInvite(true), 10_000);
     return () => window.clearTimeout(timer);
-  }, [installApp.available, installApp.installed, userId]);
+  }, [chatOpen, draft, installApp.available, installApp.installed, messages, recording, responding, userId]);
 
   useEffect(() => {
     const openPush = () => setShowPushDialog(true);
@@ -324,12 +388,31 @@ export function ConversarTab({
   }, []);
 
   useEffect(() => {
-    if (!isActive || chatOpen || recording || draft.trim() || showInstallInvite || installApp.available || localStorage.getItem("aura-push-enabled") === "true") return;
+    if (!isActive || chatOpen || recording || responding || draft.trim() || showInstallInvite || installApp.available || localStorage.getItem("aura-push-enabled") === "true") return;
+    if (!messages.some((message) => message.role === "assistant")) return;
     const dismissedUntil = Number(localStorage.getItem(`aura-push-dismissed-until:${userId}`) || 0);
     if (dismissedUntil > Date.now()) return;
-    const timer = window.setTimeout(() => setShowPushDialog(true), 3500);
+    const timer = window.setTimeout(() => setShowPushDialog(true), 10_000);
     return () => window.clearTimeout(timer);
-  }, [chatOpen, draft, installApp.available, isActive, recording, showInstallInvite, userId]);
+  }, [chatOpen, draft, installApp.available, isActive, messages, recording, responding, showInstallInvite, userId]);
+
+  useEffect(() => {
+    if (initialChatOpen) setChatOpen(true);
+  }, [initialChatOpen]);
+
+  useEffect(() => {
+    const openChat = () => setChatOpen(true);
+    window.addEventListener("aura:open-chat", openChat);
+    return () => window.removeEventListener("aura:open-chat", openChat);
+  }, []);
+
+  useEffect(() => {
+    if (!chatOpen || !isActive) return;
+    const key = `aura-conversation-opened:${userId}:${dayKeyBrt()}`;
+    if (sessionStorage.getItem(key) === "true") return;
+    sessionStorage.setItem(key, "true");
+    recordConversationEvent(userId, "conversation_opened", { day_brt: dayKeyBrt() });
+  }, [chatOpen, isActive, userId]);
 
   const postponeInstall = () => {
     localStorage.setItem(`aura-install-dismissed-until:${userId}`, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
@@ -436,7 +519,7 @@ export function ConversarTab({
           .limit(PAGE_SIZE),
         supabasePortal
           .from("aura_response_state")
-          .select("is_responding")
+          .select("is_responding,response_started_at")
           .eq("user_id", userId)
           .maybeSingle(),
       ]);
@@ -446,7 +529,21 @@ export function ConversarTab({
         setHasOlder(data.length === PAGE_SIZE);
         setTimeout(() => scrollToBottom("auto"), 0);
       }
-      setResponding(Boolean(state?.is_responding));
+      const responseStartedAt = state?.response_started_at ? new Date(state.response_started_at).getTime() : 0;
+      const responseAge = responseStartedAt ? Date.now() - responseStartedAt : 0;
+      const responseIsStale = Boolean(state?.is_responding && responseAge > 40_000);
+      setResponding(Boolean(state?.is_responding && !responseIsStale));
+      if (responseIsStale && data) {
+        const latestUserMessage = (data as ChatMessage[]).find((message) => message.role === "user");
+        if (latestUserMessage) {
+          awaitingResponseRef.current = {
+            clientId: latestUserMessage.client_message_id || latestUserMessage.id,
+            messageId: latestUserMessage.id,
+            createdAt: responseStartedAt,
+          };
+          setResponseIssue("A resposta demorou mais que o esperado.");
+        }
+      }
       setLoading(false);
     };
     void load();
@@ -460,7 +557,20 @@ export function ConversarTab({
         async (payload) => {
           const incoming = payload.new as ChatMessage;
           const [hydratedIncoming] = await hydrateAudioUrls([incoming]);
-          if (hydratedIncoming) setMessages((current) => mergeMessage(current, hydratedIncoming));
+          if (hydratedIncoming) {
+            setMessages((current) => mergeMessage(current, hydratedIncoming));
+            if (hydratedIncoming.role === "assistant") {
+              const awaiting = awaitingResponseRef.current;
+              if (!awaiting || !replyTargetId(hydratedIncoming) || replyTargetId(hydratedIncoming) === awaiting.messageId) {
+                awaitingResponseRef.current = null;
+                if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
+                setResponseIssue(null);
+                recordConversationEvent(userId, "response_received", {
+                  response_seconds: awaiting ? Math.round((Date.now() - awaiting.createdAt) / 100) / 10 : null,
+                });
+              }
+            }
+          }
           if (nearBottomRef.current) setTimeout(() => scrollToBottom(), 0);
           else setShowNew(true);
         },
@@ -500,6 +610,7 @@ export function ConversarTab({
     window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("online", onOnline);
@@ -584,7 +695,81 @@ export function ConversarTab({
       metadata: data.message.metadata,
       optimistic: false,
     }));
+    awaitingResponseRef.current = { clientId: pending.clientId, messageId: data.message.id, createdAt: Date.now() };
+    setResponding(true);
+    setResponseIssue(null);
+    if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
+    responseTimerRef.current = window.setTimeout(() => {
+      if (!awaitingResponseRef.current) return;
+      setResponding(false);
+      setResponseIssue("A resposta demorou mais que o esperado.");
+      recordConversationEvent(userId, "response_timeout", { seconds: 40 });
+    }, 40_000);
   };
+
+  const retryFailedMessage = async (message: ChatMessage) => {
+    if (message.role === "assistant" && isResponseFailure(message)) {
+      awaitingResponseRef.current = { clientId: crypto.randomUUID(), messageId: message.id, createdAt: Date.now() };
+      await retryResponseFor(message.id);
+      return;
+    }
+    const clientId = message.client_message_id;
+    if (!clientId || sending) return;
+    const pending = readOutbox(outboxKey).find((item) => item.clientId === clientId);
+    if (!pending) {
+      setMessages((current) => current.filter((item) => item.id !== message.id));
+      if (!message.is_audio) setDraft(message.content);
+      return;
+    }
+    setMessages((current) => current.map((item) => item.client_message_id === clientId ? { ...item, delivery_status: "sending" } : item));
+    setSending(true);
+    recordConversationEvent(userId, "send_retry", { kind: message.is_audio ? "audio" : "text" });
+    try {
+      await submitMessage(pending);
+    } catch {
+      setMessages((current) => current.map((item) => item.client_message_id === clientId ? { ...item, delivery_status: "failed" } : item));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const deleteFailedMessage = (message: ChatMessage) => {
+    if (message.client_message_id) removeFromOutbox(message.client_message_id);
+    if (message.audio_url?.startsWith("blob:")) URL.revokeObjectURL(message.audio_url);
+    setMessages((current) => current.filter((item) => item.id !== message.id));
+    recordConversationEvent(userId, "failed_message_deleted", { kind: message.is_audio ? "audio" : "text" });
+  };
+
+  const retryResponseFor = async (sourceMessageId?: string) => {
+    const awaiting = awaitingResponseRef.current;
+    if (!awaiting || retryingResponse) return;
+    setRetryingResponse(true);
+    setResponseIssue(null);
+    setResponding(true);
+    recordConversationEvent(userId, "response_retry");
+    const { data, error } = await supabasePortal.functions.invoke("app-chat", {
+      body: { action: "retry_response", source_message_id: sourceMessageId || awaiting.messageId },
+    });
+    if (error || !data?.accepted) {
+      setResponding(false);
+      setResponseIssue("Não consegui retomar agora. Tente mais uma vez em instantes.");
+    } else if (data.already_answered) {
+      awaitingResponseRef.current = null;
+      setResponding(false);
+      setResponseIssue(null);
+    } else {
+      awaitingResponseRef.current = { ...awaiting, clientId: data.retry_id || awaiting.clientId, createdAt: Date.now() };
+      if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
+      responseTimerRef.current = window.setTimeout(() => {
+        if (!awaitingResponseRef.current) return;
+        setResponding(false);
+        setResponseIssue("A resposta ainda não chegou. Você pode tentar novamente.");
+      }, 40_000);
+    }
+    setRetryingResponse(false);
+  };
+
+  const retryResponse = () => retryResponseFor();
 
   const send = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -611,6 +796,8 @@ export function ConversarTab({
     setDraft("");
     localStorage.removeItem(`aura-chat-draft:${userId}`);
     setSending(true);
+    setResponding(true);
+    setResponseIssue(null);
     enqueueOutbox(pending);
     scrollToBottom();
 
@@ -618,6 +805,7 @@ export function ConversarTab({
       await submitMessage(pending);
       void reportPushConversion("/meu-espaco?tab=conversar");
     } catch {
+      setResponding(false);
       setMessages((current) => current.map((message) =>
         message.client_message_id === clientId
           ? { ...message, delivery_status: "failed", optimistic: false }
@@ -696,10 +884,13 @@ export function ConversarTab({
            metadata: { audio_duration_ms: duration, audio_mime: blob.type },
         }]);
         setSending(true);
+        setResponding(true);
+        setResponseIssue(null);
         enqueueOutbox(pending);
         scrollToBottom();
         try { await submitMessage(pending); }
         catch {
+          setResponding(false);
           setMessages((current) => current.map((message) => message.client_message_id === clientId ? { ...message, delivery_status: "failed", optimistic: false } : message));
         } finally { setSending(false); }
       };
@@ -732,6 +923,10 @@ export function ConversarTab({
     { label: "Meditações", detail: "Pausas guiadas para você", tab: "meditacoes", icon: Headphones, tone: "portal-area-audio" },
     { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound, tone: "portal-area-profile" },
   ] as const;
+  const navigateFromConversation = (tab: typeof appAreas[number]["tab"]) => {
+    recordConversationEvent(userId, "area_opened_from_conversation", { destination: tab });
+    onNavigate?.(tab);
+  };
 
   const conversationList = (
     <aside className={cn(
@@ -844,7 +1039,7 @@ export function ConversarTab({
               key={tab}
               type="button"
               variant="ghost"
-              onClick={() => onNavigate?.(tab)}
+              onClick={() => navigateFromConversation(tab)}
               className="group h-auto w-full justify-start gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-card"
             >
               <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105", tone)}>
@@ -877,7 +1072,7 @@ export function ConversarTab({
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="truncate font-body text-base font-bold text-foreground">AURA</h2>
-          <p className="truncate text-xs text-muted-foreground">{responding ? "respondendo…" : connected ? "presente com você" : "reconectando…"}</p>
+           <p className="truncate text-xs text-muted-foreground">{responding ? "respondendo…" : connected ? "disponível" : "reconectando…"}</p>
         </div>
       </header>
 
@@ -905,7 +1100,7 @@ export function ConversarTab({
           </div>
         )}
 
-          <MessageTimeline messages={messages} responding={responding} onOpenReport={openReport} onOpenEpisode={openEpisode} />
+          <MessageTimeline messages={messages} responding={responding} onOpenReport={openReport} onOpenEpisode={openEpisode} onRetry={(message) => void retryFailedMessage(message)} onDelete={deleteFailedMessage} />
       </div>
 
       {showNew && (
@@ -914,7 +1109,16 @@ export function ConversarTab({
         </Button>
       )}
 
-        <form onSubmit={send} className="shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl">
+         <form onSubmit={send} className="shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl">
+          {responseIssue && (
+            <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2" role="status">
+              <p className="text-xs font-medium text-foreground">{responseIssue}</p>
+              <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 gap-1 px-2 text-xs" disabled={retryingResponse} onClick={() => void retryResponse()}>
+                {retryingResponse ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                Tentar de novo
+              </Button>
+            </div>
+          )}
          <div className="flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner focus-within:border-primary/50 focus-within:bg-card focus-within:ring-2 focus-within:ring-ring/20">
           {recording ? (
             <>

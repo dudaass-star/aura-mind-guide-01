@@ -67,6 +67,8 @@ const UserPortal = () => {
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
+  const shouldOpenConversation = searchParams.get("open") === "1"
+    || (searchParams.get("push") === "open" && searchParams.get("type") === "new_reply");
 
   useEffect(() => {
     if (!userId || searchParams.get("push") !== "open") return;
@@ -146,6 +148,7 @@ const UserPortal = () => {
     }
     localStorage.setItem(`aura-chat-open:${userId}`, "true");
     handleTabClick("conversar");
+    window.setTimeout(() => window.dispatchEvent(new Event("aura:open-chat")), 0);
   };
 
   const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = useQuery({
@@ -375,6 +378,7 @@ const UserPortal = () => {
               billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
               accountLoading={portalLoading}
               isActive={activeTab === "conversar"}
+              initialChatOpen={shouldOpenConversation}
             />
           </div>
           <Suspense fallback={<PortalLoadingInline />}>

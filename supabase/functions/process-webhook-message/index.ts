@@ -456,6 +456,7 @@ Deno.serve(async (req) => {
   let agentData: any = null;
   let turnOwnerToken: string | null = null;
   let currentMessageId: string | null = null;
+  let currentInboundMessageDbId: string | null = null;
   let isInApp = false;
   let shouldResumeInterruptedTurn = false;
   let firstResponseRecorded = false;
@@ -473,6 +474,7 @@ Deno.serve(async (req) => {
     } = workerPayload;
 
     isInApp = channel === 'in_app';
+    currentInboundMessageDbId = typeof inboundMessageDbId === 'string' ? inboundMessageDbId : null;
 
     contingencyPhone = cleanPhone;
 
@@ -1085,7 +1087,7 @@ Deno.serve(async (req) => {
         .eq('user_id', profile.user_id)
         .maybeSingle();
       inboundMessageCreatedAt = persistedInbound?.created_at ?? null;
-      (globalThis as any).__inboundMessageDbId = inboundMessageDbId;
+      currentInboundMessageDbId = inboundMessageDbId;
     } else if (messageText) {
       try {
         const resultadoPersistencia = await persistirMensagemRecebidaWhatsapp(
@@ -1097,7 +1099,7 @@ Deno.serve(async (req) => {
         const insertedMsg = resultadoPersistencia.mensagem;
         inboundSaved = true;
         inboundMessageCreatedAt = insertedMsg.created_at;
-        (globalThis as any).__inboundMessageDbId = insertedMsg.id;
+        currentInboundMessageDbId = insertedMsg.id;
         console.log(`💾 Inbound message persisted for user ${profile.user_id} (id: ${insertedMsg.id}, criada: ${resultadoPersistencia.criada})`);
       } catch (persistErr) {
         const persistMessage = persistErr instanceof Error ? persistErr.message : String(persistErr);
@@ -1468,7 +1470,8 @@ Deno.serve(async (req) => {
     // Helper: call aura-agent with timeout and optional minimal context
     async function callAuraAgent(useMinimalContext = false): Promise<any> {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 50000); // 50s timeout
+      const timeoutMs = isInApp ? (useMinimalContext ? 15_000 : 22_000) : 50_000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const body: any = {
           message: messageText,
@@ -1509,23 +1512,26 @@ Deno.serve(async (req) => {
       }
     }
 
-    // RETRY STRATEGY: attempt 1 (normal) → attempt 2 (normal) → attempt 3 (minimal context)
+    // No aplicativo, uma tentativa normal e uma enxuta evitam espera prolongada.
+    // No WhatsApp mantemos a tolerância histórica de três tentativas.
     let lastError: any = null;
     console.log(`🚀 [INVOKE] aura-agent for user=${profile.user_id} phone=${cleanPhone.substring(0, 4)}*** msgLen=${messageText.length} pending_insight=${profile.pending_insight ? 'YES' : 'no'}`);
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    const maxAttempts = isInApp ? 2 : 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const useMinimal = attempt === 3;
-        console.log(`🔄 aura-agent attempt ${attempt}/3${useMinimal ? ' (minimal_context)' : ''}...`);
+        const useMinimal = attempt === maxAttempts;
+        console.log(`🔄 aura-agent attempt ${attempt}/${maxAttempts}${useMinimal ? ' (minimal_context)' : ''}...`);
         agentData = await callAuraAgent(useMinimal);
         lastError = null;
         break;
       } catch (err: any) {
         lastError = err;
         const isTimeout = err.name === 'AbortError';
-        console.error(`❌ aura-agent attempt ${attempt} failed (${isTimeout ? 'TIMEOUT 50s' : err.message})`);
-        if (attempt < 3) {
-          console.log(`⏳ Waiting 2s before retry...`);
-          await new Promise(r => setTimeout(r, 2000));
+        console.error(`❌ aura-agent attempt ${attempt} failed (${isTimeout ? 'TIMEOUT' : err.message})`);
+        if (attempt < maxAttempts) {
+          const retryDelay = isInApp ? 150 : 2000;
+          console.log(`⏳ Waiting ${retryDelay}ms before retry...`);
+          await new Promise(r => setTimeout(r, retryDelay));
         }
       }
     }
@@ -1647,7 +1653,7 @@ Deno.serve(async (req) => {
 
       // Delay between bubbles
       if (i > 0 && msg.delay) {
-        const actualDelay = isInApp ? Math.min(Math.max(msg.delay, 400), 1200) : Math.min(msg.delay, 5000);
+        const actualDelay = isInApp ? Math.min(Math.max(msg.delay, 180), 550) : Math.min(msg.delay, 5000);
         console.log(`⏱️ Waiting ${actualDelay}ms before next message...`);
         await new Promise(resolve => setTimeout(resolve, actualDelay));
       }
@@ -1945,7 +1951,7 @@ Deno.serve(async (req) => {
         idempotencyKey: `response:${currentMessageId}`,
         category: 'response',
         type: 'new_reply',
-        path: '/meu-espaco',
+        path: '/meu-espaco?tab=conversar&open=1',
         whatsappText: '',
         whatsappCategory: 'checkin',
         priority: 'normal',
@@ -1998,9 +2004,35 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (supabase && isInApp && profile?.user_id && !sentAnyResponse) {
+      try {
+        const replyToMessageId = currentInboundMessageDbId;
+        const { data: existingFailure } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('user_id', profile.user_id)
+          .eq('role', 'assistant')
+          .contains('metadata', { kind: 'response_failure', reply_to_message_id: replyToMessageId })
+          .limit(1)
+          .maybeSingle();
+        if (!existingFailure) {
+          await supabase.from('messages').insert({
+            user_id: profile.user_id,
+            role: 'assistant',
+            content: 'Não consegui concluir minha resposta agora.',
+            channel: 'in_app',
+            delivery_status: 'delivered',
+            metadata: { kind: 'response_failure', reply_to_message_id: replyToMessageId },
+          });
+        }
+      } catch (recoveryError) {
+        console.error('⚠️ Falha ao registrar recuperação visível no aplicativo:', recoveryError);
+      }
+    }
+
     // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally
     if (!sentAnyResponse) {
-      console.error(`🚨 CRITICAL: User got NO response at all. conversation-followup will detect and re-engage naturally.`);
+      console.error(`🚨 CRITICAL: User got NO response at all. O aplicativo oferecerá retomada explícita.`);
     } else {
       console.log('ℹ️ Error after response already sent — no action needed');
     }

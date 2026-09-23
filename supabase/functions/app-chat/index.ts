@@ -10,15 +10,22 @@ const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const AUDIO_TYPES = new Set(["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav"]);
 
 const BodySchema = z.object({
+  action: z.enum(["send", "retry_response"]).default("send"),
   text: z.string().trim().max(8000).optional(),
-  client_message_id: z.string().uuid(),
+  client_message_id: z.string().uuid().optional(),
+  source_message_id: z.string().uuid().optional(),
   audio_base64: z.string().max(14_000_000).optional(),
   audio_mime: z.string().max(80).optional(),
   audio_duration_ms: z.number().int().min(100).max(120_000).optional(),
   client_sent_at: z.string().datetime().optional(),
 }).superRefine((value, context) => {
+  if (value.action === "retry_response") {
+    if (!value.source_message_id) context.addIssue({ code: z.ZodIssueCode.custom, message: "Mensagem de origem necessária" });
+    return;
+  }
   const hasText = Boolean(value.text);
   const hasAudio = Boolean(value.audio_base64 && value.audio_mime && value.audio_duration_ms);
+  if (!value.client_message_id) context.addIssue({ code: z.ZodIssueCode.custom, message: "Identificador da mensagem necessário" });
   if (hasText === hasAudio) context.addIssue({ code: z.ZodIssueCode.custom, message: "Envie texto ou áudio" });
 });
 
@@ -56,7 +63,7 @@ Deno.serve(async (req) => {
     const receivedAt = new Date().toISOString();
     const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return json({ error: "Mensagem inválida", details: parsed.error.flatten().fieldErrors }, 400);
-    const { client_message_id: clientMessageId, audio_base64: audioBase64, audio_duration_ms: audioDurationMs, client_sent_at: clientSentAt } = parsed.data;
+    const { action, client_message_id: clientMessageId, source_message_id: sourceMessageId, audio_base64: audioBase64, audio_duration_ms: audioDurationMs, client_sent_at: clientSentAt } = parsed.data;
     const text = parsed.data.text || "";
     const audioMime = parsed.data.audio_mime?.split(";")[0].toLowerCase();
     const hasAudio = Boolean(audioBase64);
@@ -73,6 +80,89 @@ Deno.serve(async (req) => {
     const { data: entitled, error: entitlementError } = await admin.rpc("has_portal_entitlement", { _user_id: userId });
     if (entitlementError) throw entitlementError;
     if (!entitled) return json({ error: "Seu acesso ainda não está liberado" }, 403);
+
+    if (action === "retry_response" && sourceMessageId) {
+      const { data: sourceMessage, error: sourceError } = await admin
+        .from("messages")
+        .select("id, content, is_audio, audio_url, metadata")
+        .eq("id", sourceMessageId)
+        .eq("user_id", userId)
+        .eq("role", "user")
+        .maybeSingle();
+      if (sourceError) throw sourceError;
+      if (!sourceMessage) return json({ error: "Mensagem não encontrada" }, 404);
+
+      const { data: existingReplies } = await admin
+        .from("messages")
+        .select("id, metadata")
+        .eq("user_id", userId)
+        .eq("role", "assistant")
+        .contains("metadata", { reply_to_message_id: sourceMessageId })
+        .limit(5);
+      const alreadyAnswered = existingReplies?.some((reply) => {
+        const metadata = reply.metadata && typeof reply.metadata === "object" && !Array.isArray(reply.metadata)
+          ? reply.metadata as Record<string, unknown>
+          : {};
+        return metadata.kind !== "response_failure";
+      });
+      if (alreadyAnswered) return json({ accepted: true, already_answered: true }, 202);
+
+      let retryAudioUrl = sourceMessage.audio_url;
+      if (sourceMessage.is_audio && sourceMessage.metadata && typeof sourceMessage.metadata === "object" && !Array.isArray(sourceMessage.metadata)) {
+        const storagePath = (sourceMessage.metadata as Record<string, unknown>).audio_storage_path;
+        if (typeof storagePath === "string") {
+          const { data: signed } = await admin.storage.from("chat-audios").createSignedUrl(storagePath, 900);
+          if (signed?.signedUrl) retryAudioUrl = signed.signedUrl;
+        }
+      }
+
+      const retryId = crypto.randomUUID();
+      const retryReceivedAt = new Date().toISOString();
+      const { count: recentAttempts } = await admin
+        .from("chat_turn_metrics")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("channel", "in_app")
+        .gte("created_at", new Date(Date.now() - 60_000).toISOString());
+      if ((recentAttempts || 0) >= 5) return json({ error: "Aguarde um instante antes de tentar novamente" }, 429);
+
+      await admin.from("chat_turn_metrics").insert({
+        user_id: userId,
+        client_message_id: retryId,
+        channel: "in_app",
+        server_received_at: retryReceivedAt,
+        status: "accepted",
+      });
+      await admin.from("aura_response_state")
+        .update({ is_responding: false })
+        .eq("user_id", userId)
+        .lt("response_started_at", new Date(Date.now() - 40_000).toISOString());
+
+      const retryWorker = fetch(`${supabaseUrl}/functions/v1/process-webhook-message`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceKey}`,
+          "x-internal-secret": internalSecret,
+        },
+        body: JSON.stringify({
+          channel: "in_app",
+          userId,
+          cleanPhone: profile.phone,
+          phone: profile.phone,
+          messageId: retryId,
+          inboundMessageDbId: sourceMessage.id,
+          text: sourceMessage.is_audio ? "" : sourceMessage.content,
+          hasAudio: sourceMessage.is_audio,
+          audioUrl: retryAudioUrl,
+          hasImage: false,
+        }),
+      }).catch((error) => console.error("Falha ao retomar resposta do chat:", error));
+      (globalThis as any).EdgeRuntime.waitUntil(retryWorker);
+      return json({ accepted: true, retry_id: retryId }, 202);
+    }
+
+    if (!clientMessageId) return json({ error: "Mensagem inválida" }, 400);
 
     const { data: existing } = await admin
       .from("messages")
