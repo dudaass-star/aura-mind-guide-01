@@ -174,6 +174,8 @@ async function createShortLink(url: string, phone: string): Promise<string | nul
 }
 
 async function transcribeAudio(audioUrl: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25_000);
   try {
     console.log('🎙️ Downloading audio from:', audioUrl);
     let audioBlob: Blob | null = null;
@@ -212,7 +214,7 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
         console.warn('⚠️ Twilio media URL detected but credentials missing');
       }
     }
-    const audioResponse = await fetch(fetchUrl, { headers: fetchHeaders, redirect: 'follow' });
+    const audioResponse = await fetch(fetchUrl, { headers: fetchHeaders, redirect: 'follow', signal: controller.signal });
     if (!audioResponse.ok) {
       console.error('❌ Failed to download audio:', audioResponse.status);
       return null;
@@ -237,6 +239,7 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` },
       body: formData,
+      signal: controller.signal,
     });
 
     if (!whisperResponse.ok) {
@@ -251,6 +254,8 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
   } catch (error) {
     console.error('❌ Error transcribing audio:', error);
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
