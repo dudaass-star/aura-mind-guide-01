@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { journey_id, portal_token } = await req.json();
+    const { journey_id, portal_token, goal } = await req.json();
 
     if (!journey_id) {
       return new Response(
@@ -86,7 +86,7 @@ serve(async (req) => {
       _episode_id: null,
       _progress_percent: null,
       _reflection_text: null,
-      _goal: null,
+      _goal: typeof goal === 'string' ? goal.slice(0, 240) : null,
     });
     if (updateError) {
       console.error('❌ Error updating profile:', updateError);

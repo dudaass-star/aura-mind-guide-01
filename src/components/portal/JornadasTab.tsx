@@ -119,7 +119,13 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
       return { ...latestCompletion, journey_id: journeyId, journey: journeys.find((journey) => journey.id === journeyId) };
     })
     .filter((item) => item.journey);
-  const availableJourneys = journeys.filter((journey) => journey.is_active && journey.id !== currentJourneyId && !completedSet.has(journey.id));
+  const goalTopics: Record<string, string[]> = {
+    Ansiedade: ["ansiedade"], Autoconfiança: ["autoestima"], Relações: ["relacionamentos"],
+    Trabalho: ["estresse_trabalho", "Procrastinação"], Mudanças: ["medo_mudanca", "luto"], Emoções: ["inteligencia_emocional"],
+  };
+  const availableJourneys = journeys
+    .filter((journey) => journey.is_active && journey.id !== currentJourneyId && !completedSet.has(journey.id))
+    .sort((a, b) => Number(goalTopics[selectedGoal]?.includes(b.topic) || false) - Number(goalTopics[selectedGoal]?.includes(a.topic) || false));
   const progress = currentJourney ? Math.min(100, Math.round((currentEpisode / currentJourney.total_episodes) * 100)) : 0;
   const futureEpisodeNumbers = currentJourney
     ? Array.from({ length: Math.max(0, currentJourney.total_episodes - currentEpisode) }, (_, index) => currentEpisode + index + 1)
