@@ -1,4 +1,5 @@
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Sun, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -217,6 +218,7 @@ const MessageTimeline = memo(function MessageTimeline({
   onRetry: (message: ChatMessage) => void;
   onDelete: (message: ChatMessage) => void;
 }) {
+  const navigate = useNavigate();
   return (
     <div className="space-y-5">
       {messages.map((message) => {
@@ -369,7 +371,8 @@ export function ConversarTab({
     onNavigate?.("insights");
   };
   const openEpisode = (episode: JourneyEpisodeCardMetadata) => {
-    window.location.assign(episode.path);
+    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "journey", event_type: "journey_card_opened", source: "conversation", metadata: { episode_id: episode.episode_id } as Json });
+    navigate(episode.path);
   };
 
   useEffect(() => {

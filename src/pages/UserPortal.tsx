@@ -158,7 +158,7 @@ const UserPortal = () => {
       const { data, error } = await supabasePortal
         .from("profiles")
         .select(
-          "name, status, payment_failed_at, current_journey_id, current_episode, journeys_completed, plan, plan_tier, billing_cycle, asaas_customer_id, card_gateway, last_user_message_at, last_proactive_insight_at, sessions_used_this_month, messages_used_this_month, messages_reset_month, created_at",
+          "name, status, payment_failed_at, current_journey_id, current_episode, journeys_completed, journey_paused, journey_selected_goal, plan, plan_tier, billing_cycle, asaas_customer_id, card_gateway, last_user_message_at, last_proactive_insight_at, sessions_used_this_month, messages_used_this_month, messages_reset_month, created_at",
         )
         .eq("user_id", userId)
         .maybeSingle();

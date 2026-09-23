@@ -39,7 +39,6 @@ const AdminSessions = lazy(() => import("./pages/AdminSessions"));
 const AdminLayout = lazy(() => import("./components/admin/AdminLayout"));
 const UserGuide = lazy(() => import("./pages/UserGuide"));
 const Episode = lazy(() => import("./pages/Episode"));
-const JourneyComplete = lazy(() => import("./pages/JourneyComplete"));
 const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
 const UserPortal = lazy(() => import("./pages/UserPortal"));
 const PortalLogin = lazy(() => import("./pages/PortalLogin"));
@@ -130,7 +129,6 @@ const App = () => (
             </Route>
             <Route path="/guia" element={<UserGuide />} />
             <Route path="/episodio/:id" element={<Episode />} />
-            <Route path="/jornada-completa/:journeyId/:userId" element={<JourneyComplete />} />
             <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route path="/meu-espaco" element={<UserPortal />} />
             <Route path="/meu-espaco/entrar" element={<PortalLogin />} />

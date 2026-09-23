@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { ArrowRight, BookOpen, CalendarDays, Headphones, MessageCircle, NotebookPen, PenLine, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,6 +85,7 @@ function recordTodayEvent(userId: string, eventType: string, action: TodayAction
 }
 
 export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConversation }: HojeTabProps) {
+  const navigate = useNavigate();
   const zeroConversation = !profile?.last_user_message_at;
 
   const { data, isLoading } = useQuery({
@@ -195,6 +197,15 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
       icon: BookOpen,
     };
 
+    if (!profile?.current_journey_id) return {
+      action: "journey" as const,
+      eyebrow: "Um tema para acompanhar você",
+      title: "Escolha uma jornada pelo que importa agora",
+      description: "Você escolhe o assunto. A sugestão é só um ponto de partida, nunca uma leitura sobre você.",
+      button: "Explorar Jornadas",
+      icon: BookOpen,
+    };
+
     if (data?.lastSession && (data.lastSession.closure_text || data.lastSession.session_summary)) return {
       action: "continuity" as const,
       eyebrow: "Um fio para continuar",
@@ -236,7 +247,11 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
       return;
     }
     if (priority.action === "journey" && data?.episode?.id) {
-      window.location.assign(`/episodio/${data.episode.id}?u=${userId}`);
+      navigate(`/episodio/${data.episode.id}?u=${userId}`);
+      return;
+    }
+    if (priority.action === "journey") {
+      onNavigateTab("jornadas");
       return;
     }
     if (priority.action === "continuity") {
@@ -289,7 +304,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
               <ContinuationRow icon={CalendarDays} title="Próxima sessão" detail={formatScheduledBrt(data.nextSession.scheduled_at)} action="Ver em Sessões" onClick={() => { recordTodayEvent(userId, "continuity_opened", "session"); onNavigateTab("sessoes"); }} />
             )}
             {showJourneyContinuation && (
-              <ContinuationRow icon={BookOpen} title={data.episode.stage_title || data.episode.title} detail={`Episódio ${data.episode.episode_number} da sua jornada`} action="Continuar" onClick={() => { recordTodayEvent(userId, "continuity_opened", "journey"); window.location.assign(`/episodio/${data.episode.id}?u=${userId}`); }} />
+               <ContinuationRow icon={BookOpen} title={data.episode.stage_title || data.episode.title} detail={`Episódio ${data.episode.episode_number} da sua jornada`} action="Continuar" onClick={() => { recordTodayEvent(userId, "continuity_opened", "journey"); navigate(`/episodio/${data.episode.id}?u=${userId}`); }} />
             )}
             {showLastSessionContinuation && (
               <ContinuationRow icon={Sparkles} title="O que ficou da última sessão" detail={data.lastSession.theme_label || data.lastSession.focus_topic || "Seu encontro mais recente"} action="Rever" onClick={() => { recordTodayEvent(userId, "continuity_opened", "continuity"); onNavigateTab("sessoes"); }} />
