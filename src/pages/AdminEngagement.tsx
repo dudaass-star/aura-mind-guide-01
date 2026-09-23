@@ -1026,8 +1026,9 @@ export default function AdminEngagement() {
                         até 3s {metrics.conversationWithin3Seconds ?? 0}% · 5s {metrics.conversationWithin5Seconds ?? 0}% · 10s {metrics.conversationWithin10Seconds ?? 0}% · 30s {metrics.conversationWithin30Seconds ?? 0}%
                       </p>
                       <p className="text-[11px] text-muted-foreground">
-                        {metrics.conversationFailed ?? 0} falhas em {metrics.conversationTurns ?? 0} turnos · {(metrics.conversationCorrectionsPer100 ?? 0).toFixed(2)} correções/100 conversas
+                        {metrics.conversationFailed ?? 0} falhas em {metrics.conversationTurns ?? 0} turnos · {(metrics.conversationCorrectionsPer100 ?? 0).toFixed(2)} correções/100 aberturas
                       </p>
+                      <p className="text-[10px] text-muted-foreground">base: {metrics.conversationOpenings ?? 0} aberturas diárias da conversa</p>
                     </CardContent>
                   </Card>
 
