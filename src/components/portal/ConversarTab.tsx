@@ -127,6 +127,28 @@ function audioStoragePath(message: ChatMessage) {
   return typeof path === "string" ? path : null;
 }
 
+function audioDurationMs(message: ChatMessage) {
+  if (!message.metadata || typeof message.metadata !== "object" || Array.isArray(message.metadata)) return null;
+  const duration = (message.metadata as Record<string, unknown>).audio_duration_ms;
+  return typeof duration === "number" && duration > 0 ? duration : null;
+}
+
+async function hydrateAudioUrls(messages: ChatMessage[]) {
+  const paths = [...new Set(messages.map(audioStoragePath).filter((path): path is string => Boolean(path)))];
+  if (!paths.length) return messages;
+  const { data: signedAudios } = await supabasePortal.storage.from("chat-audios").createSignedUrls(paths, 3600);
+  const signedByPath = new Map<string, string>();
+  signedAudios?.forEach((signed, index) => {
+    const path = paths[index];
+    if (path && signed.signedUrl) signedByPath.set(path, signed.signedUrl);
+  });
+  return messages.map((message) => {
+    const path = audioStoragePath(message);
+    const signedUrl = path ? signedByPath.get(path) : null;
+    return signedUrl ? { ...message, audio_url: signedUrl } : message;
+  });
+}
+
 const MessageTimeline = memo(function MessageTimeline({
   messages,
   responding,
@@ -177,7 +199,7 @@ const MessageTimeline = memo(function MessageTimeline({
                 </div>
               ) : (!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
               {message.is_audio && message.audio_url && (
-                <VoiceMessagePlayer src={message.audio_url} mine={mine} />
+                <VoiceMessagePlayer src={message.audio_url} mine={mine} durationMs={audioDurationMs(message)} />
               )}
             </div>
             <div className={cn("mt-1.5 flex items-center gap-1 px-1 text-[10px] font-medium text-muted-foreground", mine && "justify-end")}>
@@ -391,21 +413,7 @@ export function ConversarTab({
           .maybeSingle(),
       ]);
       if (!error && data) {
-        const initialMessages = data as ChatMessage[];
-        const audioPaths = initialMessages.map(audioStoragePath).filter((path): path is string => Boolean(path));
-        const signedByPath = new Map<string, string>();
-        if (audioPaths.length > 0) {
-          const { data: signedAudios } = await supabasePortal.storage.from("chat-audios").createSignedUrls(audioPaths, 3600);
-          signedAudios?.forEach((signed, index) => {
-            const path = audioPaths[index];
-            if (path && signed.signedUrl) signedByPath.set(path, signed.signedUrl);
-          });
-        }
-        const hydrated = initialMessages.map((message) => {
-          const storagePath = audioStoragePath(message);
-          const signedUrl = storagePath ? signedByPath.get(storagePath) : null;
-          return signedUrl ? { ...message, audio_url: signedUrl } : message;
-        });
+        const hydrated = await hydrateAudioUrls(data as ChatMessage[]);
         setMessages(orderMessages(hydrated));
         setHasOlder(data.length === PAGE_SIZE);
         setTimeout(() => scrollToBottom("auto"), 0);
@@ -421,9 +429,10 @@ export function ConversarTab({
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `user_id=eq.${userId}` },
-        (payload) => {
+        async (payload) => {
           const incoming = payload.new as ChatMessage;
-          setMessages((current) => mergeMessage(current, incoming));
+          const [hydratedIncoming] = await hydrateAudioUrls([incoming]);
+          if (hydratedIncoming) setMessages((current) => mergeMessage(current, hydratedIncoming));
           if (nearBottomRef.current) setTimeout(() => scrollToBottom(), 0);
           else setShowNew(true);
         },
@@ -451,7 +460,10 @@ export function ConversarTab({
         .gt("sequence_no", latestSequenceRef.current)
         .order("sequence_no", { ascending: true })
         .limit(PAGE_SIZE);
-      if (data?.length) setMessages((current) => (data as ChatMessage[]).reduce<ChatMessage[]>((acc, message) => mergeMessage(acc, message), current));
+      if (data?.length) {
+        const hydrated = await hydrateAudioUrls(data as ChatMessage[]);
+        setMessages((current) => hydrated.reduce<ChatMessage[]>((acc, message) => mergeMessage(acc, message), current));
+      }
     };
     const onFocus = () => void reconcile();
     const onVisibility = () => document.visibilityState === "visible" && void reconcile();
@@ -498,7 +510,8 @@ export function ConversarTab({
       .order("sequence_no", { ascending: false })
       .limit(PAGE_SIZE);
     if (!data) return;
-    setMessages((current) => orderMessages([...(data as ChatMessage[]), ...current]));
+    const hydrated = await hydrateAudioUrls(data as ChatMessage[]);
+    setMessages((current) => orderMessages([...hydrated, ...current]));
     setHasOlder(data.length === PAGE_SIZE);
     requestAnimationFrame(() => {
       if (scrollRef.current) scrollRef.current.scrollTop += scrollRef.current.scrollHeight - previousHeight;
@@ -540,6 +553,7 @@ export function ConversarTab({
       delivery_status: "delivered",
       is_audio: Boolean(pending.audioBase64),
       audio_url: data.message.audio_url || null,
+      metadata: data.message.metadata,
       optimistic: false,
     }));
   };

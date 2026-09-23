@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 interface VoiceMessagePlayerProps {
   src: string;
   mine: boolean;
+  durationMs?: number | null;
 }
 
 const SPEEDS = [1, 1.5, 2] as const;
@@ -17,11 +18,12 @@ function formatDuration(seconds: number) {
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function VoiceMessagePlayer({ src, mine }: VoiceMessagePlayerProps) {
+export function VoiceMessagePlayer({ src, mine, durationMs }: VoiceMessagePlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [duration, setDuration] = useState(0);
+  const knownDuration = durationMs && durationMs > 0 ? durationMs / 1000 : 0;
+  const [duration, setDuration] = useState(knownDuration);
   const [currentTime, setCurrentTime] = useState(0);
   const [speedIndex, setSpeedIndex] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -31,7 +33,10 @@ export function VoiceMessagePlayer({ src, mine }: VoiceMessagePlayerProps) {
     if (!audio) return;
 
     const updateTime = () => setCurrentTime(audio.currentTime);
-    const updateDuration = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+    const updateDuration = () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration);
+      else if (knownDuration > 0) setDuration(knownDuration);
+    };
     const finish = () => {
       setPlaying(false);
       setLoading(false);
@@ -40,6 +45,15 @@ export function VoiceMessagePlayer({ src, mine }: VoiceMessagePlayerProps) {
     const ready = () => {
       setLoading(false);
       setFailed(false);
+    };
+    const started = () => {
+      setPlaying(true);
+      setLoading(false);
+      setFailed(false);
+    };
+    const paused = () => {
+      if (!audio.ended) setPlaying(false);
+      setLoading(false);
     };
     const wait = () => setLoading(true);
     const fail = () => {
@@ -53,6 +67,8 @@ export function VoiceMessagePlayer({ src, mine }: VoiceMessagePlayerProps) {
     audio.addEventListener("durationchange", updateDuration);
     audio.addEventListener("ended", finish);
     audio.addEventListener("canplay", ready);
+    audio.addEventListener("playing", started);
+    audio.addEventListener("pause", paused);
     audio.addEventListener("waiting", wait);
     audio.addEventListener("error", fail);
 
@@ -62,10 +78,12 @@ export function VoiceMessagePlayer({ src, mine }: VoiceMessagePlayerProps) {
       audio.removeEventListener("durationchange", updateDuration);
       audio.removeEventListener("ended", finish);
       audio.removeEventListener("canplay", ready);
+      audio.removeEventListener("playing", started);
+      audio.removeEventListener("pause", paused);
       audio.removeEventListener("waiting", wait);
       audio.removeEventListener("error", fail);
     };
-  }, [src]);
+  }, [knownDuration, src]);
 
   const togglePlayback = async () => {
     const audio = audioRef.current;
@@ -81,9 +99,8 @@ export function VoiceMessagePlayer({ src, mine }: VoiceMessagePlayerProps) {
     setLoading(true);
     setFailed(false);
     try {
+      if (audio.ended || (duration > 0 && audio.currentTime >= duration)) audio.currentTime = 0;
       await audio.play();
-      setPlaying(true);
-      setLoading(false);
     } catch {
       setFailed(true);
       setLoading(false);
