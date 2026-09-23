@@ -186,7 +186,7 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
       const mediaId = metaMatch[1];
       console.log(`🔐 Using Meta Graph API for media download (media_id=${mediaId})`);
       const { downloadMetaMedia } = await import("../_shared/meta-whatsapp-client.ts");
-      audioBlob = await downloadMetaMedia(mediaId);
+      audioBlob = await downloadMetaMedia(mediaId, controller.signal);
       if (!audioBlob) {
         console.error('❌ Meta media download failed');
         return null;
@@ -260,6 +260,8 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
 }
 
 async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: string | null; audioContent: string | null }> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25_000);
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -267,6 +269,7 @@ async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: s
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
       body: JSON.stringify({ text, userId, voice: 'shimmer' }),
+      signal: controller.signal,
     });
     if (!response.ok) {
       console.error('❌ TTS error:', await response.text());
@@ -277,6 +280,8 @@ async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: s
   } catch (error) {
     console.error('❌ TTS exception:', error);
     return { audioUrl: null, audioContent: null };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -465,6 +470,7 @@ Deno.serve(async (req) => {
   let isInApp = false;
   let shouldResumeInterruptedTurn = false;
   let firstResponseRecorded = false;
+  let lockHeartbeatId: number | null = null;
 
   try {
     const workerPayload = await req.json();
@@ -1060,6 +1066,13 @@ Deno.serve(async (req) => {
         error_code: errorCode || null,
       }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
     };
+    lockHeartbeatId = setInterval(() => {
+      void supabase.from('aura_response_state')
+        .update({ response_started_at: new Date().toISOString() })
+        .eq('user_id', profile.user_id)
+        .eq('owner_token', turnOwnerToken)
+        .eq('is_responding', true);
+    }, 30_000);
 
     try { // try/finally covers ALL code after lock acquisition to guarantee lock release
 
@@ -1906,6 +1919,7 @@ Deno.serve(async (req) => {
 
     } finally {
       // Safety net: garante liberação do lock mesmo em caso de erro
+      if (lockHeartbeatId !== null) clearInterval(lockHeartbeatId);
       try {
         await supabase
           .from('aura_response_state')
@@ -1993,6 +2007,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: unknown) {
+    if (lockHeartbeatId !== null) clearInterval(lockHeartbeatId);
     console.error('❌ Worker processing error:', {
       message: error instanceof Error ? error.message : String(error),
       name: error instanceof Error ? error.name : 'unknown',
