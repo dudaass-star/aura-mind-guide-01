@@ -21,8 +21,8 @@ const AI_MODELS = [
 ];
 
 const TTS_MODELS = [
-  { value: 'google/erinome', label: 'Google Erinome', description: 'Voz Erinome via Google Cloud TTS (atual)' },
-  { value: 'inworld/aura', label: 'Inworld Aura', description: 'Voz customizada criada no Inworld' },
+  { value: 'google/erinome', label: 'Google Erinome', description: 'Voz anterior via Google Cloud TTS' },
+  { value: 'inworld/aura', label: 'Inworld Aura', description: 'Voz oficial da AURA no Inworld TTS-2' },
 ];
 
 const CARD_GATEWAYS = [
