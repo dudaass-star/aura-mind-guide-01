@@ -7815,19 +7815,18 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           .maybeSingle();
         
         if (nextSession) {
-          await supabase
-            .from('sessions')
-            .update({ 
-              scheduled_at: newScheduledAt.toISOString(),
-              reminder_24h_sent: false,
-              reminder_1h_sent: false,
-              reminder_15m_sent: false,
-              confirmation_requested: false,
-              user_confirmed: null
-            })
-            .eq('id', nextSession.id);
-          
-          console.log('📅 Session rescheduled via AURA:', nextSession.id, 'to', newScheduledAt.toISOString());
+          const { error: rescheduleError } = await supabase.rpc('manage_portal_session_internal', {
+            _user_id: profile.user_id,
+            _action: 'reschedule',
+            _scheduled_at: newScheduledAt.toISOString(),
+            _session_id: nextSession.id,
+          });
+
+          if (rescheduleError) {
+            console.error('❌ Falha ao reagendar sessão via AURA:', rescheduleError);
+          } else {
+            console.log('📅 Sessão reagendada via AURA:', nextSession.id, 'para', newScheduledAt.toISOString());
+          }
         }
       }
     }
