@@ -6533,17 +6533,18 @@ INSTRUÇÃO: Retome de onde pararam naturalmente. Diga algo como "Que bom que vo
             await supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id);
           } else {
             // INICIAR SESSÃO AGORA
-            const startNow = new Date().toISOString();
-            await supabase.from('sessions').update({
-              status: 'in_progress',
-              started_at: startNow,
-              session_start_notified: true,
-            }).eq('id', sessionId);
+            const { error: prearmStartError } = await supabase.rpc('manage_portal_session_internal', {
+              _user_id: profile.user_id,
+              _action: 'start',
+              _scheduled_at: null,
+              _session_id: sessionId,
+            });
+            if (prearmStartError) throw prearmStartError;
 
-            await supabase.from('profiles').update({
-              current_session_id: sessionId,
-              pending_insight: null,
-            }).eq('id', profile.id);
+            await Promise.all([
+              supabase.from('sessions').update({ session_start_notified: true }).eq('id', sessionId),
+              supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id),
+            ]);
 
             const sessionType = prearmSession.session_type || 'livre';
             const focusTopic = prearmSession.focus_topic;
