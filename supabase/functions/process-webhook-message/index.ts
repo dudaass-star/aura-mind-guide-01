@@ -1052,6 +1052,14 @@ Deno.serve(async (req) => {
         console.error(`⚠️ Erro ao liberar lock para user ${profile.user_id}:`, e);
       }
     };
+    const completeInAppTurn = async (status: 'completed' | 'interrupted' | 'failed' = 'completed', errorCode?: string) => {
+      if (!isInApp || !currentMessageId) return;
+      await supabase.from('chat_turn_metrics').update({
+        completed_at: new Date().toISOString(),
+        status,
+        error_code: errorCode || null,
+      }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+    };
 
     try { // try/finally covers ALL code after lock acquisition to guarantee lock release
 
@@ -1162,6 +1170,7 @@ Deno.serve(async (req) => {
       } else {
         await sendMessage(cleanPhone, audioErrorText);
       }
+      await completeInAppTurn('failed', 'audio_transcription_failed');
       await releaseLock();
       return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1234,6 +1243,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: confirmMsg },
           ]);
           inboundSaved = true;
+          await completeInAppTurn();
           await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_audio_received' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1251,6 +1261,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
           ]);
           inboundSaved = true;
+          await completeInAppTurn();
           await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1264,6 +1275,7 @@ Deno.serve(async (req) => {
           { user_id: profile.user_id, role: 'assistant', content: reminderMsg },
         ]);
         inboundSaved = true;
+        await completeInAppTurn();
         await releaseLock();
         return new Response(JSON.stringify({ status: 'capsule_awaiting_audio_reminder' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1280,6 +1292,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: replaceMsg },
           ]);
           inboundSaved = true;
+          await completeInAppTurn();
           await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_audio_replaced' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1297,6 +1310,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
           ]);
           inboundSaved = true;
+          await completeInAppTurn();
           await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1328,6 +1342,7 @@ Deno.serve(async (req) => {
             ]);
             inboundSaved = true;
             console.log(`✅ Time capsule saved for user ${profile.user_id}, deliver_at: ${deliverDateStr}`);
+            await completeInAppTurn();
             await releaseLock();
             return new Response(JSON.stringify({ status: 'capsule_saved' }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1359,6 +1374,7 @@ Deno.serve(async (req) => {
         inboundSaved = true;
       }
       await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: ratingResult.response });
+      await completeInAppTurn();
       await releaseLock();
       return new Response(JSON.stringify({ status: 'rating_handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1378,6 +1394,7 @@ Deno.serve(async (req) => {
         inboundSaved = true;
       }
       await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: confirmationResult.response });
+      await completeInAppTurn();
       await releaseLock();
       return new Response(JSON.stringify({ status: 'confirmation_handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
