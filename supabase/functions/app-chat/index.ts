@@ -17,6 +17,7 @@ const BodySchema = z.object({
   audio_base64: z.string().max(14_000_000).optional(),
   audio_mime: z.string().max(80).optional(),
   audio_duration_ms: z.number().int().min(100).max(120_000).optional(),
+  journey_episode_id: z.string().uuid().optional(),
   client_sent_at: z.string().datetime().optional(),
 }).superRefine((value, context) => {
   if (value.action === "retry_response") {
@@ -63,7 +64,7 @@ Deno.serve(async (req) => {
     const receivedAt = new Date().toISOString();
     const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return json({ error: "Mensagem inválida", details: parsed.error.flatten().fieldErrors }, 400);
-    const { action, client_message_id: clientMessageId, source_message_id: sourceMessageId, audio_base64: audioBase64, audio_duration_ms: audioDurationMs, client_sent_at: clientSentAt } = parsed.data;
+    const { action, client_message_id: clientMessageId, source_message_id: sourceMessageId, audio_base64: audioBase64, audio_duration_ms: audioDurationMs, journey_episode_id: journeyEpisodeId, client_sent_at: clientSentAt } = parsed.data;
     const text = parsed.data.text || "";
     const audioMime = parsed.data.audio_mime?.split(";")[0].toLowerCase();
     const hasAudio = Boolean(audioBase64);
@@ -80,6 +81,16 @@ Deno.serve(async (req) => {
     const { data: entitled, error: entitlementError } = await admin.rpc("has_portal_entitlement", { _user_id: userId });
     if (entitlementError) throw entitlementError;
     if (!entitled) return json({ error: "Seu acesso ainda não está liberado" }, 403);
+
+    if (journeyEpisodeId) {
+      const { data: releasedEpisode, error: releasedEpisodeError } = await admin
+        .from("journey_episode_progress")
+        .select("episode_id")
+        .eq("user_id", userId)
+        .eq("episode_id", journeyEpisodeId)
+        .maybeSingle();
+      if (releasedEpisodeError || !releasedEpisode) return json({ error: "Episódio não disponível" }, 403);
+    }
 
     if (action === "retry_response" && sourceMessageId) {
       const { data: sourceMessage, error: sourceError } = await admin
@@ -237,6 +248,7 @@ Deno.serve(async (req) => {
           client_sent_at: safeClientSentAt,
           server_received_at: receivedAt,
           accepted_at: new Date().toISOString(),
+          ...(journeyEpisodeId ? { journey_episode_id: journeyEpisodeId } : {}),
         },
       })
       .select("id, sequence_no, delivery_status, created_at, is_audio, audio_url, metadata")
@@ -289,6 +301,7 @@ Deno.serve(async (req) => {
         hasAudio,
         audioUrl,
         hasImage: false,
+        journeyEpisodeId,
       }),
     }).then(async (response) => {
       if (!response.ok) console.error("Falha no processamento do chat:", response.status, await response.text());

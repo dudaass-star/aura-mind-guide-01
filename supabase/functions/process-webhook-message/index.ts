@@ -481,7 +481,7 @@ Deno.serve(async (req) => {
       messageType, buttonText, buttonPayload, originalRepliedMessageSid,
       // Identificador da mensagem citada via "Responder" nativo do WhatsApp (Meta)
       quotedMessageId,
-      channel = 'whatsapp', userId, inboundMessageDbId,
+      channel = 'whatsapp', userId, inboundMessageDbId, journeyEpisodeId,
     } = workerPayload;
 
     isInApp = channel === 'in_app';
@@ -1536,6 +1536,7 @@ Deno.serve(async (req) => {
           quoted_message: quotedMessageBody,
           // Contexto de mensagem proativa recente (Pergunta da Semana, etc.)
           proactive_context: proactiveContext,
+          journey_episode_id: typeof journeyEpisodeId === 'string' ? journeyEpisodeId : null,
         };
         if (useMinimalContext) {
           body.minimal_context = true;

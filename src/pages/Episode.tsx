@@ -86,7 +86,17 @@ export default function Episode() {
     const saveProgress = async () => {
       const root = document.documentElement;
       const available = root.scrollHeight - window.innerHeight;
-      if (available <= 0 || !id) return;
+      if (!id) return;
+      if (available <= 0) {
+        if (lastProgressSent.current >= 90 || progressSaving.current) return;
+        progressSaving.current = true;
+        const { data, error: progressError } = await supabasePortal.functions.invoke("manage-portal-journey", {
+          body: { action: "progress", episodeId: id, progressPercent: 90, portalToken },
+        });
+        progressSaving.current = false;
+        if (!progressError && !data?.error) lastProgressSent.current = 90;
+        return;
+      }
       const rawPercent = Math.min(99, Math.max(1, Math.round((window.scrollY / available) * 100)));
       const percent = [90, 75, 50, 25].find((mark) => rawPercent >= mark) || 0;
       if (!percent || percent <= lastProgressSent.current || progressSaving.current) return;
@@ -108,6 +118,7 @@ export default function Episode() {
       timer = window.setTimeout(() => void saveProgress(), 700);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
+    void saveProgress();
     return () => {
       window.removeEventListener("scroll", onScroll);
       if (timer) window.clearTimeout(timer);
@@ -123,7 +134,16 @@ export default function Episode() {
   if (error || !episode) return <JourneyPageShell eyebrow="Conteúdos para você" title="Jornadas" backHref={backHref}><div className="flex flex-1 items-center justify-center px-6 text-center"><div><Sparkles className="mx-auto mb-4 h-7 w-7 text-primary" /><h2 className="font-display text-xl font-semibold">Episódio não encontrado</h2><Button asChild variant="outline" className="mt-5"><Link to={backHref}>Voltar para Jornadas</Link></Button></div></div></JourneyPageShell>;
 
   const title = episode.stage_title || episode.title;
-  const talkPath = portalToken ? `/meu-espaco?t=${encodeURIComponent(portalToken)}&tab=conversar&episode=${episode.id}` : `/meu-espaco?tab=conversar&episode=${episode.id}`;
+  const talkPath = portalToken ? `/meu-espaco?t=${encodeURIComponent(portalToken)}&tab=conversar&open=1&episode=${episode.id}` : `/meu-espaco?tab=conversar&open=1&episode=${episode.id}`;
+  const discussEpisode = () => {
+    // A conversa não deve ficar bloqueada se o registro de telemetria falhar.
+    void supabasePortal.functions.invoke("manage-portal-journey", {
+      body: { action: "discuss", episodeId: episode.id, portalToken },
+    }).then(({ error: discussError, data }) => {
+      if (discussError || data?.error) console.warn("Não foi possível registrar a conversa sobre o episódio.");
+    });
+    navigate(talkPath);
+  };
   return <>
     <Helmet><title>{`EP ${episode.episode_number} — ${title} | Aura`}</title><meta name="robots" content="noindex, nofollow" /></Helmet>
     <JourneyPageShell eyebrow="Conteúdos para você" title="Jornadas" backHref={backHref}>
@@ -143,8 +163,8 @@ export default function Episode() {
             <Textarea value={reflection} onChange={(event) => { setReflection(event.target.value); setSavedReflection(false); }} maxLength={2000} placeholder="Uma frase, pergunta ou percepção..." className="mt-4 min-h-28 resize-none rounded-xl" />
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Button variant="outline" disabled={!reflection.trim() || action.isPending} onClick={() => action.mutate({ type: "reflect", text: reflection.trim() })}>{action.isPending ? <Loader2 className="animate-spin" /> : <Heart />} {savedReflection ? "Reflexão guardada" : "Guardar reflexão"}</Button>
-              <Button variant="ghost" disabled={action.isPending} onClick={() => action.mutate({ type: "discuss" }, { onSuccess: () => navigate(talkPath) })}>
-                {action.isPending ? <Loader2 className="animate-spin" /> : <MessageCircle />} Conversar sobre este episódio
+              <Button variant="ghost" disabled={action.isPending} onClick={discussEpisode}>
+                <MessageCircle /> Conversar sobre este episódio
               </Button>
             </div>
           </section>

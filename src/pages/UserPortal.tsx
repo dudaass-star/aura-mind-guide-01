@@ -67,8 +67,35 @@ const UserPortal = () => {
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
+  const discussionEpisodeId = searchParams.get("episode");
   const shouldOpenConversation = searchParams.get("open") === "1"
+    || Boolean(discussionEpisodeId)
     || (searchParams.get("push") === "open" && searchParams.get("type") === "new_reply");
+
+  const { data: discussionEpisode } = useQuery({
+    queryKey: ["portal-discussion-episode", userId, discussionEpisodeId],
+    queryFn: async () => {
+      if (!userId || !discussionEpisodeId) return null;
+      const { data: released, error: progressError } = await supabasePortal
+        .from("journey_episode_progress")
+        .select("episode_id")
+        .eq("user_id", userId)
+        .eq("episode_id", discussionEpisodeId)
+        .maybeSingle();
+      if (progressError || !released) return null;
+      const { data, error } = await supabasePortal
+        .from("journey_episodes")
+        .select("id,episode_number,title,stage_title")
+        .eq("id", discussionEpisodeId)
+        .maybeSingle();
+      if (error) return null;
+      return data;
+    },
+    enabled: Boolean(userId && discussionEpisodeId && linkStatus === "linked"),
+  });
+  const discussionPrompt = discussionEpisode
+    ? `Quero conversar sobre o episódio ${discussionEpisode.episode_number}, “${discussionEpisode.stage_title || discussionEpisode.title}”.`
+    : undefined;
 
   useEffect(() => {
     if (!userId || searchParams.get("push") !== "open") return;
@@ -379,6 +406,8 @@ const UserPortal = () => {
               accountLoading={portalLoading}
               isActive={activeTab === "conversar"}
               initialChatOpen={shouldOpenConversation}
+              initialDraft={discussionPrompt}
+              discussionEpisodeId={discussionEpisode?.id}
             />
           </div>
           <Suspense fallback={<PortalLoadingInline />}>

@@ -100,6 +100,7 @@ type PendingMessage = {
   audioBase64?: string;
   audioMime?: string;
   audioDurationMs?: number;
+  journeyEpisodeId?: string;
   createdAt: string;
 };
 
@@ -311,6 +312,8 @@ export function ConversarTab({
   accountLoading = false,
   isActive = true,
   initialChatOpen = false,
+  initialDraft,
+  discussionEpisodeId,
 }: {
   userId: string;
   firstName: string;
@@ -322,6 +325,8 @@ export function ConversarTab({
   accountLoading?: boolean;
   isActive?: boolean;
   initialChatOpen?: boolean;
+  initialDraft?: string;
+  discussionEpisodeId?: string;
 }) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -337,6 +342,7 @@ export function ConversarTab({
   const [recording, setRecording] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
   const [audioError, setAudioError] = useState("");
+  const [activeDiscussionEpisodeId, setActiveDiscussionEpisodeId] = useState(discussionEpisodeId);
   const [chatOpen, setChatOpen] = useState(() => initialChatOpen || localStorage.getItem(`aura-chat-open:${userId}`) === "true");
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
   const [showInstallInvite, setShowInstallInvite] = useState(false);
@@ -363,6 +369,7 @@ export function ConversarTab({
   const discardRecordingRef = useRef(false);
   const awaitingResponseRef = useRef<{ clientId: string; messageId: string; createdAt: number } | null>(null);
   const responseTimerRef = useRef<number | null>(null);
+  const appliedInitialDraftRef = useRef<string | null>(null);
   const outboxKey = `aura-chat-outbox:${userId}`;
   const openReport = (report: ReportCardMetadata) => {
     const url = new URL(report.path || "/meu-espaco?tab=percurso", window.location.origin);
@@ -402,6 +409,19 @@ export function ConversarTab({
   useEffect(() => {
     if (initialChatOpen) setChatOpen(true);
   }, [initialChatOpen]);
+
+  useEffect(() => {
+    if (!initialDraft || appliedInitialDraftRef.current === initialDraft) return;
+    appliedInitialDraftRef.current = initialDraft;
+    setActiveDiscussionEpisodeId(discussionEpisodeId);
+    setDraft((current) => {
+      if (!current.trim()) return initialDraft;
+      if (current.includes(initialDraft)) return current;
+      return `${initialDraft}\n\n${current}`;
+    });
+    setChatOpen(true);
+    window.setTimeout(() => composerRef.current?.focus(), 0);
+  }, [discussionEpisodeId, initialDraft]);
 
   useEffect(() => {
     const openChat = () => setChatOpen(true);
@@ -694,10 +714,12 @@ export function ConversarTab({
         audio_base64: pending.audioBase64,
         audio_mime: pending.audioMime,
         audio_duration_ms: pending.audioDurationMs,
+        journey_episode_id: pending.journeyEpisodeId,
         client_sent_at: pending.createdAt,
       },
     });
     if (error || !data?.accepted) throw error || new Error(data?.error || "Falha no envio");
+    if (pending.journeyEpisodeId) setActiveDiscussionEpisodeId(undefined);
     removeFromOutbox(pending.clientId);
     setMessages((current) => mergeMessage(current, {
       id: data.message.id,
@@ -796,7 +818,7 @@ export function ConversarTab({
 
     const clientId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    const pending: PendingMessage = { clientId, text, createdAt };
+    const pending: PendingMessage = { clientId, text, journeyEpisodeId: activeDiscussionEpisodeId, createdAt };
     const optimistic: ChatMessage = {
       id: `local:${clientId}`,
       user_id: userId,
