@@ -11,6 +11,7 @@ import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDi
 import { ValueDiscoveryCard } from "@/components/portal/ValueDiscoveryCard";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
+import type { Json } from "@/integrations/supabase/types";
 
 type ChatMessage = {
   id: string;
@@ -165,7 +166,7 @@ function recordConversationEvent(userId: string, eventType: string, metadata: Re
     feature: "conversation",
     event_type: eventType,
     source: "app",
-    metadata,
+    metadata: metadata as Json,
   }]).then(({ error }) => {
     if (error && error.code !== "23505") console.warn("Não foi possível registrar a interação na conversa");
   });
