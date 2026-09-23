@@ -32,3 +32,4 @@
 - [Toque de Cuidado](mem://style/toque-de-cuidado) — Lembretes e follow-ups abrem com pergunta genuína; sem preço/condições/link colado; oferta só sob pedido
 - [Entrega de episódios no app](mem://features/journeys/episode-card-delivery) — A conversa mostra apenas cartão compacto do episódio; conteúdo completo vive em Jornadas
 - [Agendamento mensal flexível](mem://features/sessions/multiple-monthly-bookings) — Cliente agenda livremente até a cota; gestão individual e upgrade contextual somente ao esgotar
+- [Preparação e abertura da sessão](mem://features/sessions/preparacao-e-abertura) — Preparação atual tem prioridade; ponte anterior e compromissos só entram quando forem relevantes
