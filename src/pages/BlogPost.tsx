@@ -181,10 +181,10 @@ const BlogPost = () => {
           {/* CTA banner final */}
           <div className="mt-12 rounded-xl border border-primary/30 bg-primary/5 p-6 md:p-8 text-center">
             <h3 className="text-xl md:text-2xl font-semibold text-foreground mb-3">
-              {cluster?.cta_copy || "Quando precisar conversar, a Aura tá no seu WhatsApp."}
+              {cluster?.cta_copy || "Quando precisar conversar, a Aura está no seu aplicativo."}
             </h3>
             <p className="text-sm text-muted-foreground mb-5">
-              Acompanhamento emocional contínuo via WhatsApp. R$ 6,90 nos 7 primeiros dias.
+              Conversas por texto ou áudio no app Olá Aura. R$ 6,90 nos 7 primeiros dias.
             </p>
             <Button asChild size="lg">
               <Link to="/v2">

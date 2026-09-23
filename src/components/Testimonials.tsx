@@ -51,7 +51,7 @@ const testimonials = [
   name: "Fernanda L.",
   role: "Designer, 26 anos",
   avatar: avatarFernanda,
-  content: "A praticidade de ter no WhatsApp é tudo! Às 3h da manhã, quando a ansiedade bate, a Aura tá lá. Sem precisar marcar horário, sem esperar. Me salvou em muitas noites difíceis.",
+  content: "A praticidade de ter a Aura sempre por perto é tudo! Às 3h da manhã, quando a ansiedade bate, ela tá lá. Sem precisar marcar horário, sem esperar. Me salvou em muitas noites difíceis.",
   highlight: "disponibilidade 24h",
   rating: 5
 }];

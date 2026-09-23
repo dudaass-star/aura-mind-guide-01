@@ -180,7 +180,7 @@ async function planNextSlots(supabase: any, howMany = 8): Promise<number> {
         {
           role: "system",
           content:
-            "Você é estrategista de SEO PT-BR para a Aura (acompanhamento emocional por WhatsApp). Propõe keywords de cauda longa com intenção informacional real, que gente em sofrimento digita no Google.",
+            "Você é estrategista de SEO PT-BR para o app Olá Aura, um aplicativo de acompanhamento emocional. Propõe keywords de cauda longa com intenção informacional real, que gente em sofrimento digita no Google.",
         },
         {
           role: "user",
@@ -264,7 +264,7 @@ async function generatePost(
   cluster: Cluster,
   recentTitles: string[],
 ): Promise<GeneratedPost> {
-  const system = `Você é redator sênior de SEO em PT-BR para um serviço de acompanhamento emocional via WhatsApp chamado "Aura". Escreve com voz humana, frases curtas, zero firula, sem moralismo, sem chavões de coach. Cita estudos só quando tem repertório real. Nunca promete cura. Aceita que a dor existe e oferece passos práticos. Estrutura SEO impecável: H1 com keyword, resposta direta nos 2 primeiros parágrafos, H2s em formato de pergunta, listas, tabelas quando útil, FAQ no final.`;
+  const system = `Você é redator sênior de SEO em PT-BR para o app Olá Aura, um aplicativo de acompanhamento emocional. Escreve com voz humana, frases curtas, zero firula, sem moralismo, sem chavões de coach. Cita estudos só quando tem repertório real. Nunca promete cura. Aceita que a dor existe e oferece passos práticos. Apresenta o WhatsApp somente como canal complementar de acesso, avisos e suporte, nunca como o produto principal. Estrutura SEO impecável: H1 com keyword, resposta direta nos 2 primeiros parágrafos, H2s em formato de pergunta, listas, tabelas quando útil, FAQ no final.`;
 
   const user = `Gere um post de blog completo em JSON.
 

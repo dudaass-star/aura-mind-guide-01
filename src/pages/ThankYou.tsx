@@ -175,7 +175,7 @@ const ThankYou = () => {
               </Button>
             )}
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Você também receberá uma confirmação pelo WhatsApp e por e-mail. Eles servem como alternativa caso precise entrar em outro aparelho.
+              Você também receberá uma confirmação por mensagem e por email. Esses canais servem como alternativa caso precise entrar em outro aparelho.
             </p>
           </div>
         </main>

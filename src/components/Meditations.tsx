@@ -19,8 +19,8 @@ const features = [
 },
 {
   icon: MessageCircle,
-  title: "Direto no WhatsApp",
-  description: "Sem abrir outro app. Você ouve ali mesmo, no meio da conversa.",
+  title: "No seu espaço",
+  description: "Você ouve no app, junto da conversa e de tudo o que construiu com a AURA.",
   color: "bg-sky-soft",
   iconColor: "text-sky"
 }];
@@ -42,7 +42,7 @@ const Meditations = () => {
             <span className="text-gradient-sage">momento certo</span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            A AURA percebe quando você precisa de uma pausa e envia uma meditação guiada personalizada direto no WhatsApp.
+            A AURA percebe quando você precisa de uma pausa e deixa a meditação certa disponível no seu aplicativo.
           </p>
         </div>
 

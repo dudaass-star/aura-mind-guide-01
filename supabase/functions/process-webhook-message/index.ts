@@ -93,6 +93,33 @@ async function persistirMensagemRecebidaWhatsapp(
   throw insertError || new Error('A mensagem recebida não foi gravada');
 }
 
+function isAppInviteSilentHours(): boolean {
+  const hour = Number(new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date()));
+  return hour >= 22 || hour < 8;
+}
+
+function mustKeepWhatsAppConversation(message: string): boolean {
+  const normalized = (message || '').toLowerCase();
+  const protectedPhrases = [
+    'vou me matar', 'vou me suicidar', 'comprei os remédios', 'comprei os remedios',
+    'vou pular', 'tenho um plano', 'me matar', 'suicídio', 'suicidio',
+    'to me cortando', 'tô me cortando', 'estou me cortando',
+    'tomei os comprimidos', 'tomei remédios', 'tomei remedios',
+    'pânico', 'panico', 'não consigo respirar', 'nao consigo respirar',
+    'desesperada', 'desesperado', 'não aguento mais', 'nao aguento mais',
+    'quero morrer', 'prefiro morrer', 'acabar com tudo', 'desisti de viver',
+    'pagamento', 'cobrança', 'cobranca', 'cartão', 'cartao', 'pix', 'boleto',
+    'assinatura', 'cancelar', 'cancelamento', 'reativar', 'reembolso',
+    'suporte', 'atendimento', 'ajuda para entrar', 'não consigo entrar',
+    'nao consigo entrar', 'problema no app', 'problema no aplicativo',
+  ];
+  return protectedPhrases.some((phrase) => normalized.includes(phrase));
+}
+
 // ============================================================================
 // PREFERÊNCIA DE CANAL — detecta pedido explícito de áudio ou texto
 // ----------------------------------------------------------------------------
@@ -668,6 +695,86 @@ Deno.serve(async (req) => {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
+      }
+    }
+
+    // Migração passiva para o aplicativo: apresenta o novo espaço uma única vez
+    // quando um cliente ativo inicia conversa pelo WhatsApp. Pedidos urgentes,
+    // financeiros e de suporte continuam no fluxo normal, sem qualquer desvio.
+    const canReceiveAppInvite = !isInApp
+      && Boolean(messageText)
+      && ['active', 'trial', 'past_due', 'payment_failed'].includes(profile.status || '')
+      && !(profile as any).last_app_invite_sent_at
+      && !isAppInviteSilentHours()
+      && !mustKeepWhatsAppConversation(messageText || '');
+
+    if (canReceiveAppInvite) {
+      const claimedAt = new Date().toISOString();
+      const { data: claimed, error: claimError } = await supabase
+        .from('profiles')
+        .update({ last_app_invite_sent_at: claimedAt })
+        .eq('id', profile.id)
+        .is('last_app_invite_sent_at', null)
+        .select('id');
+
+      if (claimError) throw claimError;
+      if (!claimed?.length) {
+        return new Response(JSON.stringify({ success: true, action: 'app_invite_already_claimed' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      try {
+        await persistirMensagemRecebidaWhatsapp(
+          supabase,
+          profile.user_id,
+          messageText,
+          messageId || `msg_${Date.now()}`,
+        );
+
+        const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
+        if (!internalSecret) throw new Error('INTERNAL_WEBHOOK_SECRET ausente');
+        const inviteResponse = await fetch(`${supabaseUrl}/functions/v1/portal-whatsapp-access`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'x-internal-secret': internalSecret,
+          },
+          body: JSON.stringify({ action: 'request', phone: cleanPhone, message_variant: 'app_invite' }),
+        });
+        const inviteResult = await inviteResponse.json().catch(() => ({}));
+        if (!inviteResponse.ok || !inviteResult?.sent) {
+          throw new Error(`Convite não enviado (${inviteResponse.status})`);
+        }
+
+        if (inviteResult.sent_text) {
+          const { error: historyError } = await supabase.from('messages').insert({
+            user_id: profile.user_id,
+            role: 'assistant',
+            content: inviteResult.sent_text,
+            channel: 'whatsapp',
+          });
+          if (historyError) throw historyError;
+        }
+
+        return new Response(JSON.stringify({ success: true, action: 'app_invite_sent' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (inviteError) {
+        await supabase.from('profiles')
+          .update({ last_app_invite_sent_at: null })
+          .eq('id', profile.id)
+          .eq('last_app_invite_sent_at', claimedAt);
+        await logFailedMessage(
+          supabase,
+          profile.user_id,
+          cleanPhone,
+          messageText || '',
+          inviteError instanceof Error ? inviteError.message : String(inviteError),
+          'process-webhook-message:app_invite',
+        );
+        throw inviteError;
       }
     }
 

@@ -1,6 +1,6 @@
 # Olá AURA
 
-> AURA é uma mentora de inteligência artificial acessível via WhatsApp, oferecendo acompanhamento emocional 24/7 com memória de longo prazo e metodologia baseada em Logoterapia. Ajuda usuários a encontrar clareza, padrões e propósito em suas vidas através de conversas contínuas e sessões estruturadas de 45 minutos.
+> Olá Aura é um aplicativo de acompanhamento emocional. Dentro dele, a AURA conversa por texto ou áudio, conecta acontecimentos ao longo do tempo e ajuda cada pessoa a encontrar clareza, direção e sentido, com memória de longo prazo e metodologia baseada em Logoterapia. O WhatsApp funciona como canal complementar para acesso, avisos e suporte.
 
 ## Páginas
 
@@ -15,5 +15,5 @@
 - [/privacidade](/privacidade): Política de Privacidade e conformidade com a LGPD.
 - [/guia](/guia): Guia completo de como usar a AURA — conversas, sessões, jornadas, meditações e mais.
 - [/blog](/blog): Artigos sobre autoconhecimento emocional, ansiedade, meditação e bem-estar mental.
-- [/meu-espaco](/meu-espaco): Portal do usuário — acompanhe jornadas, meditações, cápsulas do tempo e resumos mensais (acesso com token).
+- [/meu-espaco](/meu-espaco): Aplicativo Olá Aura — converse com a AURA e acompanhe sessões, jornadas, percurso, meditações e informações pessoais.
 - [/cancelar](/cancelar): Página para cancelamento da assinatura.

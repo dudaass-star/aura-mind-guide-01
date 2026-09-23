@@ -167,7 +167,7 @@ async function buildDossier(supabase: any, dispute: any): Promise<Dossier> {
     { text: "4. SERVIÇO EFETIVAMENTE PRESTADO", size: 12, bold: true, gap: 18 },
     {
       text:
-        "A Olá Aura é um serviço de acompanhamento emocional por WhatsApp. O acesso é entregue de imediato e o uso fica registrado. Por sigilo, informamos apenas metadados de uso, sem conteúdo das conversas.",
+        "A Olá Aura é um aplicativo de acompanhamento emocional com conversas por texto ou áudio. O acesso é entregue de imediato e o uso fica registrado. O WhatsApp funciona como canal complementar. Por sigilo, informamos apenas metadados de uso, sem conteúdo das conversas.",
       gap: 4,
     },
     { text: `Mensagens trocadas na conta: ${messages}`, gap: 6 },

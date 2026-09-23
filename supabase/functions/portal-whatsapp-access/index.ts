@@ -134,7 +134,10 @@ Deno.serve(async (req) => {
 
     const link = `${siteOrigin(req)}/meu-espaco/acesso-whatsapp#token=${encodeURIComponent(token)}`;
     const firstName = profile.name?.trim().split(/\s+/)[0] || "";
-    const text = `${firstName ? `Oi, ${firstName}!` : "Oi!"} Seu acesso à AURA está pronto. Toque abaixo para abrir sua conversa:\n\n${link}\n\nEste link vale por 10 minutos e funciona uma única vez. Depois de entrar, seu acesso fica salvo neste aparelho.`;
+    const isAppInvite = body?.message_variant === "app_invite";
+    const text = isAppInvite
+      ? `${firstName ? `Oi, ${firstName}.` : "Oi."} Tenho uma novidade boa: agora a gente tem um espaço só nosso no aplicativo da AURA.\n\nSuas conversas continuam de onde pararam, mas lá ficou muito melhor para conversar comigo, acompanhar suas sessões, jornadas e tudo o que construímos juntos.\n\nÉ só tocar aqui para entrar:\n${link}\n\nTe espero lá. 💛`
+      : `${firstName ? `Oi, ${firstName}!` : "Oi!"} Seu acesso à AURA está pronto. Toque abaixo para abrir sua conversa:\n\n${link}\n\nEste link vale por 10 minutos e funciona uma única vez. Depois de entrar, seu acesso fica salvo neste aparelho.`;
     // O pedido chega de uma mensagem do próprio cliente, portanto a janela de atendimento está aberta.
     const sent = await sendMessage(normalized, text, undefined, profile.user_id || profile.id);
     await admin.from("portal_access_requests").update({
@@ -143,7 +146,7 @@ Deno.serve(async (req) => {
       delivery_provider: sent.provider,
     }).eq("id", accessRequest.id);
 
-    return json({ ok: true, message: GENERIC_MESSAGE });
+    return json({ ok: true, message: GENERIC_MESSAGE, sent: sent.success, sent_text: sent.success ? text : undefined });
   } catch (error) {
     console.error("[portal-whatsapp-access]", error);
     return json({ ok: true, message: GENERIC_MESSAGE });

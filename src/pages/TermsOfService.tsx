@@ -7,11 +7,11 @@ const TermsOfService = () => {
     <>
       <Helmet>
         <title>Termos de Uso — AURA</title>
-        <meta name="description" content="Leia os Termos de Uso do serviço AURA. Conheça as condições de acesso e uso do acompanhamento emocional via WhatsApp." />
+        <meta name="description" content="Leia os Termos de Uso do aplicativo Olá Aura e conheça as condições do serviço de acompanhamento emocional." />
         <link rel="canonical" href="https://olaaura.com.br/termos" />
         <meta property="og:url" content="https://olaaura.com.br/termos" />
         <meta property="og:title" content="Termos de Uso — AURA" />
-        <meta property="og:description" content="Leia os Termos de Uso do serviço AURA. Conheça as condições de acesso e uso do acompanhamento emocional via WhatsApp." />
+        <meta property="og:description" content="Leia os Termos de Uso do aplicativo Olá Aura e conheça as condições do serviço de acompanhamento emocional." />
         <meta property="og:type" content="website" />
       </Helmet>
 
@@ -22,7 +22,7 @@ const TermsOfService = () => {
         <div className="container mx-auto px-4 max-w-4xl">
           <h1 className="text-4xl font-bold text-center mb-8">Termos de Uso</h1>
           <p className="text-muted-foreground text-center mb-12">
-            Última atualização: Janeiro de 2025
+            Última atualização: Setembro de 2026
           </p>
 
           <div className="space-y-8 text-foreground/90">
@@ -37,9 +37,9 @@ const TermsOfService = () => {
             <section>
               <h2 className="text-2xl font-semibold mb-4">2. Descrição do Serviço</h2>
               <p className="leading-relaxed">
-                A AURA é uma assistente de autocuidado emocional baseada em inteligência artificial, disponível via WhatsApp. 
-                O serviço oferece suporte emocional, técnicas de bem-estar e acompanhamento personalizado através de sessões 
-                de conversa estruturadas.
+                A AURA é uma inteligência de acompanhamento emocional disponível no aplicativo Olá Aura. O serviço oferece
+                conversas por texto ou áudio, acompanhamento contínuo e encontros guiados. O WhatsApp pode ser usado como
+                canal complementar para acesso, avisos e suporte.
               </p>
             </section>
 

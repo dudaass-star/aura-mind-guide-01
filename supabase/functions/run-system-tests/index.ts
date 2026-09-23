@@ -871,7 +871,7 @@ async function generateVerdict(results: TestResult[]): Promise<{ verdict: string
         messages: [
           {
             role: 'system',
-            content: `Você é um avaliador de qualidade do sistema AURA (coach de vida via WhatsApp). Analise os resultados dos testes automatizados e gere:
+            content: `Você é um avaliador de qualidade do sistema AURA (acompanhamento emocional no aplicativo Olá Aura). Analise os resultados dos testes automatizados e gere:
 
 1. Um VEREDICTO claro: "✅ Tudo OK — sistema funcionando bem" ou "⚠️ Atenção — melhorias necessárias"
 2. Uma lista de SUGESTÕES ESPECÍFICAS de melhoria (se houver)
