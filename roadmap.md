@@ -71,6 +71,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Reintegrar Jornadas de Conteúdo como área própria, com progresso, episódios liberados, histórico e escolha segura.
 - [x] Transformar Jornadas em biblioteca viva, com releitura das concluídas e visão segura das próximas etapas e temas.
 - [x] Compactar mensagens de voz enviadas e recebidas em uma linha, com progresso, duração e velocidade.
+- [x] Preservar a reprodução do áudio local depois da confirmação de envio, sem substituí-lo por um endereço privado.
 - [x] Corrigir o desenquadramento da conversa ao abrir o teclado, com validação em iOS e Android.
 - [x] Separar pedido pontual de áudio de preferência contínua e restaurar o modo automático do perfil afetado.
 - [x] Padronizar episódios e conclusão de Jornadas com o visual atual do aplicativo e confirmar o acesso global isolado por cliente.
