@@ -718,13 +718,7 @@ Deno.serve(async (req) => {
         .select('id');
 
       if (claimError) throw claimError;
-      if (!claimed?.length) {
-        return new Response(JSON.stringify({ success: true, action: 'app_invite_already_claimed' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      try {
+      if (claimed?.length) try {
         await persistirMensagemRecebidaWhatsapp(
           supabase,
           profile.user_id,

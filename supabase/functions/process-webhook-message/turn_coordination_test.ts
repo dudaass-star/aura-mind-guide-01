@@ -38,3 +38,22 @@ Deno.test("telemetria do aplicativo não registra conteúdo", () => {
   assert(metricUpdates.length >= 3);
   assert(metricUpdates.every((snippet) => !snippet.includes("messageText") && !snippet.includes("content:")));
 });
+
+Deno.test("convite para o aplicativo é atômico e enviado uma única vez", () => {
+  assert(SOURCE.includes(".is('last_app_invite_sent_at', null)"));
+  assert(SOURCE.includes("message_variant: 'app_invite'"));
+  assert(SOURCE.includes("action: 'app_invite_sent'"));
+});
+
+Deno.test("convite não interrompe crise, pagamento ou suporte", () => {
+  assert(SOURCE.includes("mustKeepWhatsAppConversation"));
+  assert(SOURCE.includes("'vou me matar'"));
+  assert(SOURCE.includes("'pagamento'"));
+  assert(SOURCE.includes("'suporte'"));
+});
+
+Deno.test("falha no convite libera nova tentativa e fica visível", () => {
+  assert(SOURCE.includes(".update({ last_app_invite_sent_at: null })"));
+  assert(SOURCE.includes("'process-webhook-message:app_invite'"));
+  assert(SOURCE.includes("throw inviteError"));
+});
