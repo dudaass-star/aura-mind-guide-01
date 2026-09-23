@@ -58,16 +58,14 @@ Deno.test("falha no convite libera nova tentativa e fica visível", () => {
   assert(SOURCE.includes("throw inviteError"));
 });
 Deno.test("heartbeat mantém a trava ativa enquanto o dono processa", () => {
-  const source = Deno.readTextFileSync(new URL("../index.ts", import.meta.url));
-  if (!source.includes("setInterval(() =>")) throw new Error("heartbeat ausente");
-  if (!source.includes(".eq('owner_token', turnOwnerToken)")) throw new Error("heartbeat sem proteção do dono");
-  if (!source.includes("clearInterval(lockHeartbeatId)")) throw new Error("heartbeat sem limpeza");
+  if (!SOURCE.includes("setInterval(() =>")) throw new Error("heartbeat ausente");
+  if (!SOURCE.includes(".eq('owner_token', turnOwnerToken)")) throw new Error("heartbeat sem proteção do dono");
+  if (!SOURCE.includes("clearInterval(lockHeartbeatId)")) throw new Error("heartbeat sem limpeza");
 });
 
 Deno.test("downloads e transcrição respeitam limite de tempo", () => {
-  const worker = Deno.readTextFileSync(new URL("../index.ts", import.meta.url));
-  const meta = Deno.readTextFileSync(new URL("../../_shared/meta-whatsapp-client.ts", import.meta.url));
-  if (!worker.includes("controller.abort(), 25_000")) throw new Error("timeout do worker ausente");
-  if (!worker.includes("downloadMetaMedia(mediaId, controller.signal)")) throw new Error("sinal não chegou ao download Meta");
+  const meta = Deno.readTextFileSync(new URL("../_shared/meta-whatsapp-client.ts", import.meta.url));
+  if (!SOURCE.includes("controller.abort(), 25_000")) throw new Error("timeout do worker ausente");
+  if (!SOURCE.includes("downloadMetaMedia(mediaId, controller.signal)")) throw new Error("sinal não chegou ao download Meta");
   if (!meta.includes("signal?: AbortSignal") || !meta.includes("signal,")) throw new Error("cliente Meta ignora cancelamento");
 });
