@@ -91,4 +91,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Evoluir Sessões para continuidade dos encontros: confiabilidade app-first, agenda mensal, entrada direta, preparação, pós-sessão, hipóteses verificáveis e métricas.
 - [x] Evoluir Hoje como direção diária do cliente: prioridade contextual, continuidade entre áreas, retorno recorrente e medição de retenção/LTV.
 - [x] Destacar a preparação do encontro e entregá-la à AURA na abertura, priorizando a intenção atual sem perder a ponte anterior e os compromissos relevantes.
-- [ ] Evoluir Conversa como núcleo do aplicativo: recuperação de falhas, resposta rápida, continuidade, descoberta progressiva e métricas de retenção/LTV.
+- [x] Evoluir Conversa como núcleo do aplicativo: recuperação de falhas, resposta rápida, continuidade, descoberta progressiva e métricas de retenção/LTV.
