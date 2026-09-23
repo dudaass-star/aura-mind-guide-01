@@ -1026,6 +1026,13 @@ Deno.serve(async (req) => {
         await supabase.from('aura_response_state')
           .update({ last_user_message_id: currentMessageId, updated_at: new Date().toISOString() })
           .eq('user_id', profile.user_id);
+        if (isInApp && currentMessageId) {
+          await supabase.from('chat_turn_metrics').update({
+            completed_at: new Date().toISOString(),
+            status: 'interrupted',
+            error_code: 'coalesced_with_active_turn',
+          }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+        }
         console.log(`🛑 ABORT: Lock atômico — outro worker respondendo (age: ${Math.round(respondingAge / 1000)}s). Mensagem será acumulada.`);
         return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'another_worker_responding' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1040,6 +1047,13 @@ Deno.serve(async (req) => {
         .eq('response_started_at', currentState?.response_started_at)
         .select();
       if (!forcedLock?.length) {
+        if (isInApp && currentMessageId) {
+          await supabase.from('chat_turn_metrics').update({
+            completed_at: new Date().toISOString(),
+            status: 'interrupted',
+            error_code: 'stale_lock_race_lost',
+          }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+        }
         return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'stale_lock_race_lost' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -1079,6 +1093,7 @@ Deno.serve(async (req) => {
     // Read pending content from lock result or fresh query
     const responseState = lockResult?.[0] || (await supabase.from('aura_response_state').select('*').eq('user_id', profile.user_id).maybeSingle()).data;
     if (responseState?.processed_user_message_id === currentMessageId) {
+      await completeInAppTurn('interrupted', 'source_duplicate');
       await releaseLock();
       return new Response(JSON.stringify({ status: 'ignored', reason: 'source_duplicate' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
