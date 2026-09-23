@@ -1785,7 +1785,7 @@ Deno.serve(async (req) => {
     try {
       // Paginado: o PostgREST corta em 1000 linhas por request. Sem paginação,
       // janelas longas (90d) travavam o total exatamente em 1000 e subestimavam o KPI.
-      const correctionsRows: { user_id: string }[] = [];
+    const correctionsRows: { user_id: string; created_at: string }[] = [];
       const CORR_PAGE = 1000;
       for (let page = 0; page < 50; page++) {
         const { data } = await supabase
@@ -1795,7 +1795,7 @@ Deno.serve(async (req) => {
           .lte('created_at', periodEnd)
           .range(page * CORR_PAGE, (page + 1) * CORR_PAGE - 1);
         if (!data || data.length === 0) break;
-        correctionsRows.push(...(data as { user_id: string }[]));
+        correctionsRows.push(...(data as { user_id: string; created_at: string }[]));
         if (data.length < CORR_PAGE) break;
       }
       if (correctionsRows.length > 0) {
@@ -1900,8 +1900,12 @@ Deno.serve(async (req) => {
         { column: 'created_at', op: 'lt', value: periodEnd },
       ]);
       conversationOpenings = conversationEvents.length;
+      const conversationCorrections = correctionsRows.filter(row => {
+        const createdAt = new Date(row.created_at).getTime();
+        return createdAt >= new Date(periodStart).getTime() && createdAt < new Date(periodEnd).getTime();
+      }).length;
       conversationCorrectionsPer100 = conversationOpenings > 0
-        ? Math.round((correctionsTotalInPeriod / conversationOpenings) * 10_000) / 100
+        ? Math.round((conversationCorrections / conversationOpenings) * 10_000) / 100
         : 0;
     } catch (e) {
       console.warn('⚠️ Falha ao calcular métricas da Conversa (não crítico):', e);
