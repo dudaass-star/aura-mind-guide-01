@@ -99,11 +99,21 @@ function orderMessages(messages: ChatMessage[]) {
 }
 
 function mergeMessage(messages: ChatMessage[], incoming: ChatMessage) {
+  const matchingLocalAudio = incoming.client_message_id
+    ? messages.find((message) => (
+      message.client_message_id === incoming.client_message_id
+      && message.is_audio
+      && message.audio_url?.startsWith("blob:")
+    ))
+    : undefined;
+  const mergedIncoming = matchingLocalAudio
+    ? { ...incoming, audio_url: matchingLocalAudio.audio_url }
+    : incoming;
   const filtered = messages.filter((message) => {
     if (message.id === incoming.id) return false;
     return !(incoming.client_message_id && message.client_message_id === incoming.client_message_id);
   });
-  return orderMessages([...filtered, incoming]);
+  return orderMessages([...filtered, mergedIncoming]);
 }
 
 function formatTime(value: string | null) {
