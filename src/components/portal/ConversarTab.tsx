@@ -88,6 +88,11 @@ function getJourneyEpisodeCard(metadata: unknown): JourneyEpisodeCardMetadata | 
   return value as JourneyEpisodeCardMetadata;
 }
 
+function isResponseFailure(message: ChatMessage) {
+  if (!message.metadata || typeof message.metadata !== "object" || Array.isArray(message.metadata)) return false;
+  return (message.metadata as Record<string, unknown>).kind === "response_failure";
+}
+
 type PendingMessage = {
   clientId: string;
   text?: string;
@@ -239,6 +244,15 @@ const MessageTimeline = memo(function MessageTimeline({
                   <div className="flex items-center gap-2 text-primary"><Sparkles className="h-4 w-4" /><span className="text-[10px] font-bold uppercase">{reportCard.report_type === "weekly" ? "Resumo semanal" : "Relatório mensal"}</span></div>
                   <div><p className="font-display text-lg font-semibold text-foreground">{reportCard.title || (reportCard.report_type === "weekly" ? "Sua semana na Olá Aura" : "Seu mês em perspectiva")}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{message.content}</p></div>
                   <Button type="button" size="sm" className="w-full justify-between" onClick={() => onOpenReport(reportCard)}>{reportCard.cta || "Ver no Percurso"}<ArrowRight className="h-4 w-4" /></Button>
+                </div>
+              ) : isResponseFailure(message) ? (
+                <div className="space-y-2">
+                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                  {replyTargetId(message) && (
+                    <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => onRetry({ ...message, id: replyTargetId(message) || message.id })}>
+                      <RotateCcw className="h-3.5 w-3.5" /> Tentar responder novamente
+                    </Button>
+                  )}
                 </div>
               ) : (!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
               {message.is_audio && message.audio_url && (
@@ -657,6 +671,11 @@ export function ConversarTab({
   };
 
   const retryFailedMessage = async (message: ChatMessage) => {
+    if (message.role === "assistant" && isResponseFailure(message)) {
+      awaitingResponseRef.current = { clientId: crypto.randomUUID(), messageId: message.id, createdAt: Date.now() };
+      await retryResponseFor(message.id);
+      return;
+    }
     const clientId = message.client_message_id;
     if (!clientId || sending) return;
     const pending = readOutbox(outboxKey).find((item) => item.clientId === clientId);
@@ -684,7 +703,7 @@ export function ConversarTab({
     recordConversationEvent(userId, "failed_message_deleted", { kind: message.is_audio ? "audio" : "text" });
   };
 
-  const retryResponse = async () => {
+  const retryResponseFor = async (sourceMessageId?: string) => {
     const awaiting = awaitingResponseRef.current;
     if (!awaiting || retryingResponse) return;
     setRetryingResponse(true);
@@ -692,7 +711,7 @@ export function ConversarTab({
     setResponding(true);
     recordConversationEvent(userId, "response_retry");
     const { data, error } = await supabasePortal.functions.invoke("app-chat", {
-      body: { action: "retry_response", source_message_id: awaiting.messageId },
+      body: { action: "retry_response", source_message_id: sourceMessageId || awaiting.messageId },
     });
     if (error || !data?.accepted) {
       setResponding(false);
@@ -712,6 +731,8 @@ export function ConversarTab({
     }
     setRetryingResponse(false);
   };
+
+  const retryResponse = () => retryResponseFor();
 
   const send = async (event?: FormEvent) => {
     event?.preventDefault();

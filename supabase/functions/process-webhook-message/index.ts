@@ -2002,6 +2002,32 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (supabase && isInApp && profile?.user_id && !sentAnyResponse) {
+      try {
+        const replyToMessageId = (globalThis as any).__inboundMessageDbId || null;
+        const { data: existingFailure } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('user_id', profile.user_id)
+          .eq('role', 'assistant')
+          .contains('metadata', { kind: 'response_failure', reply_to_message_id: replyToMessageId })
+          .limit(1)
+          .maybeSingle();
+        if (!existingFailure) {
+          await supabase.from('messages').insert({
+            user_id: profile.user_id,
+            role: 'assistant',
+            content: 'Não consegui concluir minha resposta agora.',
+            channel: 'in_app',
+            delivery_status: 'delivered',
+            metadata: { kind: 'response_failure', reply_to_message_id: replyToMessageId },
+          });
+        }
+      } catch (recoveryError) {
+        console.error('⚠️ Falha ao registrar recuperação visível no aplicativo:', recoveryError);
+      }
+    }
+
     // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally
     if (!sentAnyResponse) {
       console.error(`🚨 CRITICAL: User got NO response at all. O aplicativo oferecerá retomada explícita.`);
