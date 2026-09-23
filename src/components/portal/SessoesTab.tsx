@@ -191,7 +191,7 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: Sessi
         <section className="border-y border-border py-6 text-center animate-fade-in">
           <CalendarDays className="mx-auto h-7 w-7 text-primary" />
           <p className="mt-3 text-sm text-muted-foreground">Nenhuma sessão agendada agora.</p>
-          <Button type="button" className="mt-4" onClick={() => openScheduler(false)} disabled={planLimit === 0 || monthUsed >= planLimit}>
+          <Button type="button" className="mt-4" onClick={() => openScheduler(false)} disabled={planLimit === 0}>
             <Calendar /> Agendar sessão
           </Button>
         </section>
