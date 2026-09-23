@@ -2,7 +2,7 @@ import { useSearchParams, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import { ArrowLeft, BookOpen, Sparkles, Headphones, Lock, Sun, Calendar, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { ConversarTab } from "@/components/portal/ConversarTab";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 import { rememberPushAttribution, reportPushConversion, reportPushPresence } from "@/lib/push-notifications";
+import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 
 type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes";
 
@@ -67,6 +68,10 @@ const UserPortal = () => {
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
+  const profileCache = useMemo(
+    () => userId ? readPortalCache<any>(`aura-portal-profile:${userId}`, 7 * 24 * 60 * 60 * 1000) : null,
+    [userId],
+  );
   const discussionEpisodeId = searchParams.get("episode");
   const shouldOpenConversation = searchParams.get("open") === "1"
     || Boolean(discussionEpisodeId)
@@ -156,17 +161,20 @@ const UserPortal = () => {
     }
   };
 
+  const prefetchArea = (id: TabId) => {
+    if (id === "conversar") return;
+    void AREA_LOADERS[id]();
+    setVisitedTabs((current) => current.has(id) ? current : new Set(current).add(id));
+  };
+
   useEffect(() => {
-    if (activeTab !== "conversar") return;
     const schedule = window.requestIdleCallback ?? ((callback: IdleRequestCallback) => window.setTimeout(callback, 800));
     const cancel = window.cancelIdleCallback ?? window.clearTimeout;
     const task = schedule(() => {
-      void loadHoje();
-      void loadSessoes();
-      void loadJornadas();
+      void Promise.all(Object.values(AREA_LOADERS).map((load) => load()));
     });
     return () => cancel(task);
-  }, [activeTab]);
+  }, []);
 
   const handleOpenConversation = (prefilledMessage?: string) => {
     if (!userId) return;
@@ -190,9 +198,12 @@ const UserPortal = () => {
         .eq("user_id", userId)
         .maybeSingle();
       if (error) throw error;
+      if (data) writePortalCache(`aura-portal-profile:${userId}`, data);
       return data;
     },
     enabled: !!userId && linkStatus === "linked",
+    initialData: profileCache?.value,
+    initialDataUpdatedAt: profileCache?.savedAt,
   });
 
   // Volta do Billing Portal: o webhook cobra a fatura aberta na hora, então aqui
@@ -399,6 +410,7 @@ const UserPortal = () => {
               userId={userId}
               firstName={firstName}
               onNavigate={handleTabClick}
+              onPrefetch={prefetchArea}
               onOpenBilling={() => void handleOpenBillingPortal()}
               onChangePlan={() => { setMinimumSessionLimit(undefined); setChangePlanOpen(true); }}
               onSignOut={() => void signOut()}
