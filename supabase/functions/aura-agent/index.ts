@@ -7820,10 +7820,13 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
             .update({ 
               scheduled_at: newScheduledAt.toISOString(),
               reminder_24h_sent: false,
+               reminder_5m_sent: false,
               reminder_1h_sent: false,
               reminder_15m_sent: false,
               confirmation_requested: false,
-              user_confirmed: null
+               user_confirmed: null,
+               session_start_notified: false,
+               waiting_for_scheduled_time: true
             })
             .eq('id', nextSession.id);
           
