@@ -11,7 +11,7 @@ export interface PickNextJourneyOptions {
 /**
  * Escolhe a próxima jornada para um usuário, excluindo:
  * - a jornada atual do profile (current_journey_id)
- * - todas as jornadas já presentes em user_journey_history
+ * - todas as jornadas já concluídas em user_journey_history
  *
  * Retorna o id da jornada escolhida, ou null se não houver candidata e allowRecycle=false.
  */
@@ -24,7 +24,7 @@ export async function pickNextJourney(
 
   // Carrega histórico + jornada atual em paralelo
   const [{ data: history }, { data: profile }, { data: activeJourneys }] = await Promise.all([
-    supabase.from('user_journey_history').select('journey_id, completed_at').eq('user_id', userId),
+    supabase.from('user_journey_history').select('journey_id, completed_at, status').eq('user_id', userId).eq('status', 'completed'),
     supabase.from('profiles').select('current_journey_id').eq('user_id', userId).maybeSingle(),
     supabase.from('content_journeys').select('id').eq('is_active', true).order('id'),
   ]);

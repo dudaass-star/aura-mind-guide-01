@@ -7,11 +7,16 @@ import { routeNotification } from "../_shared/notification-router.ts";
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const authorization = req.headers.get("authorization") || "";
+    if (!serviceKey || authorization !== `Bearer ${serviceKey}`) {
+      return new Response(JSON.stringify({ success: false, error: "unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     const nowInBrt = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     if (![2, 5].includes(nowInBrt.getDay())) {
       return new Response(JSON.stringify({ success: true, skipped: true, reason: "outside_journey_days" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
     const { data: users, error } = await supabase.from("profiles")
       .select("user_id,name,phone,current_journey_id,current_episode")
       .in("status", ["active", "trial"])
