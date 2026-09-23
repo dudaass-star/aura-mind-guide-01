@@ -86,7 +86,17 @@ export default function Episode() {
     const saveProgress = async () => {
       const root = document.documentElement;
       const available = root.scrollHeight - window.innerHeight;
-      if (available <= 0 || !id) return;
+      if (!id) return;
+      if (available <= 0) {
+        if (lastProgressSent.current >= 90 || progressSaving.current) return;
+        progressSaving.current = true;
+        const { data, error: progressError } = await supabasePortal.functions.invoke("manage-portal-journey", {
+          body: { action: "progress", episodeId: id, progressPercent: 90, portalToken },
+        });
+        progressSaving.current = false;
+        if (!progressError && !data?.error) lastProgressSent.current = 90;
+        return;
+      }
       const rawPercent = Math.min(99, Math.max(1, Math.round((window.scrollY / available) * 100)));
       const percent = [90, 75, 50, 25].find((mark) => rawPercent >= mark) || 0;
       if (!percent || percent <= lastProgressSent.current || progressSaving.current) return;
@@ -108,6 +118,7 @@ export default function Episode() {
       timer = window.setTimeout(() => void saveProgress(), 700);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
+    void saveProgress();
     return () => {
       window.removeEventListener("scroll", onScroll);
       if (timer) window.clearTimeout(timer);

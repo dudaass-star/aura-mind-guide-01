@@ -342,6 +342,7 @@ export function ConversarTab({
   const [recording, setRecording] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
   const [audioError, setAudioError] = useState("");
+  const [activeDiscussionEpisodeId, setActiveDiscussionEpisodeId] = useState(discussionEpisodeId);
   const [chatOpen, setChatOpen] = useState(() => initialChatOpen || localStorage.getItem(`aura-chat-open:${userId}`) === "true");
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
   const [showInstallInvite, setShowInstallInvite] = useState(false);
@@ -412,6 +413,7 @@ export function ConversarTab({
   useEffect(() => {
     if (!initialDraft || appliedInitialDraftRef.current === initialDraft) return;
     appliedInitialDraftRef.current = initialDraft;
+    setActiveDiscussionEpisodeId(discussionEpisodeId);
     setDraft((current) => {
       if (!current.trim()) return initialDraft;
       if (current.includes(initialDraft)) return current;
@@ -419,7 +421,7 @@ export function ConversarTab({
     });
     setChatOpen(true);
     window.setTimeout(() => composerRef.current?.focus(), 0);
-  }, [initialDraft]);
+  }, [discussionEpisodeId, initialDraft]);
 
   useEffect(() => {
     const openChat = () => setChatOpen(true);
@@ -717,6 +719,7 @@ export function ConversarTab({
       },
     });
     if (error || !data?.accepted) throw error || new Error(data?.error || "Falha no envio");
+    if (pending.journeyEpisodeId) setActiveDiscussionEpisodeId(undefined);
     removeFromOutbox(pending.clientId);
     setMessages((current) => mergeMessage(current, {
       id: data.message.id,
@@ -815,7 +818,7 @@ export function ConversarTab({
 
     const clientId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    const pending: PendingMessage = { clientId, text, journeyEpisodeId: discussionEpisodeId, createdAt };
+    const pending: PendingMessage = { clientId, text, journeyEpisodeId: activeDiscussionEpisodeId, createdAt };
     const optimistic: ChatMessage = {
       id: `local:${clientId}`,
       user_id: userId,

@@ -359,6 +359,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
                 : "Ela começará novamente pelo primeiro episódio. A versão concluída continuará registrada no seu histórico."}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {chooseJourney.isError && <p className="text-sm text-destructive">{chooseJourney.error.message}</p>}
           <AlertDialogFooter>
             <AlertDialogCancel>Continuar como está</AlertDialogCancel>
             <AlertDialogAction
