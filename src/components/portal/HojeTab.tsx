@@ -18,7 +18,7 @@ interface HojeTabProps {
   onOpenConversation: (prefilledMessage?: string) => void;
 }
 
-type TodayAction = "conversation" | "session" | "session_preparation" | "journey" | "continuity";
+type TodayAction = "conversation" | "session" | "session_preparation" | "journey" | "continuity" | "practice";
 
 function brtHour() {
   return Number(new Intl.DateTimeFormat("pt-BR", {
@@ -214,6 +214,11 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
 
   useEffect(() => {
     if (isLoading || !priority) return;
+    const areaKey = `aura-today-opened:${userId}:${dayKeyBrt()}`;
+    if (!sessionStorage.getItem(areaKey)) {
+      sessionStorage.setItem(areaKey, "true");
+      recordTodayEvent(userId, "area_opened", priority.action);
+    }
     const key = `aura-today-presented:${userId}:${dayKeyBrt()}:${priority.action}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, "true");
@@ -309,7 +314,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
             <p className="text-sm font-semibold text-foreground">{data.meditation.title}</p>
             <p className="text-xs text-muted-foreground">Uma pausa opcional{data.meditation.duration_seconds ? ` · ${Math.max(1, Math.round(data.meditation.duration_seconds / 60))} min` : ""}</p>
           </div>
-          <Button type="button" variant="ghost" size="icon" aria-label="Abrir meditação" onClick={() => { recordTodayEvent(userId, "invitation_opened", "conversation", { destination: "meditation" }); onNavigateTab("meditacoes"); }}><ArrowRight className="h-4 w-4" /></Button>
+          <Button type="button" variant="ghost" size="icon" aria-label="Abrir meditação" onClick={() => { recordTodayEvent(userId, "invitation_opened", "practice"); onNavigateTab("meditacoes"); }}><ArrowRight className="h-4 w-4" /></Button>
         </section>
       )}
 
