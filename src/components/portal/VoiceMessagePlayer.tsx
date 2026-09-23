@@ -41,6 +41,7 @@ export function VoiceMessagePlayer({ src, mine }: VoiceMessagePlayerProps) {
       setLoading(false);
       setFailed(false);
     };
+    const wait = () => setLoading(true);
     const fail = () => {
       setPlaying(false);
       setLoading(false);
@@ -52,7 +53,7 @@ export function VoiceMessagePlayer({ src, mine }: VoiceMessagePlayerProps) {
     audio.addEventListener("durationchange", updateDuration);
     audio.addEventListener("ended", finish);
     audio.addEventListener("canplay", ready);
-    audio.addEventListener("waiting", () => setLoading(true));
+    audio.addEventListener("waiting", wait);
     audio.addEventListener("error", fail);
 
     return () => {
@@ -61,6 +62,7 @@ export function VoiceMessagePlayer({ src, mine }: VoiceMessagePlayerProps) {
       audio.removeEventListener("durationchange", updateDuration);
       audio.removeEventListener("ended", finish);
       audio.removeEventListener("canplay", ready);
+      audio.removeEventListener("waiting", wait);
       audio.removeEventListener("error", fail);
     };
   }, [src]);
