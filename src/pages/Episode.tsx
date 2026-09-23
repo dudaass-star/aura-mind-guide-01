@@ -1,261 +1,133 @@
-import { useParams, useSearchParams } from "react-router-dom";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Helmet } from "react-helmet-async";
+import { ArrowRight, CheckCircle2, Heart, Loader2, MessageCircle, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
-import { Helmet } from "react-helmet-async";
-import { useState } from "react";
-import { Waves, Dumbbell, Clock, Heart, Leaf, Bird, RefreshCw, Brain, Sparkles, CheckCircle2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { JourneyPageShell } from "@/components/portal/JourneyPageShell";
 
-const topicIcon: Record<string, React.ElementType> = {
-  ansiedade: Waves,
-  autoconfianca: Dumbbell,
-  procrastinacao: Clock,
-  relacionamentos: Heart,
-  estresse: Leaf,
-  luto: Bird,
-  medo_mudanca: RefreshCw,
-  inteligencia_emocional: Brain,
-};
+type JourneyAction = "open" | "progress" | "reflect" | "discuss" | "complete";
 
-const Episode = () => {
+export default function Episode() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
-  const userId = searchParams.get("u");
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const portalToken = searchParams.get("t");
+  const userId = searchParams.get("u");
+  const [reflection, setReflection] = useState("");
+  const [savedReflection, setSavedReflection] = useState(false);
+  const [completed, setCompleted] = useState(false);
 
-  const [confirmed, setConfirmed] = useState(false);
-  const [chosenJourneyId, setChosenJourneyId] = useState<string | null>(null);
-
-  const effectivePortalToken = portalToken || null;
-
+  const backHref = portalToken ? `/meu-espaco?t=${encodeURIComponent(portalToken)}&tab=jornadas` : "/meu-espaco?tab=jornadas";
   const { data: episode, isLoading, error } = useQuery({
     queryKey: ["episode", id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("journey_episodes")
-        .select("*, content_journeys(*)")
-        .eq("id", id!)
-        .single();
-      if (error) throw error;
+      if (!id) throw new Error("episode_required");
+      const { data, error: queryError } = await supabase.from("journey_episodes").select("*, content_journeys(*)").eq("id", id).single();
+      if (queryError) throw queryError;
       return data;
     },
-    enabled: !!id,
+    enabled: Boolean(id),
   });
 
-  const journeyTitle = episode?.content_journeys?.title || "Jornada";
-  const totalEpisodes = episode?.content_journeys?.total_episodes || 8;
-  const isLastEpisode = episode ? episode.episode_number === totalEpisodes : false;
-  const journeyId = episode?.content_journeys?.id;
-
-  const { data: availableJourneys } = useQuery({
-    queryKey: ["journeys-available-ep", journeyId],
+  const { data: progress } = useQuery({
+    queryKey: ["journey-episode-progress", userId, id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("content_journeys")
-        .select("id, title, description, topic")
-        .eq("is_active", true)
-        .neq("id", journeyId!)
-        .order("id");
-      if (error) throw error;
-      return data;
+      if (!id || !userId) return null;
+      const { data } = await supabasePortal.from("journey_episode_progress")
+        .select("status,progress_percent,reflection_text").eq("user_id", userId).eq("episode_id", id).maybeSingle();
+      return data || null;
     },
-    enabled: isLastEpisode && !!journeyId && !!userId,
+    enabled: Boolean(id && userId),
   });
 
-  const chooseMutation = useMutation({
-    mutationFn: async (chosenId: string) => {
-      setChosenJourneyId(chosenId);
-      const { data, error } = await supabasePortal.functions.invoke("choose-next-journey", {
-        body: { journey_id: chosenId, portal_token: effectivePortalToken },
+  useEffect(() => {
+    if (progress?.reflection_text) setReflection(progress.reflection_text);
+    if (progress?.status === "completed") setCompleted(true);
+  }, [progress]);
+
+  const action = useMutation({
+    mutationFn: async ({ type, percent, text }: { type: JourneyAction; percent?: number; text?: string }) => {
+      if (!id) throw new Error("episode_required");
+      const { data, error: actionError } = await supabasePortal.functions.invoke("manage-portal-journey", {
+        body: { action: type, episodeId: id, progressPercent: percent, reflectionText: text, portalToken },
       });
-      if (error || data?.error) throw new Error(data?.error || error?.message || "Erro ao selecionar jornada");
-      return data;
+      if (actionError || data?.error) throw new Error(data?.error || actionError?.message || "Não foi possível salvar");
+      return { type, result: data?.result };
     },
-    onSuccess: () => setConfirmed(true),
+    onSuccess: ({ type, result }) => {
+      if (type === "reflect") setSavedReflection(true);
+      if (type === "complete") setCompleted(true);
+      void queryClient.invalidateQueries({ queryKey: ["journey-episode-progress"] });
+      if (result?.status === "journey_completed") void queryClient.invalidateQueries({ queryKey: ["portal-profile"] });
+    },
   });
 
-  const backHref = effectivePortalToken
-    ? `/meu-espaco?t=${encodeURIComponent(effectivePortalToken)}&tab=jornadas`
-    : "/meu-espaco?tab=jornadas";
+  useEffect(() => {
+    if (!id) return;
+    action.mutate({ type: "open" });
+    // A abertura deve ser registrada uma vez por montagem.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
-  if (isLoading) {
-    return (
-      <JourneyPageShell eyebrow="Conteúdos para você" title="Jornadas" backHref={backHref}>
-        <div className="portal-app-content mx-auto w-full max-w-2xl flex-1 space-y-5 px-5 py-7">
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-2 w-full rounded-full" />
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-8 w-3/4" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-4/5" />
-        </div>
-      </JourneyPageShell>
-    );
-  }
+  useEffect(() => {
+    const onScroll = () => {
+      const root = document.documentElement;
+      const available = root.scrollHeight - window.innerHeight;
+      if (available <= 0 || !id) return;
+      const percent = Math.min(99, Math.max(1, Math.round((window.scrollY / available) * 100)));
+      if (percent >= 25 && percent > (progress?.progress_percent || 0)) action.mutate({ type: "progress", percent });
+    };
+    const timer = window.setInterval(onScroll, 5000);
+    return () => window.clearInterval(timer);
+  }, [id, progress?.progress_percent]);
 
-  if (error || !episode) {
-    return (
-      <JourneyPageShell eyebrow="Conteúdos para você" title="Jornadas" backHref={backHref}>
-        <div className="flex flex-1 items-center justify-center px-6">
-          <div className="max-w-md text-center">
-            <span className="portal-area-content mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl"><Sparkles className="h-6 w-6" /></span>
-            <h2 className="mb-2 font-display text-xl font-semibold text-foreground">Episódio não encontrado</h2>
-            <p className="font-body text-muted-foreground">Este conteúdo não está disponível neste link.</p>
-            <Button asChild variant="outline" className="mt-5"><a href={backHref}>Voltar para Jornadas</a></Button>
-          </div>
-        </div>
-      </JourneyPageShell>
-    );
-  }
+  const journey = episode?.content_journeys;
+  const totalEpisodes = journey?.total_episodes || 8;
+  const isLastEpisode = Boolean(episode && episode.episode_number === totalEpisodes);
+  const paragraphs = useMemo(() => (episode?.essay_content || episode?.content_prompt || "").split(/\n\n+/).filter((p: string) => p.trim()), [episode]);
 
-  const stageTitle = episode.stage_title || episode.title;
-  const essayContent = episode.essay_content || episode.content_prompt || "";
-  const paragraphs = essayContent.split(/\n\n+/).filter((p: string) => p.trim());
-  const topic = episode.content_journeys?.topic || "";
+  if (isLoading) return <JourneyPageShell eyebrow="Conteúdos para você" title="Jornadas" backHref={backHref}><div className="portal-app-content mx-auto w-full max-w-2xl flex-1 space-y-5 px-5 py-7"><Skeleton className="h-20 w-full" /><Skeleton className="h-8 w-3/4" /><Skeleton className="h-40 w-full" /></div></JourneyPageShell>;
+  if (error || !episode) return <JourneyPageShell eyebrow="Conteúdos para você" title="Jornadas" backHref={backHref}><div className="flex flex-1 items-center justify-center px-6 text-center"><div><Sparkles className="mx-auto mb-4 h-7 w-7 text-primary" /><h2 className="font-display text-xl font-semibold">Episódio não encontrado</h2><Button asChild variant="outline" className="mt-5"><Link to={backHref}>Voltar para Jornadas</Link></Button></div></div></JourneyPageShell>;
 
-  return (
-    <>
-      <Helmet>
-        <title>{`EP ${episode.episode_number} — ${stageTitle} | Aura`}</title>
-        <meta name="description" content={`${journeyTitle} — Episódio ${episode.episode_number}: ${stageTitle}`} />
-        <meta name="robots" content="noindex, nofollow" />
-      </Helmet>
+  const title = episode.stage_title || episode.title;
+  const talkPath = portalToken ? `/meu-espaco?t=${encodeURIComponent(portalToken)}&tab=conversar&episode=${episode.id}` : `/meu-espaco?tab=conversar&episode=${episode.id}`;
+  return <>
+    <Helmet><title>{`EP ${episode.episode_number} — ${title} | Aura`}</title><meta name="robots" content="noindex, nofollow" /></Helmet>
+    <JourneyPageShell eyebrow="Conteúdos para você" title="Jornadas" backHref={backHref}>
+      <main className="portal-app-content mx-auto w-full max-w-2xl flex-1 px-5 py-6 pb-12">
+        <section className="mb-7 border-b pb-5">
+          <div className="flex items-center justify-between gap-3"><p className="truncate font-display text-sm font-semibold">{journey?.title || "Jornada"}</p><span className="text-xs font-semibold text-muted-foreground">{episode.episode_number} de {totalEpisodes}</span></div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary" style={{ width: `${(episode.episode_number / totalEpisodes) * 100}%` }} /></div>
+        </section>
+        <article className="portal-episode-reading">
+          <header className="mb-8"><span className="mb-2 inline-block text-xs font-bold uppercase text-primary">Episódio {episode.episode_number}</span><h1 className="font-display text-2xl font-semibold leading-tight md:text-3xl">{title}</h1></header>
+          <div className="space-y-5 font-body text-base leading-relaxed text-foreground/90 md:text-lg">{paragraphs.map((paragraph: string, index: number) => <p key={index}>{paragraph}</p>)}</div>
 
-      <JourneyPageShell eyebrow="Conteúdos para você" title="Jornadas" backHref={backHref}>
-        <main className="portal-app-content mx-auto w-full max-w-2xl flex-1 px-5 py-6 pb-12">
-          <section className="mb-7 rounded-2xl border bg-card p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <p className="min-w-0 truncate font-display text-sm font-semibold text-foreground">{journeyTitle}</p>
-              <span className="shrink-0 text-xs font-semibold text-muted-foreground">{episode.episode_number} de {totalEpisodes}</span>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuenow={episode.episode_number} aria-valuemin={0} aria-valuemax={totalEpisodes}>
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(episode.episode_number / totalEpisodes) * 100}%` }} />
+          <section className="mt-12 border-t pt-7">
+            <p className="text-xs font-bold uppercase text-primary">O que ficou com você?</p>
+            <h2 className="mt-1 font-display text-xl font-semibold">Guarde uma reflexão, se fizer sentido</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">A AURA poderá considerar somente o que você escolher registrar aqui, sem transformar isso em diagnóstico.</p>
+            <Textarea value={reflection} onChange={(event) => { setReflection(event.target.value); setSavedReflection(false); }} maxLength={2000} placeholder="Uma frase, pergunta ou percepção..." className="mt-4 min-h-28 resize-none rounded-xl" />
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Button variant="outline" disabled={!reflection.trim() || action.isPending} onClick={() => action.mutate({ type: "reflect", text: reflection.trim() })}>{action.isPending ? <Loader2 className="animate-spin" /> : <Heart />} {savedReflection ? "Reflexão guardada" : "Guardar reflexão"}</Button>
+              <Button variant="ghost" onClick={() => { action.mutate({ type: "discuss" }); navigate(talkPath); }}><MessageCircle /> Conversar sobre este episódio</Button>
             </div>
           </section>
 
-          <article className="portal-episode-reading">
-          <header className="mb-8">
-            <span className="mb-2 inline-block text-xs font-bold uppercase tracking-[0.18em] text-primary">
-              Episódio {episode.episode_number}
-            </span>
-            <h1 className="font-display text-2xl font-semibold leading-tight text-foreground md:text-3xl">
-              {stageTitle}
-            </h1>
-          </header>
-
-          <div className="space-y-5 font-body text-base leading-relaxed text-foreground/90 md:text-lg">
-            {paragraphs.map((paragraph: string, i: number) => {
-              const parts = paragraph.split(/(\*[^*]+\*)/g);
-              return <p key={i}>{parts.map((part, partIndex) => part.startsWith("*") && part.endsWith("*")
-                ? <strong key={partIndex} className="font-semibold text-foreground">{part.slice(1, -1)}</strong>
-                : part)}</p>;
-            })}
-          </div>
-
-          {/* Journey completion section */}
-          {isLastEpisode && userId && !confirmed && (
-            <div className="mt-14 space-y-6 border-t border-border/60 pt-8">
-              <div className="text-center space-y-3">
-                <span className="portal-area-content mx-auto flex h-14 w-14 items-center justify-center rounded-xl"><CheckCircle2 className="h-6 w-6" /></span>
-                <h2 className="font-display text-2xl font-semibold text-foreground">
-                  Parabéns! Você concluiu a jornada
-                </h2>
-                <p className="font-display text-xl font-medium text-primary">
-                  {journeyTitle}
-                </p>
-                <p className="mx-auto max-w-md font-body text-base text-muted-foreground">
-                  Foram {totalEpisodes} episódios de reflexão e crescimento.
-                  Cada manifesto que você leu plantou uma semente.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="mb-4 text-center font-display text-lg font-semibold text-foreground">
-                  Toque na sua próxima jornada
-                </h3>
-
-                <div className="space-y-3">
-                  {availableJourneys?.map((journey) => {
-                    const Icon = topicIcon[journey.topic] || Sparkles;
-                    const isSelecting = chooseMutation.isPending && chosenJourneyId === journey.id;
-                    return (
-                      <Button
-                        key={journey.id}
-                        variant="ghost"
-                        onClick={() => chooseMutation.mutate(journey.id)}
-                        disabled={chooseMutation.isPending}
-                        className={`h-auto w-full justify-start rounded-xl border p-4 text-left transition-colors ${
-                          isSelecting
-                            ? "border-primary/40 bg-primary/10 opacity-70"
-                            : "border-border bg-card hover:border-primary/35 hover:bg-card"
-                        } disabled:opacity-50`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="portal-area-content mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
-                            <Icon size={16} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-display text-base font-semibold text-foreground">
-                              {journey.title}
-                            </p>
-                            {journey.description && (
-                              <p className="mt-1 line-clamp-2 font-body text-sm text-muted-foreground">
-                                {journey.description}
-                              </p>
-                            )}
-                          </div>
-                          {isSelecting && (
-                            <span className="text-sm text-primary">Salvando...</span>
-                          )}
-                        </div>
-                      </Button>
-                    );
-                  })}
-                </div>
-
-                {chooseMutation.isError && (
-                  <p className="text-destructive text-sm text-center mt-3 font-['Nunito']">
-                    {chooseMutation.error?.message || "Erro ao selecionar. Tente novamente."}
-                  </p>
-                )}
-
-                 <p className="mt-6 text-center text-xs text-muted-foreground">
-                  Se não escolher, a próxima jornada será selecionada automaticamente em 48h.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Success state after choosing */}
-          {isLastEpisode && confirmed && (
-            <div className="mt-14 space-y-4 border-t border-border/60 pt-8 text-center">
-              <span className="portal-area-content mx-auto flex h-14 w-14 items-center justify-center rounded-xl"><Sparkles className="h-6 w-6" /></span>
-              <h2 className="font-display text-2xl font-semibold text-foreground">Pronto!</h2>
-              <p className="text-lg text-foreground/80">
-                Sua próxima jornada será <strong>{availableJourneys?.find(j => j.id === chosenJourneyId)?.title || "a escolhida"}</strong>.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                O primeiro episódio aparecerá em breve nas suas Jornadas.
-              </p>
-            </div>
-          )}
-
-          {/* Footer */}
-          <footer className="mt-14 space-y-2 border-t border-border/60 pt-7 text-center">
-            <Heart className="mx-auto h-5 w-5 text-primary" />
-            <p className="text-sm text-muted-foreground">Conteúdo exclusivo da AURA</p>
-          </footer>
-          </article>
-        </main>
-      </JourneyPageShell>
-    </>
-  );
-};
-
-export default Episode;
+          <section className="mt-8 border-t pt-7 text-center">
+            {completed ? <><CheckCircle2 className="mx-auto h-8 w-8 text-primary" /><h2 className="mt-3 font-display text-xl font-semibold">{isLastEpisode ? "Jornada concluída" : "Episódio concluído"}</h2><p className="mt-2 text-sm text-muted-foreground">{isLastEpisode ? "O que você construiu permanece na sua biblioteca." : "O próximo episódio chega no próximo dia de Jornada."}</p><Button asChild className="mt-5"><Link to={backHref}>Voltar para Jornadas <ArrowRight /></Link></Button></>
+              : <><h2 className="font-display text-xl font-semibold">Terminou por hoje?</h2><p className="mt-2 text-sm text-muted-foreground">Confirme no seu tempo. Só então este episódio será marcado como concluído.</p><Button className="mt-5" disabled={action.isPending} onClick={() => action.mutate({ type: "complete" })}>{action.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />} {isLastEpisode ? "Concluir esta jornada" : "Concluir episódio"}</Button></>}
+            {action.isError && <p className="mt-3 text-sm text-destructive">Não foi possível salvar agora. Tente novamente.</p>}
+          </section>
+          <footer className="mt-12 border-t pt-7 text-center text-sm text-muted-foreground">Conteúdo exclusivo da AURA</footer>
+        </article>
+      </main>
+    </JourneyPageShell>
+  </>;
+}
