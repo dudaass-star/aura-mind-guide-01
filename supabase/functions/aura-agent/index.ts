@@ -7406,7 +7406,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
 
     // Tag de agendamento: [AGENDAR_SESSAO:YYYY-MM-DD HH:mm:tipo:foco]
     const scheduleMatch = assistantMessage.match(/\[AGENDAR_SESSAO:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):?(\w*):?(.*?)\]/);
-    if (scheduleMatch && profile?.user_id && sessionsAvailable > 0) {
+    if (scheduleMatch && profile?.user_id) {
       const [_, date, time, sessionType, focusTopic] = scheduleMatch;
       let scheduledAt = new Date(`${date}T${time}:00-03:00`); // BRT timezone
       
@@ -7431,80 +7431,31 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       const shouldPrearmImmediately = minutesUntilScheduled <= 5 && minutesUntilScheduled >= -2;
 
       if (canCreateSession) {
-        // Guarda anti-duplicação: verifica se já existe sessão scheduled/active
-        // do mesmo usuário em janela de ±30min antes de inserir.
-        const windowStart = new Date(scheduledAt.getTime() - 30 * 60 * 1000).toISOString();
-        const windowEnd = new Date(scheduledAt.getTime() + 30 * 60 * 1000).toISOString();
-        const { data: existingNearby } = await supabase
-          .from('sessions')
-          .select('id, scheduled_at')
-          .eq('user_id', profile.user_id)
-          .in('status', ['scheduled', 'active'])
-          .gte('scheduled_at', windowStart)
-          .lte('scheduled_at', windowEnd)
-          .limit(1)
-          .maybeSingle();
+        const { data: schedulingResult, error: sessionError } = await supabase.rpc(
+          'manage_portal_session_internal',
+          {
+            _user_id: profile.user_id,
+            _action: 'schedule',
+            _scheduled_at: scheduledAt.toISOString(),
+            _session_id: null,
+          },
+        );
+        const scheduledSessionId = typeof schedulingResult?.session_id === 'string'
+          ? schedulingResult.session_id
+          : null;
 
-        if (existingNearby) {
-          console.warn(`⚠️ [AGENDAR_SESSAO] Sessão duplicada evitada — já existe ${existingNearby.id} em ${existingNearby.scheduled_at} (janela ±30min)`);
-          // Reusa a sessão existente para o pré-arme se for o caso
-          if (shouldPrearmImmediately && profile.id) {
-            await supabase
-              .from('profiles')
-              .update({ pending_insight: `[SESSION_PREARM]${existingNearby.id}` })
-              .eq('id', profile.id);
-            console.log(`🎯 [SESSION_PREARM] Reusando sessão existente ${existingNearby.id}`);
-          }
-        } else {
-        // Camada extra anti-duplicata: mesmo dia BRT (qualquer horário).
-        // Dois agendamentos no mesmo dia quase sempre são reformulação da Aura
-        // ou confusão de fuso (ex.: caso Carla MS↔BRT). Reagendamento legítimo
-        // usa [REAGENDAR_SESSAO], não [AGENDAR_SESSAO].
-        const brtOffsetMs = 3 * 60 * 60 * 1000; // BRT = UTC-3
-        const scheduledBrt = new Date(scheduledAt.getTime() - brtOffsetMs);
-        const dayStartBrt = new Date(Date.UTC(
-          scheduledBrt.getUTCFullYear(),
-          scheduledBrt.getUTCMonth(),
-          scheduledBrt.getUTCDate(),
-          0, 0, 0
-        ));
-        const dayStartUtc = new Date(dayStartBrt.getTime() + brtOffsetMs).toISOString();
-        const dayEndUtc = new Date(dayStartBrt.getTime() + brtOffsetMs + 24 * 60 * 60 * 1000).toISOString();
-        const { data: existingSameDay } = await supabase
-          .from('sessions')
-          .select('id, scheduled_at')
-          .eq('user_id', profile.user_id)
-          .in('status', ['scheduled', 'active'])
-          .gte('scheduled_at', dayStartUtc)
-          .lt('scheduled_at', dayEndUtc)
-          .limit(1)
-          .maybeSingle();
+        if (scheduledSessionId) {
+          await supabase
+            .from('sessions')
+            .update({
+              created_by: 'aura',
+              session_type: sessionType || 'livre',
+              focus_topic: focusTopic?.trim() || null,
+            })
+            .eq('id', scheduledSessionId)
+            .eq('user_id', profile.user_id);
 
-        if (existingSameDay) {
-          console.warn(`⚠️ [AGENDAR_SESSAO] Sessão duplicada evitada (mesmo dia BRT) — já existe ${existingSameDay.id} em ${existingSameDay.scheduled_at}. Tentativa: ${scheduledAt.toISOString()}`);
-          // Log fire-and-forget em failed_message_log para visibilidade no admin
-          supabase.from('failed_message_log').insert({
-            user_id: profile.user_id,
-            function_name: 'aura-agent:duplicate_schedule_blocked',
-            content: `attempted=${scheduledAt.toISOString()} existing_id=${existingSameDay.id} existing_at=${existingSameDay.scheduled_at}`,
-            error: 'same_day_brt',
-          }).then(() => {}, () => {});
-        } else {
-        const { data: newSession, error: sessionError } = await supabase
-          .from('sessions')
-          .insert({
-            user_id: profile.user_id,
-            scheduled_at: scheduledAt.toISOString(),
-            session_type: sessionType || 'livre',
-            focus_topic: focusTopic?.trim() || null,
-            status: 'scheduled',
-            duration_minutes: 45
-          })
-          .select()
-          .single();
-        
-        if (newSession) {
-          console.log('📅 Session scheduled via AURA:', newSession.id, 'at', scheduledAt.toISOString());
+          console.log('📅 Session scheduled via AURA:', scheduledSessionId, 'at', scheduledAt.toISOString());
 
           // Sessões marcadas para "agora" entram no mesmo fluxo livre já usado
           // por confirmações: a próxima mensagem do usuário dispara o handler
@@ -7512,15 +7463,13 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           if (shouldPrearmImmediately && profile.id) {
             await supabase
               .from('profiles')
-              .update({ pending_insight: `[SESSION_PREARM]${newSession.id}` })
+              .update({ pending_insight: `[SESSION_PREARM]${scheduledSessionId}` })
               .eq('id', profile.id);
-            console.log(`🎯 [SESSION_PREARM] Sessão ${newSession.id} pré-armada via agendamento imediato da Aura`);
+            console.log(`🎯 [SESSION_PREARM] Sessão ${scheduledSessionId} pré-armada via agendamento imediato da Aura`);
           }
         } else if (sessionError) {
-          console.error('❌ Error scheduling session:', sessionError);
+          console.error('❌ Error scheduling session through unified rules:', sessionError);
         }
-        }
-        } // close existingNearby-else block (Layer B duplicate guard)
       } else {
         console.log('⚠️ Attempted to schedule session in the past:', scheduledAt.toISOString());
       }
