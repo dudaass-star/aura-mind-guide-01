@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
@@ -22,6 +22,8 @@ export default function Episode() {
   const [reflection, setReflection] = useState("");
   const [savedReflection, setSavedReflection] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const lastProgressSent = useRef(0);
+  const progressSaving = useRef(false);
 
   const backHref = portalToken ? `/meu-espaco?t=${encodeURIComponent(portalToken)}&tab=jornadas` : "/meu-espaco?tab=jornadas";
   const { data: episode, isLoading, error } = useQuery({
@@ -49,6 +51,7 @@ export default function Episode() {
   useEffect(() => {
     if (progress?.reflection_text) setReflection(progress.reflection_text);
     if (progress?.status === "completed") setCompleted(true);
+    if (progress?.progress_percent) lastProgressSent.current = progress.progress_percent;
   }, [progress]);
 
   const action = useMutation({
@@ -70,22 +73,46 @@ export default function Episode() {
 
   useEffect(() => {
     if (!id) return;
-    action.mutate({ type: "open" });
+    void supabasePortal.functions.invoke("manage-portal-journey", {
+      body: { action: "open", episodeId: id, portalToken },
+    }).then(({ error: openError }) => {
+      if (openError) console.warn("Não foi possível registrar a abertura do episódio.");
+    });
     // A abertura deve ser registrada uma vez por montagem.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, portalToken]);
 
   useEffect(() => {
-    const onScroll = () => {
+    let timer: number | undefined;
+    const saveProgress = async () => {
       const root = document.documentElement;
       const available = root.scrollHeight - window.innerHeight;
       if (available <= 0 || !id) return;
-      const percent = Math.min(99, Math.max(1, Math.round((window.scrollY / available) * 100)));
-      if (percent >= 25 && percent > (progress?.progress_percent || 0)) action.mutate({ type: "progress", percent });
+      const rawPercent = Math.min(99, Math.max(1, Math.round((window.scrollY / available) * 100)));
+      const percent = [90, 75, 50, 25].find((mark) => rawPercent >= mark) || 0;
+      if (!percent || percent <= lastProgressSent.current || progressSaving.current) return;
+
+      progressSaving.current = true;
+      const { data, error: progressError } = await supabasePortal.functions.invoke("manage-portal-journey", {
+        body: { action: "progress", episodeId: id, progressPercent: percent, portalToken },
+      });
+      progressSaving.current = false;
+
+      if (!progressError && !data?.error) {
+        lastProgressSent.current = percent;
+      } else {
+        console.warn("Não foi possível registrar o progresso de leitura.");
+      }
     };
-    const timer = window.setInterval(onScroll, 5000);
-    return () => window.clearInterval(timer);
-  }, [id, progress?.progress_percent, action]);
+    const onScroll = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => void saveProgress(), 700);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [id, portalToken]);
 
   const journey = episode?.content_journeys;
   const totalEpisodes = journey?.total_episodes || 8;
@@ -125,7 +152,7 @@ export default function Episode() {
           <section className="mt-8 border-t pt-7 text-center">
             {completed ? <><CheckCircle2 className="mx-auto h-8 w-8 text-primary" /><h2 className="mt-3 font-display text-xl font-semibold">{isLastEpisode ? "Jornada concluída" : "Episódio concluído"}</h2><p className="mt-2 text-sm text-muted-foreground">{isLastEpisode ? "O que você construiu permanece na sua biblioteca." : "O próximo episódio chega no próximo dia de Jornada."}</p><Button asChild className="mt-5"><Link to={backHref}>Voltar para Jornadas <ArrowRight /></Link></Button></>
               : <><h2 className="font-display text-xl font-semibold">Terminou por hoje?</h2><p className="mt-2 text-sm text-muted-foreground">Confirme no seu tempo. Só então este episódio será marcado como concluído.</p><Button className="mt-5" disabled={action.isPending} onClick={() => action.mutate({ type: "complete" })}>{action.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />} {isLastEpisode ? "Concluir esta jornada" : "Concluir episódio"}</Button></>}
-            {action.isError && <p className="mt-3 text-sm text-destructive">Não foi possível salvar agora. Tente novamente.</p>}
+            {action.isError && action.variables?.type === "complete" && <p className="mt-3 text-sm text-destructive">Não foi possível concluir agora. Tente novamente.</p>}
           </section>
           <footer className="mt-12 border-t pt-7 text-center text-sm text-muted-foreground">Conteúdo exclusivo da AURA</footer>
         </article>
