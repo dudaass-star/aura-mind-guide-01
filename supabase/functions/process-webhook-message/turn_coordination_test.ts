@@ -22,7 +22,7 @@ Deno.test("contexto interrompido tem validade", () => {
 });
 
 Deno.test("mensagens recebidas usam identidade da origem", () => {
-  assert(SOURCE.includes("source_message_id: currentMessageId"));
+  assert(SOURCE.includes("source_message_id: sourceMessageId"));
   assert(SOURCE.includes("persistirMensagemRecebidaWhatsapp"));
   assert(SOURCE.includes("insertError?.code === '23505'"));
   assert(!SOURCE.includes("onConflict: 'user_id,channel,source_message_id'"));
