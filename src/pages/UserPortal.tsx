@@ -374,6 +374,7 @@ const UserPortal = () => {
               onSignOut={() => void signOut()}
               billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
               accountLoading={portalLoading}
+              isActive={activeTab === "conversar"}
             />
           </div>
           <Suspense fallback={<PortalLoadingInline />}>
