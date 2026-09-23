@@ -47,7 +47,7 @@ function sessionLimit(profile: SessionProfile) {
   return PLAN_SESSION_LIMITS[String(profile?.plan || "").toLowerCase()] || 0;
 }
 
-type UpcomingSession = { id: string; scheduled_at: string; focus_topic: string | null; status: string };
+type UpcomingSession = { id: string; scheduled_at: string | null; focus_topic: string | null; status: string };
 
 export function SessoesTab({ userId, profile, onChangePlan }: { userId: string; profile: SessionProfile; onChangePlan: (currentLimit: number) => void }) {
   const queryClient = useQueryClient();
@@ -68,7 +68,7 @@ export function SessoesTab({ userId, profile, onChangePlan }: { userId: string; 
         .select("id, scheduled_at, ended_at, status, focus_topic, theme_label, session_summary, reframe_text, closure_type, closure_text")
         .eq("user_id", userId).eq("status", "completed").order("ended_at", { ascending: false }).limit(50);
       if (error) throw error;
-      return data || [];
+      return (data || []).filter((session) => Boolean(session.scheduled_at));
     }, enabled: !!userId,
   });
 
@@ -203,7 +203,7 @@ export function SessoesTab({ userId, profile, onChangePlan }: { userId: string; 
             <article key={session.id} className={index === 0 ? "rounded-lg bg-foreground p-5 text-background shadow-card" : "rounded-lg border border-border bg-card p-4 shadow-sm"}>
               <p className={`text-xs font-bold uppercase ${index === 0 ? "text-accent" : "text-primary"}`}>{index === 0 ? "Próxima sessão" : "Sessão agendada"}</p>
               <p className={`mt-2 font-semibold capitalize leading-snug ${index === 0 ? "text-xl" : "text-base text-foreground"}`}>
-                {new Date(session.scheduled_at).toLocaleString("pt-BR", { weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+                {session.scheduled_at ? new Date(session.scheduled_at).toLocaleString("pt-BR", { weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }) : "Horário indisponível"}
               </p>
               {session.status === "scheduled" ? (
                 <div className="mt-4 flex flex-wrap gap-2">

@@ -363,14 +363,14 @@ const UserPortal = () => {
 
         {/* Content */}
         <div className={activeTab === "conversar" ? "flex-1 w-full" : "portal-app-content flex-1 max-w-2xl mx-auto w-full px-5 py-6 pb-24"}>
-          {activeTab !== "conversar" && <PlanTierBanner profile={profile} onChangePlan={() => setChangePlanOpen(true)} />}
+          {activeTab !== "conversar" && <PlanTierBanner profile={profile} onChangePlan={() => { setMinimumSessionLimit(undefined); setChangePlanOpen(true); }} />}
           <div className={activeTab === "conversar" ? "block" : "hidden"} aria-hidden={activeTab !== "conversar"}>
             <ConversarTab
               userId={userId}
               firstName={firstName}
               onNavigate={handleTabClick}
               onOpenBilling={() => void handleOpenBillingPortal()}
-              onChangePlan={() => setChangePlanOpen(true)}
+              onChangePlan={() => { setMinimumSessionLimit(undefined); setChangePlanOpen(true); }}
               onSignOut={() => void signOut()}
               billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
               accountLoading={portalLoading}
