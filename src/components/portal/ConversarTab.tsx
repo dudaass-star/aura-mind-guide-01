@@ -218,7 +218,6 @@ const MessageTimeline = memo(function MessageTimeline({
   onRetry: (message: ChatMessage) => void;
   onDelete: (message: ChatMessage) => void;
 }) {
-  const navigate = useNavigate();
   return (
     <div className="space-y-5">
       {messages.map((message) => {
@@ -324,6 +323,7 @@ export function ConversarTab({
   isActive?: boolean;
   initialChatOpen?: boolean;
 }) {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);

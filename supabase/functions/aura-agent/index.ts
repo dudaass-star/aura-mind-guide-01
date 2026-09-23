@@ -2136,7 +2136,7 @@ async function processExtractedActions(
     if (actions.journey_action === 'pause' || actions.journey_action === 'switch') {
       const intent = hasExplicitJourneyIntent(userMessage || '');
       if (actions.journey_action === 'pause' && intent.pause) {
-        await supabase.from('profiles').update({ current_journey_id: null, current_episode: 0 }).eq('user_id', userId);
+        await supabase.rpc('manage_portal_journey_internal', { _user_id: userId, _action: 'pause', _journey_id: null, _episode_id: null, _progress_percent: null, _reflection_text: null, _goal: null });
         console.log('✅ [MICRO-AGENT] Journeys paused (intenção explícita confirmada)');
       } else if (actions.journey_action === 'switch' && actions.journey_id && intent.switch) {
         // Bloqueia switch para uma jornada já concluída
@@ -2149,7 +2149,7 @@ async function processExtractedActions(
         if (alreadyDone && alreadyDone.length > 0) {
           console.warn(`🚫 [MICRO-AGENT] Switch ignorado: ${actions.journey_id} já está no histórico do usuário.`);
         } else {
-          await supabase.from('profiles').update({ current_journey_id: actions.journey_id, current_episode: 0 }).eq('user_id', userId);
+          await supabase.rpc('manage_portal_journey_internal', { _user_id: userId, _action: 'switch', _journey_id: actions.journey_id, _episode_id: null, _progress_percent: null, _reflection_text: null, _goal: null });
           console.log('✅ [MICRO-AGENT] Journey switched to:', actions.journey_id);
         }
       } else {
@@ -5815,6 +5815,7 @@ serve(async (req) => {
     let currentJourneyInfo = 'Nenhuma jornada ativa';
     let currentEpisodeInfo = '0';
     let totalEpisodesInfo = '0';
+    let journeyContinuityContext = '- Nenhum episódio pendente ou reflexão declarada.';
     let meditationCatalogSection = '';
     // Catálogo acessível também no escopo do fallback (linha ~7353).
     // Mantido fora do if(profile?.user_id) para evitar ReferenceError quando o fallback de meditação roda.
@@ -5834,6 +5835,7 @@ serve(async (req) => {
         commitmentsResult,
         completedCountResult,
         journeyResult,
+        journeyProgressResult,
         meditationsResult,
         correctionsResult,
         evolutionSummaryResult,
@@ -5911,6 +5913,17 @@ serve(async (req) => {
               .select('title, total_episodes')
               .eq('id', profile.current_journey_id)
               .single()
+          : Promise.resolve({ data: null, error: null }),
+        // 9b. Episódio pendente e reflexão declarada pelo próprio usuário.
+        (!minimal_context && profile?.current_journey_id)
+          ? supabase.from('journey_episode_progress')
+              .select('episode_number,status,reflection_text,journey_episodes(title,stage_title)')
+              .eq('user_id', userId)
+              .eq('journey_id', profile.current_journey_id)
+              .neq('status', 'completed')
+              .order('episode_number', { ascending: false })
+              .limit(1)
+              .maybeSingle()
           : Promise.resolve({ data: null, error: null }),
         // 10. Catálogo de meditações - skip em minimal
         minimal_context
