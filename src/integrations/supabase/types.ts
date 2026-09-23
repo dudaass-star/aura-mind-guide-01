@@ -3160,7 +3160,11 @@ export type Database = {
           key_insights: Json | null
           last_user_emotional_state: string | null
           post_session_sent: boolean | null
+          preparation_note: string | null
           rating_requested: boolean | null
+          reframe_feedback: string | null
+          reframe_feedback_at: string | null
+          reframe_feedback_text: string | null
           reframe_text: string | null
           reminder_15m_sent: boolean | null
           reminder_1h_sent: boolean | null
@@ -3197,7 +3201,11 @@ export type Database = {
           key_insights?: Json | null
           last_user_emotional_state?: string | null
           post_session_sent?: boolean | null
+          preparation_note?: string | null
           rating_requested?: boolean | null
+          reframe_feedback?: string | null
+          reframe_feedback_at?: string | null
+          reframe_feedback_text?: string | null
           reframe_text?: string | null
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
@@ -3234,7 +3242,11 @@ export type Database = {
           key_insights?: Json | null
           last_user_emotional_state?: string | null
           post_session_sent?: boolean | null
+          preparation_note?: string | null
           rating_requested?: boolean | null
+          reframe_feedback?: string | null
+          reframe_feedback_at?: string | null
+          reframe_feedback_text?: string | null
           reframe_text?: string | null
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
@@ -4973,6 +4985,16 @@ export type Database = {
           _ticket_id: string
         }
         Returns: string
+      }
+      record_portal_session_experience: {
+        Args: {
+          _action: string
+          _rating?: number
+          _session_id: string
+          _user_id: string
+          _value?: string
+        }
+        Returns: Json
       }
       record_retention_offer_event: {
         Args: {
