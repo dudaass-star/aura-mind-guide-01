@@ -77,14 +77,14 @@ export function ChangePlanDialog({
   // (PIX e cartão recorrente Asaas reusam a mesma edge com retorno idêntico).
   const showsNextCharge = isAsaas || isPixAutomatico;
   const copyDescription = isPixAutomatico
-    ? "No PIX Automático o valor autorizado é fixo: para trocar, você escaneia um QR novo uma única vez."
+    ? "No PIX Automático o valor autorizado é fixo: para trocar, você escaneia um QR novo uma única vez e paga o próximo ciclo ao autorizar."
     : isPix
     ? "A troca vale a partir da próxima cobrança PIX. Hoje não rola cobrança nenhuma."
     : isAsaasCard
       ? "A troca vale a partir da próxima cobrança no seu cartão. Hoje não rola cobrança nenhuma."
       : "A diferença é cobrada (ou creditada) hoje no cartão já cadastrado.";
   const copyConfirm = isPixAutomatico
-    ? "Vou gerar um QR novo com o valor do plano escolhido. Depois que você autorizar no banco, o débito antigo é encerrado — seu acesso atual não muda."
+    ? "Vou gerar um QR novo com o valor do plano escolhido. Ao autorizar no banco, o próximo ciclo é cobrado na hora e somado ao período que você já pagou. Depois disso, o débito antigo é encerrado."
     : isPix
     ? "Sua próxima cobrança PIX já vem com o novo valor. Nada é cobrado agora."
     : isAsaasCard
@@ -127,10 +127,11 @@ export function ChangePlanDialog({
       if ((data as any)?.error) throw new Error((data as any).error);
 
       await queryClient.invalidateQueries({ queryKey: ["portal-profile", userId] });
+      const authorizationPending = Boolean((data as any)?.copyPaste);
       void supabasePortal.from("portal_value_events").insert({
         user_id: userId,
         feature: "session",
-        event_type: "upgrade_completed",
+        event_type: authorizationPending ? "upgrade_authorization_started" : "upgrade_completed",
         source: "app",
         metadata: { target_plan: selected, billing, gateway: paymentGateway },
       });
@@ -190,7 +191,8 @@ export function ChangePlanDialog({
                 <div className="space-y-3 pt-1">
                   <p className="text-muted-foreground">
                     Escaneie o QR abaixo (ou copie o código) no app do seu banco. É uma vez só:
-                    depois disso a renovação volta a ser automática, já no valor novo.
+                    ao autorizar, o próximo ciclo será cobrado e somado ao período que você já pagou.
+                    Depois disso, a renovação volta a ser automática no valor novo.
                   </p>
                   {success.qrCodeImage && (
                     <img
@@ -219,7 +221,7 @@ export function ChangePlanDialog({
               )}
               <p className="text-xs text-muted-foreground pt-1">
                 {success.copyPaste
-                  ? "Seu acesso atual continua valendo normalmente até o fim do ciclo já pago."
+                   ? "O período já pago continua valendo e não será perdido."
                   : "Nada foi cobrado agora. Sua assinatura atual segue valendo até a próxima fatura."}
               </p>
             </div>
