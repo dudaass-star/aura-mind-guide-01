@@ -32,6 +32,13 @@ export function VoiceMessagePlayer({ src, mine, durationMs }: VoiceMessagePlayer
     const audio = audioRef.current;
     if (!audio) return;
 
+    setPlaying(false);
+    setLoading(false);
+    setFailed(false);
+    setCurrentTime(0);
+    setDuration(knownDuration);
+    audio.load();
+
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => {
       if (Number.isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration);
@@ -148,7 +155,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs }: VoiceMessagePlayer
           aria-label="Posição da mensagem de voz"
         />
         <div className={cn("mt-0.5 flex items-center justify-between text-[10px] font-semibold tabular-nums", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>
-          <span>{failed ? "Não foi possível reproduzir" : formatDuration(elapsed)}</span>
+          <span>{failed ? "Áudio incompatível" : formatDuration(elapsed)}</span>
           <span className="font-normal">voz</span>
         </div>
       </div>

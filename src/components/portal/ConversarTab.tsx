@@ -30,6 +30,20 @@ type ChatMessage = {
 const PAGE_SIZE = 50;
 const MAX_AUDIO_MS = 120_000;
 
+function isAppleMobileDevice() {
+  const platform = navigator.platform || "";
+  const userAgent = navigator.userAgent || "";
+  const touchMac = platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return /iPhone|iPad|iPod/i.test(userAgent) || touchMac;
+}
+
+function selectRecordingMimeType() {
+  const appleTypes = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4"];
+  const otherTypes = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", ...appleTypes];
+  const candidates = isAppleMobileDevice() ? appleTypes : otherTypes;
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+}
+
 type ReportCardMetadata = {
   kind: "report_card";
   report_type: "weekly" | "monthly";
@@ -628,7 +642,7 @@ export function ConversarTab({
     setAudioError("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const supported = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type));
+      const supported = selectRecordingMimeType();
       const recorder = supported ? new MediaRecorder(stream, { mimeType: supported }) : new MediaRecorder(stream);
       streamRef.current = stream;
       recorderRef.current = recorder;
@@ -648,7 +662,8 @@ export function ConversarTab({
           return;
         }
         if (!chunks.length) return;
-        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        const recordedType = recorder.mimeType || chunks.find((chunk) => chunk.type)?.type || "audio/mp4";
+        const blob = new Blob(chunks, { type: recordedType });
         if (blob.size > 10 * 1024 * 1024) return setAudioError("O áudio ficou grande demais. Grave até 2 minutos.");
         const clientId = crypto.randomUUID();
         const createdAt = new Date().toISOString();
