@@ -78,6 +78,8 @@ function recordTodayEvent(userId: string, eventType: string, action: TodayAction
     event_type: eventType,
     source: "app",
     metadata: { action, ...metadata } as Json,
+  }).then(({ error }) => {
+    if (error) console.warn("Não foi possível registrar a interação em Hoje", error.message);
   });
 }
 
