@@ -411,7 +411,10 @@ const UserPortal = () => {
       {userId && (
         <ChangePlanDialog
           open={changePlanOpen}
-          onOpenChange={setChangePlanOpen}
+          onOpenChange={(open) => {
+            setChangePlanOpen(open);
+            if (!open) setMinimumSessionLimit(undefined);
+          }}
           userId={userId}
           currentPlan={(profile?.plan as "essencial" | "direcao" | "transformacao" | null) ?? null}
           currentTier={(profile as any)?.plan_tier ?? null}

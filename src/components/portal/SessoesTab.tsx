@@ -76,7 +76,7 @@ export function SessoesTab({ userId, profile, onChangePlan }: { userId: string; 
     queryFn: async () => {
       const { data, error } = await supabasePortal.from("sessions")
         .select("id, scheduled_at, focus_topic, status").eq("user_id", userId)
-        .in("status", ["scheduled", "in_progress"]).order("scheduled_at", { ascending: true }).limit(12);
+        .in("status", ["scheduled", "in_progress"]).order("scheduled_at", { ascending: true }).limit(50);
       if (error) throw error;
       return data || [];
     }, enabled: !!userId,
@@ -127,7 +127,7 @@ export function SessoesTab({ userId, profile, onChangePlan }: { userId: string; 
     ]);
   };
 
-  const openScheduler = (session?: UpcomingSession) => {
+  const openScheduler = (session?: UpcomingSession, startNextMonth = false) => {
     const reschedule = Boolean(session);
     setEditing(reschedule);
     setSelectedSession(session || null);
@@ -140,7 +140,7 @@ export function SessoesTab({ userId, profile, onChangePlan }: { userId: string; 
       setDate(`${get("year")}-${get("month")}-${get("day")}`);
       setTime(`${get("hour")}:${get("minute")}`);
     } else {
-      setDate(today);
+      setDate(startNextMonth ? brtParts(nextMonthDate).date : today);
       setTime("");
     }
     setSchedulerOpen(true);
@@ -196,7 +196,7 @@ export function SessoesTab({ userId, profile, onChangePlan }: { userId: string; 
         <section className="space-y-3 animate-fade-up">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-foreground">Próximas sessões</h2>
-            <Button type="button" size="sm" onClick={() => openScheduler()}><Plus /> Agendar</Button>
+            {monthUsed < planLimit && <Button type="button" size="sm" onClick={() => openScheduler()}><Plus /> Agendar</Button>}
           </div>
           {upcomingSessions.map((session, index) => (
             <article key={session.id} className={index === 0 ? "rounded-lg bg-foreground p-5 text-background shadow-card" : "rounded-lg border border-border bg-card p-4 shadow-sm"}>
@@ -230,7 +230,7 @@ export function SessoesTab({ userId, profile, onChangePlan }: { userId: string; 
           <p className="text-sm font-semibold text-foreground">Sua agenda deste mês está completa.</p>
           <p className="mt-1 text-sm text-muted-foreground">Você ainda pode organizar sessões dos próximos meses.</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => openScheduler()}><CalendarDays /> Agendar em outro mês</Button>
+            <Button type="button" variant="outline" onClick={() => openScheduler(undefined, true)}><CalendarDays /> Agendar em outro mês</Button>
             {planLimit < 8 && <Button type="button" onClick={() => onChangePlan(planLimit)}><ArrowUpRight /> Quero mais sessões</Button>}
           </div>
         </section>
