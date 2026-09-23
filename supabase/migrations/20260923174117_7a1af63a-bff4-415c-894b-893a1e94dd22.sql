@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS session_ratings_one_per_session_idx ON public.session_ratings(session_id);
