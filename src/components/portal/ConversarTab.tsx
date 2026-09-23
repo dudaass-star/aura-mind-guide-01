@@ -311,6 +311,10 @@ export function ConversarTab({
     const syncViewport = () => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
+        if (!window.matchMedia("(max-width: 767px)").matches) {
+          setMobileViewport(null);
+          return;
+        }
         setMobileViewport({
           height: Math.round(viewport.height),
           top: Math.round(viewport.offsetTop),
