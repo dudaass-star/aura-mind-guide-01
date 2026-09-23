@@ -86,4 +86,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Substituir Jornadas completas na conversa por cartões compactos que abrem diretamente o episódio no app.
 - [x] Permitir agendar, reagendar e cancelar sessões diretamente no aplicativo, com lembretes de 24h e 5min.
 - [x] Auditar e simular o agendamento de ponta a ponta: concorrência, limites, segurança, reagendamento, cancelamento, lembretes e tela móvel.
-- [ ] Permitir que o cliente agende uma, algumas ou todas as sessões do mês até a cota do plano, com gestão individual e upgrade contextual ao esgotar a cota.
+- [x] Permitir que o cliente agende uma, algumas ou todas as sessões do mês até a cota do plano, com gestão individual e upgrade contextual ao esgotar a cota.
+- [x] Unificar as regras de cota, conflito e concorrência entre o aplicativo e todos os agendamentos feitos pela conversa.

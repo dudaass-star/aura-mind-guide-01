@@ -63,6 +63,7 @@ const UserPortal = () => {
   const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => new Set(["conversar", initialTab]));
   const [portalLoading, setPortalLoading] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
+  const [minimumSessionLimit, setMinimumSessionLimit] = useState<number | undefined>();
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
@@ -362,14 +363,14 @@ const UserPortal = () => {
 
         {/* Content */}
         <div className={activeTab === "conversar" ? "flex-1 w-full" : "portal-app-content flex-1 max-w-2xl mx-auto w-full px-5 py-6 pb-24"}>
-          {activeTab !== "conversar" && <PlanTierBanner profile={profile} onChangePlan={() => setChangePlanOpen(true)} />}
+          {activeTab !== "conversar" && <PlanTierBanner profile={profile} onChangePlan={() => { setMinimumSessionLimit(undefined); setChangePlanOpen(true); }} />}
           <div className={activeTab === "conversar" ? "block" : "hidden"} aria-hidden={activeTab !== "conversar"}>
             <ConversarTab
               userId={userId}
               firstName={firstName}
               onNavigate={handleTabClick}
               onOpenBilling={() => void handleOpenBillingPortal()}
-              onChangePlan={() => setChangePlanOpen(true)}
+              onChangePlan={() => { setMinimumSessionLimit(undefined); setChangePlanOpen(true); }}
               onSignOut={() => void signOut()}
               billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
               accountLoading={portalLoading}
@@ -385,7 +386,7 @@ const UserPortal = () => {
               onOpenConversation={handleOpenConversation}
             />
           </div>}
-          {visitedTabs.has("sessoes") && <div className={activeTab === "sessoes" ? "block" : "hidden"} aria-hidden={activeTab !== "sessoes"}><SessoesTab userId={userId} profile={profile} /></div>}
+          {visitedTabs.has("sessoes") && <div className={activeTab === "sessoes" ? "block" : "hidden"} aria-hidden={activeTab !== "sessoes"}><SessoesTab userId={userId} profile={profile} onChangePlan={(limit) => { setMinimumSessionLimit(limit); setChangePlanOpen(true); }} /></div>}
           {visitedTabs.has("jornadas") && <div className={activeTab === "jornadas" ? "block" : "hidden"} aria-hidden={activeTab !== "jornadas"}><JornadasTab userId={userId} profile={profile} onJourneyChanged={() => void refetchProfile()} /></div>}
           {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
@@ -410,7 +411,10 @@ const UserPortal = () => {
       {userId && (
         <ChangePlanDialog
           open={changePlanOpen}
-          onOpenChange={setChangePlanOpen}
+          onOpenChange={(open) => {
+            setChangePlanOpen(open);
+            if (!open) setMinimumSessionLimit(undefined);
+          }}
           userId={userId}
           currentPlan={(profile?.plan as "essencial" | "direcao" | "transformacao" | null) ?? null}
           currentTier={(profile as any)?.plan_tier ?? null}
@@ -431,6 +435,7 @@ const UserPortal = () => {
                 ? "asaas-card"
                 : "stripe-card"
           }
+          minimumSessionLimit={minimumSessionLimit}
         />
       )}
     </>

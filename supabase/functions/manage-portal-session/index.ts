@@ -25,11 +25,13 @@ function publicError(message: string) {
     "future_time_required",
     "invalid_time_interval",
     "active_session_exists",
+    "duplicate_session_window",
     "monthly_limit_reached",
     "session_not_available",
     "session_already_started",
   ];
-  return known.find((code) => message.includes(code)) || "session_update_failed";
+  const code = known.find((candidate) => message.includes(candidate));
+  return code === "duplicate_session_window" ? "session_time_conflict" : code || "session_update_failed";
 }
 
 Deno.serve(async (req) => {
