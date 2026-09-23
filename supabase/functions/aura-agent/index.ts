@@ -5804,6 +5804,7 @@ serve(async (req) => {
     let userCorrections: any[] = [];
     let userEvolutionSummary: string = '';
     let previousSessionsContext = '';
+    let sessionPreparationContext = '';
     let isFirstSession = false;
     let lastCheckin = "Nenhum registrado";
     let userThemes: any[] = [];
@@ -6003,6 +6004,33 @@ serve(async (req) => {
         }
       }
 
+      // A preparação pertence apenas à sessão atual e representa a intenção
+      // mais recente do usuário. Ela orienta a abertura sem virar diagnóstico.
+      const preparationNote = typeof currentSession?.preparation_note === 'string'
+        ? currentSession.preparation_note.trim()
+        : '';
+      if (sessionActive && preparationNote) {
+        sessionPreparationContext = `
+
+# PREPARAÇÃO DESTE ENCONTRO — PRIORIDADE NA ABERTURA
+O usuário escreveu antes desta sessão:
+"${preparationNote}"
+
+ORDEM PARA ABRIR O ENCONTRO:
+1. Comece pela preparação acima, pois ela representa o que o usuário quer trazer hoje.
+2. Confirme brevemente se esse ainda é o assunto mais vivo agora; dê liberdade real para mudar de tema.
+3. Só conecte a preparação à sessão anterior ou a compromissos pendentes quando houver relação concreta e verificável. Se a relação não estiver clara, pergunte — não invente a ponte.
+4. Compromissos anteriores entram depois, apenas se forem relevantes ao caminho escolhido pelo usuário.
+
+REGRAS:
+- Acolha o assunto naturalmente, sem anunciar que está lendo uma anotação do sistema.
+- Não copie nem recite o texto inteiro; faça uma referência humana e curta.
+- Não transforme a abertura em checklist ou sequência de perguntas.
+- Não trate a preparação como diagnóstico, interpretação psicológica ou verdade definitiva.
+- Esta anotação vale somente para este encontro e não deve ser assumida como memória permanente.
+`;
+      }
+
       // 5. Last checkin
       if (checkinResult.status === 'fulfilled' && checkinResult.value.data) {
         const checkin = checkinResult.value.data;
@@ -6191,6 +6219,9 @@ ${meditationCatalogSection}
     // Adicionar contexto de sessões anteriores e primeira sessão
     let continuityContext = '';
     if (sessionActive) {
+      if (sessionPreparationContext) {
+        continuityContext += sessionPreparationContext;
+      }
       if (previousSessionsContext) {
         continuityContext += `\n\n# CONTINUIDADE ENTRE SESSÕES\n${previousSessionsContext}`;
       }
