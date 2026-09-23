@@ -67,6 +67,8 @@ const UserPortal = () => {
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
+  const shouldOpenConversation = searchParams.get("open") === "1"
+    || (searchParams.get("push") === "open" && searchParams.get("type") === "new_reply");
 
   useEffect(() => {
     if (!userId || searchParams.get("push") !== "open") return;
@@ -375,6 +377,7 @@ const UserPortal = () => {
               billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
               accountLoading={portalLoading}
               isActive={activeTab === "conversar"}
+              initialChatOpen={shouldOpenConversation}
             />
           </div>
           <Suspense fallback={<PortalLoadingInline />}>
