@@ -519,7 +519,7 @@ export function ConversarTab({
           .limit(PAGE_SIZE),
         supabasePortal
           .from("aura_response_state")
-          .select("is_responding")
+          .select("is_responding,response_started_at")
           .eq("user_id", userId)
           .maybeSingle(),
       ]);
@@ -529,7 +529,21 @@ export function ConversarTab({
         setHasOlder(data.length === PAGE_SIZE);
         setTimeout(() => scrollToBottom("auto"), 0);
       }
-      setResponding(Boolean(state?.is_responding));
+      const responseStartedAt = state?.response_started_at ? new Date(state.response_started_at).getTime() : 0;
+      const responseAge = responseStartedAt ? Date.now() - responseStartedAt : 0;
+      const responseIsStale = Boolean(state?.is_responding && responseAge > 40_000);
+      setResponding(Boolean(state?.is_responding && !responseIsStale));
+      if (responseIsStale && data) {
+        const latestUserMessage = (data as ChatMessage[]).find((message) => message.role === "user");
+        if (latestUserMessage) {
+          awaitingResponseRef.current = {
+            clientId: latestUserMessage.client_message_id || latestUserMessage.id,
+            messageId: latestUserMessage.id,
+            createdAt: responseStartedAt,
+          };
+          setResponseIssue("A resposta demorou mais que o esperado.");
+        }
+      }
       setLoading(false);
     };
     void load();
