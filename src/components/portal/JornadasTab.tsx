@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { ArrowRight, BookOpen, Check, ChevronDown, Circle, Clock, LockKeyhole, Loader2, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowRight, BookOpen, Check, ChevronDown, Circle, Clock, LockKeyhole, Loader2, Pause, Play, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -23,6 +23,8 @@ type JornadasTabProps = {
     current_journey_id?: string | null;
     current_episode?: number | null;
     journeys_completed?: number | null;
+    journey_paused?: boolean | null;
+    journey_selected_goal?: string | null;
   } | null | undefined;
   onJourneyChanged: () => void;
 };
@@ -33,6 +35,8 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
   const [pendingJourneyId, setPendingJourneyId] = useState<string | null>(null);
   const currentJourneyId = profile?.current_journey_id ?? null;
   const currentEpisode = profile?.current_episode ?? 0;
+  const journeyPaused = profile?.journey_paused ?? false;
+  const [selectedGoal, setSelectedGoal] = useState(profile?.journey_selected_goal || "");
 
   const { data: journeys = [], isLoading: loadingJourneys } = useQuery({
     queryKey: ["portal-content-journeys"],
@@ -51,8 +55,9 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
     queryFn: async () => {
       const { data, error } = await supabasePortal
         .from("user_journey_history")
-        .select("journey_id,completed_at")
+        .select("journey_id,completed_at,status")
         .eq("user_id", userId)
+        .eq("status", "completed")
         .order("completed_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -61,6 +66,19 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
   });
 
   const completedIds = useMemo(() => Array.from(new Set(history.map((item) => item.journey_id))), [history]);
+
+  const { data: episodeProgress = [] } = useQuery({
+    queryKey: ["portal-journey-progress", userId, currentJourneyId],
+    queryFn: async () => {
+      if (!currentJourneyId) return [];
+      const { data, error } = await supabasePortal.from("journey_episode_progress")
+        .select("episode_id,status,progress_percent,reflection_text")
+        .eq("user_id", userId).eq("journey_id", currentJourneyId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: Boolean(userId && currentJourneyId),
+  });
 
   const { data: releasedEpisodes = [], isLoading: loadingEpisodes } = useQuery({
     queryKey: ["portal-journey-episodes", currentJourneyId, currentEpisode],
@@ -111,7 +129,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
     mutationFn: async (journeyId: string) => {
       setSelectedJourneyId(journeyId);
       const { data, error } = await supabasePortal.functions.invoke("choose-next-journey", {
-        body: { journey_id: journeyId },
+        body: { journey_id: journeyId, goal: selectedGoal || null },
       });
       if (error || data?.error) throw new Error(data?.error || error?.message || "Não foi possível começar esta jornada");
     },
@@ -120,6 +138,14 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
       onJourneyChanged();
     },
     onSettled: () => setSelectedJourneyId(null),
+  });
+
+  const pauseJourney = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabasePortal.functions.invoke("manage-portal-journey", { body: { action: journeyPaused ? "resume" : "pause" } });
+      if (error || data?.error) throw new Error(data?.error || error?.message || "Não foi possível atualizar a jornada");
+    },
+    onSuccess: onJourneyChanged,
   });
 
   const requestJourneyChange = (journeyId: string) => {
@@ -144,7 +170,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
                 <BookOpen className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Em andamento</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">{journeyPaused ? "Pausada no seu ponto" : "Em andamento"}</p>
                 <h2 className="mt-1 font-display text-xl font-semibold leading-tight text-foreground">{currentJourney.title}</h2>
                 {currentJourney.description && <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{currentJourney.description}</p>}
               </div>
@@ -156,12 +182,22 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
               </div>
               <Progress value={progress} className="h-2 bg-secondary" />
             </div>
+            <Button variant="ghost" size="sm" className="mt-3" disabled={pauseJourney.isPending} onClick={() => pauseJourney.mutate()}>
+              {journeyPaused ? <Play /> : <Pause />} {journeyPaused ? "Retomar jornada" : "Pausar jornada"}
+            </Button>
           </>
         ) : (
           <div className="text-center">
             <span className="portal-area-content mx-auto flex h-12 w-12 items-center justify-center rounded-xl"><Sparkles className="h-5 w-5" /></span>
             <h2 className="mt-4 font-display text-xl font-semibold text-foreground">Escolha algo para acompanhar você</h2>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">Cada jornada reúne conteúdos curtos, liberados aos poucos, para aprofundar um tema no seu ritmo.</p>
+            <div className="mx-auto mt-5 max-w-sm text-left">
+              <p className="mb-2 text-xs font-semibold text-foreground">O que você gostaria de cuidar mais neste momento?</p>
+              <div className="flex flex-wrap gap-2">
+                {["Ansiedade", "Autoconfiança", "Relações", "Trabalho", "Mudanças", "Emoções"].map((goal) => <Button key={goal} type="button" size="sm" variant={selectedGoal === goal ? "default" : "outline"} onClick={() => setSelectedGoal(goal)}>{goal}</Button>)}
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">Sua escolha orienta as sugestões abaixo. É um ponto de partida, não uma leitura sobre você.</p>
+            </div>
           </div>
         )}
       </section>
@@ -177,16 +213,22 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
           </div>
           <div className="space-y-2">
             {[...releasedEpisodes].reverse().map((episode, index) => (
+              (() => {
+                const state = episodeProgress.find((item) => item.episode_id === episode.id);
+                const stateLabel = state?.status === "completed" ? "Concluído" : state?.status === "in_progress" ? "Em leitura" : "Novo";
+                return (
                 <Button key={episode.id} variant="ghost" asChild className="h-auto w-full justify-start gap-3 rounded-xl border bg-card px-3 py-3 text-left shadow-sm">
                   <Link to={`/episodio/${episode.id}?u=${userId}`}>
                     <span className="portal-area-content flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold">{episode.episode_number}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-bold text-foreground">{episode.stage_title || episode.title}</span>
-                      <span className="mt-0.5 block text-xs font-normal text-muted-foreground">{index === 0 ? "Mais recente" : `Episódio ${episode.episode_number}`}</span>
+                      <span className="mt-0.5 block text-xs font-normal text-muted-foreground">{stateLabel}{state?.status === "in_progress" ? ` · ${state.progress_percent}%` : index === 0 && state?.status !== "completed" ? " · mais recente" : ""}</span>
                     </span>
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   </Link>
                 </Button>
+                );
+              })()
             ))}
             {futureEpisodeNumbers.map((episodeNumber, index) => (
               <div
