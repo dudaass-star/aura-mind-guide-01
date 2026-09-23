@@ -123,7 +123,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
         const { data: audios } = await supabase.from("meditation_audios")
           .select("meditation_id").in("meditation_id", meditations.map((item) => item.id));
         const withAudio = meditations.filter((item) => audios?.some((audio) => audio.meditation_id === item.id));
-        meditation = withAudio[Number(dayKeyBrt().replaceAll("-", "")) % Math.max(1, withAudio.length)] ?? null;
+        meditation = withAudio[Number(dayKeyBrt().replace(/-/g, "")) % Math.max(1, withAudio.length)] ?? null;
       }
 
       const snapshot = snapshotResult.data;
