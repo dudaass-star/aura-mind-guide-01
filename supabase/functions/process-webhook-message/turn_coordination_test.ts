@@ -23,7 +23,14 @@ Deno.test("contexto interrompido tem validade", () => {
 
 Deno.test("mensagens recebidas usam identidade da origem", () => {
   assert(SOURCE.includes("source_message_id: currentMessageId"));
-  assert(SOURCE.includes("onConflict: 'user_id,channel,source_message_id'"));
+  assert(SOURCE.includes("persistirMensagemRecebidaWhatsapp"));
+  assert(SOURCE.includes("insertError?.code === '23505'"));
+  assert(!SOURCE.includes("onConflict: 'user_id,channel,source_message_id'"));
+});
+
+Deno.test("falha ao gravar mensagem recebida interrompe o processamento", () => {
+  assert(SOURCE.includes("Falha ao gravar mensagem recebida:"));
+  assert(SOURCE.includes("throw persistErr"));
 });
 
 Deno.test("telemetria do aplicativo não registra conteúdo", () => {
