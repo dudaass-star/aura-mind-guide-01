@@ -251,6 +251,7 @@ export function ConversarTab({
   onSignOut,
   billingLabel,
   accountLoading = false,
+  isActive = true,
 }: {
   userId: string;
   firstName: string;
@@ -260,6 +261,7 @@ export function ConversarTab({
   onSignOut: () => void;
   billingLabel: string;
   accountLoading?: boolean;
+  isActive?: boolean;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -322,12 +324,12 @@ export function ConversarTab({
   }, []);
 
   useEffect(() => {
-    if (chatOpen || recording || draft.trim() || showInstallInvite || installApp.available || localStorage.getItem("aura-push-enabled") === "true") return;
+    if (!isActive || chatOpen || recording || draft.trim() || showInstallInvite || installApp.available || localStorage.getItem("aura-push-enabled") === "true") return;
     const dismissedUntil = Number(localStorage.getItem(`aura-push-dismissed-until:${userId}`) || 0);
     if (dismissedUntil > Date.now()) return;
     const timer = window.setTimeout(() => setShowPushDialog(true), 3500);
     return () => window.clearTimeout(timer);
-  }, [chatOpen, draft, installApp.available, recording, showInstallInvite, userId]);
+  }, [chatOpen, draft, installApp.available, isActive, recording, showInstallInvite, userId]);
 
   const postponeInstall = () => {
     localStorage.setItem(`aura-install-dismissed-until:${userId}`, String(Date.now() + 7 * 24 * 60 * 60 * 1000));

@@ -494,7 +494,8 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
           .maybeSingle();
 
         if (!profile?.phone) {
-          console.log(`⚠️ No phone for session to start ${session.id}`);
+          console.log(`ℹ️ Session ${session.id} is app-only; no extra start message is needed`);
+          await supabase.from('sessions').update({ session_start_notified: true }).eq('id', session.id);
           continue;
         }
 
