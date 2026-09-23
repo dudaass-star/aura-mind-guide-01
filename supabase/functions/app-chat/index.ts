@@ -133,11 +133,6 @@ Deno.serve(async (req) => {
         server_received_at: retryReceivedAt,
         status: "accepted",
       });
-      await admin.from("aura_response_state")
-        .update({ is_responding: false })
-        .eq("user_id", userId)
-        .lt("response_started_at", new Date(Date.now() - 40_000).toISOString());
-
       const retryWorker = fetch(`${supabaseUrl}/functions/v1/process-webhook-message`, {
         method: "POST",
         headers: {
@@ -157,7 +152,23 @@ Deno.serve(async (req) => {
           audioUrl: retryAudioUrl,
           hasImage: false,
         }),
-      }).catch((error) => console.error("Falha ao retomar resposta do chat:", error));
+      }).then(async (response) => {
+        if (!response.ok) {
+          console.error("Falha ao retomar resposta do chat:", response.status, await response.text());
+          await admin.from("chat_turn_metrics").update({
+            completed_at: new Date().toISOString(),
+            status: "failed",
+            error_code: `worker_http_${response.status}`,
+          }).eq("user_id", userId).eq("client_message_id", retryId);
+        }
+      }).catch(async (error) => {
+        console.error("Falha ao retomar resposta do chat:", error);
+        await admin.from("chat_turn_metrics").update({
+          completed_at: new Date().toISOString(),
+          status: "failed",
+          error_code: "worker_network_error",
+        }).eq("user_id", userId).eq("client_message_id", retryId);
+      });
       (globalThis as any).EdgeRuntime.waitUntil(retryWorker);
       return json({ accepted: true, retry_id: retryId }, 202);
     }

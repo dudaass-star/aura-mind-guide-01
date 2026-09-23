@@ -174,6 +174,8 @@ async function createShortLink(url: string, phone: string): Promise<string | nul
 }
 
 async function transcribeAudio(audioUrl: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25_000);
   try {
     console.log('🎙️ Downloading audio from:', audioUrl);
     let audioBlob: Blob | null = null;
@@ -184,7 +186,7 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
       const mediaId = metaMatch[1];
       console.log(`🔐 Using Meta Graph API for media download (media_id=${mediaId})`);
       const { downloadMetaMedia } = await import("../_shared/meta-whatsapp-client.ts");
-      audioBlob = await downloadMetaMedia(mediaId);
+      audioBlob = await downloadMetaMedia(mediaId, controller.signal);
       if (!audioBlob) {
         console.error('❌ Meta media download failed');
         return null;
@@ -212,7 +214,7 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
         console.warn('⚠️ Twilio media URL detected but credentials missing');
       }
     }
-    const audioResponse = await fetch(fetchUrl, { headers: fetchHeaders, redirect: 'follow' });
+    const audioResponse = await fetch(fetchUrl, { headers: fetchHeaders, redirect: 'follow', signal: controller.signal });
     if (!audioResponse.ok) {
       console.error('❌ Failed to download audio:', audioResponse.status);
       return null;
@@ -237,6 +239,7 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` },
       body: formData,
+      signal: controller.signal,
     });
 
     if (!whisperResponse.ok) {
@@ -251,10 +254,14 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
   } catch (error) {
     console.error('❌ Error transcribing audio:', error);
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
 async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: string | null; audioContent: string | null }> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25_000);
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -262,6 +269,7 @@ async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: s
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
       body: JSON.stringify({ text, userId, voice: 'shimmer' }),
+      signal: controller.signal,
     });
     if (!response.ok) {
       console.error('❌ TTS error:', await response.text());
@@ -272,6 +280,8 @@ async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: s
   } catch (error) {
     console.error('❌ TTS exception:', error);
     return { audioUrl: null, audioContent: null };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -460,6 +470,7 @@ Deno.serve(async (req) => {
   let isInApp = false;
   let shouldResumeInterruptedTurn = false;
   let firstResponseRecorded = false;
+  let lockHeartbeatId: number | null = null;
 
   try {
     const workerPayload = await req.json();
@@ -1015,6 +1026,13 @@ Deno.serve(async (req) => {
         await supabase.from('aura_response_state')
           .update({ last_user_message_id: currentMessageId, updated_at: new Date().toISOString() })
           .eq('user_id', profile.user_id);
+        if (isInApp && currentMessageId) {
+          await supabase.from('chat_turn_metrics').update({
+            completed_at: new Date().toISOString(),
+            status: 'interrupted',
+            error_code: 'coalesced_with_active_turn',
+          }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+        }
         console.log(`🛑 ABORT: Lock atômico — outro worker respondendo (age: ${Math.round(respondingAge / 1000)}s). Mensagem será acumulada.`);
         return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'another_worker_responding' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1029,6 +1047,13 @@ Deno.serve(async (req) => {
         .eq('response_started_at', currentState?.response_started_at)
         .select();
       if (!forcedLock?.length) {
+        if (isInApp && currentMessageId) {
+          await supabase.from('chat_turn_metrics').update({
+            completed_at: new Date().toISOString(),
+            status: 'interrupted',
+            error_code: 'stale_lock_race_lost',
+          }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+        }
         return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'stale_lock_race_lost' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -1047,12 +1072,28 @@ Deno.serve(async (req) => {
         console.error(`⚠️ Erro ao liberar lock para user ${profile.user_id}:`, e);
       }
     };
+    const completeInAppTurn = async (status: 'completed' | 'interrupted' | 'failed' = 'completed', errorCode?: string) => {
+      if (!isInApp || !currentMessageId) return;
+      await supabase.from('chat_turn_metrics').update({
+        completed_at: new Date().toISOString(),
+        status,
+        error_code: errorCode || null,
+      }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+    };
+    lockHeartbeatId = setInterval(() => {
+      void supabase.from('aura_response_state')
+        .update({ response_started_at: new Date().toISOString() })
+        .eq('user_id', profile.user_id)
+        .eq('owner_token', turnOwnerToken)
+        .eq('is_responding', true);
+    }, 30_000);
 
     try { // try/finally covers ALL code after lock acquisition to guarantee lock release
 
     // Read pending content from lock result or fresh query
     const responseState = lockResult?.[0] || (await supabase.from('aura_response_state').select('*').eq('user_id', profile.user_id).maybeSingle()).data;
     if (responseState?.processed_user_message_id === currentMessageId) {
+      await completeInAppTurn('interrupted', 'source_duplicate');
       await releaseLock();
       return new Response(JSON.stringify({ status: 'ignored', reason: 'source_duplicate' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1157,6 +1198,7 @@ Deno.serve(async (req) => {
       } else {
         await sendMessage(cleanPhone, audioErrorText);
       }
+      await completeInAppTurn('failed', 'audio_transcription_failed');
       await releaseLock();
       return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1229,6 +1271,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: confirmMsg },
           ]);
           inboundSaved = true;
+          await completeInAppTurn();
           await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_audio_received' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1246,6 +1289,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
           ]);
           inboundSaved = true;
+          await completeInAppTurn();
           await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1259,6 +1303,7 @@ Deno.serve(async (req) => {
           { user_id: profile.user_id, role: 'assistant', content: reminderMsg },
         ]);
         inboundSaved = true;
+        await completeInAppTurn();
         await releaseLock();
         return new Response(JSON.stringify({ status: 'capsule_awaiting_audio_reminder' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1275,6 +1320,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: replaceMsg },
           ]);
           inboundSaved = true;
+          await completeInAppTurn();
           await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_audio_replaced' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1292,6 +1338,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
           ]);
           inboundSaved = true;
+          await completeInAppTurn();
           await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1323,6 +1370,7 @@ Deno.serve(async (req) => {
             ]);
             inboundSaved = true;
             console.log(`✅ Time capsule saved for user ${profile.user_id}, deliver_at: ${deliverDateStr}`);
+            await completeInAppTurn();
             await releaseLock();
             return new Response(JSON.stringify({ status: 'capsule_saved' }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1354,6 +1402,7 @@ Deno.serve(async (req) => {
         inboundSaved = true;
       }
       await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: ratingResult.response });
+      await completeInAppTurn();
       await releaseLock();
       return new Response(JSON.stringify({ status: 'rating_handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1373,6 +1422,7 @@ Deno.serve(async (req) => {
         inboundSaved = true;
       }
       await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: confirmationResult.response });
+      await completeInAppTurn();
       await releaseLock();
       return new Response(JSON.stringify({ status: 'confirmation_handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1884,6 +1934,7 @@ Deno.serve(async (req) => {
 
     } finally {
       // Safety net: garante liberação do lock mesmo em caso de erro
+      if (lockHeartbeatId !== null) clearInterval(lockHeartbeatId);
       try {
         await supabase
           .from('aura_response_state')
@@ -1971,6 +2022,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: unknown) {
+    if (lockHeartbeatId !== null) clearInterval(lockHeartbeatId);
     console.error('❌ Worker processing error:', {
       message: error instanceof Error ? error.message : String(error),
       name: error instanceof Error ? error.name : 'unknown',

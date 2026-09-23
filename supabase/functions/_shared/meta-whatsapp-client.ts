@@ -410,12 +410,13 @@ export async function sendProactiveMessage(
  * Baixa um arquivo de mídia da Meta Cloud API a partir do media ID.
  * Fluxo: GET /{media_id} → retorna URL assinada curta → GET <url> com Bearer.
  */
-export async function downloadMetaMedia(mediaId: string): Promise<Blob | null> {
+export async function downloadMetaMedia(mediaId: string, signal?: AbortSignal): Promise<Blob | null> {
   try {
     const { token } = getMetaConfig();
 
     const metaRes = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/${mediaId}`, {
       headers: { 'Authorization': `Bearer ${token}` },
+      signal,
     });
     if (!metaRes.ok) {
       console.error(`❌ [Meta] media metadata fetch failed: ${metaRes.status}`);
@@ -430,6 +431,7 @@ export async function downloadMetaMedia(mediaId: string): Promise<Blob | null> {
 
     const blobRes = await fetch(mediaUrl, {
       headers: { 'Authorization': `Bearer ${token}` },
+      signal,
     });
     if (!blobRes.ok) {
       console.error(`❌ [Meta] media blob fetch failed: ${blobRes.status}`);

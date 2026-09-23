@@ -57,3 +57,15 @@ Deno.test("falha no convite libera nova tentativa e fica visível", () => {
   assert(SOURCE.includes("'process-webhook-message:app_invite'"));
   assert(SOURCE.includes("throw inviteError"));
 });
+Deno.test("heartbeat mantém a trava ativa enquanto o dono processa", () => {
+  if (!SOURCE.includes("setInterval(() =>")) throw new Error("heartbeat ausente");
+  if (!SOURCE.includes(".eq('owner_token', turnOwnerToken)")) throw new Error("heartbeat sem proteção do dono");
+  if (!SOURCE.includes("clearInterval(lockHeartbeatId)")) throw new Error("heartbeat sem limpeza");
+});
+
+Deno.test("downloads e transcrição respeitam limite de tempo", () => {
+  const meta = Deno.readTextFileSync(new URL("../_shared/meta-whatsapp-client.ts", import.meta.url));
+  if (!SOURCE.includes("controller.abort(), 25_000")) throw new Error("timeout do worker ausente");
+  if (!SOURCE.includes("downloadMetaMedia(mediaId, controller.signal)")) throw new Error("sinal não chegou ao download Meta");
+  if (!meta.includes("signal?: AbortSignal") || !meta.includes("signal,")) throw new Error("cliente Meta ignora cancelamento");
+});

@@ -178,6 +178,17 @@ interface Metrics {
   correctionsUsersInPeriod?: number;
   correctionsPerUserInPeriod?: number;
   correctionsWeekly?: { week: string; total: number; users: number; per_user: number }[];
+  conversationTurns?: number;
+  conversationCompleted?: number;
+  conversationFailed?: number;
+  conversationResponseP50Seconds?: number;
+  conversationResponseP95Seconds?: number;
+  conversationWithin3Seconds?: number;
+  conversationWithin5Seconds?: number;
+  conversationWithin10Seconds?: number;
+  conversationWithin30Seconds?: number;
+  conversationOpenings?: number;
+  conversationCorrectionsPer100?: number;
   // 🧭 Fechamento de sessão
   closureTotal?: number;
   closureDialogada?: number;
@@ -1000,6 +1011,24 @@ export default function AdminEngagement() {
                         R$ {(metrics.arrBRL ?? metrics.mrrTotalBRL * 12).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
                       </div>
                       <p className="text-[11px] text-muted-foreground">projeção anualizada (MRR × 12)</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">Conversa no aplicativo</CardTitle>
+                      <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="space-y-1 p-3 pt-0">
+                      <div className="text-xl font-bold text-foreground">{(metrics.conversationResponseP50Seconds ?? 0).toFixed(1)}s</div>
+                      <p className="text-[11px] text-muted-foreground">mediana · p95 {(metrics.conversationResponseP95Seconds ?? 0).toFixed(1)}s</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        até 3s {metrics.conversationWithin3Seconds ?? 0}% · 5s {metrics.conversationWithin5Seconds ?? 0}% · 10s {metrics.conversationWithin10Seconds ?? 0}% · 30s {metrics.conversationWithin30Seconds ?? 0}%
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {metrics.conversationFailed ?? 0} falhas em {metrics.conversationTurns ?? 0} turnos · {(metrics.conversationCorrectionsPer100 ?? 0).toFixed(2)} correções/100 aberturas
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">base: {metrics.conversationOpenings ?? 0} aberturas diárias da conversa</p>
                     </CardContent>
                   </Card>
 

@@ -1785,7 +1785,7 @@ Deno.serve(async (req) => {
     try {
       // Paginado: o PostgREST corta em 1000 linhas por request. Sem paginação,
       // janelas longas (90d) travavam o total exatamente em 1000 e subestimavam o KPI.
-      const correctionsRows: { user_id: string }[] = [];
+    const correctionsRows: { user_id: string; created_at: string }[] = [];
       const CORR_PAGE = 1000;
       for (let page = 0; page < 50; page++) {
         const { data } = await supabase
@@ -1795,7 +1795,7 @@ Deno.serve(async (req) => {
           .lte('created_at', periodEnd)
           .range(page * CORR_PAGE, (page + 1) * CORR_PAGE - 1);
         if (!data || data.length === 0) break;
-        correctionsRows.push(...(data as { user_id: string }[]));
+        correctionsRows.push(...(data as { user_id: string; created_at: string }[]));
         if (data.length < CORR_PAGE) break;
       }
       if (correctionsRows.length > 0) {
@@ -1852,6 +1852,63 @@ Deno.serve(async (req) => {
       }
     } catch (e) {
       console.warn('⚠️ Falha ao calcular métricas de correções (não crítico):', e);
+    }
+
+    // 💬 Conversa — velocidade, confiabilidade e higiene por conversa aberta.
+    let conversationTurns = 0;
+    let conversationCompleted = 0;
+    let conversationFailed = 0;
+    let conversationResponseP50Seconds = 0;
+    let conversationResponseP95Seconds = 0;
+    let conversationWithin3Seconds = 0;
+    let conversationWithin5Seconds = 0;
+    let conversationWithin10Seconds = 0;
+    let conversationWithin30Seconds = 0;
+    let conversationOpenings = 0;
+    let conversationCorrectionsPer100 = 0;
+    try {
+      const turns = await fetchAllPaginated(supabase, 'chat_turn_metrics', 'status, server_received_at, first_response_at', [
+        { column: 'channel', op: 'eq', value: 'in_app' },
+        { column: 'created_at', op: 'gte', value: periodStart },
+        { column: 'created_at', op: 'lt', value: periodEnd },
+      ]);
+      conversationTurns = turns.length;
+      conversationCompleted = turns.filter(row => row.status === 'completed').length;
+      conversationFailed = turns.filter(row => row.status === 'failed').length;
+      const responseSeconds = turns
+        .filter(row => typeof row.server_received_at === 'string' && typeof row.first_response_at === 'string')
+        .map(row => (new Date(row.first_response_at as string).getTime() - new Date(row.server_received_at as string).getTime()) / 1000)
+        .filter(seconds => Number.isFinite(seconds) && seconds >= 0)
+        .sort((a, b) => a - b);
+      const percentile = (ratio: number) => responseSeconds.length
+        ? responseSeconds[Math.min(responseSeconds.length - 1, Math.ceil(responseSeconds.length * ratio) - 1)]
+        : 0;
+      conversationResponseP50Seconds = Math.round(percentile(0.5) * 100) / 100;
+      conversationResponseP95Seconds = Math.round(percentile(0.95) * 100) / 100;
+      const percentageWithin = (limit: number) => responseSeconds.length
+        ? Math.round((responseSeconds.filter(seconds => seconds <= limit).length / responseSeconds.length) * 1000) / 10
+        : 0;
+      conversationWithin3Seconds = percentageWithin(3);
+      conversationWithin5Seconds = percentageWithin(5);
+      conversationWithin10Seconds = percentageWithin(10);
+      conversationWithin30Seconds = percentageWithin(30);
+
+      const conversationEvents = await fetchAllPaginated(supabase, 'portal_value_events', 'event_type', [
+        { column: 'feature', op: 'eq', value: 'conversation' },
+        { column: 'event_type', op: 'eq', value: 'conversation_opened' },
+        { column: 'created_at', op: 'gte', value: periodStart },
+        { column: 'created_at', op: 'lt', value: periodEnd },
+      ]);
+      conversationOpenings = conversationEvents.length;
+      const conversationCorrections = correctionsRows.filter(row => {
+        const createdAt = new Date(row.created_at).getTime();
+        return createdAt >= new Date(periodStart).getTime() && createdAt < new Date(periodEnd).getTime();
+      }).length;
+      conversationCorrectionsPer100 = conversationOpenings > 0
+        ? Math.round((conversationCorrections / conversationOpenings) * 10_000) / 100
+        : 0;
+    } catch (e) {
+      console.warn('⚠️ Falha ao calcular métricas da Conversa (não crítico):', e);
     }
 
     // 🧭 Fechamento de sessão — % dialogada vs unilateral vs no-show.
@@ -2047,6 +2104,17 @@ Deno.serve(async (req) => {
       correctionsUsersInPeriod,
       correctionsPerUserInPeriod,
       correctionsWeekly,
+      conversationTurns,
+      conversationCompleted,
+      conversationFailed,
+      conversationResponseP50Seconds,
+      conversationResponseP95Seconds,
+      conversationWithin3Seconds,
+      conversationWithin5Seconds,
+      conversationWithin10Seconds,
+      conversationWithin30Seconds,
+      conversationOpenings,
+      conversationCorrectionsPer100,
       // 🧭 Fechamento de sessão
       closureTotal,
       closureDialogada,
