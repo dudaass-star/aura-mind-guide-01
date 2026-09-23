@@ -89,5 +89,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Permitir que o cliente agende uma, algumas ou todas as sessões do mês até a cota do plano, com gestão individual e upgrade contextual ao esgotar a cota.
 - [x] Unificar as regras de cota, conflito e concorrência entre o aplicativo e todos os agendamentos feitos pela conversa, usando as sessões reais do mês em Brasília.
 - [x] Evoluir Sessões para continuidade dos encontros: confiabilidade app-first, agenda mensal, entrada direta, preparação, pós-sessão, hipóteses verificáveis e métricas.
-- [ ] Evoluir Hoje como direção diária do cliente: prioridade contextual, continuidade entre áreas, retorno recorrente e medição de retenção/LTV.
+- [x] Evoluir Hoje como direção diária do cliente: prioridade contextual, continuidade entre áreas, retorno recorrente e medição de retenção/LTV.
 - [x] Destacar a preparação do encontro e entregá-la à AURA na abertura, priorizando a intenção atual sem perder a ponte anterior e os compromissos relevantes.
