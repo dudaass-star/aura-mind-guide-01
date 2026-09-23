@@ -1,19 +1,14 @@
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, BookOpen, CalendarDays, Headphones, MessageCircle, NotebookPen, PenLine, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
-import {
-  Calendar,
-  Headphones,
-  ArrowRight,
-  MessageCircle,
-  PenLine,
-} from "lucide-react";
-import { PortalLoadingInline } from "./shared";
+import type { Json } from "@/integrations/supabase/types";
 import { IntimacyLevel } from "./IntimacyLevel";
-import { presentClosure } from "./whatsapp";
 import { PerguntaDoDiaCard } from "./PerguntaDoDiaCard";
+import { PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
-import { Button } from "@/components/ui/button";
 
 interface HojeTabProps {
   userId: string;
@@ -23,19 +18,37 @@ interface HojeTabProps {
   onOpenConversation: (prefilledMessage?: string) => void;
 }
 
-// Saudação pelo horário BRT
+type TodayAction = "conversation" | "session" | "session_preparation" | "journey" | "continuity";
+
+function brtHour() {
+  return Number(new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    hourCycle: "h23",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date()));
+}
+
 function greeting() {
-  const hour = new Date().getHours();
+  const hour = brtHour();
   if (hour < 12) return "Bom dia";
   if (hour < 18) return "Boa tarde";
   return "Boa noite";
 }
 
-function relativeTime(iso: string | null | undefined): string | null {
+function dayKeyBrt() {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date());
+}
+
+function relativeTime(iso: string | null | undefined) {
   if (!iso) return null;
   const diffMs = Date.now() - new Date(iso).getTime();
   if (diffMs < 0) return null;
-  const mins = Math.floor(diffMs / 60000);
+  const mins = Math.floor(diffMs / 60_000);
   if (mins < 1) return "agora há pouco";
   if (mins < 60) return `há ${mins} min`;
   const hours = Math.floor(mins / 60);
@@ -43,12 +56,11 @@ function relativeTime(iso: string | null | undefined): string | null {
   const days = Math.floor(hours / 24);
   if (days === 1) return "ontem";
   if (days < 7) return `há ${days} dias`;
-  return new Date(iso).toLocaleDateString("pt-BR");
+  return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
-function formatScheduledBRT(iso: string): { label: string; countdown: string } {
-  const date = new Date(iso);
-  const label = date.toLocaleString("pt-BR", {
+function formatScheduledBrt(iso: string) {
+  const label = new Date(iso).toLocaleString("pt-BR", {
     weekday: "long",
     day: "2-digit",
     month: "long",
@@ -56,483 +68,268 @@ function formatScheduledBRT(iso: string): { label: string; countdown: string } {
     minute: "2-digit",
     timeZone: "America/Sao_Paulo",
   });
-  const diffMs = date.getTime() - Date.now();
-  let countdown = "";
-  if (diffMs > 0) {
-    const hours = Math.floor(diffMs / 3_600_000);
-    if (hours < 1) countdown = "em menos de 1h";
-    else if (hours < 24) countdown = `em ${hours}h`;
-    else countdown = `em ${Math.floor(hours / 24)} dia(s)`;
-  } else {
-    countdown = "agora";
-  }
-  return { label, countdown };
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function recordTodayEvent(userId: string, eventType: string, action: TodayAction, metadata: Record<string, unknown> = {}) {
+  void supabasePortal.from("portal_value_events").insert({
+    user_id: userId,
+    feature: "today",
+    event_type: eventType,
+    source: "app",
+    metadata: { action, ...metadata } as Json,
+  });
 }
 
 export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConversation }: HojeTabProps) {
-  // Última sessão concluída
-  const { data: lastSession, isLoading: loadingLast } = useQuery({
-    queryKey: ["portal-hoje-last-session", userId],
-    queryFn: async () => {
-      const { data, error } = await supabasePortal
-        .from("sessions")
-        .select("id, ended_at, focus_topic, session_summary, closure_type, closure_text, theme_label")
-        .eq("user_id", userId)
-        .eq("status", "completed")
-        .order("ended_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!userId,
-  });
+  const zeroConversation = !profile?.last_user_message_at;
 
-  // Próxima sessão agendada
-  const { data: nextSession } = useQuery({
-    queryKey: ["portal-hoje-next-session", userId],
+  const { data, isLoading } = useQuery({
+    queryKey: ["portal-today-direction", userId, profile?.current_journey_id, profile?.current_episode],
     queryFn: async () => {
-      const { data, error } = await supabasePortal
-        .from("sessions")
-        .select("id, scheduled_at, focus_topic")
-        .eq("user_id", userId)
-        .in("status", ["scheduled", "in_progress"])
-        .gte("scheduled_at", new Date(Date.now() - 30 * 60_000).toISOString())
-        .order("scheduled_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (error) return null;
-      return data;
-    },
-    enabled: !!userId,
-  });
+      const [lastSessionResult, nextSessionResult, snapshotResult, reportResult, userAddedResult, meditationResult, episodeResult] = await Promise.all([
+        supabasePortal.from("sessions")
+          .select("id, ended_at, focus_topic, session_summary, closure_text, theme_label")
+          .eq("user_id", userId).eq("status", "completed")
+          .order("ended_at", { ascending: false }).limit(1).maybeSingle(),
+        supabasePortal.from("sessions")
+          .select("id, scheduled_at, status, preparation_note")
+          .eq("user_id", userId).in("status", ["scheduled", "in_progress"])
+          .gte("scheduled_at", new Date(Date.now() - 60 * 60_000).toISOString())
+          .order("scheduled_at", { ascending: true }).limit(1).maybeSingle(),
+        supabasePortal.from("thematic_snapshots")
+          .select("theme, snapshot_change, snapshot_before, evidence_quote, period_end, confidence")
+          .eq("user_id", userId).neq("confidence", "insufficient_data")
+          .order("period_end", { ascending: false }).limit(1).maybeSingle(),
+        supabasePortal.from("monthly_reports")
+          .select("analysis_text, created_at").eq("user_id", userId)
+          .not("analysis_text", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        supabasePortal.from("user_insights")
+          .select("id", { count: "exact", head: true }).eq("user_id", userId).eq("category", "user_added"),
+        supabase.from("meditations")
+          .select("id, title, duration_seconds, description").eq("is_active", true).limit(20),
+        profile?.current_journey_id && profile?.current_episode
+          ? supabasePortal.from("journey_episodes")
+              .select("id, title, stage_title, episode_number")
+              .eq("journey_id", profile.current_journey_id)
+              .lte("episode_number", profile.current_episode)
+              .order("episode_number", { ascending: false }).limit(1).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
 
-  // Meditação sugerida — escolha simples: 1 aleatória entre as ativas com áudio
-  const { data: suggestedMeditation } = useQuery({
-    queryKey: ["portal-hoje-suggested-meditation"],
-    queryFn: async () => {
-      const { data: meds, error } = await supabase
-        .from("meditations")
-        .select("id, title, category, duration_seconds, description")
-        .eq("is_active", true)
-        .limit(20);
-      if (error || !meds || meds.length === 0) return null;
-      const { data: audios } = await supabase
-        .from("meditation_audios")
-        .select("meditation_id")
-        .in("meditation_id", meds.map((m: any) => m.id));
-      const withAudio = meds.filter((m: any) =>
-        (audios || []).some((a: any) => a.meditation_id === m.id),
-      );
-      if (withAudio.length === 0) return null;
-      // Seleção determinística por dia (mesma sugestão durante o dia)
-      const dayKey = Math.floor(Date.now() / 86_400_000);
-      return withAudio[dayKey % withAudio.length];
-    },
-  });
+      let meditation = null;
+      const meditations = meditationResult.data ?? [];
+      if (meditations.length > 0) {
+        const { data: audios } = await supabase.from("meditation_audios")
+          .select("meditation_id").in("meditation_id", meditations.map((item) => item.id));
+        const withAudio = meditations.filter((item) => audios?.some((audio) => audio.meditation_id === item.id));
+        meditation = withAudio[Number(dayKeyBrt().replaceAll("-", "")) % Math.max(1, withAudio.length)] ?? null;
+      }
 
-  // Insight curado: snapshot temático mais recente; fallback = resumo mensal.
-  // NUNCA usar profiles.pending_insight — é buffer técnico de entrega no WhatsApp.
-  const { data: curatedInsight } = useQuery({
-    queryKey: ["portal-hoje-curated-insight", userId],
-    queryFn: async () => {
-      // 1) Snapshot temático mais recente com confiança válida
-      const { data: snap } = await supabasePortal
-        .from("thematic_snapshots")
-        .select("theme, snapshot_change, snapshot_before, evidence_quote, period_end, confidence")
-        .eq("user_id", userId)
-        .neq("confidence", "insufficient_data")
-        .order("period_end", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (snap) {
-        const period = snap.period_end
-          ? new Date(snap.period_end).toLocaleDateString("pt-BR", {
-              month: "long",
-              year: "numeric",
-              timeZone: "America/Sao_Paulo",
-            })
+      const snapshot = snapshotResult.data;
+      const report = reportResult.data;
+      const insight = snapshot
+        ? {
+            title: snapshot.theme || "Um movimento seu",
+            body: snapshot.snapshot_change || snapshot.snapshot_before || snapshot.evidence_quote || "",
+          }
+        : report?.analysis_text
+          ? { title: "Seu mês em perspectiva", body: report.analysis_text }
           : null;
+
+      return {
+        lastSession: lastSessionResult.data,
+        nextSession: nextSessionResult.data,
+        insight,
+        meditation,
+        episode: episodeResult.data,
+        userAddedCount: userAddedResult.count ?? 0,
+      };
+    },
+    enabled: Boolean(userId),
+  });
+
+  const priority = useMemo(() => {
+    if (zeroConversation) return {
+      action: "conversation" as const,
+      eyebrow: "Seu começo",
+      title: "Pode começar do seu jeito",
+      description: "Conte o que está passando por você agora, por texto ou áudio.",
+      button: "Conversar com a AURA",
+      icon: MessageCircle,
+    };
+
+    const nextSession = data?.nextSession;
+    if (nextSession) {
+      const diff = new Date(nextSession.scheduled_at).getTime() - Date.now();
+      if (nextSession.status === "in_progress" || (diff <= 15 * 60_000 && diff >= -60 * 60_000)) {
         return {
-          title: snap.theme || "Um movimento seu",
-          body: snap.snapshot_change || snap.snapshot_before || snap.evidence_quote || "",
-          meta: period,
+          action: "session" as const,
+          eyebrow: nextSession.status === "in_progress" ? "Seu encontro está acontecendo" : "Seu encontro começa em breve",
+          title: nextSession.status === "in_progress" ? "Continue sua sessão" : "Está quase na hora",
+          description: formatScheduledBrt(nextSession.scheduled_at),
+          button: nextSession.status === "in_progress" ? "Continuar sessão" : "Entrar na sessão",
+          icon: CalendarDays,
         };
       }
-      // 2) Fallback: último resumo mensal
-      const { data: report } = await supabasePortal
-        .from("monthly_reports")
-        .select("analysis_text, created_at")
-        .eq("user_id", userId)
-        .not("analysis_text", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (report?.analysis_text) {
-        const when = report.created_at
-          ? new Date(report.created_at).toLocaleDateString("pt-BR", {
-              month: "long",
-              year: "numeric",
-              timeZone: "America/Sao_Paulo",
-            })
-          : null;
+      if (!nextSession.preparation_note) {
         return {
-          title: when ? `Resumo de ${when}` : "Resumo recente",
-          body: report.analysis_text,
-          meta: null,
+          action: "session_preparation" as const,
+          eyebrow: "Antes do próximo encontro",
+          title: "Tem algo que você não quer esquecer?",
+          description: `${formatScheduledBrt(nextSession.scheduled_at)}. Deixe uma situação, dúvida ou assunto preparado para a AURA considerar na abertura.`,
+          button: "Preparar este encontro",
+          icon: NotebookPen,
         };
       }
-      return null;
-    },
-    enabled: !!userId,
-  });
+    }
 
-  const hasAnything =
-    !!lastSession || !!nextSession || !!suggestedMeditation || !!curatedInsight;
+    if (data?.episode) return {
+      action: "journey" as const,
+      eyebrow: "Sua jornada continua",
+      title: data.episode.stage_title || data.episode.title,
+      description: `Episódio ${data.episode.episode_number} disponível para você continuar no seu ritmo.`,
+      button: "Abrir episódio",
+      icon: BookOpen,
+    };
 
-  // Usuário que nunca conversou com a Aura: portal precisa focar num único CTA.
-  const zeroConversa = !profile?.last_user_message_at;
+    if (data?.lastSession && (data.lastSession.closure_text || data.lastSession.session_summary)) return {
+      action: "continuity" as const,
+      eyebrow: "Um fio para continuar",
+      title: data.lastSession.theme_label || data.lastSession.focus_topic || "O que ficou do último encontro",
+      description: sanitizePortalText(data.lastSession.closure_text || data.lastSession.session_summary || ""),
+      button: "Retomar com a AURA",
+      icon: Sparkles,
+    };
 
-  // Convite pra contribuir na aba Sobre: conta >7d, sem itens user_added ainda.
-  const { data: userAddedCount } = useQuery({
-    queryKey: ["portal-hoje-user-added-count", userId],
-    queryFn: async () => {
-      const { count } = await supabasePortal
-        .from("user_insights")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("category", "user_added");
-      return count ?? 0;
-    },
-    enabled: !!userId && !zeroConversa,
-  });
-  const contaCriadaEmMs = profile?.created_at
-    ? new Date(profile.created_at).getTime()
-    : null;
-  const contaMaduraSemUserAdded =
-    !zeroConversa &&
-    userAddedCount === 0 &&
-    !!contaCriadaEmMs &&
-    Date.now() - contaCriadaEmMs > 7 * 86_400_000;
+    return {
+      action: "conversation" as const,
+      eyebrow: "Seu momento agora",
+      title: "O que merece atenção hoje?",
+      description: "Você não precisa chegar com tudo organizado. Comece pelo que estiver mais vivo.",
+      button: "Conversar com a AURA",
+      icon: MessageCircle,
+    };
+  }, [data, zeroConversation]);
 
-  if (loadingLast) return <PortalLoadingInline />;
+  useEffect(() => {
+    if (isLoading || !priority) return;
+    const key = `aura-today-presented:${userId}:${dayKeyBrt()}:${priority.action}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "true");
+    recordTodayEvent(userId, "priority_presented", priority.action);
+  }, [isLoading, priority, userId]);
+
+  if (isLoading) return <PortalLoadingInline />;
+
+  const handlePriority = () => {
+    recordTodayEvent(userId, "priority_opened", priority.action);
+    if (priority.action === "session" || priority.action === "session_preparation") {
+      onNavigateTab("sessoes");
+      return;
+    }
+    if (priority.action === "journey" && data?.episode?.id) {
+      window.location.assign(`/episodio/${data.episode.id}?u=${userId}`);
+      return;
+    }
+    if (priority.action === "continuity") {
+      onOpenConversation(`Quero retomar o que ficou da minha última sessão: ${data?.lastSession?.closure_text || data?.lastSession?.session_summary || data?.lastSession?.focus_topic || "o que conversamos"}`);
+      return;
+    }
+    onOpenConversation();
+  };
+
+  const accountCreatedAt = profile?.created_at ? new Date(profile.created_at).getTime() : null;
+  const showProfileInvitation = !zeroConversation && data?.userAddedCount === 0 && accountCreatedAt && Date.now() - accountCreatedAt > 7 * 86_400_000;
+  const showSessionContinuation = data?.nextSession && !["session", "session_preparation"].includes(priority.action);
+  const showJourneyContinuation = data?.episode && priority.action !== "journey";
+  const showLastSessionContinuation = data?.lastSession && priority.action !== "continuity";
 
   return (
-    <div className="portal-area-page space-y-6">
-      {/* Saudação — Deep Navy Anchor */}
+    <div className="portal-area-page space-y-7">
       <header className="space-y-1 animate-fade-in">
-        <h1
-          className="text-3xl sm:text-4xl text-[#1B2A4E] font-['Fraunces']"
-          style={{ fontWeight: 600 }}
-        >
-          {greeting()}, {firstName}
-        </h1>
-        <p className="text-[#87A878] font-semibold uppercase tracking-[0.15em] text-[10px] sm:text-xs font-['Nunito']">
-          {profile?.last_user_message_at
-            ? `Vocês conversaram ${relativeTime(profile.last_user_message_at)}`
-            : "Seu refúgio de hoje"}
+        <h1 className="font-display text-3xl font-semibold text-foreground sm:text-4xl">{greeting()}, {firstName}</h1>
+        <p className="text-xs font-semibold text-primary">
+          {profile?.last_user_message_at ? `Vocês conversaram ${relativeTime(profile.last_user_message_at)}` : "Seu momento de hoje"}
         </p>
         <IntimacyLevel userId={userId} />
       </header>
 
-      {/* Zero-conversa: card único de primeiro contato, sem ruído. */}
-      {zeroConversa && (
-        <div className="rounded-2xl bg-white/60 border border-[#87A878]/20 p-6 text-center space-y-3 animate-fade-up">
-          <div className="bg-[#87A878]/15 rounded-full p-3 w-14 h-14 mx-auto flex items-center justify-center">
-            <MessageCircle size={24} className="text-[#87A878]" />
+      <section className="relative overflow-hidden rounded-lg border border-primary/25 bg-primary p-6 text-primary-foreground shadow-card animate-fade-up">
+        <div className="flex items-start gap-4">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/12" aria-hidden="true">
+            <priority.icon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary-foreground/70">{priority.eyebrow}</p>
+            <h2 className="mt-1 font-display text-2xl font-semibold leading-tight">{priority.title}</h2>
+            <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-primary-foreground/80">{priority.description}</p>
           </div>
-          <p className="font-['Fraunces'] font-semibold text-[#1B2A4E]">
-            Fala com a Aura pela primeira vez
-          </p>
-          <p className="text-sm text-[#2A2A2A]/70 font-['Nunito']">
-            Manda a primeira mensagem — depois esse espaço começa a ganhar vida.
-          </p>
-          <Button type="button" onClick={() => onOpenConversation("Oi Aura, quero começar.")} className="rounded-full px-5 font-['Nunito']">
-            <MessageCircle size={16} />
-            Conversar com a AURA
-          </Button>
         </div>
-      )}
+        <Button type="button" variant="secondary" className="mt-5 w-full justify-between" onClick={handlePriority}>
+          {priority.button}<ArrowRight className="h-4 w-4" />
+        </Button>
+      </section>
 
-      {/* Sessões: Última + Próxima em grid 2 colunas (Última bege, Próxima navy) */}
-      {!zeroConversa && (
-          <SessionsRow
-          lastSession={lastSession}
-          nextSession={nextSession}
-            onOpenConversation={onOpenConversation}
-        />
-      )}
-
-      {/* Empty state global (já conversou mas nada foi materializado ainda) */}
-      {!zeroConversa && !hasAnything && (
-        <div className="rounded-2xl bg-white/60 border border-[#87A878]/20 p-6 text-center space-y-3 animate-fade-up">
-          <p className="font-['Fraunces'] font-semibold text-[#1B2A4E]">
-            Sua jornada está começando
-          </p>
-          <p className="text-sm text-[#2A2A2A]/70 font-['Nunito']">
-            Quando vocês começarem a conversar, esse espaço ganha vida.
-          </p>
-          <Button type="button" onClick={() => onOpenConversation("Oi Aura, quero começar.")} className="rounded-full px-5 font-['Nunito']">
-            <MessageCircle size={16} />
-            Falar com a Aura
-          </Button>
-        </div>
-      )}
-
-      {/* Card: Insight curado (snapshot temático ou resumo mensal) — HERO em lavender */}
-      {curatedInsight && (
-        <InsightPreviewCard
-          title={curatedInsight.title}
-          meta={curatedInsight.meta}
-          text={curatedInsight.body}
-          onSeeAll={() => onNavigateTab("insights")}
-        />
-      )}
-
-      {/* Card: O que ficou da última sessão (bloco de continuidade da conversa) */}
-      {lastSession && (lastSession.closure_text || lastSession.session_summary) && (
-        <ClosureCard session={lastSession} onOpenConversation={onOpenConversation} />
-      )}
-
-      {/* Pergunta do dia — sage bg + navy CTA */}
-      {!zeroConversa && (
-        <PerguntaDoDiaCard lastUserMessageAt={profile?.last_user_message_at} onRespond={onOpenConversation} />
-      )}
-
-      {/* Card: Meditação sugerida (não mostrar pra zero-conversa) */}
-      {!zeroConversa && suggestedMeditation && (
-        <SuggestedMeditationCard
-          meditation={suggestedMeditation}
-          onOpen={() => onNavigateTab("meditacoes")}
-        />
-      )}
-
-      {/* Convite discreto pra contribuir com o que a Aura sabe */}
-      {contaMaduraSemUserAdded && (
-        <button
-          onClick={() => onNavigateTab("sobre")}
-          className="w-full text-left rounded-2xl border-2 border-dashed border-[#87A878]/40 bg-[#87A878]/8 p-4 flex items-center gap-3 hover:bg-[#87A878]/12 hover:border-[#87A878]/60 transition-colors animate-fade-up"
-        >
-          <div className="shrink-0 rounded-xl bg-[#B8A5D9]/25 p-2">
-            <PenLine size={16} className="text-[#1B2A4E]" />
+      {!zeroConversation && (showSessionContinuation || showJourneyContinuation || showLastSessionContinuation) && (
+        <section className="space-y-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Para continuar</p>
+            <h2 className="mt-1 font-display text-xl font-semibold text-foreground">De onde você parou</h2>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-[#1B2A4E] font-['Nunito'] leading-tight">
-              Quer me contar algo direto?
-            </p>
-            <p className="text-xs text-[#2A2A2A]/65 font-['Nunito'] mt-0.5">
-              Medos, objetivos, valores — eu levo pras conversas.
-            </p>
-          </div>
-          <ArrowRight size={16} className="text-[#1B2A4E]/60 shrink-0" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ============ Cards ============
-
-function SessionsRow({
-  lastSession,
-  nextSession,
-  onOpenConversation,
-}: {
-  lastSession: any;
-  nextSession: any;
-  onOpenConversation: (prefilledMessage?: string) => void;
-}) {
-  const lastLabel = lastSession?.ended_at ? relativeTime(lastSession.ended_at) : null;
-  const lastTheme =
-    lastSession?.theme_label || lastSession?.focus_topic || "Autoconhecimento";
-  const REAGENDAR = [7, 14, 30];
-
-  return (
-    <div className="grid grid-cols-2 gap-4 animate-fade-up">
-      {/* Última sessão — bege claro */}
-      <div className="bg-white/60 p-5 rounded-2xl border border-[#87A878]/15">
-        <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito'] mb-2">
-          Última sessão
-        </p>
-        {lastSession ? (
-          <p className="text-[#2A2A2A] text-sm leading-snug font-['Nunito']">
-            {lastLabel ? `${lastLabel} · ` : ""}
-            <span className="font-bold text-[#1B2A4E] capitalize">{lastTheme}</span>
-          </p>
-        ) : (
-          <p className="text-[#2A2A2A]/60 text-sm font-['Nunito']">
-            Ainda sem sessões concluídas
-          </p>
-        )}
-      </div>
-
-      {/* Próxima sessão — navy com chips 7/14/30d */}
-      <div className="bg-[#1B2A4E] p-5 rounded-2xl text-[#F5F0E8] shadow-lg shadow-[#1B2A4E]/20">
-        <p className="text-[10px] uppercase tracking-[0.15em] text-[#B8A5D9] font-bold font-['Nunito'] mb-2">
-          Próxima sessão
-        </p>
-        {nextSession ? (
-          <p className="text-sm mb-3 font-['Nunito'] capitalize">
-            {formatScheduledBRT(nextSession.scheduled_at).label}
-          </p>
-        ) : (
-          <p className="text-sm mb-3 font-['Nunito'] text-[#F5F0E8]/70">
-            Nenhuma agendada
-          </p>
-        )}
-        <p className="text-[10px] uppercase tracking-widest text-[#B8A5D9]/70 font-['Nunito'] mb-1.5">
-          Reagendar em
-        </p>
-        <div className="flex gap-1">
-          {REAGENDAR.map((d) => (
-            <button
-              type="button"
-              key={d}
-              onClick={() => onOpenConversation(`Oi Aura, quero remarcar minha próxima sessão para daqui a ${d} dias.`)}
-              className="px-2.5 py-1 bg-[#F5F0E8]/10 hover:bg-[#87A878] rounded text-[10px] font-bold border border-[#F5F0E8]/20 transition-colors font-['Nunito']"
-            >
-              {d}d
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ClosureCard({ session, onOpenConversation }: { session: any; onOpenConversation: (prefilledMessage?: string) => void }) {
-  const { title, buttonLabel, prefilledMessage } = presentClosure(
-    session.closure_type,
-    session.closure_text,
-  );
-  const body = sanitizePortalText(session.closure_text || session.session_summary || "");
-  const ended = session.ended_at
-    ? new Date(session.ended_at).toLocaleDateString("pt-BR", {
-        day: "2-digit",
-        month: "long",
-      })
-    : null;
-
-  return (
-    <div className="rounded-2xl bg-white/60 border border-[#87A878]/15 p-6 space-y-3 animate-fade-up">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito']">
-            {title}
-          </p>
-          {ended && (
-            <p className="text-xs text-[#2A2A2A]/50 font-['Nunito'] mt-0.5">
-              da sessão de {ended}
-            </p>
-          )}
-        </div>
-      </div>
-      <p className="text-[#1B2A4E] font-['Fraunces'] text-base leading-relaxed italic">
-        “{body}”
-      </p>
-      <button
-        type="button"
-        onClick={() => onOpenConversation(prefilledMessage)}
-        className="inline-flex items-center gap-1.5 text-sm font-bold text-[#1B2A4E] hover:text-[#87A878] font-['Nunito'] transition-colors"
-      >
-        {buttonLabel}
-        <ArrowRight size={14} />
-      </button>
-    </div>
-  );
-}
-
-function InsightPreviewCard({
-  title,
-  meta,
-  text,
-  onSeeAll,
-}: {
-  title?: string;
-  meta?: string | null;
-  text: string;
-  onSeeAll: () => void;
-}) {
-  const clean = sanitizePortalText(text);
-  return (
-    <div className="bg-[#B8A5D9]/15 border-2 border-[#B8A5D9] p-6 sm:p-7 rounded-3xl relative overflow-hidden animate-fade-up">
-      <div className="absolute -top-6 -right-6 w-32 h-32 bg-[#B8A5D9]/25 rounded-full blur-2xl pointer-events-none" />
-      <div className="relative">
-        <p className="text-[10px] uppercase tracking-[0.2em] text-[#1B2A4E]/60 font-bold font-['Nunito'] mb-3">
-          Insight da Aura
-        </p>
-        <blockquote
-          className="text-lg sm:text-xl text-[#1B2A4E] leading-relaxed font-['Fraunces'] italic mb-4"
-          style={{ fontWeight: 400 }}
-        >
-          {clean}
-        </blockquote>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="min-w-0">
-            {title && (
-              <p className="text-sm font-['Fraunces'] font-semibold text-[#1B2A4E] capitalize">
-                {title}
-              </p>
+          <div className="divide-y divide-border rounded-lg border bg-card shadow-sm">
+            {showSessionContinuation && (
+              <ContinuationRow icon={CalendarDays} title="Próxima sessão" detail={formatScheduledBrt(data.nextSession.scheduled_at)} action="Ver em Sessões" onClick={() => { recordTodayEvent(userId, "continuity_opened", "session"); onNavigateTab("sessoes"); }} />
             )}
-            {meta && (
-              <p className="text-[11px] text-[#2A2A2A]/50 font-['Nunito'] capitalize">
-                {meta}
-              </p>
+            {showJourneyContinuation && (
+              <ContinuationRow icon={BookOpen} title={data.episode.stage_title || data.episode.title} detail={`Episódio ${data.episode.episode_number} da sua jornada`} action="Continuar" onClick={() => { recordTodayEvent(userId, "continuity_opened", "journey"); window.location.assign(`/episodio/${data.episode.id}?u=${userId}`); }} />
+            )}
+            {showLastSessionContinuation && (
+              <ContinuationRow icon={Sparkles} title="O que ficou da última sessão" detail={data.lastSession.theme_label || data.lastSession.focus_topic || "Seu encontro mais recente"} action="Rever" onClick={() => { recordTodayEvent(userId, "continuity_opened", "continuity"); onNavigateTab("sessoes"); }} />
             )}
           </div>
-          <button
-            onClick={onSeeAll}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#1B2A4E] hover:text-[#87A878] font-['Nunito'] uppercase tracking-wider transition-colors"
-          >
-            Ver percurso
-            <ArrowRight size={14} />
-          </button>
-        </div>
-      </div>
+        </section>
+      )}
+
+      {!zeroConversation && <PerguntaDoDiaCard lastUserMessageAt={profile?.last_user_message_at} onRespond={(message) => { recordTodayEvent(userId, "invitation_opened", "conversation", { source: "daily_question" }); onOpenConversation(message); }} />}
+
+      {data?.insight?.body && (
+        <section className="border-l-2 border-primary px-4 py-1 animate-fade-up">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Uma leitura possível</p>
+          <h2 className="mt-1 font-display text-lg font-semibold text-foreground">{sanitizePortalText(data.insight.title)}</h2>
+          <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-muted-foreground">Talvez exista algo para observar aqui: {sanitizePortalText(data.insight.body)}</p>
+          <Button type="button" variant="link" className="mt-2 h-auto p-0" onClick={() => onNavigateTab("insights")}>Ver no meu percurso<ArrowRight className="h-4 w-4" /></Button>
+        </section>
+      )}
+
+      {!zeroConversation && data?.meditation && (
+        <section className="flex items-center gap-3 border-y border-border py-4 animate-fade-up">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground"><Headphones className="h-5 w-5" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-foreground">{data.meditation.title}</p>
+            <p className="text-xs text-muted-foreground">Uma pausa opcional{data.meditation.duration_seconds ? ` · ${Math.max(1, Math.round(data.meditation.duration_seconds / 60))} min` : ""}</p>
+          </div>
+          <Button type="button" variant="ghost" size="icon" aria-label="Abrir meditação" onClick={() => { recordTodayEvent(userId, "invitation_opened", "conversation", { destination: "meditation" }); onNavigateTab("meditacoes"); }}><ArrowRight className="h-4 w-4" /></Button>
+        </section>
+      )}
+
+      {showProfileInvitation && (
+        <Button type="button" variant="outline" className="h-auto w-full justify-start gap-3 whitespace-normal p-4 text-left" onClick={() => onNavigateTab("sobre")}>
+          <PenLine className="h-5 w-5 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1"><span className="block font-semibold">Quer contar algo direto à AURA?</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">Algo importante sobre você pode acompanhar as próximas conversas.</span></span>
+          <ArrowRight className="h-4 w-4 shrink-0" />
+        </Button>
+      )}
     </div>
   );
 }
 
-function SuggestedMeditationCard({
-  meditation,
-  onOpen,
-}: {
-  meditation: any;
-  onOpen: () => void;
-}) {
-  const mins = Math.round((meditation.duration_seconds || 0) / 60);
+function ContinuationRow({ icon: Icon, title, detail, action, onClick }: { icon: typeof CalendarDays; title: string; detail: string; action: string; onClick: () => void }) {
   return (
-    <div className="rounded-2xl bg-white/60 border border-[#87A878]/15 p-5 space-y-3 animate-fade-up">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito']">
-            Meditação sugerida
-          </p>
-          <p className="font-['Fraunces'] font-semibold text-[#1B2A4E] mt-1 truncate">
-            {meditation.title}
-          </p>
-          {mins > 0 && (
-            <p className="text-xs text-[#2A2A2A]/50 font-['Nunito'] mt-0.5">
-              {mins} min
-            </p>
-          )}
-        </div>
-        <div className="bg-[#87A878]/15 rounded-full p-2 shrink-0">
-          <Headphones size={18} className="text-[#87A878]" />
-        </div>
-      </div>
-      {meditation.description && (
-        <p className="text-sm text-[#2A2A2A]/80 font-['Nunito'] line-clamp-2">
-          {meditation.description}
-        </p>
-      )}
-      <button
-        onClick={onOpen}
-        className="inline-flex items-center gap-1.5 text-sm font-bold text-[#1B2A4E] hover:text-[#87A878] font-['Nunito'] transition-colors"
-      >
-        Ouvir agora
-        <ArrowRight size={14} />
-      </button>
-    </div>
+    <Button type="button" variant="ghost" className="h-auto w-full justify-start gap-3 rounded-none px-4 py-3 text-left first:rounded-t-lg last:rounded-b-lg" onClick={onClick}>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary"><Icon className="h-4 w-4" /></span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-foreground">{title}</span><span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">{detail}</span></span>
+      <span className="shrink-0 text-xs font-semibold text-primary">{action}</span>
+    </Button>
   );
 }
