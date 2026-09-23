@@ -20,7 +20,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   active_session_exists: "Você já tem uma próxima sessão agendada.",
   monthly_limit_reached: "Você já usou todas as sessões disponíveis nesse mês.",
   session_not_available: "Essa sessão não está mais disponível para alteração.",
+  session_required: "Essa sessão não está mais disponível. Atualize a tela e tente novamente.",
   session_already_started: "O horário dessa sessão já chegou e ela não pode mais ser alterada.",
+  auth_required: "Seu acesso expirou. Entre novamente para continuar.",
+  invalid_request: "Não foi possível validar os dados escolhidos. Confira e tente novamente.",
   session_update_failed: "Não foi possível atualizar sua sessão. Tente novamente.",
 };
 
@@ -140,6 +143,11 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: Sessi
 
   const manageSession = async (action: "schedule" | "reschedule" | "cancel") => {
     if (action !== "cancel" && (!date || !time)) return;
+    if (action !== "schedule" && !nextSession?.id) {
+      toast({ title: "Sessão indisponível", description: ERROR_MESSAGES.session_required, variant: "destructive" });
+      await refresh();
+      return;
+    }
     setSaving(true);
     try {
       const { data, error } = await supabasePortal.functions.invoke("manage-portal-session", {
