@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, ArrowUpRight, Bell, Calendar, CalendarDays, Check, ChevronLeft, ChevronRight, Clock, MessageCircle, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Bell, Calendar, CalendarDays, Check, ChevronLeft, ChevronRight, Clock, MessageCircle, NotebookPen, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -334,7 +334,20 @@ export function SessoesTab({
                   </div>
                 )}
                 {session.status === "scheduled" && (
-                  <Button type="button" variant="ghost" size="sm" className={`mt-2 px-0 ${index === 0 ? "text-background/80 hover:text-foreground" : "text-muted-foreground"}`} onClick={() => { setSelectedSession(session); setPreparation(session.preparation_note || ""); setPreparationOpen(true); }}><Pencil />{session.preparation_note ? "Editar preparação" : "Preparar este encontro"}</Button>
+                  <div className={`mt-4 border-t pt-4 ${index === 0 ? "border-background/20" : "border-border"}`}>
+                    <div className="flex items-start gap-3">
+                      <NotebookPen className={`mt-0.5 h-5 w-5 shrink-0 ${index === 0 ? "text-accent" : "text-primary"}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold">{session.preparation_note ? "Encontro preparado" : "Tem algo que você quer trazer?"}</p>
+                        <p className={`mt-1 text-xs leading-relaxed ${index === 0 ? "text-background/70" : "text-muted-foreground"}`}>
+                          {session.preparation_note ? "A AURA vai considerar sua anotação quando a sessão começar." : "Conte à AURA o que você quer conversar ou não quer esquecer."}
+                        </p>
+                        <Button type="button" variant={index === 0 ? "secondary" : "outline"} size="sm" className="mt-3" onClick={() => { setSelectedSession(session); setPreparation(session.preparation_note || ""); setPreparationOpen(true); }}>
+                          {session.preparation_note ? <Pencil /> : <NotebookPen />}{session.preparation_note ? "Editar preparação" : "Preparar este encontro"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </article>
             );
