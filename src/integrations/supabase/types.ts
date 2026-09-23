@@ -5021,6 +5021,18 @@ export type Database = {
         Args: { _ids: string[] }
         Returns: undefined
       }
+      manage_portal_journey_internal: {
+        Args: {
+          _action: string
+          _episode_id?: string
+          _goal?: string
+          _journey_id?: string
+          _progress_percent?: number
+          _reflection_text?: string
+          _user_id: string
+        }
+        Returns: Json
+      }
       manage_portal_session_internal: {
         Args: {
           _action: string
@@ -5095,6 +5107,10 @@ export type Database = {
           _source: string
         }
         Returns: undefined
+      }
+      release_next_journey_episode: {
+        Args: { _user_id: string }
+        Returns: Json
       }
     }
     Enums: {
