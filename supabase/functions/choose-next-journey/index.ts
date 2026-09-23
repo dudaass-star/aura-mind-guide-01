@@ -57,7 +57,7 @@ serve(async (req) => {
       });
     }
 
-    // Validate journey exists and is active
+    // Valida a jornada e delega a transição à operação atômica compartilhada.
     const { data: journey, error: journeyError } = await supabase
       .from('content_journeys')
       .select('id, title, is_active')
@@ -78,41 +78,16 @@ serve(async (req) => {
       );
     }
 
-    // Validate user exists
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, user_id, name, current_journey_id')
-       .eq('user_id', userId)
-      .single();
-
-    if (profileError || !profile) {
-      return new Response(
-        JSON.stringify({ error: 'Perfil não encontrado' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Record the previous journey as completed if user had one
-    if (profile.current_journey_id) {
-      await supabase
-        .from('user_journey_history')
-        .insert({
-          user_id: profile.user_id,
-          journey_id: profile.current_journey_id,
-        });
-      console.log(`📜 Recorded journey ${profile.current_journey_id} in history`);
-    }
-
-    // Update profile with chosen journey
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({
-        current_journey_id: journey_id,
-        current_episode: 0,
-        last_content_sent_at: null, // Reset so next periodic-content sends EP1
-      })
-      .eq('id', profile.id);
-
+    const { data: profile } = await supabase.from('profiles').select('current_journey_id').eq('user_id', userId).maybeSingle();
+    const { error: updateError } = await supabase.rpc('manage_portal_journey_internal', {
+      _user_id: userId,
+      _action: profile?.current_journey_id && profile.current_journey_id !== journey_id ? 'switch' : 'start',
+      _journey_id: journey_id,
+      _episode_id: null,
+      _progress_percent: null,
+      _reflection_text: null,
+      _goal: null,
+    });
     if (updateError) {
       console.error('❌ Error updating profile:', updateError);
       return new Response(
@@ -121,7 +96,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`✅ User ${profile.name || userId} chose journey: ${journey.title}`);
+    console.log(`✅ Usuário ${userId} escolheu a jornada: ${journey.title}`);
 
     return new Response(
       JSON.stringify({ success: true, journey_title: journey.title }),
