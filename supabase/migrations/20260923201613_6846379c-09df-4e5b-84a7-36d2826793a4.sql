@@ -1,0 +1,80 @@
+CREATE OR REPLACE FUNCTION public.manage_portal_journey_internal(_user_id uuid, _action text, _journey_id text DEFAULT NULL, _episode_id uuid DEFAULT NULL, _progress_percent integer DEFAULT NULL, _reflection_text text DEFAULT NULL, _goal text DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_profile public.profiles%ROWTYPE;
+  v_episode public.journey_episodes%ROWTYPE;
+  v_progress public.journey_episode_progress%ROWTYPE;
+  v_total integer;
+BEGIN
+  SELECT * INTO v_profile FROM public.profiles WHERE user_id = _user_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'profile_not_found'; END IF;
+
+  IF _action IN ('start', 'switch') THEN
+    IF _journey_id IS NULL OR NOT EXISTS (SELECT 1 FROM public.content_journeys WHERE id = _journey_id AND is_active = true) THEN
+      RAISE EXCEPTION 'journey_not_found';
+    END IF;
+    IF v_profile.current_journey_id IS NOT NULL AND v_profile.current_journey_id <> _journey_id THEN
+      UPDATE public.user_journey_history SET status = 'switched', ended_at = now()
+      WHERE user_id = _user_id AND journey_id = v_profile.current_journey_id AND status = 'active';
+    END IF;
+    UPDATE public.profiles SET current_journey_id = _journey_id, current_episode = 0, journey_paused = false, journey_selected_goal = COALESCE(_goal, journey_selected_goal) WHERE user_id = _user_id;
+    INSERT INTO public.user_journey_history (user_id, journey_id, started_at, status, origin)
+    VALUES (_user_id, _journey_id, now(), 'active', CASE WHEN _action = 'start' THEN 'guided_choice' ELSE 'switch' END)
+    ON CONFLICT DO NOTHING;
+    RETURN jsonb_build_object('status', 'active', 'journey_id', _journey_id);
+  ELSIF _action = 'pause' THEN
+    UPDATE public.profiles SET journey_paused = true WHERE user_id = _user_id;
+    RETURN jsonb_build_object('status', 'paused');
+  ELSIF _action = 'resume' THEN
+    UPDATE public.profiles SET journey_paused = false WHERE user_id = _user_id;
+    RETURN jsonb_build_object('status', 'active');
+  END IF;
+
+  IF _episode_id IS NULL THEN RAISE EXCEPTION 'episode_required'; END IF;
+  SELECT * INTO v_episode FROM public.journey_episodes WHERE id = _episode_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'episode_not_found'; END IF;
+  SELECT * INTO v_progress FROM public.journey_episode_progress WHERE user_id = _user_id AND episode_id = _episode_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'episode_not_released'; END IF;
+
+  IF _action = 'open' THEN
+    IF v_progress.status <> 'completed' THEN
+      UPDATE public.journey_episode_progress SET status = 'in_progress', opened_at = COALESCE(opened_at, now()), updated_at = now()
+      WHERE id = v_progress.id;
+    END IF;
+    RETURN jsonb_build_object('status', CASE WHEN v_progress.status = 'completed' THEN 'completed' ELSE 'in_progress' END);
+  ELSIF _action = 'progress' THEN
+    IF v_progress.status <> 'completed' THEN
+      UPDATE public.journey_episode_progress SET status = 'in_progress', opened_at = COALESCE(opened_at, now()), progress_percent = GREATEST(progress_percent, LEAST(99, GREATEST(1, COALESCE(_progress_percent, 1)))), updated_at = now()
+      WHERE id = v_progress.id;
+    END IF;
+    RETURN jsonb_build_object('status', CASE WHEN v_progress.status = 'completed' THEN 'completed' ELSE 'in_progress' END);
+  ELSIF _action = 'reflect' THEN
+    IF _reflection_text IS NULL OR char_length(trim(_reflection_text)) < 1 OR char_length(_reflection_text) > 2000 THEN RAISE EXCEPTION 'invalid_reflection'; END IF;
+    UPDATE public.journey_episode_progress SET reflection_text = trim(_reflection_text), reflection_saved_at = now(), updated_at = now() WHERE id = v_progress.id;
+    RETURN jsonb_build_object('status', 'reflected');
+  ELSIF _action = 'discuss' THEN
+    UPDATE public.journey_episode_progress SET discussed_at = COALESCE(discussed_at, now()), updated_at = now() WHERE id = v_progress.id;
+    RETURN jsonb_build_object('status', 'discussed');
+  ELSIF _action = 'complete' THEN
+    IF v_progress.status = 'completed' THEN
+      RETURN jsonb_build_object('status', 'completed', 'journey_id', v_episode.journey_id);
+    END IF;
+    UPDATE public.journey_episode_progress SET status = 'completed', progress_percent = 100, opened_at = COALESCE(opened_at, now()), completed_at = COALESCE(completed_at, now()), updated_at = now() WHERE id = v_progress.id;
+    SELECT total_episodes INTO v_total FROM public.content_journeys WHERE id = v_episode.journey_id;
+    IF v_episode.episode_number >= v_total THEN
+      UPDATE public.user_journey_history SET status = 'completed', ended_at = now(), final_episode_id = _episode_id
+      WHERE user_id = _user_id AND journey_id = v_episode.journey_id AND status = 'active';
+      UPDATE public.profiles SET current_journey_id = NULL, current_episode = 0, journey_paused = false WHERE user_id = _user_id AND current_journey_id = v_episode.journey_id;
+      RETURN jsonb_build_object('status', 'journey_completed', 'journey_id', v_episode.journey_id);
+    END IF;
+    RETURN jsonb_build_object('status', 'completed', 'journey_id', v_episode.journey_id);
+  END IF;
+  RAISE EXCEPTION 'invalid_action';
+END;
+$function$;
+REVOKE ALL ON FUNCTION public.manage_portal_journey_internal(uuid,text,text,uuid,integer,text,text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.manage_portal_journey_internal(uuid,text,text,uuid,integer,text,text) TO service_role;

@@ -5,6 +5,8 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+- [x] Transformar Jornadas em continuidade ativa: cadência fixa, um episódio pendente, leitura confirmada, reflexão, escolha guiada e métricas.
+
 - [x] Painel semanal do funil Taster no admin (TasterFunnelPanel em AdminWhatsappRecovery)
 - [x] Antecipar convite m3 de ~48h para ~6h, âncora em wa_copiou_2h_sent_at (trilho separado do genérico)
 - [x] Porta B: bloquear só inbound recente (<24h) ou oferta já existente — conversa fria volta a receber convite
@@ -92,3 +94,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Evoluir Hoje como direção diária do cliente: prioridade contextual, continuidade entre áreas, retorno recorrente e medição de retenção/LTV.
 - [x] Destacar a preparação do encontro e entregá-la à AURA na abertura, priorizando a intenção atual sem perder a ponte anterior e os compromissos relevantes.
 - [x] Evoluir Conversa como núcleo do aplicativo: recuperação de falhas, resposta rápida, continuidade, descoberta progressiva e métricas de retenção/LTV.
+- [x] Evoluir Jornadas como continuidade ativa: dois episódios semanais, sem acúmulo, leitura explícita, reflexão, conversa contextual, escolha guiada e métricas.

@@ -1,13 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { routeNotification } from "../_shared/notification-router.ts";
-
-const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
+    const nowInBrt = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    if (![2, 5].includes(nowInBrt.getDay())) {
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: "outside_journey_days" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: users, error } = await supabase.from("profiles")
       .select("user_id,name,phone,current_journey_id,current_episode")

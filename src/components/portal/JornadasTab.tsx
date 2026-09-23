@@ -119,8 +119,15 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
       return { ...latestCompletion, journey_id: journeyId, journey: journeys.find((journey) => journey.id === journeyId) };
     })
     .filter((item) => item.journey);
-  const availableJourneys = journeys.filter((journey) => journey.is_active && journey.id !== currentJourneyId && !completedSet.has(journey.id));
-  const progress = currentJourney ? Math.min(100, Math.round((currentEpisode / currentJourney.total_episodes) * 100)) : 0;
+  const goalTopics: Record<string, string[]> = {
+    Ansiedade: ["ansiedade"], Autoconfiança: ["autoestima"], Relações: ["relacionamentos"],
+    Trabalho: ["estresse_trabalho", "Procrastinação"], Mudanças: ["medo_mudanca", "luto"], Emoções: ["inteligencia_emocional"],
+  };
+  const availableJourneys = journeys
+    .filter((journey) => journey.is_active && journey.id !== currentJourneyId && !completedSet.has(journey.id))
+    .sort((a, b) => Number(goalTopics[selectedGoal]?.includes(b.topic) || false) - Number(goalTopics[selectedGoal]?.includes(a.topic) || false));
+  const completedCurrentCount = episodeProgress.filter((item) => item.status === "completed").length;
+  const progress = currentJourney ? Math.min(100, Math.round((completedCurrentCount / currentJourney.total_episodes) * 100)) : 0;
   const futureEpisodeNumbers = currentJourney
     ? Array.from({ length: Math.max(0, currentJourney.total_episodes - currentEpisode) }, (_, index) => currentEpisode + index + 1)
     : [];
@@ -177,7 +184,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
             </div>
             <div className="mt-5">
               <div className="mb-2 flex items-center justify-between text-xs font-semibold text-muted-foreground">
-                <span>{currentEpisode} de {currentJourney.total_episodes} episódios</span>
+                <span>{completedCurrentCount} de {currentJourney.total_episodes} concluídos</span>
                 <span>{progress}%</span>
               </div>
               <Progress value={progress} className="h-2 bg-secondary" />

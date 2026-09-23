@@ -1107,7 +1107,7 @@ async function handleActivation(
         needs_schedule_setup: sessionsCount > 0,
         trial_started_at: new Date().toISOString(),
         trial_phase: "listening",
-        current_journey_id: "j1-ansiedade",
+        current_journey_id: null,
         current_episode: 0,
         plan_expires_at: newExpiry,
         asaas_customer_id: updated.asaas_customer_id || null,

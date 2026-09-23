@@ -1911,6 +1911,28 @@ Deno.serve(async (req) => {
       console.warn('⚠️ Falha ao calcular métricas da Conversa (não crítico):', e);
     }
 
+    let journeyReleased = 0;
+    let journeyOpened = 0;
+    let journeyCompleted = 0;
+    let journeyReflections = 0;
+    let journeyDiscussion = 0;
+    try {
+      const rows = await fetchAllPaginated(supabase, 'portal_value_events', 'event_type,user_id', [
+        { column: 'feature', op: 'eq', value: 'journey' },
+        { column: 'created_at', op: 'gte', value: periodStart },
+        { column: 'created_at', op: 'lt', value: periodEnd },
+      ]);
+      for (const row of rows) {
+        if (row.event_type === 'journey_episode_released') journeyReleased++;
+        else if (row.event_type === 'journey_open' || row.event_type === 'journey_card_opened') journeyOpened++;
+        else if (row.event_type === 'journey_complete') journeyCompleted++;
+        else if (row.event_type === 'journey_reflect') journeyReflections++;
+        else if (row.event_type === 'journey_discuss') journeyDiscussion++;
+      }
+    } catch (e) {
+      console.warn('⚠️ Falha ao calcular métricas de Jornadas (não crítico):', e);
+    }
+
     // 🧭 Fechamento de sessão — % dialogada vs unilateral vs no-show.
     // Fonte: sessions.closure_mode gravado pelo aura-agent (dialogada) e
     // pelo session-reminder (unilateral/no_show). Serve como termômetro
@@ -2115,6 +2137,11 @@ Deno.serve(async (req) => {
       conversationWithin30Seconds,
       conversationOpenings,
       conversationCorrectionsPer100,
+      journeyReleased,
+      journeyOpened,
+      journeyCompleted,
+      journeyReflections,
+      journeyDiscussion,
       // 🧭 Fechamento de sessão
       closureTotal,
       closureDialogada,

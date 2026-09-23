@@ -28,7 +28,7 @@ export default function Episode() {
     queryKey: ["episode", id],
     queryFn: async () => {
       if (!id) throw new Error("episode_required");
-      const { data, error: queryError } = await supabase.from("journey_episodes").select("*, content_journeys(*)").eq("id", id).single();
+      const { data, error: queryError } = await supabasePortal.from("journey_episodes").select("*, content_journeys(*)").eq("id", id).single();
       if (queryError) throw queryError;
       return data;
     },
@@ -85,7 +85,7 @@ export default function Episode() {
     };
     const timer = window.setInterval(onScroll, 5000);
     return () => window.clearInterval(timer);
-  }, [id, progress?.progress_percent]);
+  }, [id, progress?.progress_percent, action]);
 
   const journey = episode?.content_journeys;
   const totalEpisodes = journey?.total_episodes || 8;
