@@ -4919,6 +4919,15 @@ export type Database = {
         Args: { _ids: string[] }
         Returns: undefined
       }
+      manage_portal_session_internal: {
+        Args: {
+          _action: string
+          _scheduled_at?: string
+          _session_id?: string
+          _user_id: string
+        }
+        Returns: Json
+      }
       match_support_kb: {
         Args: {
           match_count?: number

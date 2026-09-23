@@ -1,218 +1,271 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Calendar, CalendarDays, Clock3, Pencil, Star, Trash2 } from "lucide-react";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
-import { Calendar, Star, MessageCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import { EmptyState, PortalLoadingInline } from "./shared";
-import { auraWhatsAppLink, presentClosure } from "./whatsapp";
+import { presentClosure } from "./whatsapp";
 import { sanitizePortalText } from "./sanitize";
 
-const PLAN_SESSION_LIMITS: Record<string, number> = {
-  essencial: 1,
-  direcao: 4,
-  transformacao: 8,
+const PLAN_SESSION_LIMITS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8 };
+type SessionProfile = { plan?: string | null; plan_tier?: string | null } | null;
+const ERROR_MESSAGES: Record<string, string> = {
+  access_not_available: "Seu plano não permite agendar uma sessão agora.",
+  future_time_required: "Escolha um horário que ainda não passou.",
+  invalid_time_interval: "Escolha um horário em intervalos de 15 minutos.",
+  active_session_exists: "Você já tem uma próxima sessão agendada.",
+  monthly_limit_reached: "Você já usou todas as sessões disponíveis nesse mês.",
+  session_not_available: "Essa sessão não está mais disponível para alteração.",
+  session_already_started: "O horário dessa sessão já chegou e ela não pode mais ser alterada.",
+  session_update_failed: "Não foi possível atualizar sua sessão. Tente novamente.",
 };
 
-export function SessoesTab({ userId, profile }: { userId: string; profile: any }) {
-  // Histórico de sessões concluídas
+function brtParts(date = new Date()) {
+  const values = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => values.find((part) => part.type === type)?.value || "";
+  return { date: `${get("year")}-${get("month")}-${get("day")}`, year: get("year"), month: get("month") };
+}
+
+function brtIso(date: string, time: string) {
+  return `${date}T${time}:00-03:00`;
+}
+
+function sessionLimit(profile: SessionProfile) {
+  const tier = String(profile?.plan_tier || "").toLowerCase();
+  if (tier === "base") return 0;
+  if (tier === "lite" || tier === "taster") return 1;
+  return PLAN_SESSION_LIMITS[String(profile?.plan || "").toLowerCase()] || 0;
+}
+
+export function SessoesTab({ userId, profile }: { userId: string; profile: SessionProfile }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const today = brtParts().date;
+  const [schedulerOpen, setSchedulerOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [date, setDate] = useState(today);
+  const [time, setTime] = useState("");
+  const [saving, setSaving] = useState(false);
+
   const { data: sessions, isLoading } = useQuery({
     queryKey: ["portal-sessions-history", userId],
     queryFn: async () => {
-      const { data, error } = await supabasePortal
-        .from("sessions")
-        .select(
-          "id, scheduled_at, ended_at, status, focus_topic, theme_label, session_summary, reframe_text, closure_type, closure_text",
-        )
-        .eq("user_id", userId)
-        .eq("status", "completed")
-        .order("ended_at", { ascending: false })
-        .limit(50);
+      const { data, error } = await supabasePortal.from("sessions")
+        .select("id, scheduled_at, ended_at, status, focus_topic, theme_label, session_summary, reframe_text, closure_type, closure_text")
+        .eq("user_id", userId).eq("status", "completed").order("ended_at", { ascending: false }).limit(50);
       if (error) throw error;
       return data || [];
-    },
-    enabled: !!userId,
+    }, enabled: !!userId,
   });
 
-  // Próxima sessão
   const { data: nextSession } = useQuery({
     queryKey: ["portal-sessions-next", userId],
     queryFn: async () => {
-      const { data, error } = await supabasePortal
-        .from("sessions")
-        .select("id, scheduled_at, focus_topic")
-        .eq("user_id", userId)
-        .in("status", ["scheduled", "in_progress"])
-        .gte("scheduled_at", new Date(Date.now() - 30 * 60_000).toISOString())
-        .order("scheduled_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (error) return null;
+      const { data, error } = await supabasePortal.from("sessions")
+        .select("id, scheduled_at, focus_topic, status").eq("user_id", userId)
+        .in("status", ["scheduled", "in_progress"]).order("scheduled_at", { ascending: true }).limit(1).maybeSingle();
+      if (error) throw error;
       return data;
-    },
-    enabled: !!userId,
+    }, enabled: !!userId,
   });
 
-  // Ratings das sessões
+  const nowBrt = brtParts();
+  const monthStart = `${nowBrt.year}-${nowBrt.month}-01T00:00:00-03:00`;
+  const nextMonthDate = new Date(`${monthStart}`);
+  nextMonthDate.setUTCMonth(nextMonthDate.getUTCMonth() + 1);
+  const { data: monthUsed = 0 } = useQuery({
+    queryKey: ["portal-sessions-month-used", userId, monthStart],
+    queryFn: async () => {
+      const { count, error } = await supabasePortal.from("sessions").select("id", { count: "exact", head: true })
+        .eq("user_id", userId).in("status", ["scheduled", "in_progress", "completed", "no_show"])
+        .gte("scheduled_at", monthStart).lt("scheduled_at", nextMonthDate.toISOString());
+      if (error) throw error;
+      return count || 0;
+    }, enabled: !!userId,
+  });
+
   const { data: ratings } = useQuery({
     queryKey: ["portal-session-ratings", userId],
     queryFn: async () => {
-      const { data, error } = await supabasePortal
-        .from("session_ratings")
-        .select("session_id, rating")
-        .eq("user_id", userId)
-        .limit(100);
-      if (error) return [];
+      const { data } = await supabasePortal.from("session_ratings").select("session_id, rating").eq("user_id", userId).limit(100);
       return data || [];
-    },
-    enabled: !!userId,
+    }, enabled: !!userId,
   });
-  const ratingMap = new Map<string, number>(
-    (ratings || []).map((r: any) => [r.session_id, r.rating]),
-  );
+
+  const availableTimes = useMemo(() => {
+    const result: string[] = [];
+    for (let hour = 0; hour <= 23; hour += 1) {
+      for (const minute of [0, 15, 30, 45]) {
+        const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+        if (new Date(brtIso(date, value)).getTime() > Date.now()) result.push(value);
+      }
+    }
+    return result;
+  }, [date]);
+
+  const ratingMap = new Map<string, number>((ratings || []).map((rating) => [rating.session_id, rating.rating]));
+  const planLimit = sessionLimit(profile);
+
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["portal-sessions-next", userId] }),
+      queryClient.invalidateQueries({ queryKey: ["portal-sessions-history", userId] }),
+      queryClient.invalidateQueries({ queryKey: ["portal-sessions-month-used", userId] }),
+    ]);
+  };
+
+  const openScheduler = (reschedule = false) => {
+    setEditing(reschedule);
+    if (reschedule && nextSession?.scheduled_at) {
+      const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      });
+      const parts = formatter.formatToParts(new Date(nextSession.scheduled_at));
+      const get = (type: string) => parts.find((part) => part.type === type)?.value || "";
+      setDate(`${get("year")}-${get("month")}-${get("day")}`);
+      setTime(`${get("hour")}:${get("minute")}`);
+    } else {
+      setDate(today);
+      setTime("");
+    }
+    setSchedulerOpen(true);
+  };
+
+  const manageSession = async (action: "schedule" | "reschedule" | "cancel") => {
+    if (action !== "cancel" && (!date || !time)) return;
+    setSaving(true);
+    try {
+      const { data, error } = await supabasePortal.functions.invoke("manage-portal-session", {
+        body: {
+          action,
+          scheduledAt: action === "cancel" ? null : new Date(brtIso(date, time)).toISOString(),
+          sessionId: action === "schedule" ? null : nextSession?.id,
+        },
+      });
+      const code = data?.error || (error ? "session_update_failed" : null);
+      if (code) throw new Error(code);
+      setSchedulerOpen(false);
+      setCancelOpen(false);
+      await refresh();
+      toast({
+        title: action === "schedule" ? "Sessão agendada" : action === "reschedule" ? "Novo horário confirmado" : "Sessão cancelada",
+        description: action === "cancel" ? "Ela não contará no limite do seu plano." : "A AURA vai lembrar você antes do encontro.",
+      });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "session_update_failed";
+      toast({ title: "Não foi possível concluir", description: ERROR_MESSAGES[code] || ERROR_MESSAGES.session_update_failed, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (isLoading) return <PortalLoadingInline />;
 
-  const planKey = (profile?.plan || "").toString().toLowerCase();
-  const planLimit = PLAN_SESSION_LIMITS[planKey];
-  const used = profile?.sessions_used_this_month ?? 0;
-
   return (
-    <div className="portal-area-page space-y-5">
-      {/* Próxima sessão */}
+    <div className="portal-area-page space-y-6">
       {nextSession ? (
-        <div className="rounded-3xl bg-[#1B2A4E] p-6 space-y-3 animate-fade-up shadow-lg">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-[#B8A5D9] font-bold font-['Nunito']">
-            Próxima sessão
-          </p>
-          <p className="font-['Fraunces'] text-2xl font-semibold text-[#F5F0E8] capitalize tracking-tight leading-tight">
+        <section className="rounded-lg bg-foreground p-5 text-background shadow-card animate-fade-up">
+          <p className="text-xs font-bold uppercase text-accent">Próxima sessão</p>
+          <p className="mt-2 text-xl font-semibold capitalize leading-snug">
             {new Date(nextSession.scheduled_at).toLocaleString("pt-BR", {
-              weekday: "long",
-              day: "2-digit",
-              month: "long",
-              hour: "2-digit",
-              minute: "2-digit",
-              timeZone: "America/Sao_Paulo",
+              weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo",
             })}
           </p>
-          <a
-            href={auraWhatsAppLink("Oi Aura, quero reagendar nossa sessão.")}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-[#B8A5D9] hover:text-[#F5F0E8] font-semibold font-['Nunito'] transition-colors"
-          >
-            <MessageCircle size={14} /> Reagendar pelo WhatsApp
-          </a>
-        </div>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {nextSession.status === "scheduled" ? (
+              <>
+                <Button type="button" variant="secondary" size="sm" onClick={() => openScheduler(true)}><Pencil /> Reagendar</Button>
+                <Button type="button" variant="ghost" size="sm" className="text-background hover:text-foreground" onClick={() => setCancelOpen(true)}><Trash2 /> Cancelar</Button>
+              </>
+            ) : <p className="text-sm text-background/75">Sua sessão está em andamento.</p>}
+          </div>
+        </section>
       ) : (
-        <div className="rounded-2xl border border-dashed border-[#87A878]/30 bg-white/40 p-5 text-center animate-fade-in">
-          <p className="text-sm text-[#2A2A2A]/70 font-['Nunito']">
-            Nenhuma sessão agendada agora.
-          </p>
-          <a
-            href={auraWhatsAppLink("Oi Aura, quero agendar uma sessão.")}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-[#1B2A4E] font-bold font-['Nunito'] mt-2 hover:text-[#87A878] transition-colors"
-          >
-            <MessageCircle size={14} /> Agendar pelo WhatsApp
-          </a>
-        </div>
+        <section className="border-y border-border py-6 text-center animate-fade-in">
+          <CalendarDays className="mx-auto h-7 w-7 text-primary" />
+          <p className="mt-3 text-sm text-muted-foreground">Nenhuma sessão agendada agora.</p>
+          <Button type="button" className="mt-4" onClick={() => openScheduler(false)} disabled={planLimit === 0 || monthUsed >= planLimit}>
+            <Calendar /> Agendar sessão
+          </Button>
+        </section>
       )}
 
-      {/* Contador do mês */}
-      {planLimit ? (
-        <div className="text-xs text-[#2A2A2A]/60 font-['Nunito']">
-          {used} de {planLimit} {planLimit > 1 ? "sessões" : "sessão"} no plano deste mês
+      {planLimit > 0 ? (
+        <div>
+          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+            <span>{monthUsed} de {planLimit} {planLimit > 1 ? "sessões" : "sessão"} neste mês</span>
+            <span>{Math.max(0, planLimit - monthUsed)} {planLimit - monthUsed === 1 ? "disponível" : "disponíveis"}</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${Math.min(100, (monthUsed / planLimit) * 100)}%` }} /></div>
         </div>
       ) : null}
 
-      {/* Lista de sessões */}
-      {(!sessions || sessions.length === 0) && (
-        <EmptyState
-          icon={Calendar}
-          title="Nenhuma sessão concluída ainda"
-          description="Quando vocês fizerem a primeira sessão completa, ela aparece aqui com o resumo."
-        />
-      )}
+      {(!sessions || sessions.length === 0) && <EmptyState icon={Calendar} title="Nenhuma sessão concluída ainda" description="Depois do primeiro encontro, seu resumo fica guardado aqui." />}
 
       {sessions && sessions.length > 0 && (
         <div className="space-y-3">
-          {sessions.map((s: any, idx: number) => {
-            const rating = ratingMap.get(s.id);
-            const date = s.ended_at || s.scheduled_at;
-            const closurePres = s.closure_type
-              ? presentClosure(s.closure_type, s.closure_text)
-              : null;
+          <h2 className="text-sm font-semibold text-foreground">Encontros anteriores</h2>
+          {sessions.map((session, index) => {
+            const rating = ratingMap.get(session.id);
+            const sessionDate = session.ended_at || session.scheduled_at;
+            const closure = session.closure_type ? presentClosure(session.closure_type, session.closure_text) : null;
             return (
-              <details
-                key={s.id}
-                className="rounded-2xl border border-[#87A878]/15 bg-white/60 p-5 shadow-sm animate-fade-up group open:bg-white/80"
-                style={{ animationDelay: `${idx * 60}ms` }}
-              >
-                <summary className="cursor-pointer list-none flex items-start justify-between gap-3">
+              <details key={session.id} className="group rounded-lg border border-border bg-card p-4 shadow-sm animate-fade-up" style={{ animationDelay: `${index * 60}ms` }}>
+                <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito']">
-                      {date
-                        ? new Date(date).toLocaleDateString("pt-BR", {
-                            day: "2-digit",
-                            month: "long",
-                            year: "numeric",
-                          })
-                        : ""}
-                    </p>
-                    <p className="font-['Fraunces'] text-lg font-semibold text-[#1B2A4E] mt-0.5 truncate tracking-tight">
-                      {s.theme_label || s.focus_topic || "Sessão"}
-                    </p>
-                    {closurePres && (
-                      <span className="inline-block mt-2 px-2.5 py-1 rounded-full bg-[#B8A5D9]/25 text-[#1B2A4E] text-[10px] uppercase tracking-wider font-bold font-['Nunito']">
-                        {closurePres.title}
-                      </span>
-                    )}
+                    <p className="text-xs font-bold uppercase text-primary">{sessionDate ? new Date(sessionDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }) : ""}</p>
+                    <p className="mt-1 truncate text-lg font-semibold text-foreground">{session.theme_label || session.focus_topic || "Sessão"}</p>
+                    {closure && <span className="mt-2 inline-block rounded-full bg-secondary px-2.5 py-1 text-xs font-bold text-secondary-foreground">{closure.title}</span>}
                   </div>
-                  {rating ? (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Star size={14} className="text-[#87A878] fill-[#87A878]" />
-                      <span className="text-sm font-bold text-[#1B2A4E] font-['Nunito']">
-                        {rating}
-                      </span>
-                    </div>
-                  ) : null}
+                  {rating ? <div className="flex shrink-0 items-center gap-1"><Star className="fill-primary text-primary" size={14} /><span className="text-sm font-bold">{rating}</span></div> : null}
                 </summary>
-                <div className="mt-4 space-y-3 pt-3 border-t border-[#87A878]/15">
-                  {s.session_summary && (
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-[#87A878] font-bold font-['Nunito'] mb-1">
-                        Resumo
-                      </p>
-                      <p className="text-sm text-[#2A2A2A] font-['Nunito'] leading-relaxed">
-                        {sanitizePortalText(s.session_summary)}
-                      </p>
-                    </div>
-                  )}
-                  {s.reframe_text && (
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-[#87A878] font-bold font-['Nunito'] mb-1">
-                        Reframe
-                      </p>
-                      <p className="text-sm text-[#2A2A2A] font-['Nunito'] leading-relaxed">
-                        {sanitizePortalText(s.reframe_text)}
-                      </p>
-                    </div>
-                  )}
-                  {s.closure_text && (
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-[#87A878] font-bold font-['Nunito'] mb-1">
-                        Fechamento
-                      </p>
-                      <p className="text-[15px] text-[#1B2A4E] font-['Fraunces'] italic leading-relaxed border-l-[3px] border-[#B8A5D9] pl-3">
-                        “{sanitizePortalText(s.closure_text)}”
-                      </p>
-                    </div>
-                  )}
+                <div className="mt-4 space-y-3 border-t border-border pt-3">
+                  {session.session_summary && <div><p className="mb-1 text-xs font-bold uppercase text-primary">Resumo</p><p className="text-sm leading-relaxed">{sanitizePortalText(session.session_summary)}</p></div>}
+                  {session.reframe_text && <div><p className="mb-1 text-xs font-bold uppercase text-primary">Nova leitura</p><p className="text-sm leading-relaxed">{sanitizePortalText(session.reframe_text)}</p></div>}
+                  {session.closure_text && <div><p className="mb-1 text-xs font-bold uppercase text-primary">Fechamento</p><p className="border-l-2 border-accent pl-3 text-sm italic leading-relaxed">“{sanitizePortalText(session.closure_text)}”</p></div>}
                 </div>
               </details>
             );
           })}
         </div>
       )}
+
+      <Dialog open={schedulerOpen} onOpenChange={(open) => !saving && setSchedulerOpen(open)}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg">
+          <DialogHeader className="text-left">
+            <DialogTitle>{editing ? "Escolher um novo horário" : "Agendar sessão"}</DialogTitle>
+            <DialogDescription>Horários de Brasília. Você pode alterar até a hora marcada.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <label className="block text-sm font-medium">Dia<Input className="mt-1.5" type="date" min={today} value={date} onChange={(event) => { setDate(event.target.value); setTime(""); }} /></label>
+            <label className="block text-sm font-medium">Horário
+              <select className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm" value={time} onChange={(event) => setTime(event.target.value)}>
+                <option value="">Selecione</option>
+                {availableTimes.map((slot) => <option key={slot} value={slot}>{slot}</option>)}
+              </select>
+            </label>
+            {availableTimes.length === 0 && <p className="text-sm text-muted-foreground">Não há mais horários disponíveis neste dia.</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSchedulerOpen(false)} disabled={saving}>Voltar</Button>
+            <Button type="button" onClick={() => void manageSession(editing ? "reschedule" : "schedule")} disabled={!date || !time || saving}>{saving ? "Confirmando..." : "Confirmar horário"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={cancelOpen} onOpenChange={(open) => !saving && setCancelOpen(open)}>
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg">
+          <AlertDialogHeader><AlertDialogTitle>Cancelar esta sessão?</AlertDialogTitle><AlertDialogDescription>Ela deixa de ocupar uma sessão do seu mês e você poderá escolher outro horário depois.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel disabled={saving}>Manter sessão</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={(event) => { event.preventDefault(); void manageSession("cancel"); }} disabled={saving}>{saving ? "Cancelando..." : "Cancelar sessão"}</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
