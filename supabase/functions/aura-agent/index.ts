@@ -7848,34 +7848,15 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
         });
         
         if (scheduledAt > new Date()) {
-          // Guarda anti-duplicação: ±30 min para [CRIAR_AGENDA] também
-          const windowStart = new Date(scheduledAt.getTime() - 30 * 60 * 1000).toISOString();
-          const windowEnd = new Date(scheduledAt.getTime() + 30 * 60 * 1000).toISOString();
-          const { data: existingNearby } = await supabase
-            .from('sessions')
-            .select('id')
-            .eq('user_id', profile.user_id)
-            .in('status', ['scheduled', 'active'])
-            .gte('scheduled_at', windowStart)
-            .lte('scheduled_at', windowEnd)
-            .limit(1)
-            .maybeSingle();
-
-          if (existingNearby) {
-            console.warn(`⚠️ [CRIAR_AGENDA] Sessão duplicada evitada em ${scheduledAt.toISOString()} — já existe ${existingNearby.id}`);
-            failedCount++;
-            continue;
-          }
-
-          const { error: sessionError } = await supabase
-            .from('sessions')
-            .insert({
-              user_id: profile.user_id,
-              scheduled_at: scheduledAt.toISOString(),
-              session_type: 'livre',
-              status: 'scheduled',
-              duration_minutes: 45
-            });
+          const { error: sessionError } = await supabase.rpc(
+            'manage_portal_session_internal',
+            {
+              _user_id: profile.user_id,
+              _action: 'schedule',
+              _scheduled_at: scheduledAt.toISOString(),
+              _session_id: null,
+            },
+          );
           
           if (!sessionError) {
             createdCount++;
