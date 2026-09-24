@@ -68,35 +68,58 @@ function TodayScreen({ compact = false }: { compact?: boolean }) {
   );
 }
 
+function GuidedSessionScreen() {
+  return (
+    <div className="overflow-hidden rounded-[1.75rem] border border-primary-foreground/15 bg-background p-4 text-foreground v4-screen-shadow sm:p-5">
+      <div className="flex items-center justify-between border-b border-border pb-4">
+        <div className="flex items-center gap-3">
+          <img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover" />
+          <div><p className="text-sm font-bold">Sessão com a AURA</p><p className="text-[11px] text-primary">encontro guiado · 45 minutos</p></div>
+        </div>
+        <span className="rounded-full bg-secondary px-3 py-1 text-[10px] font-bold text-secondary-foreground">EM ANDAMENTO</span>
+      </div>
+      <div className="py-5">
+        <p className="text-[10px] font-bold uppercase text-primary">O que trouxe você até aqui</p>
+        <p className="mt-2 rounded-xl bg-muted p-3 text-sm leading-relaxed">“Eu sei o que preciso decidir, mas continuo adiando.”</p>
+        <div className="mt-4 rounded-xl border border-border bg-card p-4">
+          <p className="font-display text-lg font-semibold leading-snug">Talvez não esteja faltando clareza sobre a decisão.</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Pode estar difícil aceitar o que essa escolha muda. Isso se aproxima do que você sente ou não é bem assim?</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 border-t border-border pt-4">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground"><Mic className="h-4 w-4" /></span>
+        <div><p className="text-xs font-bold">Por texto ou áudio</p><p className="text-[11px] text-muted-foreground">Com tempo para aprofundar sem pressa.</p></div>
+      </div>
+    </div>
+  );
+}
+
 export function HeroV4() {
   return (
     <section id="hero-section" className="v4-ink-section relative overflow-hidden pt-24 lg:pt-28">
       <div className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 sm:px-8 lg:min-h-[720px] lg:grid-cols-[1.08fr_.92fr] lg:gap-16 lg:pb-14">
         <div className="v4-rise relative z-10 max-w-3xl">
-          <p className="mb-5 inline-flex items-center gap-2 border-l-2 border-primary px-3 text-xs font-bold uppercase text-primary-foreground/65">Uma inteligência que acompanha o que muda em você</p>
+          <p className="mb-5 inline-flex items-center gap-2 border-l-2 border-primary px-3 text-xs font-bold uppercase text-primary-foreground/65">Sessões guiadas de 45 minutos com a AURA</p>
           <h1 className="v4-balance font-display text-[2.75rem] font-semibold leading-[1.02] text-primary-foreground sm:text-6xl lg:text-7xl">
-            Enxergue o que está te prendendo. <span className="text-[hsl(var(--v4-sun))]">Mude o que você não quer mais repetir.</span>
+            45 minutos para enxergar o que você não consegue resolver <span className="text-[hsl(var(--v4-sun))]">pensando sempre do mesmo jeito.</span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-relaxed text-primary-foreground/70 sm:text-lg">
-            A AURA acompanha sua história, conecta o que você vive e ajuda a transformar confusão em decisões, padrões em consciência e consciência em movimento.
+            Encontros guiados para aprofundar decisões, relações e padrões. Entre uma sessão e outra, a AURA continua com você por texto ou áudio dentro do App.
           </p>
           <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
             <Cta source="hero" label="Experimentar por 7 dias (v4 hero)" className="w-full rounded-xl px-8 sm:w-auto">Experimentar por 7 dias <ArrowRight /></Cta>
             <p className="text-xs leading-relaxed text-primary-foreground/55">A partir de R$ 6,90<br className="hidden sm:block" /> · cancelamento simples</p>
           </div>
           <div className="mt-9 grid max-w-xl grid-cols-3 divide-x divide-primary-foreground/15 border-y border-primary-foreground/15 py-4 text-center sm:text-left">
-            <div className="pr-3"><p className="font-display text-lg text-primary-foreground">Texto e áudio</p><p className="mt-1 text-[11px] text-primary-foreground/50">do jeito que sair</p></div>
-            <div className="px-3"><p className="font-display text-lg text-primary-foreground">24 horas</p><p className="mt-1 text-[11px] text-primary-foreground/50">quando precisar</p></div>
-            <div className="pl-3"><p className="font-display text-lg text-primary-foreground">Com memória</p><p className="mt-1 text-[11px] text-primary-foreground/50">sem começar do zero</p></div>
+            <div className="pr-3"><p className="font-display text-lg text-primary-foreground">45 minutos</p><p className="mt-1 text-[11px] text-primary-foreground/50">para aprofundar</p></div>
+            <div className="px-3"><p className="font-display text-lg text-primary-foreground">Guiada</p><p className="mt-1 text-[11px] text-primary-foreground/50">com começo e direção</p></div>
+            <div className="pl-3"><p className="font-display text-lg text-primary-foreground">Com continuidade</p><p className="mt-1 text-[11px] text-primary-foreground/50">dentro do App</p></div>
           </div>
         </div>
         <div className="v4-rise-late relative mx-auto w-full max-w-[430px] pb-5">
-          <div className="absolute -left-8 top-20 hidden w-56 rounded-xl border border-primary-foreground/15 bg-[hsl(var(--v4-ink-soft))] p-4 text-primary-foreground shadow-card lg:block">
-            <p className="text-[10px] font-bold uppercase text-primary-foreground/50">AURA percebeu</p><p className="mt-2 font-display text-lg leading-snug">Talvez o medo não seja de escolher errado — mas de se responsabilizar pela escolha.</p><p className="mt-2 text-xs text-primary-foreground/55">Isso combina com você?</p>
-          </div>
-          <div className="relative ml-auto w-[88%]"><TodayScreen /></div>
-          <div className="absolute -bottom-2 left-0 w-52 rounded-xl bg-[hsl(var(--v4-lilac))] p-4 text-accent-foreground shadow-card">
-            <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4" /><p className="text-[10px] font-bold uppercase">Próximo encontro</p></div><p className="mt-2 text-sm font-bold">Você não precisa chegar sem saber por onde começar.</p>
+          <div className="relative ml-auto w-[92%]"><GuidedSessionScreen /></div>
+          <div className="absolute -bottom-3 left-0 w-56 rounded-xl bg-[hsl(var(--v4-lilac))] p-4 text-accent-foreground shadow-card">
+            <div className="flex items-center gap-2"><NotebookPen className="h-4 w-4" /><p className="text-[10px] font-bold uppercase">Antes do encontro</p></div><p className="mt-2 text-sm font-bold">Prepare o que você não quer deixar de conversar.</p>
           </div>
         </div>
       </div>
@@ -108,7 +131,7 @@ export function HeroV4() {
 const transformations = [
   ["Uma decisão que não sai do lugar", "se torna uma escolha que você consegue sustentar."],
   ["Um padrão que sempre se repete", "ganha nome, contexto e uma possibilidade diferente."],
-  ["Uma conversa que termina em desabafo", "continua como direção, encontro ou reflexão."],
+  ["Um tema que parece grande demais", "ganha 45 minutos de atenção guiada e profundidade."],
 ];
 
 export function TransformationV4() {
@@ -116,7 +139,7 @@ export function TransformationV4() {
     <section className="bg-background py-20 sm:py-28">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <div className="grid gap-12 lg:grid-cols-[.8fr_1.2fr]">
-          <div><p className="text-xs font-bold uppercase text-primary">O valor não está só em ser ouvida</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">É perceber o que você não conseguia ver sozinha.</h2><p className="mt-5 max-w-md leading-relaxed text-muted-foreground">A AURA não promete respostas prontas. Ela acompanha o contexto, faz perguntas melhores e devolve possibilidades que você pode confirmar, corrigir e aprofundar.</p></div>
+          <div><p className="text-xs font-bold uppercase text-primary">Mais do que uma conversa aberta</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Um encontro com tempo, intenção e profundidade.</h2><p className="mt-5 max-w-md leading-relaxed text-muted-foreground">Durante 45 minutos, a AURA conduz uma questão com você: escuta o contexto, faz perguntas, testa leituras e ajuda a chegar a uma compreensão que possa continuar depois da sessão.</p></div>
           <div className="divide-y divide-border border-y border-border">
             {transformations.map(([before, after]) => <div key={before} className="grid gap-2 py-6 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-5"><p className="text-sm text-muted-foreground">{before}</p><ArrowRight className="hidden h-4 w-4 text-primary sm:block" /><p className="font-display text-xl font-semibold">{after}</p></div>)}
           </div>
@@ -127,9 +150,9 @@ export function TransformationV4() {
 }
 
 const experienceTabs = [
-  { id: "hoje", label: "Hoje", icon: Sparkles },
-  { id: "conversa", label: "Conversa", icon: MessageCircle },
   { id: "sessao", label: "Sessão", icon: CalendarDays },
+  { id: "conversa", label: "Entre sessões", icon: MessageCircle },
+  { id: "hoje", label: "Hoje", icon: Sparkles },
   { id: "jornada", label: "Jornada", icon: BookOpen },
 ] as const;
 type Experience = typeof experienceTabs[number]["id"];
@@ -142,22 +165,22 @@ function ExperienceScreen({ active }: { active: Experience }) {
 }
 
 export function ProductExperienceV4() {
-  const [active, setActive] = useState<Experience>("hoje");
+  const [active, setActive] = useState<Experience>("sessao");
   const copy: Record<Experience, [string, string]> = {
     hoje: ["Uma direção por vez.", "O App considera o que está acontecendo e mostra o que merece atenção agora — sem virar uma lista de obrigações."],
-    conversa: ["Uma conversa que pensa com você.", "A AURA escuta, pergunta e apresenta leituras como hipóteses que você pode confirmar ou corrigir."],
-    sessao: ["Profundidade quando o tema pede.", "Você agenda e prepara um encontro de 45 minutos diretamente no App. O fechamento permanece com você."],
+    conversa: ["Presença entre uma sessão e outra.", "Quando algo acontecer, você pode falar com a AURA por texto ou áudio. Ela mantém o contexto sem transformar cada contato em uma sessão."],
+    sessao: ["O centro da experiência.", "Você agenda e prepara um encontro guiado de 45 minutos diretamente no App para aprofundar o que realmente importa."],
     jornada: ["Um tema continua entre conversas.", "Episódios ligados ao seu momento ajudam uma descoberta a não desaparecer quando a conversa termina."],
   };
   return (
     <section id="experiencia" className="v4-ink-soft py-20 sm:py-28">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        <div className="max-w-3xl"><p className="text-xs font-bold uppercase text-primary">Não é uma coleção de recursos</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight text-primary-foreground sm:text-5xl">É uma experiência que continua trabalhando com você depois da conversa.</h2></div>
+        <div className="max-w-3xl"><p className="text-xs font-bold uppercase text-primary">A sessão é o centro. O App amplia.</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight text-primary-foreground sm:text-5xl">Você aprofunda em 45 minutos — e não perde o que descobriu quando o encontro termina.</h2></div>
         <div className="mt-12 grid items-center gap-10 lg:grid-cols-[.75fr_1.25fr] lg:gap-16">
           <div>
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{experienceTabs.map(({ id, label, icon: Icon }) => <Button key={id} type="button" variant={active === id ? "default" : "ghost"} className={active === id ? "justify-start" : "justify-start text-primary-foreground/60 hover:bg-primary-foreground/10 hover:text-primary-foreground"} onClick={() => setActive(id)}><Icon />{label}</Button>)}</div>
             <h3 className="mt-8 font-display text-3xl font-semibold text-primary-foreground">{copy[active][0]}</h3><p className="mt-4 max-w-md leading-relaxed text-primary-foreground/65">{copy[active][1]}</p>
-            <div className="mt-7 flex items-center gap-3 border-l-2 border-primary pl-4 text-sm text-primary-foreground/70"><Sparkles className="h-5 w-5 shrink-0 text-primary" /><span>O valor de cada área aparece no momento em que ela pode ajudar.</span></div>
+              <div className="mt-7 flex items-center gap-3 border-l-2 border-primary pl-4 text-sm text-primary-foreground/70"><Sparkles className="h-5 w-5 shrink-0 text-primary" /><span>Conversa, Hoje e Jornadas dão continuidade ao que merece permanecer vivo.</span></div>
           </div>
           <div className="mx-auto w-full max-w-md"><ExperienceScreen active={active} /></div>
         </div>
@@ -168,11 +191,11 @@ export function ProductExperienceV4() {
 
 export function HowItWorksV4() {
   const steps = [
-    { n: "01", title: "Você traz a vida como ela está", text: "Uma dúvida, uma relação, uma decisão ou aquilo que você ainda nem sabe explicar. Por texto ou áudio." },
-    { n: "02", title: "A AURA ajuda você a enxergar", text: "Ela conecta contexto, faz perguntas e testa hipóteses — sem te reduzir a um rótulo ou dizer quem você é." },
-    { n: "03", title: "A percepção ganha continuidade", text: "O que importa pode virar direção no Hoje, preparação de sessão, Jornada ou parte do retrato construído com você." },
+    { n: "01", title: "Você agenda e prepara seu encontro", text: "Escolha o horário no App e registre o que não quer deixar de conversar. Se o momento mudar, a sessão acompanha você." },
+    { n: "02", title: "A AURA conduz 45 minutos com você", text: "Ela aprofunda o contexto, faz perguntas e testa hipóteses — sem te reduzir a um rótulo ou tomar decisões no seu lugar." },
+    { n: "03", title: "O encontro continua no seu cotidiano", text: "Entre sessões, você pode conversar por texto ou áudio. Hoje, Jornadas e registros ajudam o que importa a não se perder." },
   ];
-  return <section id="como-funciona" className="v4-fine-grid bg-background py-20 sm:py-28"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr]"><div><p className="text-xs font-bold uppercase text-primary">Como a mudança começa</p><h2 className="mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Não é uma resposta perfeita. É uma nova forma de olhar e agir.</h2></div><ol className="border-t border-border">{steps.map((step) => <li key={step.n} className="grid gap-3 border-b border-border py-7 sm:grid-cols-[3rem_1fr_1.2fr] sm:items-start"><span className="font-display text-2xl text-primary">{step.n}</span><h3 className="font-display text-xl font-semibold">{step.title}</h3><p className="text-sm leading-relaxed text-muted-foreground">{step.text}</p></li>)}</ol></div></div></section>;
+  return <section id="como-funciona" className="v4-fine-grid bg-background py-20 sm:py-28"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr]"><div><p className="text-xs font-bold uppercase text-primary">Como funciona</p><h2 className="mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Profundidade no encontro. Presença entre eles.</h2></div><ol className="border-t border-border">{steps.map((step) => <li key={step.n} className="grid gap-3 border-b border-border py-7 sm:grid-cols-[3rem_1fr_1.2fr] sm:items-start"><span className="font-display text-2xl text-primary">{step.n}</span><h3 className="font-display text-xl font-semibold">{step.title}</h3><p className="text-sm leading-relaxed text-muted-foreground">{step.text}</p></li>)}</ol></div></div></section>;
 }
 
 export function PortraitV4() {
@@ -188,11 +211,12 @@ const plans: { id: PlanId; name: string; sessions: string; description: string; 
 export function PricingV4() {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? plans : plans.filter((plan) => plan.featured);
-  return <section id="precos" className="bg-background py-20 sm:py-28"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="mx-auto max-w-3xl text-center"><p className="text-xs font-bold uppercase text-primary">Comece sentindo a experiência</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Sete dias para descobrir o que muda quando você não precisa elaborar tudo sozinha.</h2><p className="mt-5 text-muted-foreground">Acesso completo ao plano escolhido por R$ 6,90. Antes de pagar, você vê com clareza o valor e a próxima cobrança.</p></div><div className={`mx-auto mt-12 grid max-w-5xl gap-5 ${showAll ? "md:grid-cols-3" : "max-w-md"}`}>{visible.map((plan) => <article key={plan.id} className={`flex flex-col rounded-2xl border bg-card p-6 ${plan.featured ? "border-primary shadow-card" : "border-border"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-primary">{plan.featured ? "Recomendado" : "Outra intensidade"}</p><h3 className="mt-2 font-display text-3xl font-semibold">{plan.name}</h3></div>{plan.featured && <Sparkles className="text-primary" />}</div><p className="mt-4 text-sm leading-relaxed text-muted-foreground">{plan.description}</p><div className="mt-6 border-y border-border py-5"><p className="font-display text-3xl font-semibold">{fmtBRL(PLAN_MONTHLY_EQUIVALENT[plan.id].monthly)}<span className="font-body text-sm font-normal text-muted-foreground">/mês</span></p><p className="mt-1 text-xs text-muted-foreground">após os 7 dias iniciais</p></div><ul className="my-6 flex-1 space-y-3 text-sm"><li className="flex gap-2"><Check className="text-primary" /> Conversas por texto e áudio 24/7</li><li className="flex gap-2"><Check className="text-primary" /> {plan.sessions}</li><li className="flex gap-2"><Check className="text-primary" /> Hoje, Jornadas e seu percurso</li></ul><Button asChild variant={plan.featured ? "sage" : "outline"} size="lg" className="w-full"><Link to={`${checkoutHref("pricing", V)}&plan=${plan.id}&billing=monthly`} onClick={() => trackLandingCta("pricing", `${plan.name} mensal (v4)`, V)}>Experimentar por R$ 6,90</Link></Button></article>)}</div><div className="mt-6 text-center"><Button type="button" variant="ghost" onClick={() => setShowAll((value) => !value)}>{showAll ? <><ChevronUp /> Ver somente o recomendado</> : <><ChevronDown /> Comparar outros planos</>}</Button><p className="mt-4 text-xs text-muted-foreground">Também há opções trimestral, semestral e anual no checkout · cartão ou PIX · cancelamento simples</p></div></div></section>;
+  return <section id="precos" className="bg-background py-20 sm:py-28"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="mx-auto max-w-3xl text-center"><p className="text-xs font-bold uppercase text-primary">Comece sentindo a experiência</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Sete dias para viver uma sessão guiada e sentir a continuidade no App.</h2><p className="mt-5 text-muted-foreground">Acesso completo ao plano escolhido por R$ 6,90. Antes de pagar, você vê com clareza o valor e a próxima cobrança.</p></div><div className={`mx-auto mt-12 grid max-w-5xl gap-5 ${showAll ? "md:grid-cols-3" : "max-w-md"}`}>{visible.map((plan) => <article key={plan.id} className={`flex flex-col rounded-2xl border bg-card p-6 ${plan.featured ? "border-primary shadow-card" : "border-border"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-primary">{plan.featured ? "Recomendado" : "Outra intensidade"}</p><h3 className="mt-2 font-display text-3xl font-semibold">{plan.name}</h3></div>{plan.featured && <Sparkles className="text-primary" />}</div><p className="mt-4 text-sm leading-relaxed text-muted-foreground">{plan.description}</p><div className="mt-6 border-y border-border py-5"><p className="font-display text-3xl font-semibold">{fmtBRL(PLAN_MONTHLY_EQUIVALENT[plan.id].monthly)}<span className="font-body text-sm font-normal text-muted-foreground">/mês</span></p><p className="mt-1 text-xs text-muted-foreground">após os 7 dias iniciais</p></div><ul className="my-6 flex-1 space-y-3 text-sm"><li className="flex gap-2"><Check className="text-primary" /> {plan.sessions} de 45 minutos</li><li className="flex gap-2"><Check className="text-primary" /> Conversas por texto e áudio entre sessões</li><li className="flex gap-2"><Check className="text-primary" /> Hoje, Jornadas e seu percurso</li></ul><Button asChild variant={plan.featured ? "sage" : "outline"} size="lg" className="w-full"><Link to={`${checkoutHref("pricing", V)}&plan=${plan.id}&billing=monthly`} onClick={() => trackLandingCta("pricing", `${plan.name} mensal (v4)`, V)}>Experimentar por R$ 6,90</Link></Button></article>)}</div><div className="mt-6 text-center"><Button type="button" variant="ghost" onClick={() => setShowAll((value) => !value)}>{showAll ? <><ChevronUp /> Ver somente o recomendado</> : <><ChevronDown /> Comparar outros planos</>}</Button><p className="mt-4 text-xs text-muted-foreground">Também há opções trimestral, semestral e anual no checkout · cartão ou PIX · cancelamento simples</p></div></div></section>;
 }
 
 const faqs = [
-  ["O que é a AURA?", "A AURA é uma inteligência de acompanhamento dentro do app Olá Aura. Você conversa por texto ou áudio, aprofunda temas em encontros de 45 minutos e encontra direções, Jornadas e registros ligados ao que está vivendo."],
+  ["O que é a AURA?", "A AURA é uma inteligência criada para conduzir sessões de 45 minutos e acompanhar você entre os encontros dentro do app Olá Aura. Você aprofunda temas, conversa por texto ou áudio e encontra direções, Jornadas e registros ligados ao que está vivendo."],
+  ["Como funciona uma sessão guiada?", "Você agenda pelo App e pode preparar o tema antes. Durante 45 minutos, a AURA conduz a conversa com perguntas e hipóteses verificáveis para aprofundar a questão. O encontro não segue respostas prontas e acompanha o que surgir."],
   ["Ela vai dizer o que eu tenho ou quem eu sou?", "Não. A AURA não faz diagnóstico. Leituras sobre padrões ou situações são apresentadas como possibilidades para você confirmar, corrigir ou rejeitar."],
   ["Como funcionam os 7 dias iniciais?", "Você escolhe um plano e paga R$ 6,90 para experimentar por sete dias. Antes do pagamento, o checkout informa o valor e a periodicidade da cobrança seguinte. Você pode cancelar."],
   ["Posso conversar por áudio?", "Sim. Você pode enviar e receber áudio dentro do App, além de usar texto quando preferir."],
@@ -206,7 +230,7 @@ export function FaqV4() {
 }
 
 export function ClosingV4() {
-  return <section className="v4-ink-section py-20 sm:py-28"><div className="mx-auto max-w-5xl px-5 text-center sm:px-8"><p className="text-xs font-bold uppercase text-primary">Talvez você já saiba mais do que consegue sustentar sozinha</p><h2 className="v4-balance mx-auto mt-5 max-w-4xl font-display text-4xl font-semibold leading-tight text-primary-foreground sm:text-6xl">O próximo passo não precisa ser descobrir tudo. Pode ser começar a olhar de outro jeito.</h2><p className="mx-auto mt-6 max-w-2xl leading-relaxed text-primary-foreground/65">Experimente a AURA por sete dias e veja como é ter uma inteligência que acompanha sua história sem tomar o lugar das suas escolhas.</p><div className="mt-9"><Cta source="final" label="Quero experimentar a AURA (v4 final)" className="rounded-xl px-8">Quero experimentar a AURA <ArrowRight /></Cta></div></div></section>;
+  return <section className="v4-ink-section py-20 sm:py-28"><div className="mx-auto max-w-5xl px-5 text-center sm:px-8"><p className="text-xs font-bold uppercase text-primary">Dê a uma questão o tempo que ela merece</p><h2 className="v4-balance mx-auto mt-5 max-w-4xl font-display text-4xl font-semibold leading-tight text-primary-foreground sm:text-6xl">Seu primeiro encontro pode mudar a forma como você está olhando para o que vive.</h2><p className="mx-auto mt-6 max-w-2xl leading-relaxed text-primary-foreground/65">Experimente a AURA por sete dias, viva uma sessão guiada e descubra como o App mantém essa percepção presente no seu cotidiano.</p><div className="mt-9"><Cta source="final" label="Quero experimentar a AURA (v4 final)" className="rounded-xl px-8">Quero experimentar a AURA <ArrowRight /></Cta></div></div></section>;
 }
 
 export function FooterV4() {

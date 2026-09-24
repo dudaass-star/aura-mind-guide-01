@@ -6,6 +6,7 @@
 # Roadmap
 
 - [x] Criar e validar a Landing V4 com transformação como protagonista e o App como prova concreta do valor.
+- [x] Reposicionar e validar a Landing V4 com sessão guiada de 45 minutos como protagonista.
 
 - [x] Transformar Jornadas em continuidade ativa: cadência fixa, um episódio pendente, leitura confirmada, reflexão, escolha guiada e métricas.
 
