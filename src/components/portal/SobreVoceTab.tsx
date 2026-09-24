@@ -56,7 +56,7 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
       const [portraitRes, factsRes, feedbackRes] = await Promise.all([
         supabasePortal.from("user_portraits").select("*").eq("user_id", userId).maybeSingle(),
         supabasePortal.from("user_insights").select("id,key,value,created_at").eq("user_id", userId).eq("category", "user_added").order("created_at", { ascending: false }),
-        supabasePortal.from("user_portrait_feedback" as any).select("item_key,section,original_text,status,corrected_text").eq("user_id", userId),
+        supabasePortal.from("user_portrait_feedback").select("item_key,section,original_text,status,corrected_text").eq("user_id", userId),
       ]);
       if (portraitRes.error) throw portraitRes.error;
       if (factsRes.error) throw factsRes.error;
