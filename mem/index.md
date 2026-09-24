@@ -36,3 +36,4 @@
 - [Preparação e abertura da sessão](mem://features/sessions/preparacao-e-abertura) — Preparação atual tem prioridade; ponte anterior e compromissos só entram quando forem relevantes
 - [Papel da área Hoje](mem://features/portal/hoje-direcao-diaria) — Hoje é a direção diária integrada do app; Percurso/insights não é uma frente separada de evolução
 - [Continuidade sem pontuação](mem://features/portal/continuidade-sem-pontuacao) — Estados qualitativos sem nota, comparação ou recompensa por exposição pessoal
+- [Escala operacional do aplicativo](mem://technical/app-scale-first14) — Lotes, retomada segura, idempotência, métricas e validação de carga para rotinas recorrentes
