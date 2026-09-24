@@ -153,6 +153,7 @@ function normalizedText(value: unknown): string {
 }
 
 function feedbackReference(item: any): string {
+  if (item == null) return "";
   if (item.section === "pessoas") {
     return [item.label, ...(Array.isArray(item.names) ? item.names : []), item.nota]
       .filter(Boolean).join(" · ");
