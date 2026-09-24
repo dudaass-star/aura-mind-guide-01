@@ -68,27 +68,40 @@ function TodayScreen({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function GuidedSessionScreen() {
+function MonthlySessionsScreen() {
   return (
     <div className="overflow-hidden rounded-[1.75rem] border border-primary-foreground/15 bg-background p-4 text-foreground v4-screen-shadow sm:p-5">
-      <div className="flex items-center justify-between border-b border-border pb-4">
-        <div className="flex items-center gap-3">
-          <img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover" />
-          <div><p className="text-sm font-bold">Sessão com a AURA</p><p className="text-[11px] text-primary">encontro guiado · 45 minutos</p></div>
+      <div className="flex items-start justify-between border-b border-border pb-4">
+        <div>
+          <p className="text-[10px] font-bold uppercase text-primary">Sessões guiadas</p>
+          <h2 className="mt-1 font-display text-2xl font-semibold">Setembro</h2>
         </div>
-        <span className="rounded-full bg-secondary px-3 py-1 text-[10px] font-bold text-secondary-foreground">EM ANDAMENTO</span>
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary"><CalendarDays className="h-5 w-5 text-primary" /></span>
       </div>
-      <div className="py-5">
-        <p className="text-[10px] font-bold uppercase text-primary">O que trouxe você até aqui</p>
-        <p className="mt-2 rounded-xl bg-muted p-3 text-sm leading-relaxed">“Eu sei o que preciso decidir, mas continuo adiando.”</p>
-        <div className="mt-4 rounded-xl border border-border bg-card p-4">
-          <p className="font-display text-lg font-semibold leading-snug">Talvez não esteja faltando clareza sobre a decisão.</p>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Pode estar difícil aceitar o que essa escolha muda. Isso se aproxima do que você sente ou não é bem assim?</p>
+      <div className="space-y-3 py-4">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-bold text-muted-foreground">12 SET · 19:00</p>
+            <span className="flex items-center gap-1 text-[10px] font-bold text-primary"><CheckCircle2 className="h-3.5 w-3.5" /> CONCLUÍDA</span>
+          </div>
+          <h3 className="mt-3 font-display text-lg font-semibold">Decisão profissional</h3>
+          <p className="mt-1 text-xs text-muted-foreground">45 minutos de aprofundamento</p>
+        </div>
+        <div className="rounded-xl border-2 border-primary bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-bold text-primary">26 SET · 19:00</p>
+            <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-bold text-secondary-foreground">PRÓXIMA</span>
+          </div>
+          <h3 className="mt-3 font-display text-xl font-semibold">Relacionamentos e limites</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Sexta-feira · encontro guiado de 45 minutos</p>
+          <div className="mt-4 flex items-center justify-between rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground">
+            <span>Preparar encontro</span><ArrowRight className="h-4 w-4" />
+          </div>
         </div>
       </div>
-      <div className="flex items-center gap-3 border-t border-border pt-4">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground"><Mic className="h-4 w-4" /></span>
-        <div><p className="text-xs font-bold">Por texto ou áudio</p><p className="text-[11px] text-muted-foreground">Com tempo para aprofundar sem pressa.</p></div>
+      <div className="flex items-start gap-3 border-t border-border pt-4">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary"><NotebookPen className="h-4 w-4 text-primary" /></span>
+        <p className="text-xs leading-relaxed text-muted-foreground">Encontros marcados para aprofundar uma questão com começo, condução e direção.</p>
       </div>
     </div>
   );
@@ -117,10 +130,7 @@ export function HeroV4() {
           </div>
         </div>
         <div className="v4-rise-late relative mx-auto w-full max-w-[430px] pb-5">
-          <div className="relative ml-auto w-[92%]"><GuidedSessionScreen /></div>
-          <div className="absolute -bottom-3 left-0 w-56 rounded-xl bg-[hsl(var(--v4-lilac))] p-4 text-accent-foreground shadow-card">
-            <div className="flex items-center gap-2"><NotebookPen className="h-4 w-4" /><p className="text-[10px] font-bold uppercase">Antes do encontro</p></div><p className="mt-2 text-sm font-bold">Prepare o que você não quer deixar de conversar.</p>
-          </div>
+          <MonthlySessionsScreen />
         </div>
       </div>
       <div className="mx-auto max-w-7xl border-t border-primary-foreground/10 px-5 py-4 text-center text-xs text-primary-foreground/50 sm:px-8">Não faz diagnóstico e não substitui atendimento profissional. É acompanhamento para o dia a dia.</div>
