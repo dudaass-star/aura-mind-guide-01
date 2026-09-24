@@ -11,6 +11,7 @@
 - [x] Diferenciar visualmente as sessões da conversa na abertura da Landing V4 reproduzindo fielmente a tela real de Sessões.
 - [x] Conectar Jornadas, Meditações, Sobre você e Percurso à demonstração de valor da Landing V4 com telas fiéis do App.
 - [x] Reposicionar a oferta da Landing V4 no Essencial: entrada por R$ 6,90, continuidade por R$ 29,90 e planos maiores como opção secundária.
+- [x] Enxugar a Landing V4 e aproximar da oferta a prova social confirmada por avaliações reais de sessões.
 
 - [x] Transformar Jornadas em continuidade ativa: cadência fixa, um episódio pendente, leitura confirmada, reflexão, escolha guiada e métricas.
 
