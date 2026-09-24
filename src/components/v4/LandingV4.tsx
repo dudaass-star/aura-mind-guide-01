@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown,
@@ -215,13 +215,13 @@ export function FooterV4() {
 
 export function StickyCtaV4() {
   const [show, setShow] = useState(false);
-  useState(() => {
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const onScroll = () => setShow(window.scrollY > Math.max(480, window.innerHeight * 0.72));
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
-  });
+  }, []);
   if (!show) return null;
   return <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 p-3 backdrop-blur md:hidden"><Cta source="sticky" label="Experimentar por R$ 6,90 (v4 sticky)" className="w-full rounded-xl">Experimentar por R$ 6,90 <ArrowRight /></Cta></div>;
 }
