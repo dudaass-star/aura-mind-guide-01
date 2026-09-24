@@ -78,6 +78,12 @@ const UserPortal = () => {
     || Boolean(discussionEpisodeId)
     || (searchParams.get("push") === "open" && searchParams.get("type") === "new_reply");
 
+  useEffect(() => {
+    if (activeTab === initialTab) return;
+    setVisitedTabs((current) => current.has(initialTab) ? current : new Set(current).add(initialTab));
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
   const { data: discussionEpisode } = useQuery({
     queryKey: ["portal-discussion-episode", userId, discussionEpisodeId],
     queryFn: async () => {
@@ -115,7 +121,27 @@ const UserPortal = () => {
         path: window.location.pathname,
       },
     }).then(({ error }) => {
-      if (!error && deliveryId) rememberPushAttribution(deliveryId, searchParams.get("type") || undefined);
+      if (!error && deliveryId) {
+        const notificationType = searchParams.get("type") || undefined;
+        rememberPushAttribution(deliveryId, notificationType);
+        const featureByType: Record<string, "conversation" | "session" | "journey" | "practice" | "progress"> = {
+          first14_conversation: "conversation",
+          first14_session: "session",
+          first14_journey: "journey",
+          first14_practice: "practice",
+          first14_progress: "progress",
+        };
+        const feature = notificationType ? featureByType[notificationType] : undefined;
+        if (feature) {
+          void supabasePortal.from("portal_value_events").insert({
+            user_id: userId,
+            feature,
+            event_type: "first14_push_opened",
+            source: "push",
+            metadata: { delivery_id: deliveryId },
+          });
+        }
+      }
     });
   }, [searchParams, userId]);
 
@@ -196,7 +222,7 @@ const UserPortal = () => {
       const { data, error } = await supabasePortal
         .from("profiles")
         .select(
-          "name, status, payment_failed_at, current_journey_id, current_episode, journeys_completed, journey_paused, journey_selected_goal, plan, plan_tier, billing_cycle, asaas_customer_id, card_gateway, last_user_message_at, last_proactive_insight_at, sessions_used_this_month, messages_used_this_month, messages_reset_month, created_at",
+          "name, status, payment_failed_at, current_journey_id, current_episode, journeys_completed, journey_paused, journey_selected_goal, plan, plan_tier, billing_cycle, asaas_customer_id, card_gateway, last_user_message_at, last_proactive_insight_at, sessions_used_this_month, messages_used_this_month, messages_reset_month, created_at, converted_at, trial_started_at",
         )
         .eq("user_id", userId)
         .maybeSingle();

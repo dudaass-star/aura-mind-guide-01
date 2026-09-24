@@ -10,6 +10,7 @@ import { ContinuitySignal } from "./ContinuitySignal";
 import { PerguntaDoDiaCard } from "./PerguntaDoDiaCard";
 import { PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
+import { chooseFirst14Direction } from "@/lib/first-14-days";
 
 interface HojeTabProps {
   userId: string;
@@ -19,7 +20,7 @@ interface HojeTabProps {
   onOpenConversation: (prefilledMessage?: string) => void;
 }
 
-type TodayAction = "conversation" | "session" | "session_preparation" | "journey" | "continuity" | "practice";
+type TodayAction = "conversation" | "session" | "session_preparation" | "journey" | "continuity" | "practice" | "progress";
 
 function brtHour() {
   return Number(new Intl.DateTimeFormat("pt-BR", {
@@ -91,7 +92,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
   const { data, isLoading } = useQuery({
     queryKey: ["portal-today-direction", userId, profile?.current_journey_id, profile?.current_episode],
     queryFn: async () => {
-      const [lastSessionResult, nextSessionResult, snapshotResult, reportResult, userAddedResult, meditationResult, episodeResult] = await Promise.all([
+      const [lastSessionResult, nextSessionResult, snapshotResult, reportResult, userAddedResult, meditationResult, episodeResult, journeyExperienceResult, practiceExperienceResult, progressExperienceResult] = await Promise.all([
         supabasePortal.from("sessions")
           .select("id, ended_at, focus_topic, session_summary, closure_text, theme_label")
           .eq("user_id", userId).eq("status", "completed")
@@ -119,6 +120,13 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
               .lte("episode_number", profile.current_episode)
               .order("episode_number", { ascending: false }).limit(1).maybeSingle()
           : Promise.resolve({ data: null, error: null }),
+        supabasePortal.from("journey_episode_progress")
+          .select("id,status", { count: "exact" }).eq("user_id", userId),
+        supabasePortal.from("user_meditation_history")
+          .select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabasePortal.from("portal_value_events")
+          .select("id", { count: "exact", head: true }).eq("user_id", userId)
+          .eq("feature", "progress").in("event_type", ["opened", "experienced"]),
       ]);
 
       let meditation = null;
@@ -148,6 +156,10 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
         meditation,
         episode: episodeResult.data,
         userAddedCount: userAddedResult.count ?? 0,
+        journeyCount: journeyExperienceResult.count ?? 0,
+        hasPendingEpisode: (journeyExperienceResult.data ?? []).some((item) => item.status === "released" || item.status === "in_progress"),
+        practiceCount: practiceExperienceResult.count ?? 0,
+        progressCount: progressExperienceResult.count ?? 0,
       };
     },
     enabled: Boolean(userId),
@@ -188,6 +200,57 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
       }
     }
 
+    const accountStartAt = profile?.converted_at || profile?.trial_started_at || profile?.created_at;
+    const accountCreatedAt = accountStartAt ? new Date(accountStartAt).getTime() : 0;
+    const ageDays = accountCreatedAt ? Math.max(0, Math.floor((Date.now() - accountCreatedAt) / 86_400_000)) : 30;
+    const first14 = chooseFirst14Direction({
+      ageDays,
+      hasConversation: !zeroConversation,
+      hasJourney: Boolean(profile?.current_journey_id) || (data?.journeyCount ?? 0) > 0,
+      hasCompletedSession: Boolean(data?.lastSession),
+      hasPractice: (data?.practiceCount ?? 0) > 0,
+      hasProgress: (data?.progressCount ?? 0) > 0,
+      hasPendingEpisode: Boolean(data?.hasPendingEpisode),
+      hasUpcomingSession: Boolean(nextSession),
+    });
+
+    if (first14?.action === "journey") return {
+      action: "journey" as const,
+      eyebrow: "Um segundo jeito de cuidar de você",
+      title: "Escolha um tema para acompanhar no seu ritmo",
+      description: "As Jornadas organizam um assunto em episódios curtos. Você escolhe o que faz sentido agora.",
+      button: "Conhecer Jornadas",
+      icon: BookOpen,
+      milestone: first14.milestone,
+    };
+    if (first14?.action === "session") return {
+      action: "session" as const,
+      eyebrow: "Mais tempo para um assunto",
+      title: "Conheça seus encontros com a AURA",
+      description: "Nas sessões, você reserva um tempo maior para olhar com calma o que precisa de direção.",
+      button: "Conhecer Sessões",
+      icon: CalendarDays,
+      milestone: first14.milestone,
+    };
+    if (first14?.action === "practice") return {
+      action: "practice" as const,
+      eyebrow: "Uma pausa no seu ritmo",
+      title: "Há práticas em áudio para momentos diferentes",
+      description: "Use quando ouvir fizer mais sentido do que conversar ou ler.",
+      button: "Explorar práticas",
+      icon: Headphones,
+      milestone: first14.milestone,
+    };
+    if (first14?.action === "progress") return {
+      action: "progress" as const,
+      eyebrow: "Continuidade construída",
+      title: "Seu percurso começa a ganhar forma",
+      description: "Veja o que já ficou registrado na sua experiência com a AURA, sem conclusões fechadas sobre você.",
+      button: "Ver meu percurso",
+      icon: Sparkles,
+      milestone: first14.milestone,
+    };
+
     if (data?.episode) return {
       action: "journey" as const,
       eyebrow: "Sua jornada continua",
@@ -223,7 +286,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
       button: "Conversar com a AURA",
       icon: MessageCircle,
     };
-  }, [data, zeroConversation]);
+  }, [data, profile?.converted_at, profile?.created_at, profile?.current_journey_id, profile?.trial_started_at, zeroConversation]);
 
   useEffect(() => {
     if (isLoading || !priority) return;
@@ -241,7 +304,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
   if (isLoading) return <PortalLoadingInline />;
 
   const handlePriority = () => {
-    recordTodayEvent(userId, "priority_opened", priority.action);
+    recordTodayEvent(userId, "priority_opened", priority.action, "milestone" in priority ? { milestone: priority.milestone } : {});
     if (priority.action === "session" || priority.action === "session_preparation") {
       onNavigateTab("sessoes");
       return;
@@ -252,6 +315,14 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
     }
     if (priority.action === "journey") {
       onNavigateTab("jornadas");
+      return;
+    }
+    if (priority.action === "practice") {
+      onNavigateTab("meditacoes");
+      return;
+    }
+    if (priority.action === "progress") {
+      onNavigateTab("insights");
       return;
     }
     if (priority.action === "continuity") {

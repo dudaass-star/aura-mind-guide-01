@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { InstallAppMenuItem, useInstallApp } from "@/components/portal/InstallAppMenuItem";
 import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDialog";
-import { ValueDiscoveryCard } from "@/components/portal/ValueDiscoveryCard";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
 import type { Json } from "@/integrations/supabase/types";
@@ -1093,12 +1092,6 @@ export function ConversarTab({
           </div>
         </Button>
       </div>
-
-      <ValueDiscoveryCard
-        userId={userId}
-        hasConversation={messages.some((message) => message.role === "user")}
-        onNavigate={onNavigate}
-      />
 
       <div className="flex-1 overflow-y-auto border-t border-border/50 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5">
         <div className="mb-3 flex items-center justify-between px-1">
