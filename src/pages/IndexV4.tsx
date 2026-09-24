@@ -20,13 +20,13 @@ const IndexV4 = () => {
   return (
     <>
       <Helmet>
-        <title>Olá AURA — Enxergue o que está te prendendo</title>
-        <meta name="description" content="A AURA acompanha sua história e ajuda você a transformar confusão em decisões, padrões em consciência e consciência em movimento." />
+        <title>Olá AURA — Sessões guiadas de 45 minutos</title>
+        <meta name="description" content="Sessões guiadas de 45 minutos com a AURA para aprofundar decisões, relações e padrões, com acompanhamento contínuo dentro do App." />
         <meta name="robots" content="noindex, nofollow" />
         <link rel="canonical" href="https://olaaura.com.br/v4" />
         <meta property="og:url" content="https://olaaura.com.br/v4" />
-        <meta property="og:title" content="Olá AURA — Enxergue o que está te prendendo" />
-        <meta property="og:description" content="Uma inteligência que acompanha sua história e ajuda você a mudar o que não quer mais repetir." />
+        <meta property="og:title" content="Olá AURA — Sessões guiadas de 45 minutos" />
+        <meta property="og:description" content="Profundidade no encontro. Presença entre uma sessão e outra." />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
       </Helmet>

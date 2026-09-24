@@ -1,6 +1,7 @@
 # Project Memory — entradas novas
 
 ## Memories
+- [Landing V4 com sessão como protagonista](mem://marketing/landing-v4-session-first) — Sessão guiada de 45 minutos lidera a proposta; conversa sustenta o intervalo e o App amplia a continuidade
 - [Identidade do app Olá Aura](mem://style/product-naming-app-ola-aura) — Olá Aura é o produto/app; AURA é somente a pessoa da conversa; não usar “Meu Espaço” na experiência visível
 - [Primeira sessão sem onboarding faseado](mem://features/sessions/primeira-sessao-sem-onboarding-faseado) — Roteiro de 5 fases removido em 27/08/2026 (loop de foco, 1ª sessão 4,47 vs 4,80); condução normal + nota curta factual
 - [Vitrine de valor em 3 níveis](mem://features/recovery/value-showcase-tiers) — recovery-agent: memória/conveniência são nível C (nunca vendem); cenas de desejo (encontro 45min, meditações, jornadas) são a escolha padrão
