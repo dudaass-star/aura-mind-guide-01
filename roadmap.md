@@ -5,6 +5,7 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+- [x] Criar a segunda rodada de criativos estáticos para Meta Ads com produto, mecanismo e oferta compreensíveis sem depender da legenda.
 - [x] Criar e validar a Landing V4 com transformação como protagonista e o App como prova concreta do valor.
 - [x] Reposicionar e validar a Landing V4 com sessão guiada de 45 minutos como protagonista.
 - [x] Reequilibrar a Landing V4 com conversa real do App, diálogo humano de impacto e funcionalidades com valor próprio.
