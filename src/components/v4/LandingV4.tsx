@@ -70,7 +70,7 @@ function TodayScreen({ compact = false }: { compact?: boolean }) {
 
 function MonthlySessionsScreen() {
   return (
-    <div className="portal-chat-theme portal-app-theme portal-app-area-sessoes overflow-hidden rounded-[1.75rem] border border-primary-foreground/15 bg-background text-foreground v4-screen-shadow">
+    <div className="portal-chat-theme overflow-hidden rounded-[1.75rem] border border-primary-foreground/15 bg-background text-foreground v4-screen-shadow">
       <header className="border-b border-border/70 bg-card/90 px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground"><ArrowLeft className="h-5 w-5" /></span>
