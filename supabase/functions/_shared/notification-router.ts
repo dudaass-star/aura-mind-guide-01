@@ -6,6 +6,7 @@ import {
   isNonUrgentNotification,
   nextPreferredDeliveryAt,
 } from "./notification-personalization.ts";
+import { actionFromNotificationType, isFirst14NotificationCurrent } from "./first-14-days.ts";
 
 type NotificationCategory = "response" | "session" | "journey" | "practice" | "report" | "reminder" | "engagement";
 
@@ -166,6 +167,15 @@ export async function routeNotification(supabase: any, request: NotificationRequ
     deliveryError = null;
   }
   if (deliveryError || !delivery) throw deliveryError || new Error("Falha ao registrar entrega");
+
+  if (actionFromNotificationType(request.type) && !(await isFirst14NotificationCurrent(supabase, request.userId, request.type))) {
+    await supabase.from("notification_deliveries").update({
+      selected_channel: "none",
+      status: "suppressed",
+      metadata: { privacy_safe: true, reason: "first14_milestone_changed" },
+    }).eq("id", delivery.id);
+    return { success: true, channel: "none", reason: "first14_milestone_changed" };
+  }
 
   if (!personalization.allowed) {
     if (personalization.reason === "daily_non_urgent_cap") {

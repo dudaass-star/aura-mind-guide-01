@@ -229,6 +229,24 @@ Deno.serve(async (req) => {
 
     console.log('⏰ [CRON] execute-scheduled-tasks starting...');
 
+    // A condução inicial é avaliada uma vez por dia, às 10h BRT. Ela apenas
+    // agenda/envia push e nunca escreve mensagens na conversa da AURA.
+    const now = new Date();
+    const brtHour = Number(new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hourCycle: 'h23' }).format(now));
+    if (brtHour === 10 && now.getUTCMinutes() < 5) {
+      try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/first-14-days`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
+          body: '{}',
+          signal: AbortSignal.timeout(60_000),
+        });
+        if (!response.ok) console.warn('⚠️ Condução inicial indisponível:', response.status);
+      } catch (error) {
+        console.warn('⚠️ Falha isolada na condução inicial:', (error as Error).message);
+      }
+    }
+
     // ========================================================================
     // SAFETY NET: Reset tasks stuck in 'executing' for >10 minutes
     // ========================================================================
