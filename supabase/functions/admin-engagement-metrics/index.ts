@@ -1782,6 +1782,14 @@ Deno.serve(async (req) => {
     let correctionsUsersInPeriod = 0;
     let correctionsPerUserInPeriod = 0;
     let correctionsWeekly: { week: string; total: number; users: number; per_user: number }[] = [];
+    let correctionsByType: Record<string, number> = {
+      fato_pessoal: 0,
+      rejeicao_hipotese: 0,
+      contexto: 0,
+      preferencia: 0,
+      exclusao: 0,
+      nao_classificada: 0,
+    };
     let correctionsRows: { user_id: string; created_at: string; source?: string | null; correction_type?: string | null; client_message_id?: string | null }[] = [];
     try {
       // Paginado: o PostgREST corta em 1000 linhas por request. Sem paginação,
@@ -1804,6 +1812,12 @@ Deno.serve(async (req) => {
         correctionsPerUserInPeriod = correctionsUsersInPeriod > 0
           ? Math.round((correctionsTotalInPeriod / correctionsUsersInPeriod) * 100) / 100
           : 0;
+        for (const row of correctionsRows) {
+          const type = row.correction_type && row.correction_type in correctionsByType
+            ? row.correction_type
+            : 'nao_classificada';
+          correctionsByType[type] += 1;
+        }
       }
 
 
@@ -2129,6 +2143,7 @@ Deno.serve(async (req) => {
       correctionsUsersInPeriod,
       correctionsPerUserInPeriod,
       correctionsWeekly,
+      correctionsByType,
       conversationTurns,
       conversationCompleted,
       conversationFailed,

@@ -178,6 +178,7 @@ interface Metrics {
   correctionsUsersInPeriod?: number;
   correctionsPerUserInPeriod?: number;
   correctionsWeekly?: { week: string; total: number; users: number; per_user: number }[];
+  correctionsByType?: Record<string, number>;
   conversationTurns?: number;
   conversationCompleted?: number;
   conversationFailed?: number;
@@ -1180,6 +1181,9 @@ export default function AdminEngagement() {
                           <>
                             <div className={`text-xl font-bold ${color}`}>{perUser.toFixed(2)}</div>
                             <p className="text-[11px] text-muted-foreground">{total} correções · {users} usuários (período)</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              hipótese {metrics.correctionsByType?.rejeicao_hipotese ?? 0} · exclusão {metrics.correctionsByType?.exclusao ?? 0} · fato {metrics.correctionsByType?.fato_pessoal ?? 0} · contexto {metrics.correctionsByType?.contexto ?? 0} · preferência {metrics.correctionsByType?.preferencia ?? 0}
+                            </p>
                             {values.length > 1 && (
                               <svg viewBox={`0 0 ${w} ${h}`} className="mt-1 w-full h-6" preserveAspectRatio="none">
                                 <polyline
