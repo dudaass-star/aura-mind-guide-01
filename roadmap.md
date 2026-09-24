@@ -99,7 +99,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Acelerar a reabertura já autenticada e a troca entre áreas, preservando a última tela enquanto os dados são atualizados.
 - [x] Evoluir Sobre você como retrato confiável: privacidade, origem, hipóteses verificáveis, correção direta, atualização e métricas.
 - [x] Substituir o nível de intimidade por continuidade qualitativa, sem pontuação, comparação ou recompensa por exposição pessoal.
-- [ ] Conduzir os primeiros 14 dias para apresentar progressivamente duas ou três formas de valor.
+- [x] Conduzir os primeiros 14 dias por Hoje + push para apresentar progressivamente duas ou três formas de valor, sem interferir no chat.
 - [ ] Transformar Hoje no orquestrador de um único próximo passo contextual.
 - [ ] Consolidar push-first e validar retorno ao aplicativo em aparelhos reais.
 - [ ] Criar retenção adaptativa com um convite relevante por comportamento.

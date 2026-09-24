@@ -84,6 +84,8 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.execute-scheduled-tasks]
     verify_jwt = false
+  [functions.first-14-days]
+    verify_jwt = false
   [functions.finalize-meditation-audio]
     verify_jwt = false
   [functions.generate-chunk]

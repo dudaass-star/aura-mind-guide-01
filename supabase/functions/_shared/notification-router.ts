@@ -34,6 +34,11 @@ const SAFE_PUSH_COPY = {
   journey_available: () => ({ title: "Uma nova parte da sua jornada chegou", body: "Abra a AURA quando tiver um momento para você." }),
   report_available: (name?: string) => ({ title: `${name || "Oi"}, seu resumo está pronto`, body: "Veja os movimentos e avanços que marcaram este período." }),
   new_reply: () => ({ title: "AURA", body: "Tem uma nova mensagem esperando por você." }),
+  first14_conversation: (name?: string) => ({ title: `${name || "Oi"}, a AURA está disponível`, body: "Abra quando quiser começar do seu jeito." }),
+  first14_journey: () => ({ title: "Um caminho para continuar", body: "Conheça as Jornadas e escolha um tema que faça sentido agora." }),
+  first14_session: () => ({ title: "Um encontro com mais tempo", body: "Conheça as sessões disponíveis no seu plano." }),
+  first14_practice: () => ({ title: "Uma pausa no seu ritmo", body: "Há práticas em áudio disponíveis no aplicativo." }),
+  first14_progress: () => ({ title: "Seu percurso começa a ganhar forma", body: "Veja o que já ficou registrado na sua experiência com a AURA." }),
 } as const;
 
 export type RoutedNotificationResult = {
