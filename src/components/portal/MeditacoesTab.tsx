@@ -14,6 +14,7 @@ import {
 import { EmptyState, PortalLoadingInline } from "./shared";
 import AudioPlayer from "./AudioPlayer";
 import { reportPushConversion } from "@/lib/push-notifications";
+import { reportTodayDirectionProgress } from "@/lib/today-direction";
 
 interface MeditacoesTabProps {
   userId?: string;
@@ -39,6 +40,7 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
     trackedAudios.current.add(meditationId);
     void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "practice", event_type: "audio_started", source: "app", metadata: { meditation_id: meditationId } });
     void reportPushConversion("/meu-espaco?tab=meditacoes", "first14_practice");
+    reportTodayDirectionProgress(userId, "completed", "practice");
   };
 
   const { data: meditations, isLoading } = useQuery({

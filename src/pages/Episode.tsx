@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { JourneyPageShell } from "@/components/portal/JourneyPageShell";
 import { reportPushConversion } from "@/lib/push-notifications";
+import { reportTodayDirectionProgress } from "@/lib/today-direction";
 
 type JourneyAction = "open" | "progress" | "reflect" | "discuss" | "complete";
 
@@ -66,7 +67,10 @@ export default function Episode() {
     },
     onSuccess: ({ type, result }) => {
       if (type === "reflect") setSavedReflection(true);
-      if (type === "complete") setCompleted(true);
+      if (type === "complete") {
+        setCompleted(true);
+        if (userId) reportTodayDirectionProgress(userId, "completed", "journey");
+      }
       void queryClient.invalidateQueries({ queryKey: ["journey-episode-progress"] });
       if (result?.status === "journey_completed") void queryClient.invalidateQueries({ queryKey: ["portal-profile"] });
     },
@@ -79,6 +83,7 @@ export default function Episode() {
     }).then(({ error: openError }) => {
       if (openError) console.warn("Não foi possível registrar a abertura do episódio.");
       else void reportPushConversion(`/episodio/${id}`, "first14_journey");
+      if (!openError && userId) reportTodayDirectionProgress(userId, "initiated", "journey");
     });
     // A abertura deve ser registrada uma vez por montagem.
   }, [id, portalToken]);

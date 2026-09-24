@@ -1,5 +1,5 @@
 import { useSearchParams, Navigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
@@ -50,6 +50,7 @@ const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebro
 };
 
 const UserPortal = () => {
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const rawTab = searchParams.get("tab") as TabId | "memoria" | "percurso" | null;
   // Legacy: aba "memoria" foi absorvida em "sobre".
@@ -162,6 +163,7 @@ const UserPortal = () => {
   const handleTabClick = (id: TabId) => {
     setVisitedTabs((current) => current.has(id) ? current : new Set(current).add(id));
     setActiveTab(id);
+    if (id === "hoje" && userId) void queryClient.invalidateQueries({ queryKey: ["portal-today-direction", userId] });
     const valueFeature = id === "sessoes"
       ? "session"
       : id === "jornadas"

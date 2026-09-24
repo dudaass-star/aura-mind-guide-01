@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { EmptyState, PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
 import { reportPushConversion } from "@/lib/push-notifications";
+import { reportTodayDirectionProgress } from "@/lib/today-direction";
 
 type Snapshot = {
   id: string;
@@ -68,6 +69,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   useEffect(() => {
     void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "progress", event_type: "opened", source: "app" });
     void reportPushConversion("/meu-espaco?tab=insights", "first14_progress");
+    reportTodayDirectionProgress(userId, "completed", "progress");
   }, [userId]);
 
   const { data, isLoading } = useQuery({

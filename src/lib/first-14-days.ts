@@ -9,6 +9,7 @@ export type First14Signals = {
   hasProgress: boolean;
   hasPendingEpisode: boolean;
   hasUpcomingSession: boolean;
+  ignoredActions?: First14Action[];
 };
 
 export type First14Direction = {
@@ -26,13 +27,13 @@ export function chooseFirst14Direction(signals: First14Signals): First14Directio
   if (experienced >= 2 && signals.ageDays >= 10 && !signals.hasProgress) {
     return { action: "progress", milestone: "value_accumulated" };
   }
-  if (!signals.hasJourney && signals.ageDays >= 2) {
+  if (!signals.hasJourney && signals.ageDays >= 2 && !signals.ignoredActions?.includes("journey")) {
     return { action: "journey", milestone: "discover_journey" };
   }
-  if (!signals.hasSessionExperience && signals.ageDays >= 5) {
+  if (!signals.hasSessionExperience && signals.ageDays >= 5 && !signals.ignoredActions?.includes("session")) {
     return { action: "session", milestone: "discover_session" };
   }
-  if (!signals.hasPractice && signals.ageDays >= 8) {
+  if (!signals.hasPractice && signals.ageDays >= 8 && !signals.ignoredActions?.includes("practice")) {
     return { action: "practice", milestone: "discover_practice" };
   }
   return null;

@@ -37,7 +37,8 @@ const PERGUNTAS = [
 ];
 
 function perguntaDoDia(): string {
-  const dayKey = Math.floor(Date.now() / 86_400_000);
+  const dateKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const dayKey = Math.floor(Date.parse(`${dateKey}T12:00:00Z`) / 86_400_000);
   return PERGUNTAS[dayKey % PERGUNTAS.length];
 }
 
