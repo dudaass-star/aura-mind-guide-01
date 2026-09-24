@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Play, Pause, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface AudioPlayerProps {
   src: string;
   type?: string;
+  onPlay?: () => void;
 }
 
 function formatTime(seconds: number) {
@@ -13,7 +15,7 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-const AudioPlayer = ({ src, type = "audio/mpeg" }: AudioPlayerProps) => {
+const AudioPlayer = ({ src, type = "audio/mpeg", onPlay }: AudioPlayerProps) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
@@ -54,10 +56,10 @@ const AudioPlayer = ({ src, type = "audio/mpeg" }: AudioPlayerProps) => {
       setIsBuffering(false);
     } else {
       setIsBuffering(true);
-      audio.play().then(() => setIsBuffering(false)).catch(() => setIsBuffering(false));
+      audio.play().then(() => { setIsBuffering(false); onPlay?.(); }).catch(() => setIsBuffering(false));
     }
     setIsPlaying(!isPlaying);
-  }, [isPlaying]);
+  }, [isPlaying, onPlay]);
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
@@ -78,9 +80,12 @@ const AudioPlayer = ({ src, type = "audio/mpeg" }: AudioPlayerProps) => {
       </audio>
 
       {/* Play/Pause button */}
-      <button
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
         onClick={togglePlay}
-        className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-primary flex items-center justify-center shrink-0 shadow-md hover:scale-105 transition-transform active:scale-95"
+        className="h-10 w-10 shrink-0 rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90"
         aria-label={isPlaying ? "Pausar" : "Reproduzir"}
       >
         {isBuffering ? (
@@ -90,7 +95,7 @@ const AudioPlayer = ({ src, type = "audio/mpeg" }: AudioPlayerProps) => {
         ) : (
           <Play size={18} className="text-primary-foreground ml-0.5" fill="currentColor" />
         )}
-      </button>
+      </Button>
 
       {/* Time + Progress */}
       <div className="flex-1 min-w-0 space-y-1">

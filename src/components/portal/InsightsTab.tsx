@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, BarChart3, BookMarked, Calendar, Check, ChevronDown, ChevronUp, CircleHelp, Mail, MessageCircle, Quote, Sparkles, Trophy } from "lucide-react";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
@@ -7,6 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { EmptyState, PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
+import { reportPushConversion } from "@/lib/push-notifications";
 
 type Snapshot = {
   id: string;
@@ -63,6 +64,11 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const queryClient = useQueryClient();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [showOlder, setShowOlder] = useState(false);
+
+  useEffect(() => {
+    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "progress", event_type: "opened", source: "app" });
+    void reportPushConversion("/meu-espaco?tab=insights", "first14_progress");
+  }, [userId]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["portal-live-journey", userId],

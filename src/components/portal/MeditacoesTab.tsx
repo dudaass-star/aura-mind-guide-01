@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { EmptyState, PortalLoadingInline } from "./shared";
 import AudioPlayer from "./AudioPlayer";
+import { reportPushConversion } from "@/lib/push-notifications";
 
 interface MeditacoesTabProps {
   userId?: string;
@@ -31,6 +32,14 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
   const [duration, setDuration] = useState<string>("all");
+  const trackedAudios = useRef(new Set<string>());
+
+  const recordAudioStarted = (meditationId: string) => {
+    if (!userId || trackedAudios.current.has(meditationId)) return;
+    trackedAudios.current.add(meditationId);
+    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "practice", event_type: "audio_started", source: "app", metadata: { meditation_id: meditationId } });
+    void reportPushConversion("/meu-espaco?tab=meditacoes", "first14_practice");
+  };
 
   const { data: meditations, isLoading } = useQuery({
     queryKey: ["portal-all-meditations"],
@@ -162,6 +171,7 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
               audioUrl={audioMap.get(m.id)}
               heard={heardSet.has(m.id)}
               idx={idx}
+              onPlay={() => recordAudioStarted(m.id)}
             />
           ))}
         </div>
@@ -223,6 +233,7 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
               audioUrl={audioMap.get(meditation.id)}
               heard={heardSet.has(meditation.id)}
               idx={idx}
+              onPlay={() => recordAudioStarted(meditation.id)}
             />
           ))}
         </div>
@@ -236,11 +247,13 @@ function MeditationCard({
   audioUrl,
   heard,
   idx,
+  onPlay,
 }: {
   meditation: any;
   audioUrl?: string;
   heard: boolean;
   idx: number;
+  onPlay: () => void;
 }) {
   return (
     <div
@@ -273,7 +286,7 @@ function MeditationCard({
       {meditation.description && (
         <p className="text-sm text-[#2A2A2A]/80 font-['Nunito'] leading-relaxed">{meditation.description}</p>
       )}
-      {audioUrl && <AudioPlayer src={audioUrl} />}
+      {audioUrl && <AudioPlayer src={audioUrl} onPlay={onPlay} />}
     </div>
   );
 }
