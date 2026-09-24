@@ -124,7 +124,6 @@ const UserPortal = () => {
       if (!error && deliveryId) {
         const notificationType = searchParams.get("type") || undefined;
         rememberPushAttribution(deliveryId, notificationType);
-        void reportPushConversion(`${window.location.pathname}${window.location.search}`);
         const featureByType: Record<string, "conversation" | "session" | "journey" | "practice" | "progress"> = {
           first14_conversation: "conversation",
           first14_session: "session",
