@@ -35,3 +35,4 @@
 - [Agendamento mensal flexível](mem://features/sessions/multiple-monthly-bookings) — Cliente agenda livremente até a cota; gestão individual e upgrade contextual somente ao esgotar
 - [Preparação e abertura da sessão](mem://features/sessions/preparacao-e-abertura) — Preparação atual tem prioridade; ponte anterior e compromissos só entram quando forem relevantes
 - [Papel da área Hoje](mem://features/portal/hoje-direcao-diaria) — Hoje é a direção diária integrada do app; Percurso/insights não é uma frente separada de evolução
+- [Continuidade sem pontuação](mem://features/portal/continuidade-sem-pontuacao) — Estados qualitativos sem nota, comparação ou recompensa por exposição pessoal
