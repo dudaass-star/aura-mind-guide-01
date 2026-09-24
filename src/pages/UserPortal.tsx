@@ -78,6 +78,12 @@ const UserPortal = () => {
     || Boolean(discussionEpisodeId)
     || (searchParams.get("push") === "open" && searchParams.get("type") === "new_reply");
 
+  useEffect(() => {
+    if (activeTab === initialTab) return;
+    setVisitedTabs((current) => current.has(initialTab) ? current : new Set(current).add(initialTab));
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
   const { data: discussionEpisode } = useQuery({
     queryKey: ["portal-discussion-episode", userId, discussionEpisodeId],
     queryFn: async () => {

@@ -23,11 +23,9 @@ Deno.serve(async (req) => {
   if (!serviceKey || !url || req.headers.get("authorization") !== `Bearer ${serviceKey}`) return json({ error: "Não autorizado" }, 401);
   const db = createClient(url, serviceKey);
   try {
-    const cutoff = new Date(Date.now() - 15 * DAY_MS).toISOString();
     const { data: profiles, error } = await db.from("profiles")
       .select("user_id,name,created_at,converted_at,trial_started_at,current_journey_id,last_user_message_at")
       .in("status", ["active", "trial", "trialing"])
-      .gte("created_at", cutoff)
       .limit(500);
     if (error) throw error;
 

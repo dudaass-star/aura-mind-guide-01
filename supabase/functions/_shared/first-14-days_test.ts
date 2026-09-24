@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { chooseFirst14Direction, type First14Signals } from "./first-14-days.ts";
+import { actionFromNotificationType, chooseFirst14Direction, type First14Signals } from "./first-14-days.ts";
 
 const base: First14Signals = {
   ageDays: 0,
@@ -30,4 +30,9 @@ Deno.test("apresenta valores progressivamente", () => {
 
 Deno.test("encerra automaticamente depois do dia 14", () => {
   assertEquals(chooseFirst14Direction({ ...base, ageDays: 15 }), null);
+});
+
+Deno.test("reconhece somente avisos da condução inicial", () => {
+  assertEquals(actionFromNotificationType("first14_session"), "session");
+  assertEquals(actionFromNotificationType("journey_available"), null);
 });
