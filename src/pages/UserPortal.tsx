@@ -13,7 +13,7 @@ import { PhoneLinkPrompt } from "@/components/portal/PhoneLinkPrompt";
 import { ConversarTab } from "@/components/portal/ConversarTab";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
-import { rememberPushAttribution, reportPushConversion, reportPushPresence } from "@/lib/push-notifications";
+import { rememberPushAttribution, reportPushPresence } from "@/lib/push-notifications";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 
 type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes";
@@ -162,7 +162,6 @@ const UserPortal = () => {
   const handleTabClick = (id: TabId) => {
     setVisitedTabs((current) => current.has(id) ? current : new Set(current).add(id));
     setActiveTab(id);
-    if (id !== "conversar") void reportPushConversion(`/meu-espaco?tab=${id}`);
     const valueFeature = id === "sessoes"
       ? "session"
       : id === "jornadas"
@@ -459,6 +458,7 @@ const UserPortal = () => {
               profile={profile}
               onNavigateTab={(t) => handleTabClick(t as TabId)}
               onOpenConversation={handleOpenConversation}
+              onOpenNotifications={() => window.dispatchEvent(new Event("aura:open-push"))}
             />
           </div>}
           {visitedTabs.has("sessoes") && <div className={activeTab === "sessoes" ? "block" : "hidden"} aria-hidden={activeTab !== "sessoes"}><SessoesTab userId={userId} profile={profile} onChangePlan={(limit) => { setMinimumSessionLimit(limit); setChangePlanOpen(true); }} onOpenConversation={handleOpenConversation} onOpenNotifications={() => { handleTabClick("conversar"); window.setTimeout(() => window.dispatchEvent(new Event("aura:open-push")), 100); }} /></div>}

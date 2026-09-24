@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { chooseFirst14Direction, type First14Action } from "../_shared/first-14-days.ts";
+import { brtDateKey, loadFirst14Direction, type First14Action } from "../_shared/first-14-days.ts";
 import { routeNotification } from "../_shared/notification-router.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type" };
@@ -24,44 +24,32 @@ Deno.serve(async (req) => {
   const db = createClient(url, serviceKey);
   try {
     const { data: profiles, error } = await db.from("profiles")
-      .select("user_id,name,created_at,converted_at,trial_started_at,current_journey_id,last_user_message_at")
+      .select("user_id,name,created_at,converted_at,trial_started_at")
       .in("status", ["active", "trial", "trialing"])
+      .or(`created_at.gte.${new Date(Date.now() - 15 * DAY_MS).toISOString()},converted_at.gte.${new Date(Date.now() - 15 * DAY_MS).toISOString()},trial_started_at.gte.${new Date(Date.now() - 15 * DAY_MS).toISOString()}`)
       .limit(500);
     if (error) throw error;
 
     let sent = 0;
     let skipped = 0;
     for (const profile of profiles || []) {
-      const startAt = profile.converted_at || profile.trial_started_at || profile.created_at;
-      const ageDays = Math.max(0, Math.floor((Date.now() - new Date(startAt).getTime()) / DAY_MS));
-      const nowIso = new Date().toISOString();
-      const [sessions, episodes, practices, progress, deliveries] = await Promise.all([
-        db.from("sessions").select("status,scheduled_at").eq("user_id", profile.user_id).in("status", ["completed", "scheduled", "in_progress"]),
-        db.from("journey_episode_progress").select("status").eq("user_id", profile.user_id),
-        db.from("user_meditation_history").select("id", { count: "exact", head: true }).eq("user_id", profile.user_id),
-        db.from("portal_value_events").select("id", { count: "exact", head: true }).eq("user_id", profile.user_id).eq("feature", "progress").in("event_type", ["opened", "experienced"]),
+      const [state, deliveries] = await Promise.all([
+        loadFirst14Direction(db, profile.user_id),
         db.from("notification_deliveries").select("id,notification_type,status").eq("user_id", profile.user_id).like("notification_type", "first14_%"),
       ]);
-      const direction = chooseFirst14Direction({
-        ageDays,
-        hasConversation: Boolean(profile.last_user_message_at),
-        hasJourney: Boolean(profile.current_journey_id) || (episodes.data?.length || 0) > 0,
-        hasCompletedSession: (sessions.data || []).some((item) => item.status === "completed"),
-        hasPractice: (practices.count || 0) > 0,
-        hasProgress: (progress.count || 0) > 0,
-        hasPendingEpisode: (episodes.data || []).some((item) => item.status === "released" || item.status === "in_progress"),
-        hasUpcomingSession: (sessions.data || []).some((item) => item.status === "in_progress" || (item.status === "scheduled" && item.scheduled_at && item.scheduled_at >= nowIso)),
-      });
+      if (!state.reliable || deliveries.error) { skipped++; continue; }
+      const direction = state.direction;
       const prior = deliveries.data || [];
       const sentPushes = prior.filter((item) => ["sent", "opened", "converted"].includes(item.status)).length;
-      if (!direction || sentPushes >= 3 || prior.some((item) => item.notification_type === COPY[direction.action].type)) {
+      const activeAttempt = prior.some((item) => item.notification_type === (direction ? COPY[direction.action].type : "") && ["pending", "scheduled", "sent", "opened", "converted"].includes(item.status));
+      if (!direction || sentPushes >= 3 || activeAttempt) {
         skipped++;
         continue;
       }
       const item = COPY[direction.action];
       const result = await routeNotification(db, {
         userId: profile.user_id,
-        idempotencyKey: `first14:${direction.milestone}`,
+        idempotencyKey: `first14:${direction.milestone}:${brtDateKey()}`,
         category: "engagement",
         type: item.type,
         firstName: profile.name?.split(" ")[0],

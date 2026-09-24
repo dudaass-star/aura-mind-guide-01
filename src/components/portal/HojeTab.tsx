@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, BookOpen, CalendarDays, Headphones, MessageCircle, NotebookPen, PenLine, Sparkles } from "lucide-react";
+import { ArrowRight, Bell, BookOpen, CalendarDays, Headphones, MessageCircle, NotebookPen, PenLine, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
@@ -10,7 +10,7 @@ import { ContinuitySignal } from "./ContinuitySignal";
 import { PerguntaDoDiaCard } from "./PerguntaDoDiaCard";
 import { PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
-import { chooseFirst14Direction } from "@/lib/first-14-days";
+import { chooseFirst14Direction, first14AgeDaysBrt } from "@/lib/first-14-days";
 
 interface HojeTabProps {
   userId: string;
@@ -18,6 +18,7 @@ interface HojeTabProps {
   profile: any;
   onNavigateTab: (tab: string) => void;
   onOpenConversation: (prefilledMessage?: string) => void;
+  onOpenNotifications: () => void;
 }
 
 type TodayAction = "conversation" | "session" | "session_preparation" | "journey" | "continuity" | "practice" | "progress";
@@ -85,14 +86,14 @@ function recordTodayEvent(userId: string, eventType: string, action: TodayAction
   });
 }
 
-export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConversation }: HojeTabProps) {
+export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConversation, onOpenNotifications }: HojeTabProps) {
   const navigate = useNavigate();
   const zeroConversation = !profile?.last_user_message_at;
 
   const { data, isLoading } = useQuery({
     queryKey: ["portal-today-direction", userId, profile?.current_journey_id, profile?.current_episode],
     queryFn: async () => {
-      const [lastSessionResult, nextSessionResult, snapshotResult, reportResult, userAddedResult, meditationResult, episodeResult, journeyExperienceResult, practiceExperienceResult, progressExperienceResult] = await Promise.all([
+      const [lastSessionResult, nextSessionResult, snapshotResult, reportResult, userAddedResult, meditationResult, episodeResult, conversationExperienceResult, journeyExperienceResult, practiceExperienceResult, progressExperienceResult] = await Promise.all([
         supabasePortal.from("sessions")
           .select("id, ended_at, focus_topic, session_summary, closure_text, theme_label")
           .eq("user_id", userId).eq("status", "completed")
@@ -120,14 +121,23 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
               .lte("episode_number", profile.current_episode)
               .order("episode_number", { ascending: false }).limit(1).maybeSingle()
           : Promise.resolve({ data: null, error: null }),
+        supabasePortal.from("messages")
+          .select("id", { count: "exact", head: true }).eq("user_id", userId).eq("role", "user").eq("channel", "in_app"),
         supabasePortal.from("journey_episode_progress")
-          .select("id,status", { count: "exact" }).eq("user_id", userId),
-        supabasePortal.from("user_meditation_history")
-          .select("id", { count: "exact", head: true }).eq("user_id", userId),
+          .select("id,status,opened_at", { count: "exact" }).eq("user_id", userId),
+        supabasePortal.from("portal_value_events")
+          .select("id", { count: "exact", head: true }).eq("user_id", userId).eq("feature", "practice").eq("event_type", "audio_started"),
         supabasePortal.from("portal_value_events")
           .select("id", { count: "exact", head: true }).eq("user_id", userId)
-          .eq("feature", "progress").in("event_type", ["opened", "experienced"]),
+          .eq("feature", "progress").eq("event_type", "opened"),
       ]);
+
+      const first14Reliable = !conversationExperienceResult.error
+        && !journeyExperienceResult.error
+        && !practiceExperienceResult.error
+        && !progressExperienceResult.error
+        && !lastSessionResult.error
+        && !nextSessionResult.error;
 
       let meditation = null;
       const meditations = meditationResult.data ?? [];
@@ -156,17 +166,20 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
         meditation,
         episode: episodeResult.data,
         userAddedCount: userAddedResult.count ?? 0,
-        journeyCount: journeyExperienceResult.count ?? 0,
+        hasAppConversation: (conversationExperienceResult.count ?? 0) > 0,
+        hasJourneyExperience: (journeyExperienceResult.data ?? []).some((item) => Boolean(item.opened_at)),
+        hasSessionExperience: Boolean(lastSessionResult.data || nextSessionResult.data),
         hasPendingEpisode: (journeyExperienceResult.data ?? []).some((item) => item.status === "released" || item.status === "in_progress"),
-        practiceCount: practiceExperienceResult.count ?? 0,
-        progressCount: progressExperienceResult.count ?? 0,
+        hasPracticeExperience: (practiceExperienceResult.count ?? 0) > 0,
+        hasProgressExperience: (progressExperienceResult.count ?? 0) > 0,
+        first14Reliable,
       };
     },
     enabled: Boolean(userId),
   });
 
   const priority = useMemo(() => {
-    if (zeroConversation) return {
+    if (data?.first14Reliable && !data.hasAppConversation) return {
       action: "conversation" as const,
       eyebrow: "Seu começo",
       title: "Pode começar do seu jeito",
@@ -201,18 +214,17 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
     }
 
     const accountStartAt = profile?.converted_at || profile?.trial_started_at || profile?.created_at;
-    const accountCreatedAt = accountStartAt ? new Date(accountStartAt).getTime() : 0;
-    const ageDays = accountCreatedAt ? Math.max(0, Math.floor((Date.now() - accountCreatedAt) / 86_400_000)) : 30;
-    const first14 = chooseFirst14Direction({
+    const ageDays = accountStartAt ? first14AgeDaysBrt(accountStartAt) : 30;
+    const first14 = data?.first14Reliable ? chooseFirst14Direction({
       ageDays,
-      hasConversation: !zeroConversation,
-      hasJourney: Boolean(profile?.current_journey_id) || (data?.journeyCount ?? 0) > 0,
-      hasCompletedSession: Boolean(data?.lastSession),
-      hasPractice: (data?.practiceCount ?? 0) > 0,
-      hasProgress: (data?.progressCount ?? 0) > 0,
+      hasConversation: Boolean(data?.hasAppConversation),
+      hasJourney: Boolean(data?.hasJourneyExperience),
+      hasSessionExperience: Boolean(data?.hasSessionExperience),
+      hasPractice: Boolean(data?.hasPracticeExperience),
+      hasProgress: Boolean(data?.hasProgressExperience),
       hasPendingEpisode: Boolean(data?.hasPendingEpisode),
       hasUpcomingSession: Boolean(nextSession),
-    });
+    }) : null;
 
     if (first14?.action === "journey") return {
       action: "journey" as const,
@@ -286,7 +298,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
       button: "Conversar com a AURA",
       icon: MessageCircle,
     };
-  }, [data, profile?.converted_at, profile?.created_at, profile?.current_journey_id, profile?.trial_started_at, zeroConversation]);
+  }, [data, profile?.converted_at, profile?.created_at, profile?.current_journey_id, profile?.trial_started_at]);
 
   useEffect(() => {
     if (isLoading || !priority) return;
@@ -337,6 +349,10 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
   const showSessionContinuation = data?.nextSession && !["session", "session_preparation"].includes(priority.action);
   const showJourneyContinuation = data?.episode && priority.action !== "journey";
   const showLastSessionContinuation = data?.lastSession && priority.action !== "continuity";
+  const showPushInvitation = !zeroConversation
+    && localStorage.getItem("aura-push-enabled") !== "true"
+    && !sessionStorage.getItem(`aura-push-today-dismissed:${userId}`)
+    && ["conversation", "continuity", "progress"].includes(priority.action);
 
   return (
     <div className="portal-area-page space-y-7">
@@ -385,6 +401,14 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
       )}
 
       {!zeroConversation && <PerguntaDoDiaCard lastUserMessageAt={profile?.last_user_message_at} onRespond={(message) => { recordTodayEvent(userId, "invitation_opened", "conversation", { source: "daily_question" }); onOpenConversation(message); }} />}
+
+      {showPushInvitation && (
+        <section className="flex items-center gap-3 border-y border-border py-4 animate-fade-up">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary"><Bell className="h-5 w-5" /></span>
+          <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-foreground">Leve a AURA com você</p><p className="text-xs leading-relaxed text-muted-foreground">Receba respostas, sessões e a próxima direção importante mesmo com o app fechado.</p></div>
+          <Button type="button" variant="outline" size="sm" onClick={onOpenNotifications}>Ativar</Button>
+        </section>
+      )}
 
       {data?.insight?.body && (
         <section className="border-l-2 border-primary px-4 py-1 animate-fade-up">

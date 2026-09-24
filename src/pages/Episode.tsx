@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { JourneyPageShell } from "@/components/portal/JourneyPageShell";
+import { reportPushConversion } from "@/lib/push-notifications";
 
 type JourneyAction = "open" | "progress" | "reflect" | "discuss" | "complete";
 
@@ -77,6 +78,7 @@ export default function Episode() {
       body: { action: "open", episodeId: id, portalToken },
     }).then(({ error: openError }) => {
       if (openError) console.warn("Não foi possível registrar a abertura do episódio.");
+      else void reportPushConversion(`/episodio/${id}`, "first14_journey");
     });
     // A abertura deve ser registrada uma vez por montagem.
   }, [id, portalToken]);

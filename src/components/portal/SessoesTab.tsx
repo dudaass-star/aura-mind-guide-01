@@ -12,6 +12,7 @@ import { EmptyState, PortalLoadingInline } from "./shared";
 import { presentClosure } from "./whatsapp";
 import { sanitizePortalText } from "./sanitize";
 import type { Json } from "@/integrations/supabase/types";
+import { reportPushConversion } from "@/lib/push-notifications";
 
 const PLAN_SESSION_LIMITS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8 };
 type SessionProfile = { plan?: string | null; plan_tier?: string | null } | null;
@@ -251,6 +252,7 @@ export function SessoesTab({
       setSelectedSession(null);
       await refresh();
       track(action === "schedule" ? "scheduled" : action === "reschedule" ? "rescheduled" : "cancelled", { month: selectedMonth });
+      if (action === "schedule") void reportPushConversion("/meu-espaco?tab=sessoes", "first14_session");
       if (action === "schedule" && completedSessions.length > 0) {
         track("repeat_session_scheduled", { month: selectedMonth, previous_completed_count: completedSessions.length });
       }
@@ -288,6 +290,7 @@ export function SessoesTab({
       await invoke({ action, sessionId: session.id, value: value || null, rating: rating || null });
       await refresh();
       track(action, { session_id: session.id, rating });
+      if (action === "save_preparation") void reportPushConversion("/meu-espaco?tab=sessoes", "first14_session");
       setPreparationOpen(false);
       setCorrectionOpen(false);
       toast({ title: action === "rate" ? "Obrigado pela avaliação" : action === "confirm_reframe" ? "Leitura confirmada" : action === "correct_reframe" ? "Ajuste guardado" : "Preparação guardada" });

@@ -1,11 +1,11 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { actionFromNotificationType, chooseFirst14Direction, type First14Signals } from "./first-14-days.ts";
+import { actionFromNotificationType, chooseFirst14Direction, first14AgeDaysBrt, type First14Signals } from "./first-14-days.ts";
 
 const base: First14Signals = {
   ageDays: 0,
   hasConversation: false,
   hasJourney: false,
-  hasCompletedSession: false,
+  hasSessionExperience: false,
   hasPractice: false,
   hasProgress: false,
   hasPendingEpisode: false,
@@ -24,8 +24,13 @@ Deno.test("não compete com sessão ou episódio pendente", () => {
 Deno.test("apresenta valores progressivamente", () => {
   assertEquals(chooseFirst14Direction({ ...base, ageDays: 2, hasConversation: true })?.action, "journey");
   assertEquals(chooseFirst14Direction({ ...base, ageDays: 5, hasConversation: true, hasJourney: true })?.action, "session");
-  assertEquals(chooseFirst14Direction({ ...base, ageDays: 8, hasConversation: true, hasJourney: true, hasCompletedSession: true })?.action, "practice");
+  assertEquals(chooseFirst14Direction({ ...base, ageDays: 8, hasConversation: true, hasJourney: true, hasSessionExperience: true })?.action, "practice");
   assertEquals(chooseFirst14Direction({ ...base, ageDays: 10, hasConversation: true, hasJourney: true })?.action, "progress");
+});
+
+Deno.test("conta dias pelo calendário de Brasília", () => {
+  assertEquals(first14AgeDaysBrt("2026-09-23T23:50:00-03:00", new Date("2026-09-24T00:10:00-03:00")), 1);
+  assertEquals(first14AgeDaysBrt("2026-09-24T00:10:00-03:00", new Date("2026-09-24T23:50:00-03:00")), 0);
 });
 
 Deno.test("encerra automaticamente depois do dia 14", () => {

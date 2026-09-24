@@ -868,7 +868,7 @@ export function ConversarTab({
 
     try {
       await submitMessage(pending);
-      void reportPushConversion("/meu-espaco?tab=conversar");
+      void reportPushConversion("/meu-espaco?tab=conversar", "first14_conversation");
     } catch {
       setResponding(false);
       setMessages((current) => current.map((message) =>
