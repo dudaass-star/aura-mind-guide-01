@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown,
-  ChevronUp, LockKeyhole, Menu, MessageCircle, Mic, NotebookPen,
-  ShieldCheck, Sparkles, UserRound, X,
+  ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, CheckCircle2, ChevronDown,
+  ChevronUp, LockKeyhole, Menu, MessageCircle, Mic, MoreVertical, NotebookPen,
+  Play, RotateCcw, Send, ShieldCheck, Sparkles, UserRound, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { checkoutHref, trackLandingCta } from "@/lib/landing-analytics";
@@ -128,10 +128,118 @@ export function HeroV4() {
   );
 }
 
+const conversationStages = [
+  [
+    { role: "user", text: "Eu sei que preciso tomar uma decisão, mas toda vez que penso nisso começo a duvidar de mim.", time: "15:07" },
+    { role: "aura", text: "O que você teme que essa decisão diga sobre você se der errado?", time: "15:07" },
+  ],
+  [
+    { role: "user", text: "Que eu fui irresponsável. Que estraguei uma coisa estável por não saber valorizar o que tinha.", time: "15:08" },
+    { role: "aura", text: "Entendi. Então não é só o medo de escolher errado. É o medo de perder o direito de confiar em você depois.", time: "15:08" },
+    { role: "aura", text: "Mas deixa eu testar uma coisa: ficar onde está também é uma decisão. Por que o risco de permanecer tem parecido menor do que o risco de mudar?", time: "15:08" },
+  ],
+  [
+    { role: "user", text: "Porque se eu ficar e continuar infeliz, posso dizer que pelo menos tentei ser responsável. Se eu sair, a escolha passa a ser minha.", time: "15:09" },
+    { role: "aura", text: "Acho que chegamos perto do centro.", time: "15:09" },
+    { role: "aura", text: "Talvez você não esteja paralisada por falta de clareza. Talvez esteja tentando encontrar uma escolha que te proteja da responsabilidade de desejar outra vida.", time: "15:09" },
+    { role: "aura", text: "Isso te descreve — ou estou deixando escapar alguma coisa importante?", time: "15:09" },
+  ],
+] as const;
+
+function DemoMessage({ role, text, time }: { role: "user" | "aura"; text: string; time: string }) {
+  const mine = role === "user";
+  return (
+    <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
+      <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed shadow-sm ${mine ? "rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground" : "rounded-tl-sm border border-border/70 bg-card text-foreground"}`}>
+        {text}
+      </div>
+      <div className={`mt-1 flex items-center gap-1 px-1 text-[9px] font-medium text-muted-foreground ${mine ? "justify-end" : ""}`}>
+        <span>{time}</span>{mine && <CheckCheck className="h-3 w-3 text-primary" />}
+      </div>
+    </div>
+  );
+}
+
+function RealConversationScreen() {
+  const [stage, setStage] = useState(0);
+  const messages = conversationStages.slice(0, stage + 1).flat();
+  const complete = stage === conversationStages.length - 1;
+  return (
+    <div className="portal-chat-theme mx-auto flex h-[590px] w-full max-w-[430px] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background text-foreground v4-screen-shadow sm:h-[650px]">
+      <header className="flex min-h-[4.5rem] shrink-0 items-center gap-3 border-b border-border/70 bg-card/95 px-3 shadow-sm">
+        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" aria-label="Voltar"><ArrowLeft className="h-5 w-5" /></Button>
+        <div className="relative shrink-0"><img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/20" /><span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-primary" /></div>
+        <div className="min-w-0 flex-1"><p className="font-body text-base font-bold">AURA</p><p className="text-xs text-muted-foreground">disponível</p></div>
+        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" aria-label="Mais opções"><MoreVertical className="h-5 w-5" /></Button>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-secondary/45 px-4 py-5">
+        <div className="mb-5 text-center"><span className="rounded-full bg-card/80 px-3 py-1 text-[10px] font-semibold text-muted-foreground shadow-sm">HOJE</span></div>
+        <div className="space-y-4">{messages.map((message, index) => <DemoMessage key={`${stage}-${index}-${message.text}`} {...message} />)}</div>
+        {!complete && <div className="mt-4 flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55 [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55 [animation-delay:300ms]" /></div>}
+      </div>
+      <div className="shrink-0 border-t border-border/60 bg-card/95 p-3">
+        <div className="mb-3 flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner">
+          <span className="min-h-10 flex-1 px-2 py-2 text-sm text-muted-foreground">Mensagem...</span>
+          <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" aria-label="Gravar áudio"><Mic className="h-5 w-5" /></Button>
+          <Button type="button" size="icon" className="h-10 w-10 shrink-0 rounded-full" aria-label="Enviar mensagem"><Send className="h-4 w-4" /></Button>
+        </div>
+        <div className="grid grid-cols-4 text-center text-[9px] font-semibold text-muted-foreground"><span>Hoje</span><span className="text-primary">Conversar</span><span>Sessões</span><span>Mais</span></div>
+      </div>
+      <div className="absolute" />
+    </div>
+  );
+}
+
+export function ConversationDemoV4() {
+  const [stage, setStage] = useState(0);
+  const complete = stage === conversationStages.length - 1;
+  return (
+    <section id="conversa-real" className="bg-background py-20 sm:py-28">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 sm:px-8 lg:grid-cols-[.9fr_1.1fr] lg:gap-20">
+        <div className="lg:sticky lg:top-8">
+          <p className="text-xs font-bold uppercase text-primary">Não é resposta pronta. É uma conversa que pensa com você.</p>
+          <h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Veja como é ser compreendida sem receber uma frase genérica de volta.</h2>
+          <p className="mt-5 max-w-xl leading-relaxed text-muted-foreground">Você fala do seu jeito. A AURA acompanha os detalhes, faz perguntas que abrem espaço e apresenta leituras como hipóteses — para você confirmar, corrigir ou rejeitar.</p>
+          <div className="mt-7 border-l-2 border-primary pl-5"><p className="font-display text-xl font-semibold">Esta conversa poderia acontecer numa sessão ou num momento comum do seu dia.</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">A diferença está na profundidade: ela não corre para aconselhar antes de entender.</p></div>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            {!complete ? <Button type="button" variant="sage" size="lg" onClick={() => setStage((value) => Math.min(value + 1, conversationStages.length - 1))}>Continuar a conversa <ArrowRight /></Button> : <Button type="button" variant="outline" size="lg" onClick={() => setStage(0)}><RotateCcw /> Ver novamente</Button>}
+            <span className="text-xs text-muted-foreground">trecho {stage + 1} de {conversationStages.length}</span>
+          </div>
+        </div>
+        <ConversationPhone stage={stage} />
+      </div>
+    </section>
+  );
+}
+
+function ConversationPhone({ stage }: { stage: number }) {
+  const messages = conversationStages.slice(0, stage + 1).flat();
+  const complete = stage === conversationStages.length - 1;
+  return (
+    <div className="portal-chat-theme mx-auto flex h-[590px] w-full max-w-[430px] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background text-foreground v4-screen-shadow sm:h-[650px]">
+      <header className="flex min-h-[4.5rem] shrink-0 items-center gap-3 border-b border-border/70 bg-card/95 px-3 shadow-sm">
+        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" aria-label="Voltar"><ArrowLeft className="h-5 w-5" /></Button>
+        <div className="relative shrink-0"><img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/20" /><span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-primary" /></div>
+        <div className="min-w-0 flex-1"><p className="font-body text-base font-bold">AURA</p><p className="text-xs text-muted-foreground">{complete ? "disponível" : "respondendo…"}</p></div>
+        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" aria-label="Mais opções"><MoreVertical className="h-5 w-5" /></Button>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-secondary/45 px-4 py-5">
+        <div className="mb-5 text-center"><span className="rounded-full bg-card/80 px-3 py-1 text-[10px] font-semibold text-muted-foreground shadow-sm">HOJE</span></div>
+        <div className="space-y-4">{messages.map((message, index) => <DemoMessage key={`${index}-${message.text}`} {...message} />)}</div>
+        {!complete && <div className="mt-4 flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55 [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55 [animation-delay:300ms]" /></div>}
+      </div>
+      <div className="shrink-0 border-t border-border/60 bg-card/95 p-3">
+        <div className="mb-3 flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner"><span className="min-h-10 flex-1 px-2 py-2 text-sm text-muted-foreground">Mensagem...</span><Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" aria-label="Gravar áudio"><Mic className="h-5 w-5" /></Button><Button type="button" size="icon" className="h-10 w-10 shrink-0 rounded-full" aria-label="Enviar mensagem"><Send className="h-4 w-4" /></Button></div>
+        <div className="grid grid-cols-4 text-center text-[9px] font-semibold text-muted-foreground"><span>Hoje</span><span className="text-primary">Conversar</span><span>Sessões</span><span>Mais</span></div>
+      </div>
+    </div>
+  );
+}
+
 const transformations = [
   ["Uma decisão que não sai do lugar", "se torna uma escolha que você consegue sustentar."],
   ["Um padrão que sempre se repete", "ganha nome, contexto e uma possibilidade diferente."],
-  ["Um tema que parece grande demais", "ganha 45 minutos de atenção guiada e profundidade."],
+  ["Um dia em que tudo parece confuso", "ganha uma pergunta capaz de mudar o seu ponto de vista."],
 ];
 
 export function TransformationV4() {
@@ -139,7 +247,7 @@ export function TransformationV4() {
     <section className="bg-background py-20 sm:py-28">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <div className="grid gap-12 lg:grid-cols-[.8fr_1.2fr]">
-          <div><p className="text-xs font-bold uppercase text-primary">Mais do que uma conversa aberta</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Um encontro com tempo, intenção e profundidade.</h2><p className="mt-5 max-w-md leading-relaxed text-muted-foreground">Durante 45 minutos, a AURA conduz uma questão com você: escuta o contexto, faz perguntas, testa leituras e ajuda a chegar a uma compreensão que possa continuar depois da sessão.</p></div>
+          <div><p className="text-xs font-bold uppercase text-primary">Uma inteligência que acompanha a sua história</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">A conversa gera percepção. O App ajuda essa percepção a virar movimento.</h2><p className="mt-5 max-w-md leading-relaxed text-muted-foreground">Em uma sessão ou entre elas, a AURA escuta o contexto, conecta o que aparece em momentos diferentes e ajuda você a enxergar possibilidades que sozinho talvez não estivesse vendo.</p></div>
           <div className="divide-y divide-border border-y border-border">
             {transformations.map(([before, after]) => <div key={before} className="grid gap-2 py-6 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-5"><p className="text-sm text-muted-foreground">{before}</p><ArrowRight className="hidden h-4 w-4 text-primary sm:block" /><p className="font-display text-xl font-semibold">{after}</p></div>)}
           </div>
@@ -159,28 +267,28 @@ type Experience = typeof experienceTabs[number]["id"];
 
 function ExperienceScreen({ active }: { active: Experience }) {
   if (active === "hoje") return <TodayScreen compact />;
-  if (active === "conversa") return <div className="rounded-[1.75rem] bg-background p-4 text-foreground v4-screen-shadow"><div className="flex items-center gap-3 border-b border-border pb-3"><img src={avatarAura} alt="AURA" className="h-10 w-10 rounded-full object-cover" /><div><p className="text-sm font-bold">AURA</p><p className="text-[11px] text-primary">disponível</p></div></div><div className="space-y-3 py-5 text-sm"><p className="ml-auto max-w-[82%] rounded-xl rounded-br-sm bg-secondary p-3">Eu sei que preciso dizer não, mas fico me sentindo culpada.</p><p className="max-w-[88%] rounded-xl rounded-bl-sm border border-border bg-card p-3">Posso testar uma leitura com você?</p><p className="max-w-[88%] rounded-xl rounded-bl-sm border border-border bg-card p-3">Talvez a culpa não esteja dizendo que o limite é errado. Talvez ela só mostre que você ainda não está acostumada a se escolher. Isso faz sentido ou não é bem assim?</p></div><div className="flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-xs text-muted-foreground"><Mic className="h-4 w-4" /> Escreva ou envie um áudio</div></div>;
+  if (active === "conversa") return <div className="rounded-[1.75rem] bg-background p-4 text-foreground v4-screen-shadow"><div className="flex items-center gap-3 border-b border-border pb-3"><img src={avatarAura} alt="AURA" className="h-10 w-10 rounded-full object-cover" /><div><p className="text-sm font-bold">AURA</p><p className="text-[11px] text-primary">disponível</p></div></div><div className="space-y-3 py-5 text-sm"><p className="ml-auto max-w-[82%] rounded-xl rounded-br-sm bg-primary p-3 text-primary-foreground">Hoje aconteceu uma coisa e eu percebi que faço aquilo de novo.</p><p className="max-w-[88%] rounded-xl rounded-bl-sm border border-border bg-card p-3">Me conta o que aconteceu. Se isso está se repetindo, vale olhar sem pressa antes de chamar de “mais do mesmo”.</p><div className="max-w-[88%] rounded-xl rounded-bl-sm border border-border bg-card p-2.5"><div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground"><Play className="h-4 w-4 fill-current" /></span><div className="flex-1"><div className="h-1 rounded-full bg-muted"><div className="h-full w-2/3 rounded-full bg-primary" /></div><p className="mt-1 text-[10px] text-muted-foreground">0:38 · voz</p></div><span className="text-[10px] font-bold text-primary">1x</span></div></div></div><div className="flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-xs text-muted-foreground"><Mic className="h-4 w-4" /> Escreva ou envie um áudio</div></div>;
   if (active === "sessao") return <div className="rounded-[1.75rem] bg-background p-5 text-foreground v4-screen-shadow"><p className="text-[10px] font-bold uppercase text-primary">Seu encontro</p><h3 className="mt-1 font-display text-2xl font-semibold">Chegue com o que importa vivo</h3><div className="mt-5 rounded-xl border-2 border-primary bg-card p-4"><div className="flex items-center gap-3"><NotebookPen className="text-primary" /><div><p className="text-sm font-bold">Preparar encontro</p><p className="text-xs text-muted-foreground">O que você não quer deixar de conversar?</p></div></div><p className="mt-4 rounded-lg bg-muted p-3 text-sm">“Quero entender por que adio uma decisão que já parece clara.”</p><div className="mt-3 rounded-lg bg-primary px-4 py-2 text-center text-sm font-bold text-primary-foreground">Salvar preparação</div></div><p className="mt-4 text-xs leading-relaxed text-muted-foreground">Na hora marcada, a AURA começa por aqui — sem te prender ao tema se seu momento tiver mudado.</p></div>;
   return <div className="rounded-[1.75rem] bg-background p-5 text-foreground v4-screen-shadow"><p className="text-[10px] font-bold uppercase text-primary">Sua jornada</p><h3 className="mt-1 font-display text-2xl font-semibold">Limites sem culpa</h3><div className="mt-5 overflow-hidden rounded-xl bg-[hsl(var(--v4-lilac))] p-5"><p className="text-xs font-bold text-accent-foreground/65">EPISÓDIO 03</p><p className="mt-2 font-display text-2xl font-semibold text-accent-foreground">O desconforto de se escolher</p><p className="mt-3 text-sm leading-relaxed text-accent-foreground/75">Uma reflexão para diferenciar culpa de responsabilidade quando você começa a colocar limites.</p><div className="mt-5 h-1.5 overflow-hidden rounded-full bg-accent-foreground/10"><div className="h-full w-2/3 rounded-full bg-[hsl(var(--v4-plum))]" /></div></div><p className="mt-4 flex items-center gap-2 text-xs font-bold text-primary"><CheckCircle2 className="h-4 w-4" /> Seu ritmo é preservado. Sem acúmulo.</p></div>;
 }
 
 export function ProductExperienceV4() {
-  const [active, setActive] = useState<Experience>("sessao");
+  const [active, setActive] = useState<Experience>("conversa");
   const copy: Record<Experience, [string, string]> = {
     hoje: ["Uma direção por vez.", "O App considera o que está acontecendo e mostra o que merece atenção agora — sem virar uma lista de obrigações."],
-    conversa: ["Presença entre uma sessão e outra.", "Quando algo acontecer, você pode falar com a AURA por texto ou áudio. Ela mantém o contexto sem transformar cada contato em uma sessão."],
-    sessao: ["O centro da experiência.", "Você agenda e prepara um encontro guiado de 45 minutos diretamente no App para aprofundar o que realmente importa."],
+    conversa: ["A AURA está presente quando a vida acontece.", "Fale por texto ou áudio sobre uma decisão, um incômodo ou algo que acabou de acontecer. A conversa mantém contexto e pode começar do seu jeito."],
+    sessao: ["Um espaço reservado para ir mais fundo.", "Você agenda e prepara um encontro guiado de 45 minutos diretamente no App para olhar com profundidade para o que realmente importa."],
     jornada: ["Um tema continua entre conversas.", "Episódios ligados ao seu momento ajudam uma descoberta a não desaparecer quando a conversa termina."],
   };
   return (
     <section id="experiencia" className="v4-ink-soft py-20 sm:py-28">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        <div className="max-w-3xl"><p className="text-xs font-bold uppercase text-primary">A sessão é o centro. O App amplia.</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight text-primary-foreground sm:text-5xl">Você aprofunda em 45 minutos — e não perde o que descobriu quando o encontro termina.</h2></div>
+        <div className="max-w-3xl"><p className="text-xs font-bold uppercase text-primary">Uma experiência completa, não uma coleção de ferramentas</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight text-primary-foreground sm:text-5xl">Converse quando precisar. Aprofunde quando for importante. Continue avançando no seu ritmo.</h2></div>
         <div className="mt-12 grid items-center gap-10 lg:grid-cols-[.75fr_1.25fr] lg:gap-16">
           <div>
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{experienceTabs.map(({ id, label, icon: Icon }) => <Button key={id} type="button" variant={active === id ? "default" : "ghost"} className={active === id ? "justify-start" : "justify-start text-primary-foreground/60 hover:bg-primary-foreground/10 hover:text-primary-foreground"} onClick={() => setActive(id)}><Icon />{label}</Button>)}</div>
             <h3 className="mt-8 font-display text-3xl font-semibold text-primary-foreground">{copy[active][0]}</h3><p className="mt-4 max-w-md leading-relaxed text-primary-foreground/65">{copy[active][1]}</p>
-              <div className="mt-7 flex items-center gap-3 border-l-2 border-primary pl-4 text-sm text-primary-foreground/70"><Sparkles className="h-5 w-5 shrink-0 text-primary" /><span>Conversa, Hoje e Jornadas dão continuidade ao que merece permanecer vivo.</span></div>
+              <div className="mt-7 flex items-center gap-3 border-l-2 border-primary pl-4 text-sm text-primary-foreground/70"><Sparkles className="h-5 w-5 shrink-0 text-primary" /><span>Cada área acrescenta uma forma diferente de entender, aprofundar ou seguir em frente.</span></div>
           </div>
           <div className="mx-auto w-full max-w-md"><ExperienceScreen active={active} /></div>
         </div>
@@ -191,11 +299,11 @@ export function ProductExperienceV4() {
 
 export function HowItWorksV4() {
   const steps = [
-    { n: "01", title: "Você agenda e prepara seu encontro", text: "Escolha o horário no App e registre o que não quer deixar de conversar. Se o momento mudar, a sessão acompanha você." },
-    { n: "02", title: "A AURA conduz 45 minutos com você", text: "Ela aprofunda o contexto, faz perguntas e testa hipóteses — sem te reduzir a um rótulo ou tomar decisões no seu lugar." },
-    { n: "03", title: "O encontro continua no seu cotidiano", text: "Entre sessões, você pode conversar por texto ou áudio. Hoje, Jornadas e registros ajudam o que importa a não se perder." },
+    { n: "01", title: "Você começa pelo que está vivendo", text: "Pode ser por texto ou áudio, no momento em que algo acontece. A AURA escuta antes de tentar conduzir." },
+    { n: "02", title: "Quando precisa ir mais fundo", text: "Você agenda uma sessão guiada de 45 minutos para conectar o contexto, testar hipóteses e trabalhar uma questão com profundidade." },
+    { n: "03", title: "O App transforma percepção em continuidade", text: "Hoje traz uma direção, Jornadas mantêm temas vivos e Sobre você registra apenas o entendimento que você reconhece como verdadeiro." },
   ];
-  return <section id="como-funciona" className="v4-fine-grid bg-background py-20 sm:py-28"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr]"><div><p className="text-xs font-bold uppercase text-primary">Como funciona</p><h2 className="mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Profundidade no encontro. Presença entre eles.</h2></div><ol className="border-t border-border">{steps.map((step) => <li key={step.n} className="grid gap-3 border-b border-border py-7 sm:grid-cols-[3rem_1fr_1.2fr] sm:items-start"><span className="font-display text-2xl text-primary">{step.n}</span><h3 className="font-display text-xl font-semibold">{step.title}</h3><p className="text-sm leading-relaxed text-muted-foreground">{step.text}</p></li>)}</ol></div></div></section>;
+  return <section id="como-funciona" className="v4-fine-grid bg-background py-20 sm:py-28"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr]"><div><p className="text-xs font-bold uppercase text-primary">Como funciona</p><h2 className="mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Uma conversa que encontra você no presente e acompanha o que vem depois.</h2></div><ol className="border-t border-border">{steps.map((step) => <li key={step.n} className="grid gap-3 border-b border-border py-7 sm:grid-cols-[3rem_1fr_1.2fr] sm:items-start"><span className="font-display text-2xl text-primary">{step.n}</span><h3 className="font-display text-xl font-semibold">{step.title}</h3><p className="text-sm leading-relaxed text-muted-foreground">{step.text}</p></li>)}</ol></div></div></section>;
 }
 
 export function PortraitV4() {
@@ -211,7 +319,7 @@ const plans: { id: PlanId; name: string; sessions: string; description: string; 
 export function PricingV4() {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? plans : plans.filter((plan) => plan.featured);
-  return <section id="precos" className="bg-background py-20 sm:py-28"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="mx-auto max-w-3xl text-center"><p className="text-xs font-bold uppercase text-primary">Comece sentindo a experiência</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Sete dias para viver uma sessão guiada e sentir a continuidade no App.</h2><p className="mt-5 text-muted-foreground">Acesso completo ao plano escolhido por R$ 6,90. Antes de pagar, você vê com clareza o valor e a próxima cobrança.</p></div><div className={`mx-auto mt-12 grid max-w-5xl gap-5 ${showAll ? "md:grid-cols-3" : "max-w-md"}`}>{visible.map((plan) => <article key={plan.id} className={`flex flex-col rounded-2xl border bg-card p-6 ${plan.featured ? "border-primary shadow-card" : "border-border"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-primary">{plan.featured ? "Recomendado" : "Outra intensidade"}</p><h3 className="mt-2 font-display text-3xl font-semibold">{plan.name}</h3></div>{plan.featured && <Sparkles className="text-primary" />}</div><p className="mt-4 text-sm leading-relaxed text-muted-foreground">{plan.description}</p><div className="mt-6 border-y border-border py-5"><p className="font-display text-3xl font-semibold">{fmtBRL(PLAN_MONTHLY_EQUIVALENT[plan.id].monthly)}<span className="font-body text-sm font-normal text-muted-foreground">/mês</span></p><p className="mt-1 text-xs text-muted-foreground">após os 7 dias iniciais</p></div><ul className="my-6 flex-1 space-y-3 text-sm"><li className="flex gap-2"><Check className="text-primary" /> {plan.sessions} de 45 minutos</li><li className="flex gap-2"><Check className="text-primary" /> Conversas por texto e áudio entre sessões</li><li className="flex gap-2"><Check className="text-primary" /> Hoje, Jornadas e seu percurso</li></ul><Button asChild variant={plan.featured ? "sage" : "outline"} size="lg" className="w-full"><Link to={`${checkoutHref("pricing", V)}&plan=${plan.id}&billing=monthly`} onClick={() => trackLandingCta("pricing", `${plan.name} mensal (v4)`, V)}>Experimentar por R$ 6,90</Link></Button></article>)}</div><div className="mt-6 text-center"><Button type="button" variant="ghost" onClick={() => setShowAll((value) => !value)}>{showAll ? <><ChevronUp /> Ver somente o recomendado</> : <><ChevronDown /> Comparar outros planos</>}</Button><p className="mt-4 text-xs text-muted-foreground">Também há opções trimestral, semestral e anual no checkout · cartão ou PIX · cancelamento simples</p></div></div></section>;
+  return <section id="precos" className="bg-background py-20 sm:py-28"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="mx-auto max-w-3xl text-center"><p className="text-xs font-bold uppercase text-primary">Comece sentindo a experiência</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Sete dias para conversar, viver uma sessão guiada e explorar todo o App.</h2><p className="mt-5 text-muted-foreground">Acesso completo ao plano escolhido por R$ 6,90. Antes de pagar, você vê com clareza o valor e a próxima cobrança.</p></div><div className={`mx-auto mt-12 grid max-w-5xl gap-5 ${showAll ? "md:grid-cols-3" : "max-w-md"}`}>{visible.map((plan) => <article key={plan.id} className={`flex flex-col rounded-2xl border bg-card p-6 ${plan.featured ? "border-primary shadow-card" : "border-border"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-primary">{plan.featured ? "Recomendado" : "Outra intensidade"}</p><h3 className="mt-2 font-display text-3xl font-semibold">{plan.name}</h3></div>{plan.featured && <Sparkles className="text-primary" />}</div><p className="mt-4 text-sm leading-relaxed text-muted-foreground">{plan.description}</p><div className="mt-6 border-y border-border py-5"><p className="font-display text-3xl font-semibold">{fmtBRL(PLAN_MONTHLY_EQUIVALENT[plan.id].monthly)}<span className="font-body text-sm font-normal text-muted-foreground">/mês</span></p><p className="mt-1 text-xs text-muted-foreground">após os 7 dias iniciais</p></div><ul className="my-6 flex-1 space-y-3 text-sm"><li className="flex gap-2"><Check className="text-primary" /> Conversas por texto e áudio quando precisar</li><li className="flex gap-2"><Check className="text-primary" /> {plan.sessions} de 45 minutos</li><li className="flex gap-2"><Check className="text-primary" /> Hoje, Jornadas e seu percurso</li></ul><Button asChild variant={plan.featured ? "sage" : "outline"} size="lg" className="w-full"><Link to={`${checkoutHref("pricing", V)}&plan=${plan.id}&billing=monthly`} onClick={() => trackLandingCta("pricing", `${plan.name} mensal (v4)`, V)}>Experimentar por R$ 6,90</Link></Button></article>)}</div><div className="mt-6 text-center"><Button type="button" variant="ghost" onClick={() => setShowAll((value) => !value)}>{showAll ? <><ChevronUp /> Ver somente o recomendado</> : <><ChevronDown /> Comparar outros planos</>}</Button><p className="mt-4 text-xs text-muted-foreground">Também há opções trimestral, semestral e anual no checkout · cartão ou PIX · cancelamento simples</p></div></div></section>;
 }
 
 const faqs = [
@@ -230,7 +338,7 @@ export function FaqV4() {
 }
 
 export function ClosingV4() {
-  return <section className="v4-ink-section py-20 sm:py-28"><div className="mx-auto max-w-5xl px-5 text-center sm:px-8"><p className="text-xs font-bold uppercase text-primary">Dê a uma questão o tempo que ela merece</p><h2 className="v4-balance mx-auto mt-5 max-w-4xl font-display text-4xl font-semibold leading-tight text-primary-foreground sm:text-6xl">Seu primeiro encontro pode mudar a forma como você está olhando para o que vive.</h2><p className="mx-auto mt-6 max-w-2xl leading-relaxed text-primary-foreground/65">Experimente a AURA por sete dias, viva uma sessão guiada e descubra como o App mantém essa percepção presente no seu cotidiano.</p><div className="mt-9"><Cta source="final" label="Quero experimentar a AURA (v4 final)" className="rounded-xl px-8">Quero experimentar a AURA <ArrowRight /></Cta></div></div></section>;
+  return <section className="v4-ink-section py-20 sm:py-28"><div className="mx-auto max-w-5xl px-5 text-center sm:px-8"><p className="text-xs font-bold uppercase text-primary">Comece uma conversa diferente</p><h2 className="v4-balance mx-auto mt-5 max-w-4xl font-display text-4xl font-semibold leading-tight text-primary-foreground sm:text-6xl">Talvez não esteja faltando uma resposta. Talvez esteja faltando uma conversa que ajude você a enxergar melhor.</h2><p className="mx-auto mt-6 max-w-2xl leading-relaxed text-primary-foreground/65">Experimente a AURA por sete dias: converse por texto ou áudio, viva uma sessão guiada e descubra tudo o que o App pode acrescentar ao seu caminho.</p><div className="mt-9"><Cta source="final" label="Quero experimentar a AURA (v4 final)" className="rounded-xl px-8">Quero experimentar a AURA <ArrowRight /></Cta></div></div></section>;
 }
 
 export function FooterV4() {
