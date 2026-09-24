@@ -55,7 +55,7 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
     queryFn: async () => {
       const [portraitRes, factsRes, feedbackRes] = await Promise.all([
         supabasePortal.from("user_portraits").select("*").eq("user_id", userId).maybeSingle(),
-        supabasePortal.from("user_insights").select("id,key,value,created_at").eq("user_id", userId).eq("category", "user_added").order("created_at", { ascending: false }),
+        supabasePortal.from("user_insights").select("id,key,value,created_at").eq("user_id", userId).eq("category", "contexto").ilike("key", "Declarado · %").order("created_at", { ascending: false }),
         supabasePortal.from("user_portrait_feedback").select("item_key,section,original_text,status,corrected_text").eq("user_id", userId),
       ]);
       if (portraitRes.error) throw portraitRes.error;
@@ -81,7 +81,7 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
   const feedbackMap = useMemo(() => new Map((data?.feedback ?? []).map((item) => [item.item_key, item])), [data?.feedback]);
   const firstName = profile?.name?.trim().split(/\s+/)[0];
   const portrait = data?.portrait;
-  const facts = data?.facts ?? [];
+  const facts = (data?.facts ?? []).map((fact) => ({ ...fact, key: fact.key.replace(/^Declarado ·\s*/, "") }));
   const hasPortrait = Boolean(portrait?.intro || portrait?.pessoas?.length || portrait?.o_que_te_move?.length || portrait?.padroes?.length || portrait?.preferencias?.length || portrait?.sensiveis?.length);
 
   const mutation = useMutation({

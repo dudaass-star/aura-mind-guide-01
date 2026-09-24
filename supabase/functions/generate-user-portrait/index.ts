@@ -166,7 +166,6 @@ Deno.serve(async (req) => {
       supa.from("user_insights")
         .select("category, key, value, importance, last_mentioned_at")
         .eq("user_id", user_id)
-        .neq("category", "contexto")
         .order("importance", { ascending: false })
         .limit(200),
       supa.from("session_themes")
