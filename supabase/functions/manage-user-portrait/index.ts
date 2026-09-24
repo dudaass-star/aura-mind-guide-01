@@ -114,7 +114,8 @@ Deno.serve(async (req) => {
         : `No retrato da AURA, remover e não voltar a usar a leitura “${body.originalText}”.`;
       const correctionType = status === "removed" ? "exclusao" : "rejeicao_hipotese";
       await admin.from("user_memory_corrections").insert({ user_id: userId, correction_text: correctionText, source: `user_portrait_${status}`, confidence: 10, correction_type: correctionType });
-      await admin.from("user_portraits").delete().eq("user_id", userId);
+      // Mantém a última versão visível; o feedback esconde/substitui a leitura
+      // imediatamente enquanto a regeneração acontece em segundo plano.
     }
     await admin.from("portal_value_events").insert({ user_id: userId, feature: "profile", event_type: `hypothesis_${status}`, metadata: { section: body.section } });
     return json({ ok: true, status, correctedText });

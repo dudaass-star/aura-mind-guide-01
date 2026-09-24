@@ -143,7 +143,9 @@ function normalize(parsed: any) {
 }
 
 function normalizedText(value: unknown): string {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLowerCase() : "";
+  return typeof value === "string"
+    ? value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
+    : "";
 }
 
 function feedbackReference(item: any): string {
@@ -156,15 +158,24 @@ function feedbackReference(item: any): string {
 
 function applyFeedback(portrait: ReturnType<typeof normalize>, feedback: any[]) {
   const active = feedback.filter((entry) => entry?.status === "removed" || entry?.status === "corrected");
+  const similar = (left: unknown, right: unknown) => {
+    const ignored = new Set(["a", "as", "o", "os", "de", "da", "das", "do", "dos", "e", "em", "um", "uma", "que", "voce", "seu", "sua"]);
+    const tokens = (value: unknown) => new Set(normalizedText(value).split(" ").filter((token) => token.length > 2 && !ignored.has(token)));
+    const a = tokens(left);
+    const b = tokens(right);
+    if (!a.size || !b.size) return normalizedText(left) === normalizedText(right);
+    const overlap = [...a].filter((token) => b.has(token)).length;
+    return overlap / Math.min(a.size, b.size) >= 0.7;
+  };
   const resolve = (section: string, value: any) => {
     const reference = feedbackReference(value);
-    const match = active.find((entry) => entry.section === section && normalizedText(entry.original_text) === normalizedText(reference));
+    const match = active.find((entry) => entry.section === section && similar(entry.original_text, reference));
     if (!match) return value;
     if (match.status === "removed") return null;
     if (section === "pessoas") return null; // a versão corrigida volta como fato explícito, sem reconstruir uma pessoa por heurística
     return match.corrected_text || null;
   };
-  return {
+  const result = {
     ...portrait,
     intro: resolve("intro", portrait.intro),
     pessoas: portrait.pessoas.map((item: any) => resolve("pessoas", item)).filter(Boolean),
@@ -173,6 +184,16 @@ function applyFeedback(portrait: ReturnType<typeof normalize>, feedback: any[]) 
     preferencias: portrait.preferencias.map((item: string) => resolve("preferencias", item)).filter(Boolean),
     sensiveis: portrait.sensiveis.map((item: string) => resolve("sensiveis", item)).filter(Boolean),
   };
+  // Correções do usuário são fonte de verdade: mesmo que o modelo omita ou
+  // reformule o item, a versão corrigida continua presente deterministicamente.
+  for (const entry of active.filter((item) => item.status === "corrected" && item.corrected_text)) {
+    if (entry.section === "intro") result.intro = entry.corrected_text;
+    else if (entry.section !== "pessoas") {
+      const list = result[entry.section as keyof typeof result];
+      if (Array.isArray(list) && !list.some((item) => similar(item, entry.corrected_text))) list.unshift(entry.corrected_text);
+    }
+  }
+  return result;
 }
 
 Deno.serve(async (req) => {

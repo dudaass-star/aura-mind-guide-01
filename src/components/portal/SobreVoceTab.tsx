@@ -44,7 +44,7 @@ async function feedbackKey(section: string, text: string) {
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function SobreVoceTab({ userId, profile }: { userId: string; profile: { name?: string | null } | null | undefined; onOpenConversation: (prefilledMessage?: string) => void }) {
+export function SobreVoceTab({ userId, profile, onOpenConversation }: { userId: string; profile: { name?: string | null } | null | undefined; onOpenConversation: (prefilledMessage?: string) => void }) {
   const queryClient = useQueryClient();
   const [review, setReview] = useState<ReviewItem | null>(null);
   const [correction, setCorrection] = useState("");
@@ -145,6 +145,11 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
     </>}
 
     <p className="rounded-xl bg-secondary/60 p-4 text-xs leading-relaxed text-muted-foreground"><strong className="text-foreground">Você está no controle.</strong> Confirmar torna uma leitura referência. Corrigir substitui pela sua versão. Apagar faz a AURA deixar de considerar aquela informação.</p>
+
+    <Button variant="outline" className="w-full" onClick={() => {
+      void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "profile", event_type: "returned_to_conversation", source: "app" });
+      onOpenConversation("Quero conversar sobre o meu retrato em Sobre você.");
+    }}>Conversar sobre meu retrato</Button>
 
     <Dialog open={Boolean(review)} onOpenChange={(open) => { if (!open) { setReview(null); setCorrection(""); } }}>
       <DialogContent className="max-w-md rounded-xl">
