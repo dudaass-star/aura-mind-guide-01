@@ -179,7 +179,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
   });
 
   const priority = useMemo(() => {
-    if (zeroConversation) return {
+    if (data?.first14Reliable && !data.hasAppConversation) return {
       action: "conversation" as const,
       eyebrow: "Seu começo",
       title: "Pode começar do seu jeito",
@@ -298,7 +298,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
       button: "Conversar com a AURA",
       icon: MessageCircle,
     };
-  }, [data, profile?.converted_at, profile?.created_at, profile?.current_journey_id, profile?.trial_started_at, zeroConversation]);
+  }, [data, profile?.converted_at, profile?.created_at, profile?.current_journey_id, profile?.trial_started_at]);
 
   useEffect(() => {
     if (isLoading || !priority) return;

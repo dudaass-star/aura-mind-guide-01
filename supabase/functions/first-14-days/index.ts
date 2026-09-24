@@ -26,6 +26,7 @@ Deno.serve(async (req) => {
     const { data: profiles, error } = await db.from("profiles")
       .select("user_id,name,created_at,converted_at,trial_started_at")
       .in("status", ["active", "trial", "trialing"])
+      .or(`created_at.gte.${new Date(Date.now() - 15 * DAY_MS).toISOString()},converted_at.gte.${new Date(Date.now() - 15 * DAY_MS).toISOString()},trial_started_at.gte.${new Date(Date.now() - 15 * DAY_MS).toISOString()}`)
       .limit(500);
     if (error) throw error;
 
