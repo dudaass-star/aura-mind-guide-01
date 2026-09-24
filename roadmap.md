@@ -9,6 +9,7 @@
 - [x] Reposicionar e validar a Landing V4 com sessão guiada de 45 minutos como protagonista.
 - [x] Reequilibrar a Landing V4 com conversa real do App, diálogo humano de impacto e funcionalidades com valor próprio.
 - [x] Diferenciar visualmente as sessões da conversa na abertura da Landing V4 reproduzindo fielmente a tela real de Sessões.
+- [x] Conectar Jornadas, Meditações, Sobre você e Percurso à demonstração de valor da Landing V4 com telas fiéis do App.
 
 - [x] Transformar Jornadas em continuidade ativa: cadência fixa, um episódio pendente, leitura confirmada, reflexão, escolha guiada e métricas.
 
