@@ -101,7 +101,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Substituir o nível de intimidade por continuidade qualitativa, sem pontuação, comparação ou recompensa por exposição pessoal.
 - [x] Conduzir os primeiros 14 dias por Hoje + push para apresentar progressivamente duas ou três formas de valor, sem interferir no chat.
 - [x] Corrigir a condução inicial para usar experiências reais, calendário BRT, novas tentativas de push e conversões específicas por ação.
-- [ ] Preparar a condução inicial para escala com lotes, retomada segura, leituras eficientes e conversão completa de texto/áudio/reenvio/fila offline.
+- [x] Preparar a condução inicial para escala com lotes, retomada segura, leituras eficientes e conversão completa de texto/áudio/reenvio/fila offline.
 - [ ] Transformar Hoje no orquestrador de um único próximo passo contextual.
 - [ ] Consolidar push-first e validar retorno ao aplicativo em aparelhos reais.
 - [ ] Criar retenção adaptativa com um convite relevante por comportamento.

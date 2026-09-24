@@ -26,6 +26,7 @@ type NotificationRequest = {
   templateVariables?: string[];
   fallback?: "whatsapp" | "none";
   scheduledDeliveryId?: string;
+  first14StateAlreadyValidated?: boolean;
 };
 
 const SAFE_PUSH_COPY = {
@@ -74,7 +75,11 @@ async function scheduleDelivery(
     task_type: "notification_delivery",
     execute_at: scheduledFor.toISOString(),
     status: "pending",
-    payload: { ...request, scheduledDeliveryId: deliveryId },
+    payload: {
+      ...request,
+      scheduledDeliveryId: deliveryId,
+      first14StateAlreadyValidated: false,
+    },
   });
   if (error) {
     console.error("Falha ao programar notificação:", error);
@@ -168,7 +173,7 @@ export async function routeNotification(supabase: any, request: NotificationRequ
   }
   if (deliveryError || !delivery) throw deliveryError || new Error("Falha ao registrar entrega");
 
-  if (actionFromNotificationType(request.type) && !(await isFirst14NotificationCurrent(supabase, request.userId, request.type))) {
+  if (actionFromNotificationType(request.type) && !request.first14StateAlreadyValidated && !(await isFirst14NotificationCurrent(supabase, request.userId, request.type))) {
     await supabase.from("notification_deliveries").update({
       selected_channel: "none",
       status: "suppressed",

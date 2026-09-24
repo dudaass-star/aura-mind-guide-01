@@ -13,6 +13,18 @@ export type First14Signals = {
 
 export type First14Direction = { action: First14Action; milestone: string } | null;
 
+export type First14Profile = {
+  user_id: string;
+  created_at: string;
+  converted_at?: string | null;
+  trial_started_at?: string | null;
+};
+
+export type First14BatchState = {
+  direction: First14Direction;
+  reliable: boolean;
+};
+
 export function chooseFirst14Direction(signals: First14Signals): First14Direction {
   if (signals.ageDays < 0 || signals.ageDays > 14) return null;
   if (!signals.hasConversation) return { action: "conversation", milestone: "first_conversation" };
@@ -77,6 +89,68 @@ export async function loadFirst14Direction(db: any, userId: string) {
       hasUpcomingSession: sessionRows.some((item: { status: string; scheduled_at?: string }) => item.status === "in_progress" || (item.status === "scheduled" && item.scheduled_at && new Date(item.scheduled_at).getTime() >= Date.now())),
     }),
   };
+}
+
+export async function loadFirst14BatchDirections(
+  db: any,
+  profiles: First14Profile[],
+): Promise<Map<string, First14BatchState>> {
+  const result = new Map<string, First14BatchState>();
+  if (!profiles.length) return result;
+  const userIds = profiles.map((profile) => profile.user_id);
+  const [conversation, sessions, episodes, practices, progress] = await Promise.all([
+    db.from("messages").select("user_id").in("user_id", userIds).eq("role", "user").eq("channel", "in_app"),
+    db.from("sessions").select("user_id,status,scheduled_at,preparation_note").in("user_id", userIds).in("status", ["scheduled", "in_progress", "completed"]),
+    db.from("journey_episode_progress").select("user_id,status,opened_at").in("user_id", userIds),
+    db.from("portal_value_events").select("user_id").in("user_id", userIds).eq("feature", "practice").eq("event_type", "audio_started"),
+    db.from("portal_value_events").select("user_id").in("user_id", userIds).eq("feature", "progress").eq("event_type", "opened"),
+  ]);
+  const reads = [conversation, sessions, episodes, practices, progress];
+  if (reads.some((read) => read.error)) {
+    for (const profile of profiles) result.set(profile.user_id, { direction: null, reliable: false });
+    return result;
+  }
+
+  const conversationUsers = new Set((conversation.data || []).map((row: { user_id: string }) => row.user_id));
+  const practiceUsers = new Set((practices.data || []).map((row: { user_id: string }) => row.user_id));
+  const progressUsers = new Set((progress.data || []).map((row: { user_id: string }) => row.user_id));
+  const sessionsByUser = new Map<string, Array<{ status: string; scheduled_at?: string | null; preparation_note?: string | null }>>();
+  const episodesByUser = new Map<string, Array<{ status: string; opened_at?: string | null }>>();
+  for (const row of sessions.data || []) {
+    const rows = sessionsByUser.get(row.user_id) || [];
+    rows.push(row);
+    sessionsByUser.set(row.user_id, rows);
+  }
+  for (const row of episodes.data || []) {
+    const rows = episodesByUser.get(row.user_id) || [];
+    rows.push(row);
+    episodesByUser.set(row.user_id, rows);
+  }
+
+  const now = Date.now();
+  for (const profile of profiles) {
+    const sessionRows = sessionsByUser.get(profile.user_id) || [];
+    const episodeRows = episodesByUser.get(profile.user_id) || [];
+    const startAt = profile.converted_at || profile.trial_started_at || profile.created_at;
+    result.set(profile.user_id, {
+      reliable: true,
+      direction: chooseFirst14Direction({
+        ageDays: first14AgeDaysBrt(startAt),
+        hasConversation: conversationUsers.has(profile.user_id),
+        hasJourney: episodeRows.some((item) => Boolean(item.opened_at)),
+        hasSessionExperience: sessionRows.length > 0,
+        hasPractice: practiceUsers.has(profile.user_id),
+        hasProgress: progressUsers.has(profile.user_id),
+        hasPendingEpisode: episodeRows.some((item) => item.status === "released" || item.status === "in_progress"),
+        hasUpcomingSession: sessionRows.some((item) => item.status === "in_progress" || (item.status === "scheduled" && item.scheduled_at && new Date(item.scheduled_at).getTime() >= now)),
+      }),
+    });
+  }
+  return result;
+}
+
+export function nextFirst14Cursor<T extends { user_id: string }>(rows: T[], batchSize: number) {
+  return rows.length === batchSize ? rows.at(-1)?.user_id || null : null;
 }
 
 export function actionFromNotificationType(type: string): First14Action | null {

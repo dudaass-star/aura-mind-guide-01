@@ -88,7 +88,7 @@ const PUSH_ATTRIBUTION_KEY = "aura-push-attribution";
 const PUSH_ATTRIBUTION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export function rememberPushAttribution(deliveryId: string, notificationType?: string) {
-  sessionStorage.setItem(PUSH_ATTRIBUTION_KEY, JSON.stringify({
+  localStorage.setItem(PUSH_ATTRIBUTION_KEY, JSON.stringify({
     deliveryId,
     notificationType,
     openedAt: Date.now(),
@@ -96,11 +96,12 @@ export function rememberPushAttribution(deliveryId: string, notificationType?: s
 }
 
 export async function reportPushConversion(path: string, expectedType?: string) {
-  const raw = sessionStorage.getItem(PUSH_ATTRIBUTION_KEY);
+  const raw = localStorage.getItem(PUSH_ATTRIBUTION_KEY) || sessionStorage.getItem(PUSH_ATTRIBUTION_KEY);
   if (!raw) return;
   try {
     const attribution = JSON.parse(raw) as { deliveryId?: string; notificationType?: string; openedAt?: number };
     if (!attribution.deliveryId || !attribution.openedAt || Date.now() - attribution.openedAt > PUSH_ATTRIBUTION_WINDOW_MS) {
+      localStorage.removeItem(PUSH_ATTRIBUTION_KEY);
       sessionStorage.removeItem(PUSH_ATTRIBUTION_KEY);
       return;
     }
@@ -114,8 +115,12 @@ export async function reportPushConversion(path: string, expectedType?: string) 
         path,
       },
     });
-    if (!error) sessionStorage.removeItem(PUSH_ATTRIBUTION_KEY);
+    if (!error) {
+      localStorage.removeItem(PUSH_ATTRIBUTION_KEY);
+      sessionStorage.removeItem(PUSH_ATTRIBUTION_KEY);
+    }
   } catch {
+    localStorage.removeItem(PUSH_ATTRIBUTION_KEY);
     sessionStorage.removeItem(PUSH_ATTRIBUTION_KEY);
   }
 }
