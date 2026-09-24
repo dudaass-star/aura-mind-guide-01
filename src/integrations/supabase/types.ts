@@ -4292,6 +4292,45 @@ export type Database = {
         }
         Relationships: []
       }
+      user_portrait_feedback: {
+        Row: {
+          corrected_text: string | null
+          created_at: string
+          id: string
+          item_key: string
+          original_text: string
+          section: string
+          source_kind: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          corrected_text?: string | null
+          created_at?: string
+          id?: string
+          item_key: string
+          original_text: string
+          section: string
+          source_kind?: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          corrected_text?: string | null
+          created_at?: string
+          id?: string
+          item_key?: string
+          original_text?: string
+          section?: string
+          source_kind?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_portraits: {
         Row: {
           conquistas: Json
