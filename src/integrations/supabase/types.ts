@@ -4213,8 +4213,10 @@ export type Database = {
       }
       user_memory_corrections: {
         Row: {
+          client_message_id: string | null
           confidence: number
           correction_text: string
+          correction_type: string | null
           created_at: string
           id: string
           last_used_at: string | null
@@ -4222,8 +4224,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          client_message_id?: string | null
           confidence?: number
           correction_text: string
+          correction_type?: string | null
           created_at?: string
           id?: string
           last_used_at?: string | null
@@ -4231,8 +4235,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          client_message_id?: string | null
           confidence?: number
           correction_text?: string
+          correction_type?: string | null
           created_at?: string
           id?: string
           last_used_at?: string | null
