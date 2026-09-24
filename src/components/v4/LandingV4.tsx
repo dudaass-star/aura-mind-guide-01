@@ -13,6 +13,18 @@ import avatarAura from "@/assets/avatar-aura.jpg";
 
 const V = "v4" as const;
 
+function BrandLogo({ className = "" }: { className?: string }) {
+  return (
+    <span className={`relative block h-8 w-[7.9rem] overflow-hidden ${className}`}>
+      <img
+        src={logoOlaAura}
+        alt="Olá AURA"
+        className="absolute left-[-0.8rem] top-[-3.25rem] h-[8.5rem] w-[8.5rem] max-w-none brightness-0 invert"
+      />
+    </span>
+  );
+}
+
 function Cta({ source, label, children, className = "" }: { source: "hero" | "pricing" | "sticky" | "header" | "final" | "demo"; label: string; children: ReactNode; className?: string }) {
   return (
     <Button asChild variant="sage" size="lg" className={className}>
@@ -26,7 +38,7 @@ export function HeaderV4() {
   return (
     <header className="absolute inset-x-0 top-0 z-40 border-b border-primary-foreground/10">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
-        <Link to="/v4" aria-label="Olá AURA"><img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto brightness-0 invert" /></Link>
+        <Link to="/v4" aria-label="Olá AURA" className="shrink-0"><BrandLogo /></Link>
         <nav className="hidden items-center gap-7 md:flex">
           <a href="#experiencia" className="text-sm font-semibold text-primary-foreground/70 transition-colors hover:text-primary-foreground">A experiência</a>
           <a href="#como-funciona" className="text-sm font-semibold text-primary-foreground/70 transition-colors hover:text-primary-foreground">Como funciona</a>
@@ -127,7 +139,7 @@ export function HeroV4() {
     <section id="hero-section" className="v4-ink-section relative overflow-hidden pt-24 lg:pt-28">
       <div className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 sm:px-8 lg:min-h-[720px] lg:grid-cols-[1.08fr_.92fr] lg:gap-16 lg:pb-14">
         <div className="v4-rise relative z-10 max-w-3xl">
-          <p className="mb-5 inline-flex items-center gap-2 border-l-2 border-primary px-3 text-xs font-bold uppercase text-primary-foreground/65">Sessões guiadas de 45 minutos com a AURA</p>
+          <p className="mb-5 inline-flex items-center gap-2 border-l-2 border-primary px-3 text-xs font-bold uppercase text-primary-foreground/65">Viva a experiência AURA</p>
           <h1 className="v4-balance font-display text-[2.75rem] font-semibold leading-[1.02] text-primary-foreground sm:text-6xl lg:text-7xl">
             45 minutos para transformar o que te confunde <span className="text-[hsl(var(--v4-sun))]">em direção para agir.</span>
           </h1>
