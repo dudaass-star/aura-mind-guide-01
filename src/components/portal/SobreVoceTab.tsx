@@ -25,7 +25,7 @@ type Portrait = {
 };
 
 type Feedback = { item_key: string; section: string; original_text: string; status: "confirmed" | "corrected" | "removed"; corrected_text: string | null };
-type UserFact = { id: string; key: string; value: string; created_at: string | null };
+type UserFact = { id: string; key: string; value: string; created_at: string | null; declared_category?: string | null };
 type SectionKey = "intro" | "pessoas" | "o_que_te_move" | "padroes" | "preferencias" | "sensiveis";
 type ReviewItem = { section: SectionKey; text: string };
 
@@ -55,7 +55,7 @@ export function SobreVoceTab({ userId, profile, onOpenConversation }: { userId: 
     queryFn: async () => {
       const [portraitRes, factsRes, feedbackRes] = await Promise.all([
         supabasePortal.from("user_portraits").select("*").eq("user_id", userId).maybeSingle(),
-        supabasePortal.from("user_insights").select("id,key,value,created_at").eq("user_id", userId).eq("category", "contexto").ilike("key", "Declarado · %").order("created_at", { ascending: false }),
+        supabasePortal.from("user_insights").select("id,key,value,created_at,declared_category").eq("user_id", userId).eq("source_kind", "user_declared").order("created_at", { ascending: false }),
         supabasePortal.from("user_portrait_feedback").select("item_key,section,original_text,status,corrected_text").eq("user_id", userId),
       ]);
       if (portraitRes.error) throw portraitRes.error;

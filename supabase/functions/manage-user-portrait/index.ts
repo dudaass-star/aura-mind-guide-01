@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     if (body.action === "add_fact") {
       const { data, error } = await admin.from("user_insights").insert({
         user_id: userId, category: "contexto", key: `Declarado · ${CATEGORY_LABELS[body.category]}`, value: body.value,
-        importance: 9, mentioned_count: 1,
+        importance: 9, mentioned_count: 1, source_kind: "user_declared", declared_category: body.category,
       }).select("id, key, value, created_at").single();
       if (error) throw error;
       await admin.from("portal_value_events").insert({ user_id: userId, feature: "profile", event_type: "fact_added", metadata: { category: body.category } });
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "edit_fact" || body.action === "delete_fact") {
-      const { data: insight } = await admin.from("user_insights").select("id,key,value").eq("id", body.insightId).eq("user_id", userId).eq("category", "contexto").ilike("key", "Declarado · %").maybeSingle();
+      const { data: insight } = await admin.from("user_insights").select("id,key,value,declared_category").eq("id", body.insightId).eq("user_id", userId).eq("source_kind", "user_declared").maybeSingle();
       if (!insight) return json({ error: "Informação não encontrada" }, 404);
       if (body.action === "edit_fact") {
         const { error } = await admin.from("user_insights").update({ value: body.value, last_mentioned_at: new Date().toISOString() }).eq("id", insight.id).eq("user_id", userId);
