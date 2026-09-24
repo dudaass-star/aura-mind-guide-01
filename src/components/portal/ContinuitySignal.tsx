@@ -1,34 +1,44 @@
 import { useQuery } from "@tanstack/react-query";
+import { BookOpen, CheckCircle2, Sprout } from "lucide-react";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
-type Stage = {
-  key: "inicio" | "familiaridade" | "profundidade";
-  label: string;
-  short: string;
-  percent: number;
+export type ContinuityStage = {
+  key: "inicio" | "contexto" | "continuidade";
+  title: string;
+  description: string;
+  icon: typeof Sprout;
 };
 
-function computeStage(sessions: number, themes: number, corrections: number): Stage {
+export function computeContinuityStage(sessions: number, themes: number): ContinuityStage {
   if (sessions >= 10 && themes >= 5) {
-    return { key: "profundidade", label: "profundamente", short: "Íntimo", percent: 95 };
+    return {
+      key: "continuidade",
+      title: "Continuidade construída",
+      description: "Já existe um histórico consistente de encontros e assuntos para apoiar suas próximas conversas.",
+      icon: CheckCircle2,
+    };
   }
-  if (sessions >= 3 && (themes >= 3 || corrections >= 1)) {
-    return { key: "familiaridade", label: "bem", short: "Aprofundando", percent: 65 };
+  if (sessions >= 3 || themes >= 3) {
+    return {
+      key: "contexto",
+      title: "Sua história ganhando contexto",
+      description: "Os assuntos e encontros anteriores já ajudam a dar continuidade ao que importa para você.",
+      icon: BookOpen,
+    };
   }
-  return { key: "inicio", label: "superficialmente", short: "Superficial", percent: 25 };
+  return {
+    key: "inicio",
+    title: "Começando a conhecer você",
+    description: "A cada conversa ou encontro, a AURA passa a ter mais contexto para acompanhar sua história.",
+    icon: Sprout,
+  };
 }
 
-export function IntimacyLevel({ userId }: { userId: string }) {
-  const { data } = useQuery({
-    queryKey: ["portal-intimacy", userId],
+export function ContinuitySignal({ userId }: { userId: string }) {
+  const { data, isError } = useQuery({
+    queryKey: ["portal-continuity-signal", userId],
     queryFn: async () => {
-      const [sessionsRes, themesRes, corrRes] = await Promise.all([
+      const [sessionsRes, themesRes] = await Promise.all([
         supabasePortal
           .from("sessions")
           .select("id", { count: "exact", head: true })
@@ -38,53 +48,29 @@ export function IntimacyLevel({ userId }: { userId: string }) {
           .from("session_themes")
           .select("theme_name")
           .eq("user_id", userId),
-        supabasePortal
-          .from("user_memory_corrections")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId),
       ]);
+      if (sessionsRes.error) throw sessionsRes.error;
+      if (themesRes.error) throw themesRes.error;
       const sessions = sessionsRes.count ?? 0;
       const themes = new Set((themesRes.data ?? []).map((t: any) => t.theme_name)).size;
-      const corrections = corrRes.count ?? 0;
-      return { sessions, themes, corrections };
+      return { sessions, themes };
     },
   });
 
-  if (!data) return null;
-  const stage = computeStage(data.sessions, data.themes, data.corrections);
+  if (!data || isError) return null;
+  const stage = computeContinuityStage(data.sessions, data.themes);
+  const Icon = stage.icon;
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="mt-4 rounded-2xl bg-white/60 p-5 cursor-help border border-white/80">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#1B2A4E] font-['Nunito']">
-                Nível de Intimidade
-              </h3>
-              <span className="text-xs font-bold text-[#87A878] font-['Nunito']">
-                {stage.short}
-              </span>
-            </div>
-            <div className="h-2 w-full bg-[#1B2A4E]/10 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-[#87A878] to-[#B8A5D9] transition-all duration-500"
-                style={{ width: `${stage.percent}%` }}
-              />
-            </div>
-            <div className="flex justify-between mt-2">
-              <span className="text-[10px] text-[#2A2A2A]/40 font-['Nunito']">Superficial</span>
-              <span className="text-[10px] text-[#2A2A2A]/40 font-['Nunito']">Íntimo</span>
-            </div>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-xs">
-          <p className="text-xs font-['Nunito']">
-            Baseado em sessões concluídas, diversidade de temas conversados e correções que você fez
-            na memória dela.
-          </p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <section className="mt-4 flex items-start gap-3 rounded-lg border border-[hsl(var(--portal-area-foreground)/0.18)] bg-[hsl(var(--portal-area-surface)/0.58)] p-4" aria-label="Continuidade com a AURA" data-continuity-stage={stage.key}>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--portal-area-foreground)/0.12)] text-[hsl(var(--portal-area-foreground))]" aria-hidden="true">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold uppercase text-[hsl(var(--portal-area-foreground))]">Contexto construído</p>
+        <h2 className="mt-0.5 text-sm font-semibold text-foreground">{stage.title}</h2>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{stage.description}</p>
+      </div>
+    </section>
   );
 }

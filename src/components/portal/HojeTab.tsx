@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import type { Json } from "@/integrations/supabase/types";
-import { IntimacyLevel } from "./IntimacyLevel";
+import { ContinuitySignal } from "./ContinuitySignal";
 import { PerguntaDoDiaCard } from "./PerguntaDoDiaCard";
 import { PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
@@ -274,7 +274,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
         <p className="text-xs font-semibold text-primary">
           {profile?.last_user_message_at ? `Vocês conversaram ${relativeTime(profile.last_user_message_at)}` : "Seu momento de hoje"}
         </p>
-        <IntimacyLevel userId={userId} />
+        <ContinuitySignal userId={userId} />
       </header>
 
       <section className="relative overflow-hidden rounded-lg border border-primary/25 bg-primary p-6 text-primary-foreground shadow-card animate-fade-up">
