@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown,
-  ChevronUp, Headphones, LockKeyhole, Menu, MessageCircle, Mic, NotebookPen,
-  RotateCcw, ShieldCheck, Sparkles, UserRound, X,
+  ChevronUp, LockKeyhole, Menu, MessageCircle, Mic, NotebookPen,
+  ShieldCheck, Sparkles, UserRound, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { checkoutHref, trackLandingCta } from "@/lib/landing-analytics";
@@ -13,7 +13,7 @@ import avatarAura from "@/assets/avatar-aura.jpg";
 
 const V = "v4" as const;
 
-function Cta({ source, label, children, className = "" }: { source: "hero" | "pricing" | "sticky" | "header" | "final" | "demo"; label: string; children: React.ReactNode; className?: string }) {
+function Cta({ source, label, children, className = "" }: { source: "hero" | "pricing" | "sticky" | "header" | "final" | "demo"; label: string; children: ReactNode; className?: string }) {
   return (
     <Button asChild variant="sage" size="lg" className={className}>
       <Link to={checkoutHref(source, V)} onClick={() => trackLandingCta(source, label, V)}>{children}</Link>
@@ -118,7 +118,7 @@ export function TransformationV4() {
         <div className="grid gap-12 lg:grid-cols-[.8fr_1.2fr]">
           <div><p className="text-xs font-bold uppercase text-primary">O valor não está só em ser ouvida</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">É perceber o que você não conseguia ver sozinha.</h2><p className="mt-5 max-w-md leading-relaxed text-muted-foreground">A AURA não promete respostas prontas. Ela acompanha o contexto, faz perguntas melhores e devolve possibilidades que você pode confirmar, corrigir e aprofundar.</p></div>
           <div className="divide-y divide-border border-y border-border">
-            {transformations.map(([before, after], index) => <div key={before} className="grid gap-2 py-6 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-5"><p className="text-sm text-muted-foreground">{before}</p><ArrowRight className="hidden h-4 w-4 text-primary sm:block" /><p className="font-display text-xl font-semibold">{after}</p></div>)}
+            {transformations.map(([before, after]) => <div key={before} className="grid gap-2 py-6 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-5"><p className="text-sm text-muted-foreground">{before}</p><ArrowRight className="hidden h-4 w-4 text-primary sm:block" /><p className="font-display text-xl font-semibold">{after}</p></div>)}
           </div>
         </div>
       </div>
