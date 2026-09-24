@@ -3,6 +3,7 @@
 // schema estruturado e grava em user_portraits. Reaproveita cache via hash.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { z } from "npm:zod@3.25.76";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -27,7 +28,7 @@ async function md5(text: string): Promise<string> {
     .map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function buildPrompt(name: string | null, insights: Insight[], themes: any[]): string {
+function buildPrompt(name: string | null, insights: Insight[], themes: any[], corrections: string[]): string {
   const insightLines = insights
     .map((i) => `- [${i.category}] ${i.key ?? "—"}: ${i.value ?? ""} (importância ${i.importance ?? 0})`)
     .join("\n");
@@ -35,11 +36,14 @@ function buildPrompt(name: string | null, insights: Insight[], themes: any[]): s
     .map((t) => `- ${t.theme_name} (${t.status}, ${t.session_count}x)`)
     .join("\n");
 
-  return `Você é a Aura escrevendo um RETRATO pessoal do usuário ${name ?? "(sem nome)"} pra ele mesmo ler no portal /meu-espaco.
+  const correctionLines = corrections.map((text) => `- ${text}`).join("\n");
+  return `Você é a Aura escrevendo um RETRATO pessoal do usuário ${name ?? "(sem nome)"} pra ele mesmo ler no aplicativo.
 
 REGRAS DUROS:
 - Português Brasil, informal, voz da Aura ("eu percebi", "você costuma")
 - Só use o que está nos dados abaixo. NUNCA invente fato, nome ou evento.
+- Toda leitura de padrão é uma HIPÓTESE a ser confirmada pelo usuário. Escreva padrões com linguagem aberta, como "Talvez você..." ou "Parece que...", nunca como diagnóstico ou verdade fechada.
+- CORREÇÕES DO USUÁRIO têm prioridade absoluta. Não repita conteúdo removido e use a versão corrigida no lugar da leitura anterior.
 - AGRUPE entradas semanticamente parecidas em UM item (ex: "Padrão de comportamento: adiamento" + "Comportamento: adiamento" viram um só)
 - DESCARTE entradas operacionais, fragmentos sem sentido ("Comida: felicidade", "Sorvete: resolveu conflito" só entra se virar uma frase real), keys soltas como "fazer"/"sentir"/"acao"
 - Cada item de o_que_te_move/padroes/preferencias deve ser UMA FRASE inteira humana, sem rótulo-chave artificial
@@ -70,6 +74,9 @@ ${insightLines || "(nenhum)"}
 
 TEMAS DE SESSÃO:
 ${themeLines || "(nenhum)"}
+
+CORREÇÕES E EXCLUSÕES DEFINIDAS PELO USUÁRIO:
+${correctionLines || "(nenhuma)"}
 `;
 }
 
@@ -139,17 +146,23 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { user_id, force } = await req.json();
-    if (!user_id) {
-      return new Response(JSON.stringify({ error: "user_id required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    if (req.method !== "POST") return new Response(JSON.stringify({ error: "Método não permitido" }), { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) return new Response(JSON.stringify({ error: "Sessão necessária" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!anonKey) throw new Error("Configuração interna incompleta");
+    const authClient = createClient(SUPABASE_URL, anonKey, { global: { headers: { Authorization: authHeader } } });
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.slice(7));
+    const authenticatedUserId = claimsData?.claims?.sub as string | undefined;
+    if (claimsError || !authenticatedUserId) return new Response(JSON.stringify({ error: "Sessão inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const parsedBody = z.object({ force: z.boolean().optional() }).safeParse(await req.json().catch(() => ({})));
+    if (!parsedBody.success) return new Response(JSON.stringify({ error: "Dados inválidos" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const user_id = authenticatedUserId;
+    const force = parsedBody.data.force;
     const supa = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     // 1. Carrega dados brutos
-    const [{ data: insights }, { data: themes }, { data: profile }] = await Promise.all([
+    const [{ data: insights }, { data: themes }, { data: profile }, { data: corrections }] = await Promise.all([
       supa.from("user_insights")
         .select("category, key, value, importance, last_mentioned_at")
         .eq("user_id", user_id)
@@ -162,6 +175,7 @@ Deno.serve(async (req) => {
         .order("session_count", { ascending: false })
         .limit(40),
       supa.from("profiles").select("name").eq("user_id", user_id).maybeSingle(),
+      supa.from("user_memory_corrections").select("correction_text").eq("user_id", user_id).order("created_at", { ascending: false }).limit(80),
     ]);
 
     const insightsArr = (insights || []) as Insight[];
@@ -172,6 +186,7 @@ Deno.serve(async (req) => {
       pv: PROMPT_VERSION,
       i: insightsArr.map((x) => [x.category, x.key, x.value, x.importance]),
       t: themesArr.map((x: any) => [x.theme_name, x.status, x.session_count]),
+      c: (corrections || []).map((x: any) => x.correction_text),
     });
     const version = await md5(versionInput);
 
@@ -206,7 +221,7 @@ Deno.serve(async (req) => {
     }
 
     // 5. Gera via LLM
-    const prompt = buildPrompt(profile?.name ?? null, insightsArr, themesArr);
+    const prompt = buildPrompt(profile?.name ?? null, insightsArr, themesArr, (corrections || []).map((x: any) => x.correction_text));
     const parsed = await callGemini(prompt);
     const norm = normalize(parsed);
 
