@@ -13,6 +13,7 @@
 - [x] Reposicionar a oferta da Landing V4 no Essencial: entrada por R$ 6,90, continuidade por R$ 29,90 e planos maiores como opção secundária.
 - [x] Enxugar a Landing V4 e aproximar da oferta a prova social confirmada por avaliações reais de sessões.
 - [x] Reforçar a marca na abertura da Landing V4 e apresentar a experiência AURA antes do diferencial da sessão.
+- [x] Incluir a Landing V4 no Google Analytics e Clarity e preservar origem, plano e ciclo no retorno de cancelamento do checkout externo.
 
 - [x] Transformar Jornadas em continuidade ativa: cadência fixa, um episódio pendente, leitura confirmada, reflexão, escolha guiada e métricas.
 

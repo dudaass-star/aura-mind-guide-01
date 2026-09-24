@@ -92,7 +92,7 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup, prewarm, accessToken } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup, prewarm, accessToken, landingVariant, ctaSource } = await req.json();
 
     // === WARMUP ===
     // O front chama isso no primeiro foco de campo pra matar o cold start da função
@@ -335,6 +335,19 @@ serve(async (req) => {
     }
 
     const origin = req.headers.get("origin") || "https://olaaura.com.br";
+    const safeLandingVariant = typeof landingVariant === "string" && /^v\d+$/.test(landingVariant)
+      ? landingVariant
+      : "v2";
+    const allowedCtaSources = new Set(["hero", "pricing", "sticky", "header", "final", "demo"]);
+    const safeCtaSource = typeof ctaSource === "string" && allowedCtaSources.has(ctaSource)
+      ? ctaSource
+      : "checkout";
+    const cancelParams = new URLSearchParams({
+      src: safeCtaSource,
+      lp: safeLandingVariant,
+      plan,
+      billing: billingOverride,
+    });
 
     // Plan display prices for custom_text — agora cobre os 4 períodos.
     const planPrices: Record<string, Record<string, string>> = {
@@ -373,7 +386,7 @@ serve(async (req) => {
       sessionConfig.return_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`;
     } else {
       sessionConfig.success_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`;
-      sessionConfig.cancel_url = `${origin}/checkout`;
+      sessionConfig.cancel_url = `${origin}/v2/checkout?${cancelParams.toString()}`;
     }
 
     const planNames: Record<string, string> = { essencial: "Essencial", direcao: "Direção", transformacao: "Transformação" };
