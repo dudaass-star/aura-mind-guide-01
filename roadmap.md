@@ -5,7 +5,7 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
-- [ ] Criar e validar a Landing V4 com transformação como protagonista e o App como prova concreta do valor.
+- [x] Criar e validar a Landing V4 com transformação como protagonista e o App como prova concreta do valor.
 
 - [x] Transformar Jornadas em continuidade ativa: cadência fixa, um episódio pendente, leitura confirmada, reflexão, escolha guiada e métricas.
 
