@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, CheckCircle2, ChevronDown,
-  ChevronUp, LockKeyhole, Menu, MessageCircle, Mic, MoreVertical, NotebookPen,
-  Play, RotateCcw, Send, ShieldCheck, Sparkles, UserRound, X,
+  ChevronLeft, ChevronRight, ChevronUp, LockKeyhole, Menu, MessageCircle, Mic, MoreVertical, NotebookPen,
+  Pencil, Play, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, UserRound, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { checkoutHref, trackLandingCta } from "@/lib/landing-analytics";
@@ -70,38 +70,53 @@ function TodayScreen({ compact = false }: { compact?: boolean }) {
 
 function MonthlySessionsScreen() {
   return (
-    <div className="overflow-hidden rounded-[1.75rem] border border-primary-foreground/15 bg-background p-4 text-foreground v4-screen-shadow sm:p-5">
-      <div className="flex items-start justify-between border-b border-border pb-4">
-        <div>
-          <p className="text-[10px] font-bold uppercase text-primary">Sessões guiadas</p>
-          <h2 className="mt-1 font-display text-2xl font-semibold">Setembro</h2>
-        </div>
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary"><CalendarDays className="h-5 w-5 text-primary" /></span>
-      </div>
-      <div className="space-y-3 py-4">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-bold text-muted-foreground">12 SET · 19:00</p>
-            <span className="flex items-center gap-1 text-[10px] font-bold text-primary"><CheckCircle2 className="h-3.5 w-3.5" /> CONCLUÍDA</span>
+    <div className="portal-chat-theme overflow-hidden rounded-[1.75rem] border border-primary-foreground/15 bg-background text-foreground v4-screen-shadow">
+      <header className="border-b border-border/70 bg-card/90 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground"><ArrowLeft className="h-5 w-5" /></span>
+          <span className="portal-area-sessions flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"><CalendarDays className="h-5 w-5" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Seus encontros</p>
+            <p className="font-display text-lg font-semibold leading-tight">Sessões</p>
           </div>
-          <h3 className="mt-3 font-display text-lg font-semibold">Decisão profissional</h3>
-          <p className="mt-1 text-xs text-muted-foreground">45 minutos de aprofundamento</p>
+          <img src={logoOlaAura} alt="Olá AURA" className="h-6 w-auto opacity-75" />
         </div>
-        <div className="rounded-xl border-2 border-primary bg-card p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-bold text-primary">26 SET · 19:00</p>
-            <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] font-bold text-secondary-foreground">PRÓXIMA</span>
-          </div>
-          <h3 className="mt-3 font-display text-xl font-semibold">Relacionamentos e limites</h3>
-          <p className="mt-1 text-xs text-muted-foreground">Sexta-feira · encontro guiado de 45 minutos</p>
-          <div className="mt-4 flex items-center justify-between rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground">
-            <span>Preparar encontro</span><ArrowRight className="h-4 w-4" />
-          </div>
-        </div>
-      </div>
-      <div className="flex items-start gap-3 border-t border-border pt-4">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary"><NotebookPen className="h-4 w-4 text-primary" /></span>
-        <p className="text-xs leading-relaxed text-muted-foreground">Encontros marcados para aprofundar uma questão com começo, condução e direção.</p>
+      </header>
+      <div className="space-y-5 p-4 sm:p-5">
+        <section className="flex items-center justify-between border-b border-border pb-4">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full"><ChevronLeft className="h-5 w-5 text-muted-foreground" /></span>
+          <div className="text-center"><p className="text-[9px] font-bold uppercase text-muted-foreground">Sua agenda</p><h2 className="mt-1 font-display text-base font-semibold">Setembro de 2026</h2></div>
+          <span className="flex h-9 w-9 items-center justify-center rounded-full"><ChevronRight className="h-5 w-5" /></span>
+        </section>
+        <section>
+          <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold">Sessões marcadas</h2><span className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-[11px] font-bold text-primary-foreground"><Plus className="h-3.5 w-3.5" /> Agendar</span></div>
+          <article className="mt-3 rounded-lg bg-foreground p-4 text-background shadow-card">
+            <div className="flex items-center justify-between gap-3"><p className="text-[10px] font-bold uppercase text-accent">Próxima sessão</p><span className="text-[10px] text-background/70">Começa em 2 dias</span></div>
+            <p className="mt-2 text-lg font-semibold leading-snug">Sexta-feira, 26 de setembro às 19:00</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="flex items-center gap-1.5 rounded-md bg-secondary px-3 py-2 text-xs font-bold text-secondary-foreground"><Pencil className="h-3.5 w-3.5" /> Reagendar</span>
+              <span className="flex items-center gap-1.5 px-2 py-2 text-xs font-bold text-background/75"><Trash2 className="h-3.5 w-3.5" /> Cancelar</span>
+            </div>
+            <div className="mt-4 border-t border-background/20 pt-4">
+              <div className="flex items-start gap-3">
+                <NotebookPen className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">Tem algo que você quer trazer?</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-background/70">Conte à AURA o que você quer conversar ou não quer esquecer.</p>
+                  <span className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-secondary px-3 py-2 text-xs font-bold text-secondary-foreground"><NotebookPen className="h-3.5 w-3.5" /> Preparar este encontro</span>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section>
+          <div className="mb-2 flex items-center justify-between text-[10px] text-muted-foreground"><span>2 de 4 sessões em Setembro</span><span>2 disponíveis</span></div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full w-1/2 bg-primary" /></div>
+        </section>
+        <section className="flex items-center gap-3 border-y border-border py-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-primary"><Bell className="h-4 w-4" /></span>
+          <div><p className="text-xs font-semibold">Lembretes 24h e 5 min antes</p><p className="text-[10px] text-muted-foreground">Ativados neste aparelho.</p></div>
+        </section>
       </div>
     </div>
   );
