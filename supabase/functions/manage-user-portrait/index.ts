@@ -73,7 +73,6 @@ Deno.serve(async (req) => {
       }).select("id, key, value, created_at").single();
       if (error) throw error;
       await admin.from("portal_value_events").insert({ user_id: userId, feature: "profile", event_type: "fact_added", metadata: { category: body.category } });
-      await admin.from("user_portraits").delete().eq("user_id", userId);
       return json({ ok: true, item: data });
     }
 
@@ -91,8 +90,8 @@ Deno.serve(async (req) => {
         const { error } = await admin.from("user_insights").delete().eq("id", insight.id).eq("user_id", userId);
         if (error) throw error;
         await admin.from("portal_value_events").insert({ user_id: userId, feature: "profile", event_type: "fact_removed", metadata: { category: insight.key } });
+        await admin.from("user_portraits").delete().eq("user_id", userId);
       }
-      await admin.from("user_portraits").delete().eq("user_id", userId);
       return json({ ok: true });
     }
 
