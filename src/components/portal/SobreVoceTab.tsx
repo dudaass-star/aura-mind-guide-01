@@ -1,53 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Activity, Check, ChevronDown, ChevronUp, Compass, Heart, Pencil, PenLine, Plus, ShieldAlert, Sparkles, Trash2, UserRound, Users, X } from "lucide-react";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
-import {
-  Heart,
-  Tag,
-  User,
-  Users,
-  Compass,
-  Activity,
-  Trophy,
-  ShieldAlert,
-  ChevronDown,
-  ChevronUp,
-  MessageCircle,
-  Sparkles,
-  Plus,
-  Pencil,
-  Trash2,
-  Check,
-  X,
-  Target,
-  Frown,
-  Swords,
-  Gem,
-  Sprout,
-  PenLine,
-} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { EmptyState, PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
 import { toast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
-// ============================================================
-// Aba "Sobre você" — versão retrato narrativo
-// Lê o retrato curado em public.user_portraits (gerado por edge function via Gemini Flash).
-// Se cache estiver vazio/stale, dispara generate-user-portrait em background.
-// Temas continuam vindo de session_themes (já curados).
-// ============================================================
-
+// Retrato atual do cliente. Fatos declarados e leituras da AURA ficam separados:
+// fatos podem ser editados; leituras precisam de confirmação antes de virarem referência validada.
 type Portrait = {
   user_id: string;
   intro: string | null;
@@ -55,770 +20,164 @@ type Portrait = {
   o_que_te_move: string[];
   padroes: string[];
   preferencias: string[];
-  conquistas: string[];
   sensiveis: string[];
-  insights_version: string | null;
   generated_at: string;
 };
 
-const MAX_THEMES = 12;
+type Feedback = { item_key: string; section: string; original_text: string; status: "confirmed" | "corrected" | "removed"; corrected_text: string | null };
+type UserFact = { id: string; key: string; value: string; created_at: string | null };
+type SectionKey = "intro" | "pessoas" | "o_que_te_move" | "padroes" | "preferencias" | "sensiveis";
+type ReviewItem = { section: SectionKey; text: string };
 
-// Temas operacionais / meta-conversa que não devem aparecer como "temas de vida".
-const THEME_BLACKLIST = [
-  "mudança de assunto",
-  "mudanca de assunto",
-  "recusa de agendamento",
-  "recusa de ajuda",
-  "organizar sessões",
-  "organizar sessoes",
-  "agendar sessão",
-  "agendar sessao",
-  "cancelar sessão",
-  "cancelar sessao",
-  "reagendar sessão",
-  "reagendar sessao",
-  "setup mensal",
-  "preferência por áudio",
-  "preferencia por audio",
-];
+const PROMPTS = [
+  { id: "objetivo", label: "Um objetivo importante", placeholder: "Onde eu quero chegar…" },
+  { id: "desafio", label: "Um desafio atual", placeholder: "O que estou enfrentando agora…" },
+  { id: "valor", label: "Um valor inegociável", placeholder: "Uma coisa que eu não abro mão…" },
+  { id: "medo", label: "Um medo ou receio", placeholder: "Uma coisa que me trava…" },
+  { id: "aspiracao", label: "Quem quero me tornar", placeholder: "A pessoa que quero me tornar…" },
+  { id: "sobre_mim", label: "Outra coisa", placeholder: "O que a AURA deveria saber?" },
+] as const;
 
-// Normaliza pra sentence-case: primeira letra maiúscula, resto preservando case interno.
-// Se vier tudo em lowercase, capitaliza só a inicial; se vier Title Case, mantém.
-function normalizeThemeName(raw: string): string {
-  const s = raw.trim().replace(/\s+/g, " ");
-  if (!s) return s;
-  // Se está todo em lowercase → capitaliza só a 1ª letra
-  if (s === s.toLowerCase()) {
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }
-  return s;
+const normalize = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+async function feedbackKey(section: string, text: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${section}:${normalize(text)}`));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-// ---------- COMPONENTES ----------
+export function SobreVoceTab({ userId, profile }: { userId: string; profile: { name?: string | null } | null | undefined; onOpenConversation: (prefilledMessage?: string) => void }) {
+  const queryClient = useQueryClient();
+  const [review, setReview] = useState<ReviewItem | null>(null);
+  const [correction, setCorrection] = useState("");
+  const [sensitiveOpen, setSensitiveOpen] = useState(false);
 
-export function SobreVoceTab({ userId, profile, onOpenConversation }: { userId: string; profile: { name?: string | null } | null | undefined; onOpenConversation: (prefilledMessage?: string) => void }) {
-  const { data: portrait, isLoading, refetch } = useQuery({
-    queryKey: ["portal-user-portrait", userId],
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["portal-user-portrait-view", userId],
     queryFn: async () => {
-      const { data } = await supabasePortal
-        .from("user_portraits" as any)
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
-      return (data as unknown as Portrait | null) ?? null;
+      const [portraitRes, factsRes, feedbackRes] = await Promise.all([
+        supabasePortal.from("user_portraits").select("*").eq("user_id", userId).maybeSingle(),
+        supabasePortal.from("user_insights").select("id,key,value,created_at").eq("user_id", userId).eq("category", "user_added").order("created_at", { ascending: false }),
+        supabasePortal.from("user_portrait_feedback" as any).select("item_key,section,original_text,status,corrected_text").eq("user_id", userId),
+      ]);
+      if (portraitRes.error) throw portraitRes.error;
+      if (factsRes.error) throw factsRes.error;
+      if (feedbackRes.error) throw feedbackRes.error;
+      return { portrait: portraitRes.data as unknown as Portrait | null, facts: (factsRes.data ?? []) as UserFact[], feedback: (feedbackRes.data ?? []) as unknown as Feedback[] };
     },
-    enabled: !!userId,
+    enabled: Boolean(userId),
   });
 
-  // Sempre invoca generate-user-portrait ao montar. O backend tem cache por
-  // hash dos insights/temas + PROMPT_VERSION: se nada mudou retorna em ms
-  // sem chamar LLM (custo zero). Refetch só quando o conteúdo realmente
-  // mudou — evita o portal mostrar versão antiga em cache do react-query.
+  const refreshPortrait = async (force = false) => {
+    const { error } = await supabasePortal.functions.invoke("generate-user-portrait", { body: { force } });
+    if (!error) await refetch();
+  };
+
   useEffect(() => {
-    if (!userId) return;
-    if (isLoading) return;
-    supabasePortal.functions
-      .invoke("generate-user-portrait", { body: { user_id: userId } })
-      .then((res: any) => {
-        const cached = res?.data?.cached;
-        const newGeneratedAt = res?.data?.portrait?.generated_at;
-        if (cached === false || (newGeneratedAt && newGeneratedAt !== portrait?.generated_at)) {
-          refetch();
-        }
-      })
-      .catch((e) => console.warn("generate-user-portrait failed", e));
+    if (!userId || isLoading) return;
+    void refreshPortrait(false);
+    // A identidade da conta não muda durante a montagem desta área.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, isLoading]);
 
-  const { data: themes } = useQuery({
-    queryKey: ["portal-session-themes", userId],
-    queryFn: async () => {
-      const { data, error } = await supabasePortal
-        .from("session_themes")
-        .select("id, theme_name, status, session_count, last_mentioned_at")
-        .eq("user_id", userId)
-        .order("session_count", { ascending: false })
-        .limit(40);
-      if (error) return [];
-      return data || [];
+  const feedbackMap = useMemo(() => new Map((data?.feedback ?? []).map((item) => [item.item_key, item])), [data?.feedback]);
+  const firstName = profile?.name?.trim().split(/\s+/)[0];
+  const portrait = data?.portrait;
+  const facts = data?.facts ?? [];
+  const hasPortrait = Boolean(portrait?.intro || portrait?.pessoas?.length || portrait?.o_que_te_move?.length || portrait?.padroes?.length || portrait?.preferencias?.length || portrait?.sensiveis?.length);
+
+  const mutation = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const { data: response, error } = await supabasePortal.functions.invoke("manage-user-portrait", { body });
+      if (error) throw error;
+      if (response?.error) throw new Error(response.error);
+      return response;
     },
-    enabled: !!userId,
+    onSuccess: async (_, variables) => {
+      setReview(null);
+      setCorrection("");
+      await queryClient.invalidateQueries({ queryKey: ["portal-user-portrait-view", userId] });
+      if (variables.action !== "confirm") await refreshPortrait(true);
+    },
+    onError: () => toast({ title: "Não foi possível salvar agora", description: "Tente novamente em instantes.", variant: "destructive" }),
   });
 
-  const dedupedThemes = useMemo(() => {
-    const map = new Map<string, any>();
-    for (const t of themes || []) {
-      const rawName = (t.theme_name || "").trim();
-      if (!rawName) continue;
-      const lower = rawName.toLowerCase();
-      // Banlist operacional (substring)
-      if (THEME_BLACKLIST.some((b) => lower.includes(b))) continue;
-      const name = normalizeThemeName(rawName);
-      const key = name.toLowerCase();
-      const existing = map.get(key);
-      if (!existing) {
-        map.set(key, { ...t, theme_name: name });
-      } else {
-        existing.session_count = (existing.session_count || 0) + (t.session_count || 0);
-        if (t.status === "active") existing.status = "active";
-      }
-    }
-    // Dedup semântico por substring: se "ansiedade" está contido em "Dominando a ansiedade",
-    // fundir no mais longo (mais descritivo), somando session_count.
-    const items = Array.from(map.values());
-    const removed = new Set<string>();
-    for (let i = 0; i < items.length; i++) {
-      if (removed.has(items[i].theme_name.toLowerCase())) continue;
-      for (let j = 0; j < items.length; j++) {
-        if (i === j) continue;
-        const a = items[i].theme_name.toLowerCase();
-        const b = items[j].theme_name.toLowerCase();
-        if (removed.has(b)) continue;
-        // a contido em b (a mais curto), e mesmo status-família → mesclar em b
-        if (a !== b && b.includes(a) && a.length >= 4) {
-          items[j].session_count =
-            (items[j].session_count || 0) + (items[i].session_count || 0);
-          if (items[i].status === "active") items[j].status = "active";
-          removed.add(a);
-          break;
-        }
-      }
-    }
-    return items
-      .filter((it) => !removed.has(it.theme_name.toLowerCase()))
-      .sort((a, b) => {
-      if (a.status !== b.status) return a.status === "active" ? -1 : 1;
-      return (b.session_count || 0) - (a.session_count || 0);
+  const reviewMutation = async (action: "confirm" | "correct" | "remove", item: ReviewItem, correctedText?: string) => {
+    mutation.mutate({ action, section: item.section, originalText: item.text, ...(correctedText ? { correctedText } : {}) }, {
+      onSuccess: () => toast({
+        title: action === "confirm" ? "Confirmado por você" : action === "correct" ? "Leitura corrigida" : "Leitura removida",
+        description: action === "confirm" ? "A AURA pode usar isso como referência validada." : "Sua versão passa a valer a partir de agora.",
+      }),
     });
-  }, [themes]);
-
-  const activeThemes = dedupedThemes.filter((t) => t.status !== "resolved").slice(0, MAX_THEMES);
-  const resolvedThemes = dedupedThemes.filter((t) => t.status === "resolved").slice(0, MAX_THEMES);
+  };
 
   if (isLoading) return <PortalLoadingInline />;
 
-  const firstName = (profile?.name || "").trim().split(/\s+/)[0] || null;
-
-  const hasAny =
-    !!portrait?.intro ||
-    (portrait?.pessoas?.length ?? 0) > 0 ||
-    (portrait?.o_que_te_move?.length ?? 0) > 0 ||
-    (portrait?.padroes?.length ?? 0) > 0 ||
-    (portrait?.preferencias?.length ?? 0) > 0 ||
-    (portrait?.conquistas?.length ?? 0) > 0 ||
-    (portrait?.sensiveis?.length ?? 0) > 0 ||
-    activeThemes.length > 0 ||
-    resolvedThemes.length > 0;
-
-  if (!hasAny) {
-    return (
-      <div className="portal-area-page space-y-5">
-        <EmptyState
-          icon={Heart}
-          title="A Aura ainda está te conhecendo"
-          description="Depois de algumas conversas ela mapeia aqui identidade, pessoas próximas, valores e temas recorrentes seus."
-        />
-        <ContribuicaoUsuario userId={userId} emptyContext />
-      </div>
-    );
-  }
-
-  const greeting = firstName ? `Oi, ${firstName}` : "Sobre você";
-
-  return (
-    <div className="portal-area-page space-y-7">
-      {/* Hero navy — retrato narrativo */}
-      <div className="relative overflow-hidden rounded-3xl bg-[#1B2A4E] p-6 animate-in fade-in slide-in-from-top-2 duration-500">
-        <Sparkles size={16} className="text-[#B8A5D9] absolute top-5 right-5 opacity-70" />
-        <p className="text-[10px] uppercase tracking-[0.2em] text-[#B8A5D9] font-bold font-['Nunito']">
-          Retrato
-        </p>
-        <h2 className="font-['Fraunces'] text-3xl font-semibold text-[#F5F0E8] mt-1 tracking-tight">
-          {greeting}
-        </h2>
-        {portrait?.intro ? (
-          <p className="text-[15px] text-[#F5F0E8]/85 font-['Nunito'] leading-relaxed mt-3 pr-6">
-            {sanitizePortalText(portrait.intro)}
-          </p>
-        ) : (
-          <p className="text-sm text-[#F5F0E8]/70 font-['Nunito'] mt-2">
-            O que fui aprendendo sobre você nas nossas conversas.
-          </p>
-        )}
-      </div>
-
-      {/* Convite pra contribuir — logo abaixo do hero, com destaque próprio. */}
-      <ContribuicaoUsuario userId={userId} />
-
-      {/* Pessoas — chips */}
-      {portrait?.pessoas && portrait.pessoas.length > 0 && (
-        <SectionShell title="Pessoas da sua vida" icon={Users}>
-          <div className="grid grid-cols-2 gap-2">
-            {portrait.pessoas.map((p, i) => (
-              <div
-                key={`${p.label}-${i}`}
-                className="rounded-xl border border-[#87A878]/15 bg-white/60 px-3 py-2.5"
-              >
-                <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito']">
-                  {p.label}
-                </p>
-                {p.names.length > 0 && (
-                  <p className="text-sm text-[#1B2A4E] font-['Nunito'] font-semibold leading-snug mt-0.5">
-                    {p.names.join(", ")}
-                  </p>
-                )}
-                {p.nota && (
-                  <p className="text-xs text-[#2A2A2A]/60 font-['Nunito'] leading-snug mt-0.5 italic">
-                    {sanitizePortalText(p.nota)}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </SectionShell>
-      )}
-
-      {/* O que te move */}
-      {portrait?.o_que_te_move && portrait.o_que_te_move.length > 0 && (
-        <SectionShell title="O que te move" icon={Compass}>
-          <ProseList items={portrait.o_que_te_move} />
-        </SectionShell>
-      )}
-
-      {/* Padrões */}
-      {portrait?.padroes && portrait.padroes.length > 0 && (
-        <SectionShell title="Padrões que a Aura percebeu" icon={Activity}>
-          <div className="space-y-3">
-            {portrait.padroes.map((v, i) => (
-              <blockquote key={i} className="border-l-[3px] border-[#B8A5D9] pl-4 py-1">
-                <p className="text-[15px] text-[#1B2A4E]/85 font-['Fraunces'] italic leading-relaxed">
-                  {sanitizePortalText(v)}
-                </p>
-              </blockquote>
-            ))}
-          </div>
-        </SectionShell>
-      )}
-
-      {/* Preferências */}
-      {portrait?.preferencias && portrait.preferencias.length > 0 && (
-        <SectionShell title="Preferências e gostos" icon={Heart}>
-          <ProseList items={portrait.preferencias} />
-        </SectionShell>
-      )}
-
-      {/* Conquistas */}
-      {portrait?.conquistas && portrait.conquistas.length > 0 && (
-        <SectionShell title="Conquistas" icon={Trophy}>
-          <div className="flex flex-wrap gap-2.5">
-            {portrait.conquistas.map((v, i) => (
-              <span
-                key={i}
-                className="inline-flex items-start gap-1.5 px-3 py-2 rounded-2xl bg-[#B8A5D9]/20 text-[#1B2A4E] text-xs font-semibold font-['Nunito'] leading-snug max-w-full whitespace-normal"
-              >
-                <Trophy size={12} className="mt-0.5 shrink-0 text-[#87A878]" />
-                <span>{sanitizePortalText(v).replace(/\.$/, "")}</span>
-              </span>
-            ))}
-          </div>
-        </SectionShell>
-      )}
-
-      {/* Sensíveis */}
-      {portrait?.sensiveis && portrait.sensiveis.length > 0 && (
-        <CollapsibleShell title="Pontos sensíveis" icon={ShieldAlert}>
-          <p className="text-xs text-[#2A2A2A]/60 italic font-['Nunito']">
-            Tópicos delicados que você compartilhou com a Aura.
-          </p>
-          <ProseList items={portrait.sensiveis} muted />
-        </CollapsibleShell>
-      )}
-
-      {/* Temas em movimento */}
-      {(activeThemes.length > 0 || resolvedThemes.length > 0) && (
-        <div className="space-y-4">
-          {activeThemes.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Tag size={14} className="text-[#87A878]" />
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[#1B2A4E] font-bold font-['Nunito']">
-                  Temas em movimento
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2.5">
-                {activeThemes.map((t: any) => (
-                  <span
-                    key={t.id}
-                    className="inline-flex items-center px-3 py-2 rounded-full bg-[#87A878]/15 text-[#1B2A4E] text-xs font-semibold font-['Nunito'] whitespace-nowrap"
-                  >
-                    {t.theme_name}
-                    {t.session_count > 1 && (
-                      <span className="ml-1 opacity-60">· {t.session_count}</span>
-                    )}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {resolvedThemes.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-[#2A2A2A]/50 font-bold font-['Nunito']">
-                Já trabalhados
-              </p>
-              <div className="flex flex-wrap gap-2.5">
-                {resolvedThemes.map((t: any) => (
-                  <span
-                    key={t.id}
-                    className="inline-flex items-center px-3 py-2 rounded-full bg-[#F5F0E8] text-[#2A2A2A]/60 text-xs font-medium font-['Nunito'] line-through whitespace-nowrap border border-[#87A878]/10"
-                  >
-                    {t.theme_name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => onOpenConversation("Oi Aura, queria corrigir uma coisa no que você sabe sobre mim.")}
-        className="w-full min-h-12 h-auto gap-2 mt-2 rounded-xl border-[#87A878]/20 bg-white/60 text-sm text-[#1B2A4E]/70 hover:text-[#1B2A4E] hover:border-[#87A878]/50 font-['Nunito']"
-      >
-        <MessageCircle size={14} />
-        Algo aqui não bate? Me conta na conversa →
-      </Button>
-    </div>
-  );
-}
-
-// ---------- SHELLS ----------
-
-function SectionShell({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: React.ElementType;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Icon size={14} className="text-[#87A878]" />
-        <p className="text-[10px] uppercase tracking-[0.18em] text-[#1B2A4E] font-bold font-['Nunito']">
-          {title}
-        </p>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function CollapsibleShell({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: React.ElementType;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="space-y-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 w-full text-left"
-      >
-        <Icon size={14} className="text-[#87A878]" />
-        <p className="text-[10px] uppercase tracking-[0.18em] text-[#1B2A4E] font-bold font-['Nunito']">
-          {title}
-        </p>
-        <span className="ml-auto text-[#1B2A4E]/50">
-          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </span>
-      </button>
-      {open && <div className="space-y-3">{children}</div>}
-    </div>
-  );
-}
-
-function ProseList({ items, muted }: { items: string[]; muted?: boolean }) {
-  return (
-    <ul className="space-y-2.5">
-      {items.map((v, i) => (
-        <li key={i} className="flex gap-2.5">
-          <span className="text-[#87A878] mt-1.5 select-none leading-none">•</span>
-          <span
-            className={`text-[14px] font-['Nunito'] leading-relaxed ${
-              muted ? "text-[#2A2A2A]/75" : "text-[#2A2A2A]"
-            }`}
-          >
-            {sanitizePortalText(v)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// ============================================================
-// ContribuicaoUsuario — "O que você quer que a Aura saiba"
-// Absorve o CRUD que antes vivia na aba Memória, mas com convite ativo
-// por prompts (medos, objetivos, desafios, valores) em vez de campo em branco.
-// Lê/grava em user_insights com source implícito via category="user_added".
-// ============================================================
-
-type UserAdded = {
-  id: string;
-  key: string;
-  value: string;
-  created_at: string | null;
-};
-
-type PromptOption = {
-  id: string;
-  icon: React.ElementType;
-  label: string;
-  placeholder: string;
-  keyLabel: string; // como fica salvo no campo "key" do insight
-};
-
-const PROMPTS: PromptOption[] = [
-  {
-    id: "objetivo",
-    icon: Target,
-    label: "Um objetivo importante",
-    placeholder: "Onde eu quero chegar em...",
-    keyLabel: "Objetivo",
-  },
-  {
-    id: "medo",
-    icon: Frown,
-    label: "Um medo ou receio",
-    placeholder: "Uma coisa que me trava é...",
-    keyLabel: "Medo",
-  },
-  {
-    id: "desafio",
-    icon: Swords,
-    label: "Um desafio atual",
-    placeholder: "O que estou enfrentando agora é...",
-    keyLabel: "Desafio",
-  },
-  {
-    id: "valor",
-    icon: Gem,
-    label: "Um valor inegociável",
-    placeholder: "Uma coisa que eu não abro mão é...",
-    keyLabel: "Valor",
-  },
-  {
-    id: "quem",
-    icon: Sprout,
-    label: "Quem eu quero me tornar",
-    placeholder: "A pessoa que eu quero me tornar é...",
-    keyLabel: "Aspiração",
-  },
-  {
-    id: "outro",
-    icon: PenLine,
-    label: "Outra coisa",
-    placeholder: "O que a Aura deveria saber sobre você?",
-    keyLabel: "Sobre mim",
-  },
-];
-
-function ContribuicaoUsuario({
-  userId,
-  emptyContext = false,
-}: {
-  userId: string;
-  emptyContext?: boolean;
-}) {
-  const qc = useQueryClient();
-  const [selectedPrompt, setSelectedPrompt] = useState<PromptOption | null>(null);
-  const [draft, setDraft] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState<UserAdded | null>(null);
-
-  const { data: items, isLoading } = useQuery({
-    queryKey: ["portal-user-added", userId],
-    queryFn: async () => {
-      const { data, error } = await supabasePortal
-        .from("user_insights")
-        .select("id, key, value, created_at")
-        .eq("user_id", userId)
-        .eq("category", "user_added")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as UserAdded[];
-    },
-  });
-
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["portal-user-added", userId] });
-    qc.invalidateQueries({ queryKey: ["portal-user-portrait", userId] });
-  };
-
-  const addMut = useMutation({
-    mutationFn: async () => {
-      if (!selectedPrompt) throw new Error("Escolha um tema.");
-      const val = draft.trim();
-      if (!val) throw new Error("Escreve alguma coisa antes de salvar.");
-      const { error } = await supabasePortal.from("user_insights").insert({
-        user_id: userId,
-        category: "user_added",
-        key: selectedPrompt.keyLabel,
-        value: val,
-        importance: 9,
-        mentioned_count: 1,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast({ title: "Guardado", description: "A Aura já sabe disso." });
-      setSelectedPrompt(null);
-      setDraft("");
-      invalidate();
-    },
-    onError: (e: any) =>
-      toast({ title: "Não deu", description: e.message, variant: "destructive" }),
-  });
-
-  const editMut = useMutation({
-    mutationFn: async ({ item, newVal }: { item: UserAdded; newVal: string }) => {
-      const { error } = await supabasePortal
-        .from("user_insights")
-        .update({ value: newVal })
-        .eq("id", item.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast({ title: "Atualizado" });
-      setEditingId(null);
-      invalidate();
-    },
-    onError: (e: any) =>
-      toast({ title: "Não deu", description: e.message, variant: "destructive" }),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: async (item: UserAdded) => {
-      const { error: corrErr } = await supabasePortal.from("user_memory_corrections").insert({
-        user_id: userId,
-        correction_text: `Ignorar: ${item.key} — ${item.value}.`,
-        source: "user_portal",
-        confidence: 1,
-      });
-      if (corrErr) throw corrErr;
-      const { error } = await supabasePortal.from("user_insights").delete().eq("id", item.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast({ title: "Apagado" });
-      setConfirmDelete(null);
-      invalidate();
-    },
-    onError: (e: any) =>
-      toast({ title: "Não deu", description: e.message, variant: "destructive" }),
-  });
-
-  const list = items ?? [];
-
-  return (
-    <div className="rounded-3xl border-2 border-dashed border-[#87A878]/40 bg-[#87A878]/6 p-5 sm:p-6 space-y-4 animate-fade-up">
-      <div className="flex items-start gap-3">
-        <div className="shrink-0 rounded-2xl bg-[#B8A5D9]/25 p-2.5">
-          <PenLine size={18} className="text-[#1B2A4E]" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-[#87A878] font-bold font-['Nunito']">
-            Você conta pra Aura
-          </p>
-          <h3 className="font-['Fraunces'] text-[22px] leading-tight text-[#1B2A4E] font-semibold mt-0.5">
-            O que você quer que eu saiba
-          </h3>
-          <p className="text-sm text-[#2A2A2A]/70 font-['Nunito'] leading-relaxed mt-1.5">
-            {emptyContext
-              ? "Enquanto eu te conheço nas conversas, você já pode me contar o essencial aqui — medos, objetivos, valores."
-              : "Adicione o que for importante — medos, objetivos, valores. Eu levo pra nossas conversas."}
-          </p>
-          {list.length > 0 && (
-            <p className="text-[11px] text-[#87A878] font-bold font-['Nunito'] uppercase tracking-wider mt-2">
-              {list.length} {list.length === 1 ? "coisa adicionada" : "coisas adicionadas"}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Itens já adicionados */}
-      {!isLoading && list.length > 0 && (
-        <div className="space-y-2">
-          {list.map((item) => {
-            const isEditing = editingId === item.id;
-            return (
-              <div
-                key={item.id}
-                className="rounded-xl border border-[#87A878]/15 bg-white/60 p-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito']">
-                      {item.key}
-                    </p>
-                    {isEditing ? (
-                      <textarea
-                        autoFocus
-                        value={editDraft}
-                        onChange={(e) => setEditDraft(e.target.value)}
-                        rows={2}
-                        className="mt-1 w-full bg-[#F5F0E8] rounded-lg px-2 py-1.5 text-sm border border-[#87A878] font-['Nunito'] resize-none text-[#1B2A4E]"
-                      />
-                    ) : (
-                      <p className="text-sm text-[#1B2A4E] font-['Nunito'] mt-0.5 break-words leading-relaxed">
-                        {sanitizePortalText(item.value)}
-                      </p>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <div className="flex gap-1 shrink-0">
-                      <button
-                        onClick={() =>
-                          editMut.mutate({ item, newVal: editDraft.trim() })
-                        }
-                        disabled={editMut.isPending || !editDraft.trim()}
-                        className="p-1.5 rounded-lg bg-[#1B2A4E] text-[#F5F0E8] disabled:opacity-60"
-                        title="Salvar"
-                      >
-                        <Check size={14} />
-                      </button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="p-1.5 rounded-lg text-[#2A2A2A]/60 hover:bg-[#F5F0E8]"
-                        title="Cancelar"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-1 shrink-0 opacity-60 hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => {
-                          setEditingId(item.id);
-                          setEditDraft(item.value);
-                        }}
-                        className="p-1.5 rounded-lg text-[#2A2A2A]/60 hover:bg-[#F5F0E8] hover:text-[#1B2A4E]"
-                        title="Editar"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={() => setConfirmDelete(item)}
-                        disabled={deleteMut.isPending}
-                        className="p-1.5 rounded-lg text-[#2A2A2A]/60 hover:bg-destructive/10 hover:text-destructive"
-                        title="Apagar"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Formulário aberto */}
-      {selectedPrompt ? (
-        <div className="rounded-xl border border-[#87A878]/30 bg-[#87A878]/8 p-4 space-y-3 animate-fade-in">
-          <div className="flex items-center gap-2">
-            <selectedPrompt.icon size={16} className="text-[#1B2A4E]" />
-            <p className="text-sm font-bold text-[#1B2A4E] font-['Nunito']">
-              {selectedPrompt.label}
-            </p>
-          </div>
-          <textarea
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={selectedPrompt.placeholder}
-            rows={3}
-            className="w-full bg-white rounded-lg px-3 py-2 text-sm border border-[#87A878]/25 font-['Nunito'] resize-none focus:outline-none focus:border-[#1B2A4E] text-[#1B2A4E]"
-          />
-          <div className="flex gap-2 justify-end">
-            <button
-              onClick={() => {
-                setSelectedPrompt(null);
-                setDraft("");
-              }}
-              className="px-3 py-1.5 text-xs text-[#2A2A2A]/60 hover:text-[#1B2A4E] font-['Nunito']"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={() => addMut.mutate()}
-              disabled={addMut.isPending || !draft.trim()}
-              className="px-4 py-2 text-xs rounded-full bg-[#1B2A4E] text-[#F5F0E8] font-bold font-['Nunito'] disabled:opacity-60 hover:bg-[#1B2A4E]/90"
-            >
-              Salvar
-            </button>
-          </div>
-        </div>
-      ) : (
-        // Seletor de prompts
+  return <div className="portal-area-page space-y-7">
+    <section className="rounded-2xl border border-[hsl(var(--portal-area-foreground)/0.22)] bg-[hsl(var(--portal-area-surface)/0.72)] p-5 sm:p-6">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs text-[#2A2A2A]/60 font-['Nunito'] mb-2 flex items-center gap-1.5">
-            <Plus size={12} />
-            Sobre o quê você quer contar?
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {PROMPTS.map((p) => {
-              const Icon = p.icon;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    setSelectedPrompt(p);
-                    setDraft("");
-                  }}
-                  className="flex items-center gap-2 rounded-xl border border-[#87A878]/15 bg-white/60 px-3 py-3 text-left hover:border-[#1B2A4E]/30 hover:bg-white transition-colors"
-                >
-                  <Icon size={14} className="text-[#87A878] shrink-0" />
-                  <span className="text-xs text-[#1B2A4E] font-['Nunito'] font-semibold leading-tight">
-                    {p.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <p className="text-[10px] font-bold uppercase text-[hsl(var(--portal-area-foreground))]">Seu retrato atual</p>
+          <h2 className="mt-1 text-2xl font-semibold text-foreground">{firstName ? `${firstName}, o que estamos construindo juntos` : "O que estamos construindo juntos"}</h2>
         </div>
-      )}
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--portal-area-foreground))] text-background"><UserRound className="h-5 w-5" /></span>
+      </div>
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">O que você contou aparece como fato. O que eu percebi aparece como leitura para você confirmar ou corrigir.</p>
+    </section>
 
-      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Apagar isto?</AlertDialogTitle>
-            <AlertDialogDescription>
-              A Aura vai deixar de considerar "{confirmDelete?.value}".
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => confirmDelete && deleteMut.mutate(confirmDelete)}
-            >
-              Apagar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
+    <FactContribution facts={facts} busy={mutation.isPending} onAction={(body) => mutation.mutate(body, { onSuccess: () => toast({ title: body.action === "add_fact" ? "Guardado" : body.action === "edit_fact" ? "Atualizado" : "Apagado", description: "A AURA passa a considerar essa mudança nas próximas conversas." }) })} />
+
+    {!hasPortrait ? <EmptyState icon={Heart} title="A AURA ainda está te conhecendo" description="Quando houver material suficiente, as primeiras leituras aparecem aqui para você confirmar." /> : <>
+      {portrait?.intro && <HypothesisCard item={{ section: "intro", text: portrait.intro }} title="Uma leitura de quem você é hoje" feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />}
+      {portrait?.pessoas?.length ? <Section title="Pessoas da sua vida" icon={Users}>{portrait.pessoas.map((person, index) => {
+        const text = [person.label, ...(person.names ?? []), person.nota].filter(Boolean).join(" · ");
+        return <HypothesisRow key={`${text}-${index}`} item={{ section: "pessoas", text }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />;
+      })}</Section> : null}
+      {portrait?.o_que_te_move?.length ? <Section title="O que te move" icon={Compass}>{portrait.o_que_te_move.map((text) => <HypothesisRow key={text} item={{ section: "o_que_te_move", text }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />)}</Section> : null}
+      {portrait?.padroes?.length ? <Section title="Leituras para você confirmar" icon={Activity}>{portrait.padroes.map((text) => <HypothesisRow key={text} item={{ section: "padroes", text }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />)}</Section> : null}
+      {portrait?.preferencias?.length ? <Section title="Preferências e gostos" icon={Heart}>{portrait.preferencias.map((text) => <HypothesisRow key={text} item={{ section: "preferencias", text }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />)}</Section> : null}
+      {portrait?.sensiveis?.length ? <section className="space-y-3"><Button variant="ghost" className="h-auto w-full justify-start gap-2 px-0 text-left" onClick={() => setSensitiveOpen((open) => !open)}><ShieldAlert className="h-4 w-4 text-primary" /><span className="flex-1 text-sm font-semibold">Pontos sensíveis</span>{sensitiveOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>{sensitiveOpen && <div className="space-y-3">{portrait.sensiveis.map((text) => <HypothesisRow key={text} item={{ section: "sensiveis", text }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />)}</div>}</section> : null}
+    </>}
+
+    <p className="rounded-xl bg-secondary/60 p-4 text-xs leading-relaxed text-muted-foreground"><strong className="text-foreground">Você está no controle.</strong> Confirmar torna uma leitura referência. Corrigir substitui pela sua versão. Apagar faz a AURA deixar de considerar aquela informação.</p>
+
+    <Dialog open={Boolean(review)} onOpenChange={(open) => { if (!open) setReview(null); }}>
+      <DialogContent className="max-w-md rounded-xl">
+        <DialogHeader><DialogTitle>O que não ficou certo?</DialogTitle><DialogDescription>Escreva como você prefere que a AURA entenda isso.</DialogDescription></DialogHeader>
+        <div className="rounded-lg bg-secondary/60 p-3 text-sm text-muted-foreground">“{review?.text}”</div>
+        <Textarea value={correction} onChange={(event) => setCorrection(event.target.value)} maxLength={800} placeholder="Na verdade…" />
+        <DialogFooter className="gap-2 sm:space-x-0"><Button variant="ghost" className="text-destructive" disabled={mutation.isPending} onClick={() => review && void reviewMutation("remove", review)}>Apagar leitura</Button><Button disabled={!correction.trim() || mutation.isPending} onClick={() => review && void reviewMutation("correct", review, correction.trim())}>Salvar minha versão</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </div>;
+}
+
+function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
+  return <section className="space-y-3"><div className="flex items-center gap-2"><Icon className="h-4 w-4 text-primary" /><h3 className="text-sm font-semibold text-foreground">{title}</h3></div><div className="space-y-3">{children}</div></section>;
+}
+
+function HypothesisCard(props: HypothesisProps & { title: string }) {
+  return <section className="rounded-2xl border bg-card p-5"><div className="mb-2 flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /><p className="text-xs font-bold uppercase text-primary">{props.title}</p></div><HypothesisContent {...props} /></section>;
+}
+function HypothesisRow(props: HypothesisProps) { return <article className="rounded-xl border bg-card p-4"><HypothesisContent {...props} /></article>; }
+type HypothesisProps = { item: ReviewItem; feedbackMap: Map<string, Feedback>; busy: boolean; onConfirm: (action: "confirm", item: ReviewItem) => void; onReview: (item: ReviewItem) => void };
+function HypothesisContent({ item, feedbackMap, busy, onConfirm, onReview }: HypothesisProps) {
+  const [feedback, setFeedback] = useState<Feedback | undefined>();
+  useEffect(() => { let current = true; void feedbackKey(item.section, item.text).then((key) => { if (current) setFeedback(feedbackMap.get(key)); }); return () => { current = false; }; }, [feedbackMap, item.section, item.text]);
+  if (feedback?.status === "removed") return null;
+  const display = feedback?.status === "corrected" && feedback.corrected_text ? feedback.corrected_text : item.text;
+  return <div className="space-y-3"><p className="text-sm leading-relaxed text-foreground">{sanitizePortalText(display)}</p>{feedback ? <Badge variant="secondary" className="gap-1"><Check className="h-3 w-3" />{feedback.status === "confirmed" ? "Confirmado por você" : "Atualizado por você"}</Badge> : <div><p className="mb-2 text-[11px] text-muted-foreground">Percebido pela AURA — ainda não confirmado</p><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={() => onConfirm("confirm", item)}><Check className="h-3.5 w-3.5" /> Faz sentido</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => onReview(item)}>Não foi bem assim</Button></div></div>}</div>;
+}
+
+function FactContribution({ facts, busy, onAction }: { facts: UserFact[]; busy: boolean; onAction: (body: Record<string, unknown>) => void }) {
+  const [promptIndex, setPromptIndex] = useState(0);
+  const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState<UserFact | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [deleting, setDeleting] = useState<UserFact | null>(null);
+  const prompt = PROMPTS[promptIndex % PROMPTS.length];
+  return <section className="space-y-4 rounded-2xl border border-primary/20 bg-card p-5">
+    <div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><PenLine className="h-4 w-4" /></span><div><p className="text-xs font-bold uppercase text-primary">Contado por você</p><h3 className="mt-1 text-lg font-semibold text-foreground">Tem algo importante que eu ainda não sei?</h3><p className="mt-1 text-sm text-muted-foreground">Isso evita que você precise explicar de novo nas próximas conversas.</p></div></div>
+    {facts.length > 0 && <div className="space-y-2">{facts.map((fact) => <div key={fact.id} className="flex items-start gap-2 rounded-xl bg-secondary/55 p-3"><div className="min-w-0 flex-1"><Badge variant="outline" className="mb-1">Contado por você</Badge>{editing?.id === fact.id ? <Textarea autoFocus value={editDraft} onChange={(event) => setEditDraft(event.target.value)} maxLength={800} className="mt-2" /> : <p className="text-sm leading-relaxed text-foreground"><strong>{fact.key}:</strong> {sanitizePortalText(fact.value)}</p>}</div>{editing?.id === fact.id ? <div className="flex gap-1"><Button size="icon" className="h-8 w-8" aria-label="Salvar" disabled={busy || !editDraft.trim()} onClick={() => onAction({ action: "edit_fact", insightId: fact.id, value: editDraft.trim() })}><Check className="h-4 w-4" /></Button><Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Cancelar" onClick={() => setEditing(null)}><X className="h-4 w-4" /></Button></div> : <div className="flex gap-1"><Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Editar" onClick={() => { setEditing(fact); setEditDraft(fact.value); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" aria-label="Apagar" onClick={() => setDeleting(fact)}><Trash2 className="h-4 w-4" /></Button></div>}</div>)}</div>}
+    <div className="rounded-xl bg-secondary/40 p-4"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-foreground">{prompt.label}</p><Button variant="ghost" size="sm" onClick={() => { setPromptIndex((index) => index + 1); setDraft(""); }}>Outra pergunta</Button></div><Textarea className="mt-2" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={800} placeholder={prompt.placeholder} /><Button className="mt-3 w-full" disabled={busy || !draft.trim()} onClick={() => { onAction({ action: "add_fact", category: prompt.id, value: draft.trim() }); setDraft(""); setPromptIndex((index) => index + 1); }}><Plus className="h-4 w-4" /> Guardar para próximas conversas</Button></div>
+    <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => { if (!open) setDeleting(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Apagar esta informação?</AlertDialogTitle><AlertDialogDescription>A AURA vai deixar de considerar “{deleting?.value}” nas próximas conversas.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { if (deleting) onAction({ action: "delete_fact", insightId: deleting.id }); setDeleting(null); }}>Apagar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+  </section>;
 }
