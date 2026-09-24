@@ -164,7 +164,7 @@ function feedbackReference(item: any): string {
 export function applyFeedback(portrait: ReturnType<typeof normalize>, feedback: any[]) {
   const active = feedback.filter((entry) => entry?.status === "removed" || entry?.status === "corrected");
   const similar = (left: unknown, right: unknown) => {
-    const ignored = new Set(["a", "as", "o", "os", "de", "da", "das", "do", "dos", "e", "em", "um", "uma", "que", "voce", "seu", "sua"]);
+    const ignored = new Set(["a", "as", "o", "os", "de", "da", "das", "do", "dos", "e", "em", "um", "uma", "que", "voce", "seu", "sua", "parece", "parecer", "talvez"]);
     const tokens = (value: unknown) => new Set(normalizedText(value).split(" ").filter((token) => token.length > 2 && !ignored.has(token)));
     const a = tokens(left);
     const b = tokens(right);
