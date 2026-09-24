@@ -95,7 +95,7 @@ export function rememberPushAttribution(deliveryId: string, notificationType?: s
   }));
 }
 
-export async function reportPushConversion(path: string) {
+export async function reportPushConversion(path: string, expectedType?: string) {
   const raw = sessionStorage.getItem(PUSH_ATTRIBUTION_KEY);
   if (!raw) return;
   try {
@@ -104,6 +104,7 @@ export async function reportPushConversion(path: string) {
       sessionStorage.removeItem(PUSH_ATTRIBUTION_KEY);
       return;
     }
+    if (expectedType && attribution.notificationType !== expectedType) return;
     const { error } = await supabasePortal.functions.invoke("register-push-device", {
       body: {
         action: "event",
