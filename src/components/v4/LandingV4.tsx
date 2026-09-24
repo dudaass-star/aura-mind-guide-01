@@ -101,10 +101,10 @@ export function HeroV4() {
         <div className="v4-rise relative z-10 max-w-3xl">
           <p className="mb-5 inline-flex items-center gap-2 border-l-2 border-primary px-3 text-xs font-bold uppercase text-primary-foreground/65">Sessões guiadas de 45 minutos com a AURA</p>
           <h1 className="v4-balance font-display text-[2.75rem] font-semibold leading-[1.02] text-primary-foreground sm:text-6xl lg:text-7xl">
-            45 minutos para enxergar o que você não consegue resolver <span className="text-[hsl(var(--v4-sun))]">pensando sempre do mesmo jeito.</span>
+            45 minutos para transformar o que te confunde <span className="text-[hsl(var(--v4-sun))]">em direção para agir.</span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-relaxed text-primary-foreground/70 sm:text-lg">
-            Encontros guiados para aprofundar decisões, relações e padrões. Entre uma sessão e outra, a AURA continua com você por texto ou áudio dentro do App.
+            Em uma conversa guiada, a AURA conecta o que está acontecendo na sua vida, aprofunda inseguranças, decisões e padrões — e ajuda você a encontrar clareza e movimento.
           </p>
           <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
             <Cta source="hero" label="Experimentar por 7 dias (v4 hero)" className="w-full rounded-xl px-8 sm:w-auto">Experimentar por 7 dias <ArrowRight /></Cta>
