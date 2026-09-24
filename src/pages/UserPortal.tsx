@@ -121,7 +121,28 @@ const UserPortal = () => {
         path: window.location.pathname,
       },
     }).then(({ error }) => {
-      if (!error && deliveryId) rememberPushAttribution(deliveryId, searchParams.get("type") || undefined);
+      if (!error && deliveryId) {
+        const notificationType = searchParams.get("type") || undefined;
+        rememberPushAttribution(deliveryId, notificationType);
+        void reportPushConversion(`${window.location.pathname}${window.location.search}`);
+        const featureByType: Record<string, "conversation" | "session" | "journey" | "practice" | "progress"> = {
+          first14_conversation: "conversation",
+          first14_session: "session",
+          first14_journey: "journey",
+          first14_practice: "practice",
+          first14_progress: "progress",
+        };
+        const feature = notificationType ? featureByType[notificationType] : undefined;
+        if (feature) {
+          void supabasePortal.from("portal_value_events").insert({
+            user_id: userId,
+            feature,
+            event_type: "first14_push_opened",
+            source: "push",
+            metadata: { delivery_id: deliveryId },
+          });
+        }
+      }
     });
   }, [searchParams, userId]);
 
