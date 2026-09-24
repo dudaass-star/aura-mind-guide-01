@@ -5824,6 +5824,7 @@ serve(async (req) => {
     let temporalGapHours = 0;
     let userInsights: any[] = [];
     let userCorrections: any[] = [];
+    let confirmedPortraitReadings: any[] = [];
     let userEvolutionSummary: string = '';
     let previousSessionsContext = '';
     let sessionPreparationContext = '';
@@ -5861,6 +5862,7 @@ serve(async (req) => {
         meditationsResult,
         correctionsResult,
         evolutionSummaryResult,
+        portraitFeedbackResult,
       ] = await Promise.allSettled([
         // 1. Últimas mensagens (10 em minimal, 40 normal)
         supabase
@@ -5954,20 +5956,28 @@ serve(async (req) => {
               .from('meditations')
               .select('category, title, best_for, triggers')
               .eq('is_active', true),
-        // 11. Correções de memória do usuário (prioridade máxima)
+        // 11. Correções de memória do usuário (prioridade máxima).
+        // O limite amplo mantém exclusões e rejeições históricas no contexto.
         supabase
           .from('user_memory_corrections')
           .select('correction_text, source, confidence, created_at')
           .eq('user_id', userId)
           .order('confidence', { ascending: false })
           .order('created_at', { ascending: false })
-          .limit(15),
+          .limit(80),
         // 12. Resumo evolutivo narrativo (terceira camada de memória)
         supabase
           .from('user_evolution_summary')
           .select('summary_text')
           .eq('user_id', userId)
           .maybeSingle(),
+        supabase
+          .from('user_portrait_feedback')
+          .select('section, original_text, corrected_text')
+          .eq('user_id', userId)
+          .eq('status', 'confirmed')
+          .order('updated_at', { ascending: false })
+          .limit(20),
       ]);
 
       console.log('⚡ All context queries completed in parallel');
@@ -6012,6 +6022,10 @@ serve(async (req) => {
         if (userCorrections.length > 0) {
           console.log(`🛡️ Loaded ${userCorrections.length} memory corrections (priority overrides)`);
         }
+      }
+
+      if (portraitFeedbackResult.status === 'fulfilled' && portraitFeedbackResult.value.data) {
+        confirmedPortraitReadings = portraitFeedbackResult.value.data;
       }
 
       // 12. Resumo evolutivo narrativo (carregado se já gerado)
@@ -6212,6 +6226,13 @@ ${(() => {
   }
   const lines = userCorrections.map((c: any, i: number) => `${i + 1}. ${c.correction_text}`).join('\n');
   return `Estas são verdades que o próprio usuário já estabeleceu (ou correções que ele te deu em conversas passadas). NUNCA contrarie, NUNCA repita o erro corrigido, e NUNCA force conexões entre temas que estas correções proibiram explicitamente.\n\n${lines}`;
+})()}
+
+## Leituras do retrato confirmadas pelo usuário
+${(() => {
+  if (!confirmedPortraitReadings.length) return '- Nenhuma leitura confirmada.';
+  const lines = confirmedPortraitReadings.map((item: any, index: number) => `${index + 1}. ${item.corrected_text || item.original_text}`).join('\n');
+  return `Estas leituras foram explicitamente confirmadas pelo usuário. Podem orientar sua compreensão, mas nunca devem virar pauta sem gancho na mensagem atual, diagnóstico ou conexão inventada.\n\n${lines}`;
 })()}
 
 ## 📖 Quem é ${profile?.name || 'esta pessoa'} (contexto de fundo, NÃO use como pauta)

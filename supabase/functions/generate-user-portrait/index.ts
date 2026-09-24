@@ -2,16 +2,20 @@
 // Lê user_insights + session_themes + profiles, manda pro Gemini Flash com
 // schema estruturado e grava em user_portraits. Reaproveita cache via hash.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3.25.76";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
-const STALE_HOURS = 24;
+const PORTRAIT_CACHE_HOURS = 24 * 7;
 // Bump quando mudar prompt/normalize pra invalidar caches antigos.
-const PROMPT_VERSION = "v2-2026-05-31";
+const PROMPT_VERSION = "v3-2026-09-24";
 
 type Insight = {
   category: string;
@@ -103,7 +107,7 @@ async function callGemini(prompt: string): Promise<any> {
   return JSON.parse(content);
 }
 
-function normalize(parsed: any) {
+export function normalize(parsed: any) {
   const arr = (v: any) => (Array.isArray(v) ? v : []);
   const cleanStr = (s: any) => (typeof s === "string" ? s.trim() : "");
   const cleanList = (v: any, max: number) =>
@@ -142,7 +146,62 @@ function normalize(parsed: any) {
   };
 }
 
-Deno.serve(async (req) => {
+function normalizedText(value: unknown): string {
+  return typeof value === "string"
+    ? value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
+    : "";
+}
+
+function feedbackReference(item: any): string {
+  if (item == null) return "";
+  if (item.section === "pessoas") {
+    return [item.label, ...(Array.isArray(item.names) ? item.names : []), item.nota]
+      .filter(Boolean).join(" · ");
+  }
+  return typeof item === "string" ? item : "";
+}
+
+export function applyFeedback(portrait: ReturnType<typeof normalize>, feedback: any[]) {
+  const active = feedback.filter((entry) => entry?.status === "removed" || entry?.status === "corrected");
+  const similar = (left: unknown, right: unknown) => {
+    const ignored = new Set(["a", "as", "o", "os", "de", "da", "das", "do", "dos", "e", "em", "um", "uma", "que", "voce", "seu", "sua", "parece", "parecer", "talvez"]);
+    const tokens = (value: unknown) => new Set(normalizedText(value).split(" ").filter((token) => token.length > 2 && !ignored.has(token)));
+    const a = tokens(left);
+    const b = tokens(right);
+    if (!a.size || !b.size) return normalizedText(left) === normalizedText(right);
+    const overlap = [...a].filter((token) => b.has(token)).length;
+    return overlap / Math.min(a.size, b.size) >= 0.7;
+  };
+  const resolve = (section: string, value: any) => {
+    const reference = feedbackReference(value);
+    const match = active.find((entry) => entry.section === section && similar(entry.original_text, reference));
+    if (!match) return value;
+    if (match.status === "removed") return null;
+    if (section === "pessoas") return null; // a versão corrigida volta como fato explícito, sem reconstruir uma pessoa por heurística
+    return match.corrected_text || null;
+  };
+  const result = {
+    ...portrait,
+    intro: resolve("intro", portrait.intro),
+    pessoas: portrait.pessoas.map((item: any) => resolve("pessoas", item)).filter(Boolean),
+    o_que_te_move: portrait.o_que_te_move.map((item: string) => resolve("o_que_te_move", item)).filter(Boolean),
+    padroes: portrait.padroes.map((item: string) => resolve("padroes", item)).filter(Boolean),
+    preferencias: portrait.preferencias.map((item: string) => resolve("preferencias", item)).filter(Boolean),
+    sensiveis: portrait.sensiveis.map((item: string) => resolve("sensiveis", item)).filter(Boolean),
+  };
+  // Correções do usuário são fonte de verdade: mesmo que o modelo omita ou
+  // reformule o item, a versão corrigida continua presente deterministicamente.
+  for (const entry of active.filter((item) => item.status === "corrected" && item.corrected_text)) {
+    if (entry.section === "intro") result.intro = entry.corrected_text;
+    else if (entry.section !== "pessoas") {
+      const list = result[entry.section as keyof typeof result];
+      if (Array.isArray(list) && !list.some((item) => similar(item, entry.corrected_text))) list.unshift(entry.corrected_text);
+    }
+  }
+  return result;
+}
+
+if (import.meta.main) Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -162,7 +221,7 @@ Deno.serve(async (req) => {
     const supa = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     // 1. Carrega dados brutos
-    const [{ data: insights }, { data: themes }, { data: profile }, { data: corrections }] = await Promise.all([
+    const [{ data: insights }, { data: themes }, { data: profile }, { data: corrections }, { data: feedback }] = await Promise.all([
       supa.from("user_insights")
         .select("category, key, value, importance, last_mentioned_at")
         .eq("user_id", user_id)
@@ -175,6 +234,7 @@ Deno.serve(async (req) => {
         .limit(40),
       supa.from("profiles").select("name").eq("user_id", user_id).maybeSingle(),
       supa.from("user_memory_corrections").select("correction_text").eq("user_id", user_id).order("created_at", { ascending: false }).limit(80),
+      supa.from("user_portrait_feedback").select("section,original_text,status,corrected_text").eq("user_id", user_id),
     ]);
 
     const insightsArr = (insights || []) as Insight[];
@@ -186,6 +246,7 @@ Deno.serve(async (req) => {
       i: insightsArr.map((x) => [x.category, x.key, x.value, x.importance]),
       t: themesArr.map((x: any) => [x.theme_name, x.status, x.session_count]),
       c: (corrections || []).map((x: any) => x.correction_text),
+      f: (feedback || []).map((x: any) => [x.section, x.original_text, x.status, x.corrected_text]),
     });
     const version = await md5(versionInput);
 
@@ -198,7 +259,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (existing) {
         const ageHours = (Date.now() - new Date(existing.generated_at).getTime()) / 36e5;
-        if (existing.insights_version === version && ageHours < STALE_HOURS * 7) {
+        if (existing.insights_version === version && ageHours < PORTRAIT_CACHE_HOURS) {
           return new Response(JSON.stringify({ portrait: existing, cached: true }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -222,7 +283,7 @@ Deno.serve(async (req) => {
     // 5. Gera via LLM
     const prompt = buildPrompt(profile?.name ?? null, insightsArr, themesArr, (corrections || []).map((x: any) => x.correction_text));
     const parsed = await callGemini(prompt);
-    const norm = normalize(parsed);
+    const norm = applyFeedback(normalize(parsed), feedback || []);
 
     const row = {
       user_id,
@@ -236,9 +297,10 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ portrait: row, cached: false }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
+  } catch (e: unknown) {
     console.error("generate-user-portrait error", e);
-    return new Response(JSON.stringify({ error: String(e?.message || e) }), {
+    const message = e instanceof Error ? e.message : String(e);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

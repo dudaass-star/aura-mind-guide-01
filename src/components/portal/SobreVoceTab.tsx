@@ -25,7 +25,7 @@ type Portrait = {
 };
 
 type Feedback = { item_key: string; section: string; original_text: string; status: "confirmed" | "corrected" | "removed"; corrected_text: string | null };
-type UserFact = { id: string; key: string; value: string; created_at: string | null };
+type UserFact = { id: string; key: string; value: string; created_at: string | null; declared_category?: string | null };
 type SectionKey = "intro" | "pessoas" | "o_que_te_move" | "padroes" | "preferencias" | "sensiveis";
 type ReviewItem = { section: SectionKey; text: string };
 
@@ -44,7 +44,7 @@ async function feedbackKey(section: string, text: string) {
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function SobreVoceTab({ userId, profile }: { userId: string; profile: { name?: string | null } | null | undefined; onOpenConversation: (prefilledMessage?: string) => void }) {
+export function SobreVoceTab({ userId, profile, onOpenConversation }: { userId: string; profile: { name?: string | null } | null | undefined; onOpenConversation: (prefilledMessage?: string) => void }) {
   const queryClient = useQueryClient();
   const [review, setReview] = useState<ReviewItem | null>(null);
   const [correction, setCorrection] = useState("");
@@ -55,7 +55,7 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
     queryFn: async () => {
       const [portraitRes, factsRes, feedbackRes] = await Promise.all([
         supabasePortal.from("user_portraits").select("*").eq("user_id", userId).maybeSingle(),
-        supabasePortal.from("user_insights").select("id,key,value,created_at").eq("user_id", userId).eq("category", "contexto").ilike("key", "Declarado · %").order("created_at", { ascending: false }),
+        supabasePortal.from("user_insights").select("id,key,value,created_at,declared_category").eq("user_id", userId).eq("source_kind", "user_declared").order("created_at", { ascending: false }),
         supabasePortal.from("user_portrait_feedback").select("item_key,section,original_text,status,corrected_text").eq("user_id", userId),
       ]);
       if (portraitRes.error) throw portraitRes.error;
@@ -68,12 +68,13 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
 
   const refreshPortrait = async (force = false) => {
     const { error } = await supabasePortal.functions.invoke("generate-user-portrait", { body: { force } });
-    if (!error) await refetch();
+    if (error) throw error;
+    await refetch();
   };
 
   useEffect(() => {
     if (!userId || isLoading) return;
-    void refreshPortrait(false);
+    void refreshPortrait(false).catch(() => undefined);
     // A identidade da conta não muda durante a montagem desta área.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, isLoading]);
@@ -91,11 +92,17 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
       if (response?.error) throw new Error(response.error);
       return response;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: async (_, variables) => {
       setReview(null);
       setCorrection("");
-      void queryClient.invalidateQueries({ queryKey: ["portal-user-portrait-view", userId] });
-      if (variables.action !== "confirm") void refreshPortrait(true);
+      await queryClient.invalidateQueries({ queryKey: ["portal-user-portrait-view", userId] });
+      if (variables.action !== "confirm") {
+        try {
+          await refreshPortrait(true);
+        } catch {
+          toast({ title: "Mudança salva", description: "O retrato será atualizado automaticamente quando a conexão voltar." });
+        }
+      }
     },
     onError: () => toast({ title: "Não foi possível salvar agora", description: "Tente novamente em instantes.", variant: "destructive" }),
   });
@@ -123,7 +130,15 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">O que você contou aparece como fato. O que eu percebi aparece como leitura para você confirmar ou corrigir.</p>
     </section>
 
-    <FactContribution facts={facts} busy={mutation.isPending} onAction={(body) => mutation.mutate(body, { onSuccess: () => toast({ title: body.action === "add_fact" ? "Guardado" : body.action === "edit_fact" ? "Atualizado" : "Apagado", description: "A AURA passa a considerar essa mudança nas próximas conversas." }) })} />
+    <FactContribution facts={facts} busy={mutation.isPending} onAction={async (body) => {
+      try {
+        await mutation.mutateAsync(body);
+        toast({ title: body.action === "add_fact" ? "Guardado" : body.action === "edit_fact" ? "Atualizado" : "Apagado", description: "A AURA passa a considerar essa mudança nas próximas conversas." });
+        return true;
+      } catch {
+        return false;
+      }
+    }} />
 
     {!hasPortrait ? <EmptyState icon={Heart} title="A AURA ainda está te conhecendo" description="Quando houver material suficiente, as primeiras leituras aparecem aqui para você confirmar." /> : <>
       {portrait?.intro && <HypothesisCard item={{ section: "intro", text: portrait.intro }} title="Uma leitura de quem você é hoje" feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />}
@@ -139,7 +154,12 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
 
     <p className="rounded-xl bg-secondary/60 p-4 text-xs leading-relaxed text-muted-foreground"><strong className="text-foreground">Você está no controle.</strong> Confirmar torna uma leitura referência. Corrigir substitui pela sua versão. Apagar faz a AURA deixar de considerar aquela informação.</p>
 
-    <Dialog open={Boolean(review)} onOpenChange={(open) => { if (!open) setReview(null); }}>
+    <Button variant="outline" className="w-full" onClick={() => {
+      void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "profile", event_type: "returned_to_conversation", source: "app" });
+      onOpenConversation("Quero conversar sobre o meu retrato em Sobre você.");
+    }}>Conversar sobre meu retrato</Button>
+
+    <Dialog open={Boolean(review)} onOpenChange={(open) => { if (!open) { setReview(null); setCorrection(""); } }}>
       <DialogContent className="max-w-md rounded-xl">
         <DialogHeader><DialogTitle>O que não ficou certo?</DialogTitle><DialogDescription>Escreva como você prefere que a AURA entenda isso.</DialogDescription></DialogHeader>
         <div className="rounded-lg bg-secondary/60 p-3 text-sm text-muted-foreground">“{review?.text}”</div>
@@ -176,7 +196,7 @@ function HypothesisContent({ item, feedbackMap, busy, onConfirm, onReview }: Hyp
   return <div className="space-y-3"><p className="text-sm leading-relaxed text-foreground">{sanitizePortalText(display)}</p>{feedback ? <Badge variant="secondary" className="gap-1"><Check className="h-3 w-3" />{feedback.status === "confirmed" ? "Confirmado por você" : "Atualizado por você"}</Badge> : <div><p className="mb-2 text-[11px] text-muted-foreground">Percebido pela AURA — ainda não confirmado</p><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={() => onConfirm("confirm", item)}><Check className="h-3.5 w-3.5" /> Faz sentido</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => onReview(item)}>Não foi bem assim</Button></div></div>}</div>;
 }
 
-function FactContribution({ facts, busy, onAction }: { facts: UserFact[]; busy: boolean; onAction: (body: Record<string, unknown>) => void }) {
+function FactContribution({ facts, busy, onAction }: { facts: UserFact[]; busy: boolean; onAction: (body: Record<string, unknown>) => Promise<boolean> }) {
   const [promptIndex, setPromptIndex] = useState(0);
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<UserFact | null>(null);
@@ -185,8 +205,8 @@ function FactContribution({ facts, busy, onAction }: { facts: UserFact[]; busy: 
   const prompt = PROMPTS[promptIndex % PROMPTS.length];
   return <section className="space-y-4 rounded-2xl border border-primary/20 bg-card p-5">
     <div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><PenLine className="h-4 w-4" /></span><div><p className="text-xs font-bold uppercase text-primary">Contado por você</p><h3 className="mt-1 text-lg font-semibold text-foreground">Tem algo importante que eu ainda não sei?</h3><p className="mt-1 text-sm text-muted-foreground">Isso evita que você precise explicar de novo nas próximas conversas.</p></div></div>
-    {facts.length > 0 && <div className="space-y-2">{facts.map((fact) => <div key={fact.id} className="flex items-start gap-2 rounded-xl bg-secondary/55 p-3"><div className="min-w-0 flex-1"><Badge variant="outline" className="mb-1">Contado por você</Badge>{editing?.id === fact.id ? <Textarea autoFocus value={editDraft} onChange={(event) => setEditDraft(event.target.value)} maxLength={800} className="mt-2" /> : <p className="text-sm leading-relaxed text-foreground"><strong>{fact.key}:</strong> {sanitizePortalText(fact.value)}</p>}</div>{editing?.id === fact.id ? <div className="flex gap-1"><Button size="icon" className="h-8 w-8" aria-label="Salvar" disabled={busy || !editDraft.trim()} onClick={() => { onAction({ action: "edit_fact", insightId: fact.id, value: editDraft.trim() }); setEditing(null); }}><Check className="h-4 w-4" /></Button><Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Cancelar" onClick={() => setEditing(null)}><X className="h-4 w-4" /></Button></div> : <div className="flex gap-1"><Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Editar" onClick={() => { setEditing(fact); setEditDraft(fact.value); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" aria-label="Apagar" onClick={() => setDeleting(fact)}><Trash2 className="h-4 w-4" /></Button></div>}</div>)}</div>}
-    <div className="rounded-xl bg-secondary/40 p-4"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-foreground">{prompt.label}</p><Button variant="ghost" size="sm" onClick={() => { setPromptIndex((index) => index + 1); setDraft(""); }}>Outra pergunta</Button></div><Textarea className="mt-2" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={800} placeholder={prompt.placeholder} /><Button className="mt-3 w-full" disabled={busy || !draft.trim()} onClick={() => { onAction({ action: "add_fact", category: prompt.id, value: draft.trim() }); setDraft(""); setPromptIndex((index) => index + 1); }}><Plus className="h-4 w-4" /> Guardar para próximas conversas</Button></div>
+    {facts.length > 0 && <div className="space-y-2">{facts.map((fact) => <div key={fact.id} className="flex items-start gap-2 rounded-xl bg-secondary/55 p-3"><div className="min-w-0 flex-1"><Badge variant="outline" className="mb-1">Contado por você</Badge>{editing?.id === fact.id ? <Textarea autoFocus value={editDraft} onChange={(event) => setEditDraft(event.target.value)} maxLength={800} className="mt-2" /> : <p className="text-sm leading-relaxed text-foreground"><strong>{fact.key}:</strong> {sanitizePortalText(fact.value)}</p>}</div>{editing?.id === fact.id ? <div className="flex gap-1"><Button size="icon" className="h-8 w-8" aria-label="Salvar" disabled={busy || !editDraft.trim()} onClick={async () => { if (await onAction({ action: "edit_fact", insightId: fact.id, value: editDraft.trim() })) setEditing(null); }}><Check className="h-4 w-4" /></Button><Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Cancelar" onClick={() => setEditing(null)}><X className="h-4 w-4" /></Button></div> : <div className="flex gap-1"><Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Editar" onClick={() => { setEditing(fact); setEditDraft(fact.value); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" aria-label="Apagar" onClick={() => setDeleting(fact)}><Trash2 className="h-4 w-4" /></Button></div>}</div>)}</div>}
+    <div className="rounded-xl bg-secondary/40 p-4"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-foreground">{prompt.label}</p><Button variant="ghost" size="sm" onClick={() => { setPromptIndex((index) => index + 1); setDraft(""); }}>Outra pergunta</Button></div><Textarea className="mt-2" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={800} placeholder={prompt.placeholder} /><Button className="mt-3 w-full" disabled={busy || !draft.trim()} onClick={async () => { if (await onAction({ action: "add_fact", category: prompt.id, value: draft.trim() })) { setDraft(""); setPromptIndex((index) => index + 1); } }}><Plus className="h-4 w-4" /> Guardar para próximas conversas</Button></div>
     <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => { if (!open) setDeleting(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Apagar esta informação?</AlertDialogTitle><AlertDialogDescription>A AURA vai deixar de considerar “{deleting?.value}” nas próximas conversas.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { if (deleting) onAction({ action: "delete_fact", insightId: deleting.id }); setDeleting(null); }}>Apagar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </section>;
 }

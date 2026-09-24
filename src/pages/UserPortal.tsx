@@ -65,6 +65,7 @@ const UserPortal = () => {
   const [portalLoading, setPortalLoading] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
   const [minimumSessionLimit, setMinimumSessionLimit] = useState<number | undefined>();
+  const [conversationDraftRequest, setConversationDraftRequest] = useState<string>();
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
@@ -179,7 +180,9 @@ const UserPortal = () => {
   const handleOpenConversation = (prefilledMessage?: string) => {
     if (!userId) return;
     if (prefilledMessage?.trim()) {
-      localStorage.setItem(`aura-chat-draft:${userId}`, prefilledMessage.trim());
+      const nextDraft = prefilledMessage.trim();
+      localStorage.setItem(`aura-chat-draft:${userId}`, nextDraft);
+      setConversationDraftRequest(nextDraft);
     }
     localStorage.setItem(`aura-chat-open:${userId}`, "true");
     handleTabClick("conversar");
@@ -418,7 +421,7 @@ const UserPortal = () => {
               accountLoading={portalLoading}
               isActive={activeTab === "conversar"}
               initialChatOpen={shouldOpenConversation}
-              initialDraft={discussionPrompt}
+              initialDraft={conversationDraftRequest ?? discussionPrompt}
               discussionEpisodeId={discussionEpisode?.id}
             />
           </div>
