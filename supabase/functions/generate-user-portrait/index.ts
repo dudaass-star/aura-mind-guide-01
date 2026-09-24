@@ -103,7 +103,7 @@ async function callGemini(prompt: string): Promise<any> {
   return JSON.parse(content);
 }
 
-function normalize(parsed: any) {
+export function normalize(parsed: any) {
   const arr = (v: any) => (Array.isArray(v) ? v : []);
   const cleanStr = (s: any) => (typeof s === "string" ? s.trim() : "");
   const cleanList = (v: any, max: number) =>
@@ -156,7 +156,7 @@ function feedbackReference(item: any): string {
   return typeof item === "string" ? item : "";
 }
 
-function applyFeedback(portrait: ReturnType<typeof normalize>, feedback: any[]) {
+export function applyFeedback(portrait: ReturnType<typeof normalize>, feedback: any[]) {
   const active = feedback.filter((entry) => entry?.status === "removed" || entry?.status === "corrected");
   const similar = (left: unknown, right: unknown) => {
     const ignored = new Set(["a", "as", "o", "os", "de", "da", "das", "do", "dos", "e", "em", "um", "uma", "que", "voce", "seu", "sua"]);
@@ -196,7 +196,7 @@ function applyFeedback(portrait: ReturnType<typeof normalize>, feedback: any[]) 
   return result;
 }
 
-Deno.serve(async (req) => {
+if (import.meta.main) Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
