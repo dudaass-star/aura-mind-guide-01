@@ -70,8 +70,8 @@ function TodayScreen({ compact = false }: { compact?: boolean }) {
 
 export function HeroV4() {
   return (
-    <section id="hero-section" className="v4-ink-section relative min-h-[94svh] overflow-hidden pt-28">
-      <div className="mx-auto grid min-h-[calc(94svh-7rem)] max-w-7xl items-center gap-10 px-5 pb-14 sm:px-8 lg:grid-cols-[1.08fr_.92fr] lg:gap-16 lg:pb-20">
+    <section id="hero-section" className="v4-ink-section relative min-h-[94svh] overflow-hidden pt-24 lg:pt-28">
+      <div className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 sm:px-8 lg:min-h-[calc(94svh-9rem)] lg:grid-cols-[1.08fr_.92fr] lg:gap-16 lg:pb-14">
         <div className="v4-rise relative z-10 max-w-3xl">
           <p className="mb-5 inline-flex items-center gap-2 border-l-2 border-primary px-3 text-xs font-bold uppercase text-primary-foreground/65">Uma inteligência que acompanha o que muda em você</p>
           <h1 className="v4-balance font-display text-[2.75rem] font-semibold leading-[1.02] text-primary-foreground sm:text-6xl lg:text-7xl">
@@ -90,7 +90,7 @@ export function HeroV4() {
             <div className="pl-3"><p className="font-display text-lg text-primary-foreground">Com memória</p><p className="mt-1 text-[11px] text-primary-foreground/50">sem começar do zero</p></div>
           </div>
         </div>
-        <div className="v4-rise-late relative mx-auto w-full max-w-[430px] pb-5 lg:translate-y-6">
+        <div className="v4-rise-late relative mx-auto w-full max-w-[430px] pb-5">
           <div className="absolute -left-8 top-20 hidden w-56 rounded-xl border border-primary-foreground/15 bg-[hsl(var(--v4-ink-soft))] p-4 text-primary-foreground shadow-card lg:block">
             <p className="text-[10px] font-bold uppercase text-primary-foreground/50">AURA percebeu</p><p className="mt-2 font-display text-lg leading-snug">Talvez o medo não seja de escolher errado — mas de se responsabilizar pela escolha.</p><p className="mt-2 text-xs text-primary-foreground/55">Isso combina com você?</p>
           </div>
@@ -100,7 +100,7 @@ export function HeroV4() {
           </div>
         </div>
       </div>
-      <div className="mx-auto max-w-7xl border-t border-primary-foreground/10 px-5 py-5 text-center text-xs text-primary-foreground/50 sm:px-8">Não faz diagnóstico e não substitui atendimento profissional. É acompanhamento para o dia a dia.</div>
+      <div className="mx-auto max-w-7xl border-t border-primary-foreground/10 px-5 py-4 text-center text-xs text-primary-foreground/50 sm:px-8">Não faz diagnóstico e não substitui atendimento profissional. É acompanhamento para o dia a dia.</div>
     </section>
   );
 }
@@ -214,5 +214,14 @@ export function FooterV4() {
 }
 
 export function StickyCtaV4() {
+  const [show, setShow] = useState(false);
+  useState(() => {
+    if (typeof window === "undefined") return;
+    const onScroll = () => setShow(window.scrollY > Math.max(480, window.innerHeight * 0.72));
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  });
+  if (!show) return null;
   return <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 p-3 backdrop-blur md:hidden"><Cta source="sticky" label="Experimentar por R$ 6,90 (v4 sticky)" className="w-full rounded-xl">Experimentar por R$ 6,90 <ArrowRight /></Cta></div>;
 }
