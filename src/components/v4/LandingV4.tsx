@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, CheckCircle2, ChevronDown,
@@ -185,6 +185,12 @@ export function ConversationDemoV4() {
 function ConversationPhone({ stage }: { stage: number }) {
   const messages = conversationStages.slice(0, stage + 1).flat();
   const complete = stage === conversationStages.length - 1;
+  const conversationRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const container = conversationRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+  }, [stage]);
   return (
     <div className="portal-chat-theme mx-auto flex h-[590px] w-full max-w-[430px] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background text-foreground v4-screen-shadow sm:h-[650px]">
       <header className="flex min-h-[4.5rem] shrink-0 items-center gap-3 border-b border-border/70 bg-card/95 px-3 shadow-sm">
@@ -193,7 +199,7 @@ function ConversationPhone({ stage }: { stage: number }) {
         <div className="min-w-0 flex-1"><p className="font-body text-base font-bold">AURA</p><p className="text-xs text-muted-foreground">{complete ? "disponível" : "respondendo…"}</p></div>
         <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" aria-label="Mais opções"><MoreVertical className="h-5 w-5" /></Button>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto bg-secondary/45 px-4 py-5">
+      <div ref={conversationRef} className="min-h-0 flex-1 overflow-y-auto bg-secondary/45 px-4 py-5">
         <div className="mb-5 text-center"><span className="rounded-full bg-card/80 px-3 py-1 text-[10px] font-semibold text-muted-foreground shadow-sm">HOJE</span></div>
         <div className="space-y-4">{messages.map((message, index) => <DemoMessage key={`${index}-${message.text}`} {...message} />)}</div>
         {!complete && <div className="mt-4 flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55 [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55 [animation-delay:300ms]" /></div>}
