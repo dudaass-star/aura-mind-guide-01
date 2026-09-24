@@ -4102,33 +4102,39 @@ export type Database = {
         Row: {
           category: string
           created_at: string | null
+          declared_category: string | null
           id: string
           importance: number | null
           key: string
           last_mentioned_at: string | null
           mentioned_count: number | null
+          source_kind: string | null
           user_id: string
           value: string
         }
         Insert: {
           category: string
           created_at?: string | null
+          declared_category?: string | null
           id?: string
           importance?: number | null
           key: string
           last_mentioned_at?: string | null
           mentioned_count?: number | null
+          source_kind?: string | null
           user_id: string
           value: string
         }
         Update: {
           category?: string
           created_at?: string | null
+          declared_category?: string | null
           id?: string
           importance?: number | null
           key?: string
           last_mentioned_at?: string | null
           mentioned_count?: number | null
+          source_kind?: string | null
           user_id?: string
           value?: string
         }
