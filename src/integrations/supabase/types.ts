@@ -4213,8 +4213,10 @@ export type Database = {
       }
       user_memory_corrections: {
         Row: {
+          client_message_id: string | null
           confidence: number
           correction_text: string
+          correction_type: string | null
           created_at: string
           id: string
           last_used_at: string | null
@@ -4222,8 +4224,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          client_message_id?: string | null
           confidence?: number
           correction_text: string
+          correction_type?: string | null
           created_at?: string
           id?: string
           last_used_at?: string | null
@@ -4231,8 +4235,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          client_message_id?: string | null
           confidence?: number
           correction_text?: string
+          correction_type?: string | null
           created_at?: string
           id?: string
           last_used_at?: string | null
@@ -4288,6 +4294,45 @@ export type Database = {
           created_at?: string
           id?: string
           token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_portrait_feedback: {
+        Row: {
+          corrected_text: string | null
+          created_at: string
+          id: string
+          item_key: string
+          original_text: string
+          section: string
+          source_kind: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          corrected_text?: string | null
+          created_at?: string
+          id?: string
+          item_key: string
+          original_text: string
+          section: string
+          source_kind?: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          corrected_text?: string | null
+          created_at?: string
+          id?: string
+          item_key?: string
+          original_text?: string
+          section?: string
+          source_kind?: string
+          status?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []

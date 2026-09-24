@@ -97,3 +97,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Evoluir Jornadas como continuidade ativa: dois episódios semanais, sem acúmulo, leitura explícita, reflexão, conversa contextual, escolha guiada e métricas.
 - [x] Corrigir e validar ponta a ponta todos os fluxos de Jornadas, incluindo conversa contextual real sobre o episódio.
 - [x] Acelerar a reabertura já autenticada e a troca entre áreas, preservando a última tela enquanto os dados são atualizados.
+- [x] Evoluir Sobre você como retrato confiável: privacidade, origem, hipóteses verificáveis, correção direta, atualização e métricas.

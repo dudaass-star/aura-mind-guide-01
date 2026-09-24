@@ -1537,6 +1537,7 @@ Deno.serve(async (req) => {
           // Contexto de mensagem proativa recente (Pergunta da Semana, etc.)
           proactive_context: proactiveContext,
           journey_episode_id: typeof journeyEpisodeId === 'string' ? journeyEpisodeId : null,
+          client_message_id: typeof currentMessageId === 'string' ? currentMessageId : null,
         };
         if (useMinimalContext) {
           body.minimal_context = true;
