@@ -744,6 +744,7 @@ export function ConversarTab({
       },
     });
     if (error || !data?.accepted) throw error || new Error(data?.error || "Falha no envio");
+    void reportPushConversion("/meu-espaco?tab=conversar", "first14_conversation");
     if (pending.journeyEpisodeId) setActiveDiscussionEpisodeId(undefined);
     removeFromOutbox(pending.clientId);
     setMessages((current) => mergeMessage(current, {
@@ -868,7 +869,6 @@ export function ConversarTab({
 
     try {
       await submitMessage(pending);
-      void reportPushConversion("/meu-espaco?tab=conversar", "first14_conversation");
     } catch {
       setResponding(false);
       setMessages((current) => current.map((message) =>

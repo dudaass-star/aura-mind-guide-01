@@ -120,6 +120,7 @@ const PHONELESS_TASK_TYPES = new Set([
   // O push usa o aparelho já registrado; telefone só é necessário se houver
   // fallback para WhatsApp e já segue preservado no payload da entrega.
   'notification_delivery',
+  'first14_batch',
   'woovi_cycle_recycle',
   'woovi_next_cycle_cobr',
   'woovi_retry_confirm',
@@ -317,11 +318,12 @@ Deno.serve(async (req) => {
         const profile = (profileRow ?? { phone: '', name: null, whatsapp_instance_id: null }) as
           { phone: string; name: string | null; whatsapp_instance_id: string | null };
 
-        let instanceConfig = undefined;
-        try {
-          instanceConfig = await getInstanceConfigForUser(supabase, task.user_id);
-        } catch (e) {
-          console.warn('⚠️ Could not get instance config, using env vars');
+        if (task.task_type !== 'first14_batch') {
+          try {
+            await getInstanceConfigForUser(supabase, task.user_id);
+          } catch (e) {
+            console.warn('⚠️ Could not get instance config, using env vars');
+          }
         }
 
         const payload = task.payload as Record<string, any>;
@@ -378,6 +380,19 @@ Deno.serve(async (req) => {
             const result = await routeNotification(supabase, request);
             if (!result.success) throw new Error(result.error || result.reason || 'Falha na entrega programada');
             console.log(`✅ Notificação programada concluída via ${result.channel}`);
+            break;
+          }
+
+          case 'first14_batch': {
+            if (!payload.cursor || !payload.run_key) throw new Error('Continuação da condução inicial inválida');
+            const first14Res = await fetch(`${supabaseUrl}/functions/v1/first-14-days`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({ cursor: payload.cursor, runKey: payload.run_key }),
+              signal: AbortSignal.timeout(45_000),
+            });
+            if (!first14Res.ok) throw new Error(`Condução inicial em lote indisponível: ${first14Res.status}`);
+            console.log('✅ Lote seguinte da condução inicial concluído');
             break;
           }
 
@@ -1380,6 +1395,20 @@ Deno.serve(async (req) => {
         executed++;
 
       } catch (error) {
+        if (task.task_type === 'first14_batch') {
+          const attempt = Number(task.payload?.batch_retry_attempt || 0);
+          if (attempt < 3) {
+            const retryAt = new Date(Date.now() + (attempt + 1) * 5 * 60_000).toISOString();
+            await supabase.from('scheduled_tasks').update({
+              status: 'pending',
+              execute_at: retryAt,
+              payload: { ...(task.payload || {}), batch_retry_attempt: attempt + 1 },
+            }).eq('id', task.id).eq('status', 'executing');
+            console.warn(`⏳ lote da condução inicial reagendado após falha transitória (tentativa ${attempt + 1})`);
+            failed++;
+            continue;
+          }
+        }
         if (task.task_type === 'notification_delivery') {
           const attempt = Number(task.payload?.delivery_retry_attempt || 0);
           const scheduledDeliveryId = task.payload?.scheduledDeliveryId;
