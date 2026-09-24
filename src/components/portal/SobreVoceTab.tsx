@@ -68,12 +68,13 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
 
   const refreshPortrait = async (force = false) => {
     const { error } = await supabasePortal.functions.invoke("generate-user-portrait", { body: { force } });
-    if (!error) await refetch();
+    if (error) throw error;
+    await refetch();
   };
 
   useEffect(() => {
     if (!userId || isLoading) return;
-    void refreshPortrait(false);
+    void refreshPortrait(false).catch(() => undefined);
     // A identidade da conta não muda durante a montagem desta área.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, isLoading]);
@@ -91,11 +92,17 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
       if (response?.error) throw new Error(response.error);
       return response;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: async (_, variables) => {
       setReview(null);
       setCorrection("");
-      void queryClient.invalidateQueries({ queryKey: ["portal-user-portrait-view", userId] });
-      if (variables.action !== "confirm") void refreshPortrait(true);
+      await queryClient.invalidateQueries({ queryKey: ["portal-user-portrait-view", userId] });
+      if (variables.action !== "confirm") {
+        try {
+          await refreshPortrait(true);
+        } catch {
+          toast({ title: "Mudança salva", description: "O retrato será atualizado automaticamente quando a conexão voltar." });
+        }
+      }
     },
     onError: () => toast({ title: "Não foi possível salvar agora", description: "Tente novamente em instantes.", variant: "destructive" }),
   });
@@ -139,7 +146,7 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
 
     <p className="rounded-xl bg-secondary/60 p-4 text-xs leading-relaxed text-muted-foreground"><strong className="text-foreground">Você está no controle.</strong> Confirmar torna uma leitura referência. Corrigir substitui pela sua versão. Apagar faz a AURA deixar de considerar aquela informação.</p>
 
-    <Dialog open={Boolean(review)} onOpenChange={(open) => { if (!open) setReview(null); }}>
+    <Dialog open={Boolean(review)} onOpenChange={(open) => { if (!open) { setReview(null); setCorrection(""); } }}>
       <DialogContent className="max-w-md rounded-xl">
         <DialogHeader><DialogTitle>O que não ficou certo?</DialogTitle><DialogDescription>Escreva como você prefere que a AURA entenda isso.</DialogDescription></DialogHeader>
         <div className="rounded-lg bg-secondary/60 p-3 text-sm text-muted-foreground">“{review?.text}”</div>

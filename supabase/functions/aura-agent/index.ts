@@ -5954,14 +5954,15 @@ serve(async (req) => {
               .from('meditations')
               .select('category, title, best_for, triggers')
               .eq('is_active', true),
-        // 11. Correções de memória do usuário (prioridade máxima)
+        // 11. Correções de memória do usuário (prioridade máxima).
+        // O limite amplo mantém exclusões e rejeições históricas no contexto.
         supabase
           .from('user_memory_corrections')
           .select('correction_text, source, confidence, created_at')
           .eq('user_id', userId)
           .order('confidence', { ascending: false })
           .order('created_at', { ascending: false })
-          .limit(15),
+          .limit(80),
         // 12. Resumo evolutivo narrativo (terceira camada de memória)
         supabase
           .from('user_evolution_summary')

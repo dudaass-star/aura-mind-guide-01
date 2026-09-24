@@ -9,9 +9,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
-const STALE_HOURS = 24;
+const PORTRAIT_CACHE_HOURS = 24 * 7;
 // Bump quando mudar prompt/normalize pra invalidar caches antigos.
-const PROMPT_VERSION = "v2-2026-05-31";
+const PROMPT_VERSION = "v3-2026-09-24";
 
 type Insight = {
   category: string;
@@ -142,6 +142,39 @@ function normalize(parsed: any) {
   };
 }
 
+function normalizedText(value: unknown): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLowerCase() : "";
+}
+
+function feedbackReference(item: any): string {
+  if (item.section === "pessoas") {
+    return [item.label, ...(Array.isArray(item.names) ? item.names : []), item.nota]
+      .filter(Boolean).join(" · ");
+  }
+  return typeof item === "string" ? item : "";
+}
+
+function applyFeedback(portrait: ReturnType<typeof normalize>, feedback: any[]) {
+  const active = feedback.filter((entry) => entry?.status === "removed" || entry?.status === "corrected");
+  const resolve = (section: string, value: any) => {
+    const reference = feedbackReference(value);
+    const match = active.find((entry) => entry.section === section && normalizedText(entry.original_text) === normalizedText(reference));
+    if (!match) return value;
+    if (match.status === "removed") return null;
+    if (section === "pessoas") return null; // a versão corrigida volta como fato explícito, sem reconstruir uma pessoa por heurística
+    return match.corrected_text || null;
+  };
+  return {
+    ...portrait,
+    intro: resolve("intro", portrait.intro),
+    pessoas: portrait.pessoas.map((item: any) => resolve("pessoas", item)).filter(Boolean),
+    o_que_te_move: portrait.o_que_te_move.map((item: string) => resolve("o_que_te_move", item)).filter(Boolean),
+    padroes: portrait.padroes.map((item: string) => resolve("padroes", item)).filter(Boolean),
+    preferencias: portrait.preferencias.map((item: string) => resolve("preferencias", item)).filter(Boolean),
+    sensiveis: portrait.sensiveis.map((item: string) => resolve("sensiveis", item)).filter(Boolean),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -162,7 +195,7 @@ Deno.serve(async (req) => {
     const supa = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     // 1. Carrega dados brutos
-    const [{ data: insights }, { data: themes }, { data: profile }, { data: corrections }] = await Promise.all([
+    const [{ data: insights }, { data: themes }, { data: profile }, { data: corrections }, { data: feedback }] = await Promise.all([
       supa.from("user_insights")
         .select("category, key, value, importance, last_mentioned_at")
         .eq("user_id", user_id)
@@ -175,6 +208,7 @@ Deno.serve(async (req) => {
         .limit(40),
       supa.from("profiles").select("name").eq("user_id", user_id).maybeSingle(),
       supa.from("user_memory_corrections").select("correction_text").eq("user_id", user_id).order("created_at", { ascending: false }).limit(80),
+      supa.from("user_portrait_feedback").select("section,original_text,status,corrected_text").eq("user_id", user_id),
     ]);
 
     const insightsArr = (insights || []) as Insight[];
@@ -186,6 +220,7 @@ Deno.serve(async (req) => {
       i: insightsArr.map((x) => [x.category, x.key, x.value, x.importance]),
       t: themesArr.map((x: any) => [x.theme_name, x.status, x.session_count]),
       c: (corrections || []).map((x: any) => x.correction_text),
+      f: (feedback || []).map((x: any) => [x.section, x.original_text, x.status, x.corrected_text]),
     });
     const version = await md5(versionInput);
 
@@ -198,7 +233,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (existing) {
         const ageHours = (Date.now() - new Date(existing.generated_at).getTime()) / 36e5;
-        if (existing.insights_version === version && ageHours < STALE_HOURS * 7) {
+        if (existing.insights_version === version && ageHours < PORTRAIT_CACHE_HOURS) {
           return new Response(JSON.stringify({ portrait: existing, cached: true }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -222,7 +257,7 @@ Deno.serve(async (req) => {
     // 5. Gera via LLM
     const prompt = buildPrompt(profile?.name ?? null, insightsArr, themesArr, (corrections || []).map((x: any) => x.correction_text));
     const parsed = await callGemini(prompt);
-    const norm = normalize(parsed);
+    const norm = applyFeedback(normalize(parsed), feedback || []);
 
     const row = {
       user_id,
