@@ -208,6 +208,8 @@ const CheckoutV2 = () => {
   const billingFromUrl = searchParams.get("billing") as BillingPeriod | null;
   const planFromState = location.state?.plan as PlanId | undefined;
   const billingFromState = location.state?.billing as BillingPeriod | undefined;
+  const landingVariant = searchParams.get("lp") || undefined;
+  const ctaSource = searchParams.get("src") || undefined;
 
   /**
    * Origem do lead: `?lp=v2`, `?lp=v3`, etc. O botão "Voltar" precisa devolver
@@ -568,6 +570,8 @@ const CheckoutV2 = () => {
             email: email.trim(),
             phone,
             accessToken: getCheckoutAccessToken(),
+            landingVariant,
+            ctaSource,
           },
         });
         if (!error && (data as any)?.clientSecret) {
@@ -696,6 +700,8 @@ const CheckoutV2 = () => {
             email: email.trim(),
             phone: phone,
             accessToken: getCheckoutAccessToken(),
+            landingVariant,
+            ctaSource,
             ...(fbp && { fbp }),
             ...(fbc && { fbc }),
             ...(gaClientId && { gaClientId }),
@@ -848,6 +854,8 @@ const CheckoutV2 = () => {
             email: email.trim(),
             phone,
             accessToken: getCheckoutAccessToken(),
+            landingVariant,
+            ctaSource,
           },
         });
         if (error || !data?.url) {
@@ -872,7 +880,7 @@ const CheckoutV2 = () => {
         setEmbeddedFallbackLoading(false);
       }
     },
-    [selectedPlan, billingPeriod, name, email, phone],
+    [selectedPlan, billingPeriod, name, email, phone, landingVariant, ctaSource],
   );
 
   useEffect(() => {
