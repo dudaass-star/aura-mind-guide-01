@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { actionFromNotificationType, chooseFirst14Direction, first14AgeDaysBrt, nextFirst14Cursor, type First14Signals } from "./first-14-days.ts";
+import { actionFromNotificationType, chooseFirst14Direction, first14AgeDaysBrt, ignoredFirst14Actions, nextFirst14Cursor, type First14Signals } from "./first-14-days.ts";
 
 const base: First14Signals = {
   ageDays: 0,
@@ -60,4 +60,11 @@ Deno.test("dimensiona 50, 100, 200 e 300 clientes em lotes limitados", () => {
     assertEquals(batchLengths.every((value) => value > 0 && value <= batchSize), true);
     assertEquals(batchLengths.length, Math.ceil(total / batchSize));
   }
+});
+
+Deno.test("Hoje e push param de insistir depois de três apresentações ignoradas", () => {
+  const events = Array.from({ length: 3 }, () => ({ event_type: "priority_presented", metadata: { action: "journey" } }));
+  assertEquals(ignoredFirst14Actions(events), ["journey"]);
+  assertEquals(chooseFirst14Direction({ ...base, ageDays: 2, hasConversation: true, ignoredActions: ["journey"] }), null);
+  assertEquals(ignoredFirst14Actions([...events, { event_type: "priority_opened", metadata: { action: "journey" } }]), []);
 });

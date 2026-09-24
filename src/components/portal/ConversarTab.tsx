@@ -10,6 +10,7 @@ import avatarAura from "@/assets/avatar-aura.jpg";
 import { InstallAppMenuItem, useInstallApp } from "@/components/portal/InstallAppMenuItem";
 import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDialog";
 import { reportPushConversion } from "@/lib/push-notifications";
+import { reportTodayDirectionProgress } from "@/lib/today-direction";
 import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
 import type { Json } from "@/integrations/supabase/types";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
@@ -745,6 +746,7 @@ export function ConversarTab({
     });
     if (error || !data?.accepted) throw error || new Error(data?.error || "Falha no envio");
     void reportPushConversion("/meu-espaco?tab=conversar", "first14_conversation");
+    reportTodayDirectionProgress(userId, "completed", "conversation");
     if (pending.journeyEpisodeId) setActiveDiscussionEpisodeId(undefined);
     removeFromOutbox(pending.clientId);
     setMessages((current) => mergeMessage(current, {
