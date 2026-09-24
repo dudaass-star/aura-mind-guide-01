@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
         await admin.from("portal_value_events").insert({ user_id: userId, feature: "profile", event_type: "fact_edited", metadata: { category: insight.key } });
       } else {
         const correction = `Não considerar mais como fato: ${insight.key} — ${insight.value}.`;
-        const { error: correctionError } = await admin.from("user_memory_corrections").insert({ user_id: userId, correction_text: correction, source: "user_portrait_fact_removed", confidence: 10 });
+        const { error: correctionError } = await admin.from("user_memory_corrections").insert({ user_id: userId, correction_text: correction, source: "user_portrait_fact_removed", confidence: 10, correction_type: "exclusao" });
         if (correctionError) throw correctionError;
         const { error } = await admin.from("user_insights").delete().eq("id", insight.id).eq("user_id", userId);
         if (error) throw error;
@@ -113,7 +113,8 @@ Deno.serve(async (req) => {
       const correctionText = status === "corrected"
         ? `No retrato da AURA, substituir a leitura “${body.originalText}” pela correção do usuário: “${correctedText}”.`
         : `No retrato da AURA, remover e não voltar a usar a leitura “${body.originalText}”.`;
-      await admin.from("user_memory_corrections").insert({ user_id: userId, correction_text: correctionText, source: `user_portrait_${status}`, confidence: 10 });
+      const correctionType = status === "removed" ? "exclusao" : "rejeicao_hipotese";
+      await admin.from("user_memory_corrections").insert({ user_id: userId, correction_text: correctionText, source: `user_portrait_${status}`, confidence: 10, correction_type: correctionType });
       await admin.from("user_portraits").delete().eq("user_id", userId);
     }
     await admin.from("portal_value_events").insert({ user_id: userId, feature: "profile", event_type: `hypothesis_${status}`, metadata: { section: body.section } });
