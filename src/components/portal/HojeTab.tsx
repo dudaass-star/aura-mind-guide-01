@@ -200,7 +200,8 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
       }
     }
 
-    const accountCreatedAt = profile?.created_at ? new Date(profile.created_at).getTime() : 0;
+    const accountStartAt = profile?.converted_at || profile?.trial_started_at || profile?.created_at;
+    const accountCreatedAt = accountStartAt ? new Date(accountStartAt).getTime() : 0;
     const ageDays = accountCreatedAt ? Math.max(0, Math.floor((Date.now() - accountCreatedAt) / 86_400_000)) : 30;
     const first14 = chooseFirst14Direction({
       ageDays,
@@ -285,7 +286,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
       button: "Conversar com a AURA",
       icon: MessageCircle,
     };
-  }, [data, profile?.created_at, profile?.current_journey_id, zeroConversation]);
+  }, [data, profile?.converted_at, profile?.created_at, profile?.current_journey_id, profile?.trial_started_at, zeroConversation]);
 
   useEffect(() => {
     if (isLoading || !priority) return;

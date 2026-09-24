@@ -53,7 +53,8 @@ Deno.serve(async (req) => {
         hasUpcomingSession: (sessions.data || []).some((item) => item.status === "in_progress" || (item.status === "scheduled" && item.scheduled_at && item.scheduled_at >= nowIso)),
       });
       const prior = deliveries.data || [];
-      if (!direction || prior.length >= 3 || prior.some((item) => item.notification_type === COPY[direction.action].type)) {
+      const sentPushes = prior.filter((item) => ["sent", "opened", "converted"].includes(item.status)).length;
+      if (!direction || sentPushes >= 3 || prior.some((item) => item.notification_type === COPY[direction.action].type)) {
         skipped++;
         continue;
       }
