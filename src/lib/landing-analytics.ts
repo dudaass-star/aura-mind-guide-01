@@ -46,7 +46,7 @@ export const trackLandingCta = (source: CtaSource, label?: string, variant: Land
   });
 };
 
-export type LandingVariant = "v2" | "v3";
+export type LandingVariant = "v2" | "v3" | "v4";
 
 /** Link do checkout com a origem do clique e a variante da landing preservadas. */
 export const checkoutHref = (source: CtaSource, variant: LandingVariant = "v2"): string =>
