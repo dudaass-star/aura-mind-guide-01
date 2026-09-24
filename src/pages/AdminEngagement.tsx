@@ -1044,9 +1044,9 @@ export default function AdminEngagement() {
                         até 3s {metrics.conversationWithin3Seconds ?? 0}% · 5s {metrics.conversationWithin5Seconds ?? 0}% · 10s {metrics.conversationWithin10Seconds ?? 0}% · 30s {metrics.conversationWithin30Seconds ?? 0}%
                       </p>
                       <p className="text-[11px] text-muted-foreground">
-                        {metrics.conversationFailed ?? 0} falhas em {metrics.conversationTurns ?? 0} turnos · {(metrics.conversationCorrectionsPer100 ?? 0).toFixed(2)} correções/100 aberturas
+                        {metrics.conversationFailed ?? 0} falhas em {metrics.conversationTurns ?? 0} turnos · {(metrics.conversationCorrectionsPer100 ?? 0).toFixed(2)} conversas corrigidas/100 concluídas
                       </p>
-                      <p className="text-[10px] text-muted-foreground">base: {metrics.conversationOpenings ?? 0} aberturas diárias da conversa</p>
+                      <p className="text-[10px] text-muted-foreground">base: {metrics.conversationCompleted ?? 0} conversas concluídas</p>
                     </CardContent>
                   </Card>
 
@@ -1653,6 +1653,7 @@ export default function AdminEngagement() {
                     <p>• <strong>Activation Rate:</strong> % de pagantes que enviaram a 1ª mensagem em ≤3 dias do cadastro. Meta: &gt;70%.</p>
                     <p>• <strong>Conversão Madura:</strong> só conta trials com ≥7 dias de vida. Meta: &gt;25%.</p>
                     <p>• <strong>Correções / usuário:</strong> quantas vezes, em média, cada usuário corrigiu uma leitura da Aura no período. Baseline 3-13. Meta: ≤4 (verde). Sparkline = últimas 8 semanas.</p>
+                    <p>• <strong>Conversas corrigidas / 100:</strong> conversas concluídas com pelo menos uma correção explícita ÷ conversas concluídas × 100. Cada conversa conta uma única vez.</p>
                     <p>• <strong>ARR / ARPU:</strong> ARR = MRR × 12 (projeção anualizada). ARPU = MRR ÷ assinaturas ativas (receita média por usuário/mês).</p>
                     <p>• <strong>MRR Growth (30d):</strong> soma do MRR das assinaturas <strong>novas</strong> criadas nos últimos 30d menos o MRR <strong>perdido</strong> por cancelamentos no mesmo período. % calculado sobre o MRR estimado no início do período.</p>
                     <p>• <strong>Margem de contribuição:</strong> MRR mensal menos custo de IA <strong>mensalizado</strong> (custo do período × 30 ÷ dias do período). Garante que ambos os lados estão na mesma escala temporal — a margem fica estável independente do filtro de data. Verde ≥70%, amarelo 40-70%, vermelho &lt;40%.</p>

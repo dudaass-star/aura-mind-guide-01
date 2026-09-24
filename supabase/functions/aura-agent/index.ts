@@ -2257,7 +2257,8 @@ async function postConversationAnalysis(
   geminiApiKey: string,
   supabase: any,
   userId: string,
-  sessionId: string | null
+  sessionId: string | null,
+  clientMessageId: string | null
 ): Promise<void> {
   try {
     const cleanResponse = stripAllInternalTags(assistantResponse);
@@ -2524,6 +2525,8 @@ Use a função extract_analysis para retornar os dados.`;
             correction_text: text.substring(0, 800),
             source: 'correcao_usuario_conversa',
             confidence: 10,
+            correction_type: 'rejeicao_hipotese',
+            client_message_id: clientMessageId,
           });
           console.log(`🛡️ [POST-ANALYSIS] Correction saved: ${text.substring(0, 80)}...`);
         } else {
@@ -4986,7 +4989,7 @@ serve(async (req) => {
       console.warn('Failed to read AI model config, using default:', e);
     }
 
-    const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message, proactive_context, inbound_message_created_at, is_audio_message, journey_episode_id } = await req.json();
+    const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message, proactive_context, inbound_message_created_at, is_audio_message, journey_episode_id, client_message_id } = await req.json();
     const inboundMessageDate = inbound_message_created_at ? new Date(inbound_message_created_at) : null;
     const reminderReferenceDate = inboundMessageDate && !isNaN(inboundMessageDate.getTime()) ? inboundMessageDate : new Date();
 
@@ -8845,7 +8848,8 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
             GEMINI_API_KEY,
             supabase,
             profile.user_id,
-            currentSession?.id || null
+            currentSession?.id || null,
+            typeof client_message_id === 'string' ? client_message_id : null
           );
         } catch (err) {
           console.error('⚠️ Post-analysis async error:', err);

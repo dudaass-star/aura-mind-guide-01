@@ -94,8 +94,8 @@ export function SobreVoceTab({ userId, profile }: { userId: string; profile: { n
     onSuccess: async (_, variables) => {
       setReview(null);
       setCorrection("");
-      await queryClient.invalidateQueries({ queryKey: ["portal-user-portrait-view", userId] });
       if (variables.action !== "confirm") await refreshPortrait(true);
+      await queryClient.invalidateQueries({ queryKey: ["portal-user-portrait-view", userId] });
     },
     onError: () => toast({ title: "Não foi possível salvar agora", description: "Tente novamente em instantes.", variant: "destructive" }),
   });
@@ -161,7 +161,16 @@ function HypothesisRow(props: HypothesisProps) { return <article className="roun
 type HypothesisProps = { item: ReviewItem; feedbackMap: Map<string, Feedback>; busy: boolean; onConfirm: (action: "confirm", item: ReviewItem) => void; onReview: (item: ReviewItem) => void };
 function HypothesisContent({ item, feedbackMap, busy, onConfirm, onReview }: HypothesisProps) {
   const [feedback, setFeedback] = useState<Feedback | undefined>();
-  useEffect(() => { let current = true; void feedbackKey(item.section, item.text).then((key) => { if (current) setFeedback(feedbackMap.get(key)); }); return () => { current = false; }; }, [feedbackMap, item.section, item.text]);
+  useEffect(() => {
+    let current = true;
+    void feedbackKey(item.section, item.text).then((key) => {
+      if (!current) return;
+      const direct = feedbackMap.get(key);
+      const corrected = [...feedbackMap.values()].find((entry) => entry.status === "corrected" && normalize(entry.corrected_text ?? "") === normalize(item.text));
+      setFeedback(direct ?? corrected);
+    });
+    return () => { current = false; };
+  }, [feedbackMap, item.section, item.text]);
   if (feedback?.status === "removed") return null;
   const display = feedback?.status === "corrected" && feedback.corrected_text ? feedback.corrected_text : item.text;
   return <div className="space-y-3"><p className="text-sm leading-relaxed text-foreground">{sanitizePortalText(display)}</p>{feedback ? <Badge variant="secondary" className="gap-1"><Check className="h-3 w-3" />{feedback.status === "confirmed" ? "Confirmado por você" : "Atualizado por você"}</Badge> : <div><p className="mb-2 text-[11px] text-muted-foreground">Percebido pela AURA — ainda não confirmado</p><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={() => onConfirm("confirm", item)}><Check className="h-3.5 w-3.5" /> Faz sentido</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => onReview(item)}>Não foi bem assim</Button></div></div>}</div>;
