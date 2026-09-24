@@ -8,6 +8,7 @@
 - [x] Criar e validar a Landing V4 com transformação como protagonista e o App como prova concreta do valor.
 - [x] Reposicionar e validar a Landing V4 com sessão guiada de 45 minutos como protagonista.
 - [x] Reequilibrar a Landing V4 com conversa real do App, diálogo humano de impacto e funcionalidades com valor próprio.
+- [x] Diferenciar visualmente as sessões da conversa na abertura da Landing V4 com a agenda mensal de encontros.
 
 - [x] Transformar Jornadas em continuidade ativa: cadência fixa, um episódio pendente, leitura confirmada, reflexão, escolha guiada e métricas.
 
