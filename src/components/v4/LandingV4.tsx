@@ -160,36 +160,6 @@ function DemoMessage({ role, text, time }: { role: "user" | "aura"; text: string
   );
 }
 
-function RealConversationScreen() {
-  const [stage, setStage] = useState(0);
-  const messages = conversationStages.slice(0, stage + 1).flat();
-  const complete = stage === conversationStages.length - 1;
-  return (
-    <div className="portal-chat-theme mx-auto flex h-[590px] w-full max-w-[430px] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background text-foreground v4-screen-shadow sm:h-[650px]">
-      <header className="flex min-h-[4.5rem] shrink-0 items-center gap-3 border-b border-border/70 bg-card/95 px-3 shadow-sm">
-        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" aria-label="Voltar"><ArrowLeft className="h-5 w-5" /></Button>
-        <div className="relative shrink-0"><img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/20" /><span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-primary" /></div>
-        <div className="min-w-0 flex-1"><p className="font-body text-base font-bold">AURA</p><p className="text-xs text-muted-foreground">disponível</p></div>
-        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" aria-label="Mais opções"><MoreVertical className="h-5 w-5" /></Button>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto bg-secondary/45 px-4 py-5">
-        <div className="mb-5 text-center"><span className="rounded-full bg-card/80 px-3 py-1 text-[10px] font-semibold text-muted-foreground shadow-sm">HOJE</span></div>
-        <div className="space-y-4">{messages.map((message, index) => <DemoMessage key={`${stage}-${index}-${message.text}`} {...message} />)}</div>
-        {!complete && <div className="mt-4 flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55 [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground/55 [animation-delay:300ms]" /></div>}
-      </div>
-      <div className="shrink-0 border-t border-border/60 bg-card/95 p-3">
-        <div className="mb-3 flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner">
-          <span className="min-h-10 flex-1 px-2 py-2 text-sm text-muted-foreground">Mensagem...</span>
-          <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" aria-label="Gravar áudio"><Mic className="h-5 w-5" /></Button>
-          <Button type="button" size="icon" className="h-10 w-10 shrink-0 rounded-full" aria-label="Enviar mensagem"><Send className="h-4 w-4" /></Button>
-        </div>
-        <div className="grid grid-cols-4 text-center text-[9px] font-semibold text-muted-foreground"><span>Hoje</span><span className="text-primary">Conversar</span><span>Sessões</span><span>Mais</span></div>
-      </div>
-      <div className="absolute" />
-    </div>
-  );
-}
-
 export function ConversationDemoV4() {
   const [stage, setStage] = useState(0);
   const complete = stage === conversationStages.length - 1;
