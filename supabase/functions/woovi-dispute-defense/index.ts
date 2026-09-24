@@ -6,9 +6,9 @@
 // dossiê (consentimento + identidade + serviço entregue + histórico de
 // pagamento) e envia como evidência pela API, sem etapa manual.
 //
-// Regra de conduta gravada em código: cliente que de fato NÃO usou o serviço não
-// é defendido. Marcamos `defense_decision = 'refund_suggested'` e deixamos para
-// devolução. Brigar em caso perdido é o que suja a reputação da conta.
+// A defesa separa legitimidade da compra e intensidade de uso. Pagamento
+// autorizado com acesso entregue já é defendido; mensagens e sessões entram
+// como provas adicionais do serviço prestado.
 //
 // Doc: https://developers.woovi.com/docs/disputa/how-add-new-evidence-in-dispute
 //      https://developers.woovi.com/docs/arquivos/upload-de-arquivo
@@ -27,6 +27,7 @@ const log = (step: string, detail?: unknown) =>
 
 const BUCKET = "dispute-evidence";
 const PAID = ["COMPLETED", "PAID", "CONFIRMED"];
+const CLOSED = new Set(["REJECTED", "WON", "LOST", "CLOSED", "REFUNDED", "CANCELED", "CANCELLED"]);
 
 /** Data/hora em BRT — padrão absoluto do projeto. */
 function brt(v: string | null | undefined, withTime = true): string {
@@ -72,21 +73,38 @@ async function buildDossier(supabase: any, dispute: any): Promise<Dossier> {
       .eq("installment_id", e2e).maybeSingle();
     charge = data || null;
   }
-  if (!charge && dispute.value_cents) {
-    // Fallback: valor + pagamento recente, quando o e2e não casa (avulso antigo).
-    const { data } = await supabase.from("woovi_charges").select("*")
-      .eq("value_cents", dispute.value_cents).in("status", PAID)
-      .order("paid_at", { ascending: false }).limit(1);
-    charge = Array.isArray(data) ? data[0] || null : null;
+  let taster: any = null;
+  if (!charge && e2e) {
+    const bank = e2e.length >= 9 ? e2e.slice(1, 9) : null;
+    const openedAt = dispute.raw_payload?.createdAt || dispute.created_at || null;
+    let q = supabase.from("taster_offers").select("*")
+      .not("paid_at", "is", null)
+      .eq("paid_value_cents", dispute.value_cents || 690);
+    if (bank) q = q.contains("metadata", { payer_bank: bank });
+    if (openedAt) {
+      const center = new Date(openedAt).getTime();
+      q = q.gte("paid_at", new Date(center - 3 * 24 * 60 * 60 * 1000).toISOString())
+        .lte("paid_at", new Date(center + 24 * 60 * 60 * 1000).toISOString());
+    }
+    const { data } = await q.order("paid_at", { ascending: false }).limit(2);
+    if (Array.isArray(data) && data.length === 1) taster = data[0];
   }
 
-  const profileId = charge?.user_id || dispute.profile_id || null;
-
-  const { data: profile } = profileId
-    ? await supabase.from("profiles").select(
-      "id,user_id,name,email,phone,plan,billing_cycle,status,created_at,card_gateway",
-    ).eq("id", profileId).maybeSingle()
-    : { data: null };
+  const profileUserId = taster?.profile_user_id || null;
+  let profile: any = null;
+  if (charge?.user_id || dispute.profile_id) {
+    const profileId = charge?.user_id || dispute.profile_id;
+    const { data } = await supabase.from("profiles").select(
+      "id,user_id,name,email,phone,plan,billing_cycle,status,created_at,card_gateway,taster_paid_at,taster_expires_at",
+    ).eq("id", profileId).maybeSingle();
+    profile = data || null;
+  } else if (profileUserId) {
+    const { data } = await supabase.from("profiles").select(
+      "id,user_id,name,email,phone,plan,billing_cycle,status,created_at,card_gateway,taster_paid_at,taster_expires_at",
+    ).eq("user_id", profileUserId).maybeSingle();
+    profile = data || null;
+  }
+  const profileId = profile?.id || dispute.profile_id || null;
 
   const { data: sub } = profileId
     ? await supabase.from("woovi_subscriptions").select(
@@ -119,15 +137,19 @@ async function buildDossier(supabase: any, dispute: any): Promise<Dossier> {
   const messages = Number(msgCount || 0);
   const sessions = Number(sessionCount || 0);
 
-  // Decisão: só defendemos com consentimento registrado E uso real do serviço.
-  const hasConsent = !!(mandate?.mandate_approved_at || charge?.paid_at);
+  const isTaster = !!taster;
+  const paidAt = taster?.paid_at || charge?.paid_at || mandate?.entry_paid_at || null;
+  const accessDelivered = !!(profile?.created_at || charge?.access_activated_at || taster?.profile_user_id);
+  const hasConsent = !!paidAt;
   const hasUsage = messages >= 10 || sessions >= 1;
-  const decision: Dossier["decision"] = hasConsent && hasUsage ? "defend" : "refund_suggested";
+  const decision: Dossier["decision"] = hasConsent && accessDelivered ? "defend" : "refund_suggested";
   const reason = decision === "defend"
-    ? "consentimento e uso do serviço comprovados"
+    ? hasUsage
+      ? "pagamento autorizado, acesso entregue e uso do serviço comprovados"
+      : "pagamento autorizado e acesso ao serviço entregue"
     : !hasConsent
-      ? "sem registro de autorização — não defender"
-      : "sem uso relevante do serviço — sugerir devolução";
+      ? "pagamento não vinculado automaticamente — exige revisão"
+      : "acesso entregue não comprovado automaticamente — exige revisão";
 
   const value = dispute.value_cents ?? charge?.value_cents ?? null;
 
@@ -139,28 +161,29 @@ async function buildDossier(supabase: any, dispute: any): Promise<Dossier> {
     { text: "1. TRANSAÇÃO CONTESTADA", size: 12, bold: true, gap: 18 },
     { text: `End-to-end ID: ${e2e || "—"}`, gap: 4 },
     { text: `Valor: ${money(value)}` },
-    { text: `Vencimento do ciclo: ${brt(charge?.due_date, false)}` },
-    { text: `Liquidação: ${brt(charge?.paid_at)}` },
-    { text: `Natureza: cobrança recorrente autorizada (Pix Automático), ciclo ${charge?.cycle_index ?? "—"}` },
-    { text: `Assinatura Woovi: ${mandate?.subscription_id || "—"}` },
+    { text: isTaster ? `Validade do acesso adquirido: ${brt(taster?.expires_at)}` : `Vencimento do ciclo: ${brt(charge?.due_date, false)}` },
+    { text: `Liquidação: ${brt(paidAt)}` },
+    { text: isTaster ? "Natureza: compra avulsa de encontro guiado, sem renovação automática" : `Natureza: cobrança recorrente autorizada (Pix Automático), ciclo ${charge?.cycle_index ?? "—"}` },
+    { text: isTaster ? `Identificador da compra: ${taster?.charge_correlation_id || "—"}` : `Assinatura Woovi: ${mandate?.subscription_id || "—"}` },
 
     { text: "2. CONSENTIMENTO DO PAGADOR", size: 12, bold: true, gap: 18 },
     {
       text:
-        "O débito não foi iniciado por nós de forma unilateral. O pagador autorizou o mandato de Pix Automático dentro do aplicativo do próprio banco, informando os dados abaixo no nosso checkout antes da autorização.",
+        isTaster
+          ? "O pagador gerou um código Pix para uma compra avulsa, conferiu beneficiário e valor no aplicativo do próprio banco e concluiu o pagamento de forma ativa. A compra não cria renovação automática."
+          : "O débito não foi iniciado por nós de forma unilateral. O pagador autorizou o mandato de Pix Automático dentro do aplicativo do próprio banco, informando os dados abaixo no nosso checkout antes da autorização.",
       gap: 4,
     },
-    { text: `Autorização do mandato aprovada em: ${brt(mandate?.mandate_approved_at)}`, gap: 6 },
-    { text: `Pagamento de entrada (adesão) em: ${brt(mandate?.entry_paid_at || paidCharges[0]?.paid_at)}` },
-    { text: `Situação do mandato: ${mandate?.status || "—"} (${mandate?.pix_status || "—"})` },
-    { text: `Plano contratado: ${mandate?.plan || profile?.plan || "—"} · periodicidade ${mandate?.billing_period || profile?.billing_cycle || "—"}` },
-    { text: `Valor autorizado por ciclo: ${money(mandate?.value_cents)}` },
-    { text: `ISPB da instituição do pagador: ${mandate?.payer_bank || charge?.payer_bank || "—"}` },
+    { text: isTaster ? `Pagamento Pix confirmado em: ${brt(paidAt)}` : `Autorização do mandato aprovada em: ${brt(mandate?.mandate_approved_at)}`, gap: 6 },
+    { text: isTaster ? `Valor conferido e pago: ${money(taster?.paid_value_cents)}` : `Pagamento de entrada (adesão) em: ${brt(mandate?.entry_paid_at || paidCharges[0]?.paid_at)}` },
+    { text: isTaster ? "Modalidade: compra avulsa, sem assinatura e sem nova cobrança automática" : `Situação do mandato: ${mandate?.status || "—"} (${mandate?.pix_status || "—"})` },
+    { text: isTaster ? `Produto adquirido: encontro guiado de 45 minutos com acesso imediato` : `Plano contratado: ${mandate?.plan || profile?.plan || "—"} · periodicidade ${mandate?.billing_period || profile?.billing_cycle || "—"}` },
+    { text: `ISPB da instituição do pagador: ${taster?.metadata?.payer_bank || mandate?.payer_bank || charge?.payer_bank || "—"}` },
 
     { text: "3. IDENTIFICAÇÃO DO CLIENTE", size: 12, bold: true, gap: 18 },
-    { text: `Nome informado no checkout: ${mandate?.customer_name || profile?.name || "—"}`, gap: 4 },
-    { text: `E-mail: ${mandate?.customer_email || profile?.email || "—"}` },
-    { text: `Telefone (WhatsApp usado no serviço): ${mask(mandate?.customer_phone || profile?.phone, 4)}` },
+    { text: `Nome informado no checkout: ${taster?.name || mandate?.customer_name || profile?.name || "—"}`, gap: 4 },
+    { text: `E-mail: ${taster?.email || mandate?.customer_email || profile?.email || "—"}` },
+    { text: `Telefone (WhatsApp usado no serviço): ${mask(taster?.phone_normalized || mandate?.customer_phone || profile?.phone, 4)}` },
     { text: `CPF informado: ${mask(mandate?.customer_cpf, 3)}` },
     { text: `Cliente cadastrado em: ${brt(profile?.created_at)}` },
 
@@ -174,21 +197,26 @@ async function buildDossier(supabase: any, dispute: any): Promise<Dossier> {
     { text: `Encontros guiados concluídos: ${sessions}` },
     { text: `Última interação do cliente: ${brt(lastMessageAt)}` },
     {
-      text: lastMessageAt && charge?.paid_at && new Date(lastMessageAt) >= new Date(charge.paid_at)
+      text: lastMessageAt && paidAt && new Date(lastMessageAt) >= new Date(paidAt)
         ? "Observação: o cliente seguiu usando o serviço APÓS a cobrança contestada."
         : "Observação: há uso registrado do serviço no período pago.",
     },
 
     { text: "5. HISTÓRICO DE PAGAMENTOS", size: 12, bold: true, gap: 18 },
-    ...paidCharges.map((c: any) => ({
+    ...(isTaster ? [{
+      text: `• ${brt(taster?.paid_at)} — ${money(taster?.paid_value_cents)} — compra avulsa paga`,
+      size: 9,
+    }] : paidCharges.map((c: any) => ({
       text: `• ${brt(c.paid_at)} — ${money(c.value_cents)} — ${
         c.kind === "entry" ? "adesão" : `ciclo ${c.cycle_index}`
       } — pago`,
       size: 9,
-    })),
+    }))),
     {
       text:
-        "Nenhuma cobrança foi feita fora do que o cliente autorizou: valor, periodicidade e plano são os mesmos do mandato aprovado no banco.",
+        isTaster
+          ? "O valor foi pago uma única vez pelo próprio pagador. Esta compra avulsa não autoriza cobranças futuras."
+          : "Nenhuma cobrança foi feita fora do que o cliente autorizou: valor, periodicidade e plano são os mesmos do mandato aprovado no banco.",
       gap: 6,
     },
 
@@ -199,7 +227,7 @@ async function buildDossier(supabase: any, dispute: any): Promise<Dossier> {
       gap: 4,
     },
     {
-      text: `Conclusão: transação legítima, autorizada pelo próprio pagador em ${brt(mandate?.mandate_approved_at)} e com serviço comprovadamente utilizado.`,
+      text: `Conclusão: transação legítima, paga pelo próprio pagador em ${brt(paidAt)}, com acesso entregue${hasUsage ? " e serviço comprovadamente utilizado" : ""}.`,
       bold: true,
       gap: 10,
     },
@@ -217,8 +245,11 @@ async function buildDossier(supabase: any, dispute: any): Promise<Dossier> {
       sessions,
       last_message_at: lastMessageAt,
       mandate_approved_at: mandate?.mandate_approved_at || null,
+      purchase_type: isTaster ? "taster" : "subscription",
+      paid_at: paidAt,
+      access_delivered: accessDelivered,
       paid_charges: paidCharges.length,
-      customer_name: mandate?.customer_name || profile?.name || null,
+      customer_name: taster?.name || mandate?.customer_name || profile?.name || null,
       decision,
       reason,
     },
@@ -322,7 +353,7 @@ async function processDispute(supabase: any, dispute: any) {
 
   const pdf = buildPdf(dossier.lines);
   const correlationID = `dispute-${dispute.dispute_id}`;
-  const description = "Dossie de defesa: autorizacao do Pix Automatico pelo pagador, identificacao do cliente, uso comprovado do servico e historico de pagamentos.";
+  const description = "Dossie de defesa: pagamento autorizado pelo pagador, identificacao do cliente, acesso entregue, uso do servico e historico da compra.";
 
   let result = { ok: false, detail: "não tentado" };
   const viaWoovi = await uploadToWoovi(pdf, correlationID);
@@ -401,6 +432,36 @@ async function syncDisputes(supabase: any): Promise<{ found: number; created: nu
   return { found: 0, created: 0, raw: "nenhum endpoint de listagem de disputa respondeu" };
 }
 
+async function alertOpenWithoutEvidence(supabase: any): Promise<number> {
+  const { data } = await supabase.from("woovi_disputes")
+    .select("dispute_id,status,value_cents,customer_name,evidence_error")
+    .is("evidence_sent_at", null)
+    .order("created_at", { ascending: true });
+  const pending = (data || []).filter((row: any) => !CLOSED.has(String(row.status || "").toUpperCase()));
+  if (pending.length === 0) return 0;
+  const alertEmail = Deno.env.get("ADMIN_ALERT_EMAIL");
+  if (!alertEmail) {
+    log("alerta admin não enviado", { reason: "ADMIN_ALERT_EMAIL ausente", total: pending.length });
+    return 0;
+  }
+  const date = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const { error } = await supabase.functions.invoke("send-transactional-email", {
+    body: {
+      templateName: "admin-woovi-dispute-alert",
+      recipientEmail: alertEmail,
+      idempotencyKey: `woovi-disputes-${new Date().toISOString().slice(0, 10)}`,
+      templateData: {
+        date,
+        lines: pending.map((row: any) =>
+          `${row.customer_name || "Cliente não identificado"} · ${money(row.value_cents)} · ${row.status || "aberta"} · ${row.evidence_error || "sem evidência"}`
+        ),
+      },
+    },
+  });
+  if (error) log("alerta admin falhou", { error: error.message });
+  return error ? 0 : pending.length;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -468,7 +529,9 @@ Deno.serve(async (req) => {
     const { data: disputes, error } = await q.order("created_at", { ascending: true }).limit(20);
     if (error) throw new Error(error.message);
 
-    const pending = (disputes || []).filter((d: any) => force || !d.evidence_sent_at);
+    const pending = (disputes || []).filter((d: any) =>
+      (force || !d.evidence_sent_at) && (force || !CLOSED.has(String(d.status || "").toUpperCase()))
+    );
     log("disputas para tratar", { total: pending.length });
 
     const results = [];
@@ -486,7 +549,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {
+    const alerts = await alertOpenWithoutEvidence(supabase);
+
+    return new Response(JSON.stringify({ ok: true, processed: results.length, alerts, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

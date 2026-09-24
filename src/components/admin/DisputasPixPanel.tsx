@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 //
 // Por que existe: disputa MED sem resposta é decidida contra nós e deixa marca
 // de fraude na conta — acumulado, isso desabilita a conta Woovi. A defesa é
-// enviada automaticamente pelo webhook; aqui só se confere se saiu, com que
+// enviada pelo webhook com reconciliação diária; aqui se confere se saiu, com que
 // veredito e quantas disputas temos por 100 pagamentos de PIX.
 
 type Dispute = {
@@ -40,6 +40,8 @@ const brt = (v?: string | null) =>
         minute: "2-digit",
       }).format(new Date(v))
     : "—";
+
+const CLOSED = new Set(["REJECTED", "WON", "LOST", "CLOSED", "REFUNDED", "CANCELED", "CANCELLED"]);
 
 export default function DisputasPixPanel() {
   const [loading, setLoading] = useState(true);
@@ -83,8 +85,8 @@ export default function DisputasPixPanel() {
     load();
   }
 
-  const abertas = rows.filter((r) => !r.resolution);
-  const semDefesa = abertas.filter((r) => !r.evidence_sent_at && r.defense_decision !== "refund_suggested");
+  const abertas = rows.filter((r) => !r.resolution && !CLOSED.has(String(r.status || "").toUpperCase()));
+  const semDefesa = abertas.filter((r) => !r.evidence_sent_at);
   const por100 = paidCount > 0 ? ((rows.length / paidCount) * 100).toFixed(2) : "0,00";
 
   return (
@@ -129,15 +131,15 @@ export default function DisputasPixPanel() {
                   <span className="font-medium">{r.customer_name || "Cliente não identificado"}</span>
                   <Badge variant="outline">{r.dispute_type || "MED"}</Badge>
                   <Badge variant="outline">{money(r.value_cents)}</Badge>
-                  {r.resolution ? (
-                    <Badge variant={r.resolution === "WON" ? "default" : "destructive"}>{r.resolution}</Badge>
+                  {r.resolution || CLOSED.has(String(r.status || "").toUpperCase()) ? (
+                    <Badge variant={["WON", "REJECTED"].includes(String(r.resolution || r.status).toUpperCase()) ? "default" : "destructive"}>{r.resolution || r.status}</Badge>
                   ) : (
                     <Badge variant="secondary">{r.status || "aberta"}</Badge>
                   )}
                   {r.evidence_sent_at ? (
                     <Badge variant="default">defesa enviada {brt(r.evidence_sent_at)}</Badge>
                   ) : r.defense_decision === "refund_suggested" ? (
-                    <Badge variant="secondary">devolução sugerida</Badge>
+                    <Badge variant="destructive">revisão necessária</Badge>
                   ) : (
                     <Badge variant="destructive">sem defesa</Badge>
                   )}
