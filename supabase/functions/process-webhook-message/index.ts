@@ -142,6 +142,10 @@ function wantsSessionArea(message: string): boolean {
   return /(sessão|sessao|agendar|reagendar|remarcar|horário da sessão|horario da sessao)/i.test(message || '');
 }
 
+function isPortalAccessIntent(message: string): boolean {
+  return /(?:n[aã]o\s+recebi|sem|problema\s+(?:com|no))[^\n]{0,45}c[oó]digo[^\n]{0,55}(?:meu\s+espa[cç]o|painel|entrar|acesso)|entrar\s+(?:no|pelo)\s+(?:meu\s+espa[cç]o|painel|whatsapp|app|aplicativo)|quero\s+(?:entrar|acessar|abrir)(?:\s+no|\s+o|\s+a)?\s+(?:app|aplicativo|meu\s+espa[cç]o|painel)|(?:link|c[oó]digo)[^\n]{0,30}(?:expirou|venceu|inv[aá]lido|n[aã]o\s+funciona)/i.test(message || '');
+}
+
 // ============================================================================
 // PREFERÊNCIA DE CANAL — detecta pedido explícito de áudio ou texto
 // ----------------------------------------------------------------------------
@@ -590,7 +594,7 @@ Deno.serve(async (req) => {
 
     // Recuperação determinística do Meu Espaço. O próprio inbound confirma o número
     // cadastrado e abre a janela necessária para responder com o link de uso único.
-    const portalAccessIntent = /(?:n[aã]o\s+recebi|sem|problema\s+(?:com|no))[^\n]{0,45}c[oó]digo[^\n]{0,55}(?:meu\s+espa[cç]o|painel|entrar|acesso)|entrar\s+(?:no|pelo)\s+(?:meu\s+espa[cç]o|painel|whatsapp)/i.test(messageText || '');
+    const portalAccessIntent = isPortalAccessIntent(messageText || '');
     if (portalAccessIntent) {
       const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
       if (!internalSecret) throw new Error('INTERNAL_WEBHOOK_SECRET ausente');
@@ -601,7 +605,7 @@ Deno.serve(async (req) => {
           'Authorization': `Bearer ${supabaseServiceKey}`,
           'x-internal-secret': internalSecret,
         },
-        body: JSON.stringify({ action: 'request', phone: cleanPhone }),
+        body: JSON.stringify({ action: 'request', phone: cleanPhone, destination: 'conversar' }),
       });
       if (!response.ok) {
         console.error('❌ Falha ao gerar acesso do portal:', response.status, await response.text());

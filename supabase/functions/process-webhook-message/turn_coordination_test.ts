@@ -60,6 +60,13 @@ Deno.test("redirecionamento repetido respeita limite de 24 horas", () => {
   assert(SOURCE.includes("24 * 60 * 60 * 1000"));
   assert(SOURCE.includes("action: 'app_redirect_rate_limited'"));
 });
+
+Deno.test("pedido de novo acesso reconhece frases prometidas ao cliente", () => {
+  assert(SOURCE.includes("function isPortalAccessIntent"));
+  assert(SOURCE.includes("quero\\s+(?:entrar|acessar|abrir)"));
+  assert(SOURCE.includes("(?:link|c[oó]digo)[^\\n]{0,30}(?:expirou|venceu|inv[aá]lido"));
+  assert(SOURCE.includes("destination: 'conversar'"));
+});
 Deno.test("heartbeat mantém a trava ativa enquanto o dono processa", () => {
   if (!SOURCE.includes("setInterval(() =>")) throw new Error("heartbeat ausente");
   if (!SOURCE.includes(".eq('owner_token', turnOwnerToken)")) throw new Error("heartbeat sem proteção do dono");
