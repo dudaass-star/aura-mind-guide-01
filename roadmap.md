@@ -126,4 +126,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Refazer do zero os três conceitos prioritários de anúncios estáticos, com composições próprias para Feed e Stories e CTA previsto desde o início.
 - [x] Encantar clientes na migração WhatsApp → App, comunicando ganhos reais antes da mudança de canal e reduzindo resistência.
 - [x] Criar e validar a recepção ativa do cliente novo no App, com primeira sessão independente do WhatsApp.
-- [ ] Corrigir os riscos residuais da conversa: causa do erro 500, TypeError, espera em reenvio duplicado e teste controlado da retomada automática.
+- [ ] Corrigir os riscos residuais da conversa: detalhamento do erro 500, proteção do TypeError, espera em reenvio duplicado e teste controlado da retomada automática concluídos; causa original do erro 500 não reproduzida, acompanhar novos registros e piloto com clientes reais.
