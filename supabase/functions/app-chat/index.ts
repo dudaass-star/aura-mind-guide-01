@@ -1,5 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { z } from "npm:zod@3.25.76";
+import {
+  buildPortalWelcome,
+  portalWelcomeSource,
+  resolveEntryContext,
+  type PortalEntryContext,
+} from "./onboarding-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,7 +16,8 @@ const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 const AUDIO_TYPES = new Set(["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav"]);
 
 const BodySchema = z.object({
-  action: z.enum(["send", "retry_response"]).default("send"),
+  action: z.enum(["initialize", "send", "retry_response"]).default("send"),
+  entry_context: z.enum(["new", "migration", "regular"]).optional(),
   text: z.string().trim().max(8000).optional(),
   client_message_id: z.string().uuid().optional(),
   source_message_id: z.string().uuid().optional(),
@@ -20,6 +27,7 @@ const BodySchema = z.object({
   journey_episode_id: z.string().uuid().optional(),
   client_sent_at: z.string().datetime().optional(),
 }).superRefine((value, context) => {
+  if (value.action === "initialize") return;
   if (value.action === "retry_response") {
     if (!value.source_message_id) context.addIssue({ code: z.ZodIssueCode.custom, message: "Mensagem de origem necessária" });
     return;
@@ -64,7 +72,7 @@ Deno.serve(async (req) => {
     const receivedAt = new Date().toISOString();
     const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return json({ error: "Mensagem inválida", details: parsed.error.flatten().fieldErrors }, 400);
-    const { action, client_message_id: clientMessageId, source_message_id: sourceMessageId, audio_base64: audioBase64, audio_duration_ms: audioDurationMs, journey_episode_id: journeyEpisodeId, client_sent_at: clientSentAt } = parsed.data;
+    const { action, entry_context: requestedEntryContext, client_message_id: clientMessageId, source_message_id: sourceMessageId, audio_base64: audioBase64, audio_duration_ms: audioDurationMs, journey_episode_id: journeyEpisodeId, client_sent_at: clientSentAt } = parsed.data;
     const text = parsed.data.text || "";
     const audioMime = parsed.data.audio_mime?.split(";")[0].toLowerCase();
     const hasAudio = Boolean(audioBase64);
@@ -73,7 +81,7 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: profile, error: profileError } = await admin
       .from("profiles")
-      .select("user_id, phone, status")
+      .select("user_id, phone, status, name, created_at, converted_at, trial_started_at, pending_insight, pending_first_session_invite")
       .eq("user_id", userId)
       .maybeSingle();
     if (profileError) throw profileError;
@@ -81,6 +89,71 @@ Deno.serve(async (req) => {
     const { data: entitled, error: entitlementError } = await admin.rpc("has_portal_entitlement", { _user_id: userId });
     if (entitlementError) throw entitlementError;
     if (!entitled) return json({ error: "Seu acesso ainda não está liberado" }, 403);
+
+    if (action === "initialize") {
+      const entryContext = resolveEntryContext(
+        (requestedEntryContext || "regular") as PortalEntryContext,
+        profile,
+      );
+      if (entryContext === "regular") return json({ initialized: true, context: entryContext });
+
+      const sources = [portalWelcomeSource("new"), portalWelcomeSource("migration")];
+      const { data: existingWelcome, error: existingWelcomeError } = await admin
+        .from("messages")
+        .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url,metadata")
+        .eq("user_id", userId)
+        .eq("channel", "in_app")
+        .in("source_message_id", sources)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (existingWelcomeError) throw existingWelcomeError;
+      if (existingWelcome) return json({ initialized: true, context: entryContext, message: existingWelcome, duplicate: true });
+
+      const firstName = profile.name?.trim().split(/\s+/)[0] || "você";
+      const welcomeText = buildPortalWelcome(firstName, entryContext);
+      if (!welcomeText) return json({ initialized: true, context: entryContext });
+      const welcomeSource = portalWelcomeSource(entryContext);
+      const { data: welcome, error: welcomeError } = await admin
+        .from("messages")
+        .insert({
+          user_id: userId,
+          role: "assistant",
+          content: welcomeText,
+          channel: "in_app",
+          source_message_id: welcomeSource,
+          delivery_status: "delivered",
+          is_audio: false,
+          metadata: { kind: "portal_welcome", entry_context: entryContext },
+        })
+        .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url,metadata")
+        .single();
+      if (welcomeError) {
+        if (welcomeError.code === "23505") {
+          const { data: duplicate } = await admin
+            .from("messages")
+            .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url,metadata")
+            .eq("user_id", userId)
+            .eq("channel", "in_app")
+            .eq("source_message_id", welcomeSource)
+            .single();
+          return json({ initialized: true, context: entryContext, message: duplicate, duplicate: true });
+        }
+        throw welcomeError;
+      }
+
+      if (typeof profile.pending_insight === "string" && profile.pending_insight.startsWith("[WELCOME]")) {
+        await admin.from("profiles").update({ pending_insight: null }).eq("user_id", userId);
+      }
+      await admin.from("portal_value_events").insert({
+        user_id: userId,
+        feature: "conversation",
+        event_type: entryContext === "migration" ? "migration_welcome_created" : "new_customer_welcome_created",
+        source: "app",
+        metadata: { version: 1 },
+      });
+      return json({ initialized: true, context: entryContext, message: welcome }, 201);
+    }
 
     if (journeyEpisodeId) {
       const { data: releasedEpisode, error: releasedEpisodeError } = await admin
@@ -231,6 +304,11 @@ Deno.serve(async (req) => {
       audioUrl = signed.signedUrl;
     }
 
+    const [{ count: priorInAppUserMessages }, { count: onboardingWelcomes }] = await Promise.all([
+      admin.from("messages").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("channel", "in_app").eq("role", "user"),
+      admin.from("messages").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("channel", "in_app").eq("role", "assistant").contains("metadata", { kind: "portal_welcome" }),
+    ]);
+
     const { data: inserted, error: insertError } = await admin
       .from("messages")
       .insert({
@@ -264,6 +342,10 @@ Deno.serve(async (req) => {
         return json({ accepted: true, message: duplicate, duplicate: true }, 202);
       }
       throw insertError;
+    }
+
+    if ((priorInAppUserMessages || 0) === 0 && (onboardingWelcomes || 0) > 0 && !profile.pending_first_session_invite) {
+      await admin.from("profiles").update({ pending_first_session_invite: true }).eq("user_id", userId);
     }
 
 
