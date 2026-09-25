@@ -119,3 +119,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [ ] Criar retenção adaptativa com um convite relevante por comportamento.
 - [ ] Unificar coortes, retenção e LTV no painel administrativo.
 - [ ] Executar piloto monitorado de 14–30 dias do ciclo integrado de retenção.
+- [x] Refazer do zero os três conceitos prioritários de anúncios estáticos, com composições próprias para Feed e Stories e CTA previsto desde o início.
