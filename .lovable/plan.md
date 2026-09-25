@@ -11,10 +11,12 @@ Tornar o App o único lugar para conversa livre e sessões com a AURA, mantendo 
    - Preservar respostas operacionais determinísticas necessárias, como confirmação e avaliação de sessão.
 
 2. **Transição assistida para clientes atuais**
-   - Na primeira tentativa de conversar pelo WhatsApp, enviar uma comunicação definitiva e acolhedora explicando que conversas e sessões agora acontecem no App.
+   - Na primeira tentativa de conversar pelo WhatsApp, comunicar primeiro os ganhos reais: conversa mais fluida e privada, continuidade visível da história e sessões, jornadas e descobertas reunidas.
+   - Somente depois dos ganhos, explicar de forma definitiva e acolhedora que conversas e sessões agora acontecem no app Olá Aura.
    - Gerar acesso individual de uso único e abrir diretamente a área correta: Conversar ou Sessões.
    - Nas repetições, responder de forma curta, com limite de frequência, sem chamar a AURA e sem gerar spam.
    - Atualizar o convite antigo, que apresentava o App como opcional.
+   - Usar esta estrutura na mensagem principal: novidade concreta → benefícios verificáveis → mudança de canal → continuidade do WhatsApp operacional → acesso direto.
 
 3. **Atendimento operacional Nível 1 no WhatsApp**
    - Responder orientações básicas sobre entrada, instalação, localização das áreas, notificações, pagamento, cancelamento e privacidade.
@@ -29,10 +31,12 @@ Tornar o App o único lugar para conversa livre e sessões com a AURA, mantendo 
 5. **Continuidade dentro do App**
    - Preservar o contexto da mensagem que motivou o redirecionamento para a pessoa não precisar recomeçar.
    - Abrir a conversa ou Sessões após o acesso, conforme a intenção detectada.
+   - Receber o cliente com uma fala curta da AURA que reconhece a transição e convida a continuar, sem tutorial, campanha ou lista de recursos.
    - Registrar entrada, redirecionamento, abertura do App e primeira conversa para acompanhar onde clientes ficam travados.
 
 ## Regras de segurança e experiência
 - Nenhum bloqueio seco: toda primeira tentativa recebe explicação e acesso direto.
+- Não vender “um novo canal”; vender continuidade, organização e presença. Toda promessa deve corresponder ao que o App já entrega.
 - A AURA não promete alterações financeiras ou cadastrais que não realizou.
 - WhatsApp continua disponível para risco imediato e ajuda operacional.
 - Conteúdos e botões deixam de entregar experiências completas no WhatsApp e passam a abrir a área correspondente no App.
