@@ -916,7 +916,6 @@ export function ConversarTab({
         }]);
         setSending(true);
         setResponding(true);
-        setResponseIssue(null);
         enqueueOutbox(pending);
         scrollToBottom();
         try { await submitMessage(pending); }
