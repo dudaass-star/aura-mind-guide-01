@@ -4,6 +4,7 @@ import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendMessage } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { pickNextJourney, hasExplicitJourneyIntent } from "../_shared/journey-helper.ts";
+import { describeChatError } from "../_shared/chat-error.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8926,10 +8927,9 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
 
   } catch (error) {
     // Detailed logging so HTTP 500s are diagnosable in edge logs
-    const errMsg = error instanceof Error ? error.message : typeof error === 'object' && error !== null
-      ? JSON.stringify(error)
-      : String(error);
-    const errStack = error instanceof Error ? error.stack : undefined;
+    const described = describeChatError(error);
+    const errMsg = described.message;
+    const errStack = described.stack;
     console.error("❌ [AURA-AGENT] Unhandled error:", errMsg);
     if (errStack) console.error("❌ [AURA-AGENT] Stack trace:", errStack);
     return new Response(JSON.stringify({

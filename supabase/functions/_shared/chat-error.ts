@@ -9,10 +9,10 @@ export function describeChatError(error: unknown): { message: string; code: stri
   const details = typeof value.details === 'string' ? value.details : null;
   const hint = typeof value.hint === 'string' ? value.hint : null;
   const message = typeof value.message === 'string' && value.message.trim()
-    ? value.message
+    ? value.message.slice(0, 1000)
     : error instanceof Error ? error.message : 'Erro interno sem mensagem';
   return {
-    message: [message, code && `código: ${code}`, details && `detalhes: ${details}`, hint && `dica: ${hint}`].filter(Boolean).join(' | '),
+    message: [message, code && `código: ${code}`, details && `detalhes: ${details.slice(0, 400)}`, hint && `dica: ${hint.slice(0, 400)}`].filter(Boolean).join(' | '),
     code,
     status,
     stack: error instanceof Error ? error.stack ?? null : null,
