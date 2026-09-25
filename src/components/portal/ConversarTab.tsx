@@ -222,8 +222,8 @@ const MessageTimeline = memo(function MessageTimeline({
   onDelete: (message: ChatMessage) => void;
 }) {
   return (
-    <div className="space-y-5">
-      {messages.map((message) => {
+    <div className="space-y-2.5">
+      {messages.filter((message) => !isResponseFailure(message)).map((message) => {
         const mine = message.role === "user";
         const reportCard = getReportCard(message.metadata);
         const episodeCard = getJourneyEpisodeCard(message.metadata);
@@ -258,27 +258,18 @@ const MessageTimeline = memo(function MessageTimeline({
                   <div><p className="font-display text-lg font-semibold text-foreground">{reportCard.title || (reportCard.report_type === "weekly" ? "Sua semana na Olá Aura" : "Seu mês em perspectiva")}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{message.content}</p></div>
                   <Button type="button" size="sm" className="w-full justify-between" onClick={() => onOpenReport(reportCard)}>{reportCard.cta || "Ver no Percurso"}<ArrowRight className="h-4 w-4" /></Button>
                 </div>
-              ) : isResponseFailure(message) ? (
-                <div className="space-y-2">
-                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                  {replyTargetId(message) && (
-                    <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => onRetry({ ...message, id: replyTargetId(message) || message.id })}>
-                      <RotateCcw className="h-3.5 w-3.5" /> Tentar responder novamente
-                    </Button>
-                  )}
-                </div>
               ) : (!message.is_audio || !message.audio_url) && (mine
                 ? <p className="whitespace-pre-wrap break-words">{message.content}</p>
                 : <MessageResponse className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{message.content}</MessageResponse>)}
               {message.is_audio && message.audio_url && (
                 <VoiceMessagePlayer src={message.audio_url} mine={mine} durationMs={audioDurationMs(message)} mimeType={audioMimeType(message)} />
               )}
-            </div>
-            <div className={cn("mt-1.5 flex items-center gap-1 px-1 text-[10px] font-medium text-muted-foreground", mine && "justify-end")}>
-              <span>{formatTime(message.created_at)}</span>
-              {mine && message.delivery_status === "sending" && <Check className="h-3 w-3" />}
-              {mine && message.delivery_status === "delivered" && <CheckCheck className="h-3 w-3 text-primary" />}
-              {mine && message.delivery_status === "failed" && <AlertCircle className="h-3 w-3 text-destructive" />}
+              <div className={cn("mt-0.5 flex items-center justify-end gap-1 text-[10px] leading-none", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                <span>{formatTime(message.created_at)}</span>
+                {mine && message.delivery_status === "sending" && <Check className="h-3 w-3" />}
+                {mine && message.delivery_status === "delivered" && <CheckCheck className="h-3 w-3" />}
+                {mine && message.delivery_status === "failed" && <AlertCircle className="h-3 w-3" />}
+              </div>
             </div>
             {mine && message.delivery_status === "failed" && (
               <div className="mt-1 flex items-center gap-1" aria-label="Mensagem não enviada">
