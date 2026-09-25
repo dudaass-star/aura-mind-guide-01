@@ -16,7 +16,7 @@ import { reportPushConversion } from "@/lib/push-notifications";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 
 const PLAN_SESSION_LIMITS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8 };
-type SessionProfile = { plan?: string | null; plan_tier?: string | null } | null;
+type SessionProfile = { plan?: string | null; plan_tier?: string | null; status?: string | null } | null;
 type PortalSession = {
   id: string;
   scheduled_at: string;
@@ -374,7 +374,7 @@ export function SessoesTab({
         {!pushEnabled && <Button type="button" variant="outline" size="sm" onClick={() => { onOpenNotifications(); setTimeout(() => setPushEnabled(localStorage.getItem("aura-push-enabled") === "true"), 1500); }}>Ativar</Button>}
       </section>
 
-      {monthUsed >= planLimit && planLimit > 0 && planLimit < 8 && (
+      {profile?.status !== "demo" && monthUsed >= planLimit && planLimit > 0 && planLimit < 8 && (
         <section className="border-y border-border py-5"><p className="text-sm font-semibold">Sua agenda de {monthLabel(selectedMonth)} está completa.</p><p className="mt-1 text-sm text-muted-foreground">Se quiser uma frequência maior, veja apenas os planos que liberam mais encontros.</p><Button type="button" className="mt-4" onClick={() => { track("upgrade_opened", { current_limit: planLimit }); onChangePlan(planLimit); }}><ArrowUpRight /> Quero mais sessões</Button></section>
       )}
 

@@ -1494,7 +1494,7 @@ Deno.serve(async (req) => {
     // ========================================================================
     // CALL AURA AGENT
     // ========================================================================
-    console.log(`📱 Processing message from: ${cleanPhone.substring(0, 4)}***`);
+    console.log(`📱 Processing message from: ${cleanPhone?.substring(0, 4) ?? 'in_app'}***`);
     console.log(`💬 Message length: ${messageText.length} chars`);
     console.log(`🎤 Is audio message: ${isAudioMessage}`);
 
@@ -1582,7 +1582,7 @@ Deno.serve(async (req) => {
     // No aplicativo, uma tentativa normal e uma enxuta evitam espera prolongada.
     // No WhatsApp mantemos a tolerância histórica de três tentativas.
     let lastError: any = null;
-    console.log(`🚀 [INVOKE] aura-agent for user=${profile.user_id} phone=${cleanPhone.substring(0, 4)}*** msgLen=${messageText.length} pending_insight=${profile.pending_insight ? 'YES' : 'no'}`);
+    console.log(`🚀 [INVOKE] aura-agent for user=${profile.user_id} phone=${cleanPhone?.substring(0, 4) ?? 'in_app'}*** msgLen=${messageText.length} pending_insight=${profile.pending_insight ? 'YES' : 'no'}`);
     const maxAttempts = isInApp ? 2 : 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
