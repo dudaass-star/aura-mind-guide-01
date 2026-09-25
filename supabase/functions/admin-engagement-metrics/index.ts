@@ -251,6 +251,12 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
 
+    // Personagens fictícios nunca entram em indicadores de uso real.
+    const demoProfiles = await fetchAllPaginated(supabase, 'profiles', 'user_id', [
+      { column: 'status', op: 'eq', value: 'demo' },
+    ]);
+    const demoUserIds = new Set(demoProfiles.map((profile) => profile.user_id as string));
+
     // Paginated fetch — only user messages for active users count
     const periodUserMessages = await fetchAllPaginated(supabase, 'messages', 'user_id', [
       { column: 'role', op: 'eq', value: 'user' },
@@ -258,21 +264,22 @@ Deno.serve(async (req) => {
       { column: 'created_at', op: 'lt', value: periodEnd },
     ]);
 
-    const uniqueUsersInPeriod = new Set(periodUserMessages.map(m => m.user_id as string));
+    const realPeriodUserMessages = periodUserMessages.filter((message) => !demoUserIds.has(message.user_id as string));
+    const uniqueUsersInPeriod = new Set(realPeriodUserMessages.map(m => m.user_id as string));
     const activeUsersInPeriod = uniqueUsersInPeriod.size;
 
     // Total user messages in period (count only user role for consistency)
-    const userMessagesInPeriod = periodUserMessages.length;
+    const userMessagesInPeriod = realPeriodUserMessages.length;
 
     // Total all messages (user + assistant) for display if needed
-    const { count: totalMessagesInPeriod } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', periodStart)
-      .lt('created_at', periodEnd);
+    const allPeriodMessages = await fetchAllPaginated(supabase, 'messages', 'user_id', [
+      { column: 'created_at', op: 'gte', value: periodStart },
+      { column: 'created_at', op: 'lt', value: periodEnd },
+    ]);
+    const totalMessagesInPeriod = allPeriodMessages.filter((message) => !demoUserIds.has(message.user_id as string)).length;
 
     // Sessions completed in period — filter by ended_at, not created_at
-    const { data: completedSessions } = await supabase
+    const { data: allCompletedSessions } = await supabase
       .from('sessions')
       .select('started_at, ended_at, user_id')
       .eq('status', 'completed')
@@ -280,6 +287,7 @@ Deno.serve(async (req) => {
       .not('ended_at', 'is', null)
       .gte('ended_at', periodStart)
       .lt('ended_at', periodEnd);
+    const completedSessions = allCompletedSessions?.filter((session) => !demoUserIds.has(session.user_id));
 
     const weeklySessionsCount = completedSessions?.length || 0;
 
