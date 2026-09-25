@@ -1811,7 +1811,7 @@ Deno.serve(async (req) => {
           .lte('created_at', periodEnd)
           .range(page * CORR_PAGE, (page + 1) * CORR_PAGE - 1);
         if (!data || data.length === 0) break;
-        correctionsRows.push(...(data as typeof correctionsRows));
+        correctionsRows.push(...(data as typeof correctionsRows).filter((row) => !demoUserIds.has(row.user_id)));
         if (data.length < CORR_PAGE) break;
       }
       if (correctionsRows.length > 0) {
@@ -1840,7 +1840,7 @@ Deno.serve(async (req) => {
           .gte('created_at', eightWeeksAgo.toISOString())
           .range(page * CORR_PAGE, (page + 1) * CORR_PAGE - 1);
         if (!data || data.length === 0) break;
-        weeklyRows.push(...(data as { user_id: string; created_at: string }[]));
+        weeklyRows.push(...(data as { user_id: string; created_at: string }[]).filter((row) => !demoUserIds.has(row.user_id)));
         if (data.length < CORR_PAGE) break;
       }
       if (weeklyRows.length > 0) {
@@ -1889,11 +1889,12 @@ Deno.serve(async (req) => {
     let conversationOpenings = 0;
     let conversationCorrectionsPer100 = 0;
     try {
-      const turns = await fetchAllPaginated(supabase, 'chat_turn_metrics', 'status, server_received_at, first_response_at, client_message_id', [
+      const allTurns = await fetchAllPaginated(supabase, 'chat_turn_metrics', 'user_id,status, server_received_at, first_response_at, client_message_id', [
         { column: 'channel', op: 'eq', value: 'in_app' },
         { column: 'created_at', op: 'gte', value: periodStart },
         { column: 'created_at', op: 'lt', value: periodEnd },
       ]);
+      const turns = allTurns.filter((row) => !demoUserIds.has(row.user_id as string));
       conversationTurns = turns.length;
       conversationCompleted = turns.filter(row => row.status === 'completed').length;
       conversationFailed = turns.filter(row => row.status === 'failed').length;
@@ -1915,13 +1916,13 @@ Deno.serve(async (req) => {
       conversationWithin10Seconds = percentageWithin(10);
       conversationWithin30Seconds = percentageWithin(30);
 
-      const conversationEvents = await fetchAllPaginated(supabase, 'portal_value_events', 'event_type', [
+      const conversationEvents = await fetchAllPaginated(supabase, 'portal_value_events', 'event_type,user_id', [
         { column: 'feature', op: 'eq', value: 'conversation' },
         { column: 'event_type', op: 'eq', value: 'conversation_opened' },
         { column: 'created_at', op: 'gte', value: periodStart },
         { column: 'created_at', op: 'lt', value: periodEnd },
       ]);
-      conversationOpenings = conversationEvents.length;
+      conversationOpenings = conversationEvents.filter((row) => !demoUserIds.has(row.user_id as string)).length;
       const correctedConversationIds = new Set(correctionsRows.filter(row => {
         const createdAt = new Date(row.created_at).getTime();
         return row.source === 'correcao_usuario_conversa'
@@ -1948,6 +1949,7 @@ Deno.serve(async (req) => {
         { column: 'created_at', op: 'lt', value: periodEnd },
       ]);
       for (const row of rows) {
+        if (demoUserIds.has(row.user_id as string)) continue;
         if (row.event_type === 'journey_episode_released') journeyReleased++;
         else if (row.event_type === 'journey_open' || row.event_type === 'journey_card_opened') journeyOpened++;
         else if (row.event_type === 'journey_complete') journeyCompleted++;
@@ -1971,17 +1973,17 @@ Deno.serve(async (req) => {
     let closureNoShowPct = 0;
     try {
       // Paginado (limite de 1000 linhas do PostgREST).
-      const closureRows: { closure_mode: string }[] = [];
+      const closureRows: { user_id: string; closure_mode: string }[] = [];
       for (let page = 0; page < 50; page++) {
         const { data } = await supabase
           .from('sessions')
-          .select('closure_mode')
+          .select('user_id, closure_mode')
           .gte('ended_at', periodStart)
           .lte('ended_at', periodEnd)
           .not('closure_mode', 'is', null)
           .range(page * 1000, (page + 1) * 1000 - 1);
         if (!data || data.length === 0) break;
-        closureRows.push(...(data as { closure_mode: string }[]));
+        closureRows.push(...(data as { user_id: string; closure_mode: string }[]).filter((row) => !demoUserIds.has(row.user_id)));
         if (data.length < 1000) break;
       }
       if (closureRows.length > 0) {
