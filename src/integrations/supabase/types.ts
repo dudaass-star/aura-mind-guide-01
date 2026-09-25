@@ -2202,6 +2202,7 @@ export type Database = {
           created_at: string
           delivery_message_id: string | null
           delivery_provider: string | null
+          destination: string
           email_hash: string | null
           expires_at: string
           id: string
@@ -2217,6 +2218,7 @@ export type Database = {
           created_at?: string
           delivery_message_id?: string | null
           delivery_provider?: string | null
+          destination?: string
           email_hash?: string | null
           expires_at?: string
           id?: string
@@ -2232,6 +2234,7 @@ export type Database = {
           created_at?: string
           delivery_message_id?: string | null
           delivery_provider?: string | null
+          destination?: string
           email_hash?: string | null
           expires_at?: string
           id?: string
@@ -2367,6 +2370,9 @@ export type Database = {
           voice_mode: string
           voice_mode_set_at: string | null
           welcome_sent_at: string | null
+          whatsapp_app_migration_sent_at: string | null
+          whatsapp_app_redirect_count: number
+          whatsapp_app_redirect_last_sent_at: string | null
           whatsapp_instance_id: string | null
           whatsapp_provider: string | null
           winback_d14_sent_at: string | null
@@ -2457,6 +2463,9 @@ export type Database = {
           voice_mode?: string
           voice_mode_set_at?: string | null
           welcome_sent_at?: string | null
+          whatsapp_app_migration_sent_at?: string | null
+          whatsapp_app_redirect_count?: number
+          whatsapp_app_redirect_last_sent_at?: string | null
           whatsapp_instance_id?: string | null
           whatsapp_provider?: string | null
           winback_d14_sent_at?: string | null
@@ -2547,6 +2556,9 @@ export type Database = {
           voice_mode?: string
           voice_mode_set_at?: string | null
           welcome_sent_at?: string | null
+          whatsapp_app_migration_sent_at?: string | null
+          whatsapp_app_redirect_count?: number
+          whatsapp_app_redirect_last_sent_at?: string | null
           whatsapp_instance_id?: string | null
           whatsapp_provider?: string | null
           winback_d14_sent_at?: string | null
@@ -5030,6 +5042,7 @@ export type Database = {
       consume_portal_access_request: {
         Args: { _action_hash: string }
         Returns: {
+          destination: string
           profile_id: string
           request_id: string
         }[]
