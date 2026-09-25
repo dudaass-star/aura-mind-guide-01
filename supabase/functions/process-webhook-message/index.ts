@@ -1785,13 +1785,7 @@ Deno.serve(async (req) => {
         }
         if (audioUrl || audioContent) {
           if (isInApp && (audioUrl || audioContent)) {
-            sentAnyResponse = true;
-            if (!firstResponseRecorded && currentMessageId) {
-              firstResponseRecorded = true;
-              await supabase.from('chat_turn_metrics').update({ first_response_at: new Date().toISOString() })
-                .eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
-            }
-            await supabase.from('messages').insert({
+            const { error: audioPersistError } = await supabase.from('messages').insert({
               user_id: profile.user_id,
               role: 'assistant',
               content: responseText,
@@ -1801,6 +1795,13 @@ Deno.serve(async (req) => {
               delivery_status: 'delivered',
               metadata: { reply_to_message_id: inboundMessageDbId || null, assistant_persisted_at: new Date().toISOString() },
             });
+            if (audioPersistError) throw audioPersistError;
+            sentAnyResponse = true;
+            if (!firstResponseRecorded && currentMessageId) {
+              firstResponseRecorded = true;
+              await supabase.from('chat_turn_metrics').update({ first_response_at: new Date().toISOString() })
+                .eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+            }
             continue;
           }
 
@@ -1855,8 +1856,8 @@ Deno.serve(async (req) => {
         await logFailedMessage(supabase, profile.user_id, cleanPhone, responseText, sendResult.error);
         // Still persist to DB so context is not lost, but log the failure
       }
-      sentAnyResponse = true;
-      if (isInApp && !firstResponseRecorded && currentMessageId) {
+      if (!isInApp) sentAnyResponse = sendResult.success;
+      if (!isInApp && !firstResponseRecorded && currentMessageId) {
         firstResponseRecorded = true;
         await supabase.from('chat_turn_metrics').update({ first_response_at: new Date().toISOString() })
           .eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
@@ -1870,7 +1871,7 @@ Deno.serve(async (req) => {
           .gte('created_at', new Date(Date.now() - 30000).toISOString())
           .limit(1).maybeSingle();
         if (!existingAssistant2) {
-          await supabase.from('messages').insert({
+          const { error: persistError } = await supabase.from('messages').insert({
             user_id: profile.user_id,
             role: 'assistant',
             content: responseText,
@@ -1878,11 +1879,21 @@ Deno.serve(async (req) => {
             delivery_status: 'delivered',
             metadata: { reply_to_message_id: inboundMessageDbId || null, assistant_persisted_at: new Date().toISOString() },
           });
+          if (persistError) throw persistError;
         } else {
           console.log('⏭️ DEDUP: Assistant text message already exists, skipping persist');
         }
       } catch (persistErr) {
+        if (isInApp) throw persistErr;
         console.warn('⚠️ Failed to persist assistant message:', persistErr);
+      }
+      if (isInApp) {
+        sentAnyResponse = true;
+        if (!firstResponseRecorded && currentMessageId) {
+          firstResponseRecorded = true;
+          await supabase.from('chat_turn_metrics').update({ first_response_at: new Date().toISOString() })
+            .eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+        }
       }
     }
 
