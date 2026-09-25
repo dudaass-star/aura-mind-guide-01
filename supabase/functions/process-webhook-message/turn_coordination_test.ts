@@ -67,6 +67,13 @@ Deno.test("pedido de novo acesso reconhece frases prometidas ao cliente", () => 
   assert(SOURCE.includes("(?:link|c[oó]digo)[^\\n]{0,30}(?:expirou|venceu|inv[aá]lido"));
   assert(SOURCE.includes("destination: 'conversar'"));
 });
+
+Deno.test("áudio sem transcrição e imagem sem legenda também ficam no aplicativo", () => {
+  assert(SOURCE.includes("const hasWhatsappContent = !isInApp"));
+  assert(SOURCE.includes("'[Áudio recebido no WhatsApp]'"));
+  assert(SOURCE.includes("'[Imagem recebida no WhatsApp]'"));
+  assert(SOURCE.includes("if (hasWhatsappContent && activeForApp"));
+});
 Deno.test("heartbeat mantém a trava ativa enquanto o dono processa", () => {
   if (!SOURCE.includes("setInterval(() =>")) throw new Error("heartbeat ausente");
   if (!SOURCE.includes(".eq('owner_token', turnOwnerToken)")) throw new Error("heartbeat sem proteção do dono");

@@ -548,6 +548,10 @@ Deno.serve(async (req) => {
       console.log('🖼️ Image with caption:', messageText);
     }
 
+    const hasWhatsappContent = !isInApp && (Boolean(messageText?.trim()) || Boolean(hasAudio) || Boolean(hasImage));
+    const whatsappContentText = messageText?.trim()
+      || (hasAudio ? '[Áudio recebido no WhatsApp]' : '[Imagem recebida no WhatsApp]');
+
     // ========================================================================
     // USER LOOKUP
     // ========================================================================
@@ -740,18 +744,22 @@ Deno.serve(async (req) => {
     // Conversa livre e sessões acontecem somente no App; a fala recebida fica no
     // histórico para a pessoa continuar sem precisar repetir o que escreveu.
     const activeForApp = ['active', 'trial', 'past_due', 'payment_failed', 'canceling'].includes(profile.status || '');
-    if (!isInApp && messageText && activeForApp && !isImmediateRisk(messageText)) {
+    if (hasWhatsappContent && activeForApp && !isImmediateRisk(messageText || '')) {
       const persisted = await persistirMensagemRecebidaWhatsapp(
         supabase,
         profile.user_id,
-        messageText,
+        whatsappContentText,
         messageId || `msg_${Date.now()}`,
       );
 
-      const ratingResult = await handleSessionRating(supabase, profile.user_id, messageText);
+      const ratingResult = messageText
+        ? await handleSessionRating(supabase, profile.user_id, messageText)
+        : { handled: false as const };
       const confirmationResult = ratingResult.handled
         ? { handled: false as const }
-        : await handleSessionConfirmation(supabase, profile.user_id, messageText);
+        : messageText
+          ? await handleSessionConfirmation(supabase, profile.user_id, messageText)
+          : { handled: false as const };
       const deterministicResponse = ratingResult.handled ? ratingResult.response : confirmationResult.response;
       if (deterministicResponse) {
         await sendMessage(cleanPhone, deterministicResponse, undefined, profile.user_id);
@@ -766,7 +774,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      const operational = getOperationalWhatsAppResponse(messageText);
+      const operational = messageText ? getOperationalWhatsAppResponse(messageText) : null;
       if (operational) {
         const sendResult = await sendMessage(cleanPhone, operational.text, undefined, profile.user_id);
         if (sendResult.success) {
@@ -795,7 +803,7 @@ Deno.serve(async (req) => {
       }
 
       const firstMigration = !(profile as any).whatsapp_app_migration_sent_at;
-      const destination = wantsSessionArea(messageText) ? 'sessoes' : 'conversar';
+      const destination = wantsSessionArea(messageText || '') ? 'sessoes' : 'conversar';
       const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
       if (!internalSecret) throw new Error('INTERNAL_WEBHOOK_SECRET ausente');
       const accessResponse = await fetch(`${supabaseUrl}/functions/v1/portal-whatsapp-access`, {
