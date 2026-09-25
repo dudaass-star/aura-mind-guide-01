@@ -50,7 +50,7 @@ Deno.test("risco permanece no WhatsApp e suporte operacional não chega ao agent
   assert(SOURCE.includes("isImmediateRisk"));
   assert(SOURCE.includes("getOperationalWhatsAppResponse"));
   assert(SOURCE.includes("'vou me matar'"));
-  assert(SOURCE.includes("'pagamento'"));
+  assert(SOURCE.includes("pagamento|cobrança|cobranca"));
   assert(SOURCE.includes("operational_support_level_"));
 });
 
