@@ -14,6 +14,7 @@ import { reportTodayDirectionProgress } from "@/lib/today-direction";
 import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
 import type { Json } from "@/integrations/supabase/types";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
+import { MessageResponse } from "@/components/ai-elements/message";
 
 type ChatMessage = {
   id: string;
@@ -229,9 +230,9 @@ const MessageTimeline = memo(function MessageTimeline({
         return (
           <div key={message.id} data-chat-message className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
-              "min-w-0 max-w-[86%] rounded-2xl text-[15px] leading-relaxed md:max-w-[76%]",
+              "min-w-0 max-w-[86%] text-[15px] leading-relaxed md:max-w-[76%]",
               message.is_audio && message.audio_url ? "px-2.5 py-2" : "px-4 py-3",
-              mine ? "rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : "rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm",
+              mine ? "rounded-2xl rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : message.is_audio ? "rounded-2xl rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm" : "text-foreground",
               message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
             )} data-message-bubble>
               {episodeCard ? (
@@ -266,7 +267,9 @@ const MessageTimeline = memo(function MessageTimeline({
                     </Button>
                   )}
                 </div>
-              ) : (!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+              ) : (!message.is_audio || !message.audio_url) && (mine
+                ? <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                : <MessageResponse className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{message.content}</MessageResponse>)}
               {message.is_audio && message.audio_url && (
                 <VoiceMessagePlayer src={message.audio_url} mine={mine} durationMs={audioDurationMs(message)} mimeType={audioMimeType(message)} />
               )}
