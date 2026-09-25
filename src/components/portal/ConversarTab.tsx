@@ -316,6 +316,7 @@ export function ConversarTab({
   initialChatOpen = false,
   initialDraft,
   discussionEpisodeId,
+  entryContext = "regular",
 }: {
   userId: string;
   firstName: string;
@@ -330,6 +331,7 @@ export function ConversarTab({
   initialChatOpen?: boolean;
   initialDraft?: string;
   discussionEpisodeId?: string;
+  entryContext?: "new" | "migration" | "regular";
 }) {
   const navigate = useNavigate();
   const messageCacheKey = `aura-chat-messages:${userId}`;
@@ -541,6 +543,10 @@ export function ConversarTab({
     if (saved) setDraft(saved);
 
     const load = async () => {
+      const { data: initialization } = await supabasePortal.functions.invoke("app-chat", {
+        body: { action: "initialize", entry_context: entryContext },
+      });
+      if (initialization?.message) setChatOpen(true);
       const [{ data, error }, { data: state }] = await Promise.all([
         supabasePortal
           .from("messages")
@@ -669,7 +675,7 @@ export function ConversarTab({
       document.removeEventListener("visibilitychange", onVisibility);
       void supabasePortal.removeChannel(channel);
     };
-  }, [messageCacheKey, userId]);
+  }, [entryContext, messageCacheKey, userId]);
 
   useEffect(() => {
     if (loading || messages.length === 0) return;
@@ -1165,8 +1171,8 @@ export function ConversarTab({
           <div className="mx-auto flex h-full max-w-sm flex-col items-center justify-center text-center">
             <img src={avatarAura} alt="AURA" className="mb-4 h-16 w-16 rounded-full object-cover ring-4 ring-card" />
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Sua conversa com a AURA</p>
-            <p className="mt-2 font-display text-2xl text-foreground">Chegamos ao nosso novo espaço.</p>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Sua história continua aqui. Pode falar do seu jeito, por texto ou áudio.</p>
+            <p className="mt-2 font-display text-2xl text-foreground">Pode falar do seu jeito.</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">A AURA está disponível por texto ou áudio.</p>
           </div>
         )}
 

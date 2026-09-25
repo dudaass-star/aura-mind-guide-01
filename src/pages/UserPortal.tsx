@@ -76,6 +76,8 @@ const UserPortal = () => {
   );
   const discussionEpisodeId = searchParams.get("episode");
   const shouldOpenConversation = searchParams.get("open") === "1"
+    || searchParams.get("onboarding") === "new"
+    || searchParams.get("migracao") === "whatsapp"
     || Boolean(discussionEpisodeId)
     || (searchParams.get("push") === "open" && searchParams.get("type") === "new_reply");
 
@@ -461,6 +463,7 @@ const UserPortal = () => {
               initialChatOpen={shouldOpenConversation}
               initialDraft={conversationDraftRequest ?? discussionPrompt}
               discussionEpisodeId={discussionEpisode?.id}
+              entryContext={searchParams.get("migracao") === "whatsapp" ? "migration" : searchParams.get("onboarding") === "new" ? "new" : "regular"}
             />
           </div>
           <Suspense fallback={<PortalLoadingInline />}>

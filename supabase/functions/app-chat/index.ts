@@ -98,6 +98,12 @@ Deno.serve(async (req) => {
       if (entryContext === "regular") return json({ initialized: true, context: entryContext });
 
       const sources = [portalWelcomeSource("new"), portalWelcomeSource("migration")];
+      const { count: existingInAppMessages, error: existingMessagesError } = await admin
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("channel", "in_app");
+      if (existingMessagesError) throw existingMessagesError;
       const { data: existingWelcome, error: existingWelcomeError } = await admin
         .from("messages")
         .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url,metadata")
@@ -109,6 +115,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (existingWelcomeError) throw existingWelcomeError;
       if (existingWelcome) return json({ initialized: true, context: entryContext, message: existingWelcome, duplicate: true });
+      if ((existingInAppMessages || 0) > 0) return json({ initialized: true, context: "regular" });
 
       const firstName = profile.name?.trim().split(/\s+/)[0] || "você";
       const welcomeText = buildPortalWelcome(firstName, entryContext);
@@ -306,7 +313,7 @@ Deno.serve(async (req) => {
 
     const [{ count: priorInAppUserMessages }, { count: onboardingWelcomes }] = await Promise.all([
       admin.from("messages").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("channel", "in_app").eq("role", "user"),
-      admin.from("messages").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("channel", "in_app").eq("role", "assistant").contains("metadata", { kind: "portal_welcome" }),
+      admin.from("messages").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("channel", "in_app").eq("role", "assistant").eq("source_message_id", portalWelcomeSource("new")),
     ]);
 
     const { data: inserted, error: insertError } = await admin
