@@ -321,6 +321,7 @@ const UserPortal = () => {
   if (profileLoading) return <PortalLoading />;
 
   const firstName = profile?.name?.split(" ")[0] || "você";
+  const isDemo = profile?.status === "demo";
   const areaMeta = activeTab === "conversar" ? null : APP_AREA_META[activeTab];
   // Trilho PIX Automático Bacen pelo Banco Inter (sem cartão, mandato Bacen).
   const isInterPix = (profile as any)?.card_gateway === "inter";
@@ -420,6 +421,7 @@ const UserPortal = () => {
       </Helmet>
 
       <div className={`min-h-screen bg-background text-foreground flex flex-col ${activeTab === "conversar" ? "" : `portal-chat-theme portal-app-theme portal-app-area-${activeTab}`}`}>
+        {isDemo && <div className="border-b border-border bg-muted px-4 py-1.5 text-center text-xs font-semibold text-muted-foreground">Personagem fictícia · Conta de demonstração</div>}
         {areaMeta && (
           <header className="portal-app-header sticky top-0 z-30 border-b border-border/70 bg-card/90 backdrop-blur-xl">
             <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5">
@@ -447,7 +449,7 @@ const UserPortal = () => {
 
         {/* Content */}
         <div className={activeTab === "conversar" ? "flex-1 w-full" : "portal-app-content flex-1 max-w-2xl mx-auto w-full px-5 py-6 pb-24"}>
-          {activeTab !== "conversar" && <PlanTierBanner profile={profile} onChangePlan={() => { setMinimumSessionLimit(undefined); setChangePlanOpen(true); }} />}
+          {activeTab !== "conversar" && !isDemo && <PlanTierBanner profile={profile} onChangePlan={() => { setMinimumSessionLimit(undefined); setChangePlanOpen(true); }} />}
           <div className={activeTab === "conversar" ? "block" : "hidden"} aria-hidden={activeTab !== "conversar"}>
             <ConversarTab
               userId={userId}
@@ -459,6 +461,7 @@ const UserPortal = () => {
               onSignOut={() => void signOut()}
               billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
               accountLoading={portalLoading}
+              isDemo={isDemo}
               isActive={activeTab === "conversar"}
               initialChatOpen={shouldOpenConversation}
               initialDraft={conversationDraftRequest ?? discussionPrompt}
@@ -499,7 +502,7 @@ const UserPortal = () => {
         </footer>}
       </div>
 
-      {userId && (
+      {userId && !isDemo && (
         <ChangePlanDialog
           open={changePlanOpen}
           onOpenChange={(open) => {

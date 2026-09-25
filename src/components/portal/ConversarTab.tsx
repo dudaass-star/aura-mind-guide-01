@@ -315,6 +315,7 @@ export function ConversarTab({
   onSignOut,
   billingLabel,
   accountLoading = false,
+  isDemo = false,
   isActive = true,
   initialChatOpen = false,
   initialDraft,
@@ -330,6 +331,7 @@ export function ConversarTab({
   onSignOut: () => void;
   billingLabel: string;
   accountLoading?: boolean;
+  isDemo?: boolean;
   isActive?: boolean;
   initialChatOpen?: boolean;
   initialDraft?: string;
@@ -1028,24 +1030,24 @@ export function ConversarTab({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} collisionPadding={16} className="z-[70] w-64 max-w-[calc(100vw-2rem)] rounded-lg border-border bg-background p-1.5 shadow-card">
-              <DropdownMenuItem onSelect={onOpenBilling} disabled={accountLoading} className="gap-3 px-3 py-3 font-body">
+              {!isDemo && <DropdownMenuItem onSelect={onOpenBilling} disabled={accountLoading} className="gap-3 px-3 py-3 font-body">
                 {accountLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
                 <span>{accountLoading ? "Abrindo…" : billingLabel}</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={onChangePlan} className="gap-3 px-3 py-3 font-body">
+              </DropdownMenuItem>}
+              {!isDemo && <DropdownMenuItem onSelect={onChangePlan} className="gap-3 px-3 py-3 font-body">
                 <RefreshCw className="h-4 w-4" />
                 <span>Trocar de plano</span>
-              </DropdownMenuItem>
+              </DropdownMenuItem>}
               <InstallAppMenuItem
                 available={installApp.available}
                 ios={installApp.ios}
                 onInstall={installApp.install}
                 onShowIosGuide={() => setShowIosInstallGuide(true)}
               />
-              <DropdownMenuItem onSelect={() => setShowPushDialog(true)} className="gap-3 px-3 py-3 font-body">
+              {!isDemo && <DropdownMenuItem onSelect={() => setShowPushDialog(true)} className="gap-3 px-3 py-3 font-body">
                 <Bell className="h-4 w-4" />
                 <span>Notificações</span>
-              </DropdownMenuItem>
+              </DropdownMenuItem>}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={onSignOut} className="gap-3 px-3 py-3 font-body text-destructive focus:text-destructive">
                 <LogOut className="h-4 w-4" />
