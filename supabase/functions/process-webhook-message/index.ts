@@ -1613,13 +1613,13 @@ Deno.serve(async (req) => {
           user_id: profile.user_id,
           phone: cleanPhone,
           content: messageText.substring(0, 500),
-          error: `aura-agent invoke failed after 3 attempts: ${lastError?.message || 'no agentData'}`,
+          error: `aura-agent invoke failed after ${maxAttempts} attempts: ${lastError?.message || 'no agentData'}`,
           function_name: 'process-webhook-message',
         });
       } catch (logErr) {
         console.error('⚠️ Failed to write failed_message_log:', logErr);
       }
-      throw lastError || new Error('All 3 aura-agent attempts failed');
+      throw lastError || new Error(`All ${maxAttempts} aura-agent attempts failed`);
     }
 
     // Clear pending content after passing to agent
@@ -2079,7 +2079,7 @@ Deno.serve(async (req) => {
     if (supabase && isInApp && profile?.user_id && !sentAnyResponse) {
       try {
         const { data: latestInbound } = await supabase.from('messages')
-          .select('id, content, channel, client_message_id, source_message_id, is_audio, audio_url, metadata')
+          .select('id, content, channel, client_message_id, source_message_id, is_audio, audio_url, metadata, created_at')
           .eq('user_id', profile.user_id)
           .eq('role', 'user')
           .eq('channel', 'in_app')
@@ -2104,7 +2104,7 @@ Deno.serve(async (req) => {
               let recoveryAudioUrl = latestInbound.audio_url;
               const storagePath = latestInbound.metadata?.audio_storage_path;
               if (latestInbound.is_audio && typeof storagePath === 'string') {
-                const { data: signed } = await supabase!.storage.from('chat-audios').createSignedUrl(storagePath, 900);
+                const { data: signed } = await supabase.storage.from('chat-audios').createSignedUrl(storagePath, 900);
                 recoveryAudioUrl = signed?.signedUrl || recoveryAudioUrl;
               }
               const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/process-webhook-message`, {
