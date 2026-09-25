@@ -32,6 +32,11 @@ Deno.test("falha na segunda geração não derruba a resposta pronta", () => {
   assert(SOURCE.includes("shouldResumeInterruptedTurn = true"));
 });
 
+Deno.test("mensagem original é encerrada quando uma fala nova assume o turno", () => {
+  assert(SOURCE.includes("originatingMessageId"));
+  assert(SOURCE.includes("superseded_by_newer_message"));
+});
+
 Deno.test("erro libera trava e descarta contexto pendente defeituoso", () => {
   assert(SOURCE.includes("pending_content: null"));
   assert(SOURCE.includes("pending_context: null"));

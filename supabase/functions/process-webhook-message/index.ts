@@ -446,6 +446,7 @@ Deno.serve(async (req) => {
   let agentData: any = null;
   let turnOwnerToken: string | null = null;
   let currentMessageId: string | null = null;
+  let originatingMessageId: string | null = null;
   let currentInboundMessageDbId: string | null = null;
   let isInApp = false;
   let shouldResumeInterruptedTurn = false;
@@ -818,6 +819,7 @@ Deno.serve(async (req) => {
     // INTERRUPTION SYSTEM
     // ========================================================================
     currentMessageId = messageId || `msg_${Date.now()}`;
+    originatingMessageId = currentMessageId;
     turnOwnerToken = crypto.randomUUID();
 
     // ========================================================================
@@ -2056,10 +2058,18 @@ Deno.serve(async (req) => {
     }
 
     if (isInApp && currentMessageId) {
+      const completedAt = new Date().toISOString();
       await supabase.from('chat_turn_metrics').update({
-        completed_at: new Date().toISOString(),
+        completed_at: completedAt,
         status: wasInterrupted ? 'interrupted' : 'completed',
       }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+      if (originatingMessageId && originatingMessageId !== currentMessageId) {
+        await supabase.from('chat_turn_metrics').update({
+          completed_at: completedAt,
+          status: 'interrupted',
+          error_code: 'superseded_by_newer_message',
+        }).eq('user_id', profile.user_id).eq('client_message_id', originatingMessageId);
+      }
     }
 
     if (isInApp && sentAnyResponse && !wasInterrupted && currentMessageId) {
