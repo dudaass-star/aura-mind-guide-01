@@ -735,7 +735,7 @@ Deno.serve(async (req) => {
     // O WhatsApp permanece como porta de entrada, segurança e suporte operacional.
     // Conversa livre e sessões acontecem somente no App; a fala recebida fica no
     // histórico para a pessoa continuar sem precisar repetir o que escreveu.
-    const activeForApp = ['active', 'trial', 'past_due', 'payment_failed'].includes(profile.status || '');
+    const activeForApp = ['active', 'trial', 'past_due', 'payment_failed', 'canceling'].includes(profile.status || '');
     if (!isInApp && messageText && activeForApp && !isImmediateRisk(messageText)) {
       const persisted = await persistirMensagemRecebidaWhatsapp(
         supabase,
