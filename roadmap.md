@@ -121,4 +121,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [ ] Executar piloto monitorado de 14–30 dias do ciclo integrado de retenção.
 - [x] Refazer do zero os três conceitos prioritários de anúncios estáticos, com composições próprias para Feed e Stories e CTA previsto desde o início.
 - [x] Encantar clientes na migração WhatsApp → App, comunicando ganhos reais antes da mudança de canal e reduzindo resistência.
-- [ ] Criar e validar a recepção ativa do cliente novo no App, com primeira sessão independente do WhatsApp.
+- [x] Criar e validar a recepção ativa do cliente novo no App, com primeira sessão independente do WhatsApp.
