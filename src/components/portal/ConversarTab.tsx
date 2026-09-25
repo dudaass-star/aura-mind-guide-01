@@ -14,6 +14,7 @@ import { reportTodayDirectionProgress } from "@/lib/today-direction";
 import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
 import type { Json } from "@/integrations/supabase/types";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
+import { MessageResponse } from "@/components/ai-elements/message";
 
 type ChatMessage = {
   id: string;
@@ -229,9 +230,9 @@ const MessageTimeline = memo(function MessageTimeline({
         return (
           <div key={message.id} data-chat-message className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
-              "min-w-0 max-w-[86%] rounded-2xl text-[15px] leading-relaxed md:max-w-[76%]",
+              "min-w-0 max-w-[86%] text-[15px] leading-relaxed md:max-w-[76%]",
               message.is_audio && message.audio_url ? "px-2.5 py-2" : "px-4 py-3",
-              mine ? "rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : "rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm",
+              mine ? "rounded-2xl rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : message.is_audio ? "rounded-2xl rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm" : "text-foreground",
               message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
             )} data-message-bubble>
               {episodeCard ? (
@@ -266,7 +267,9 @@ const MessageTimeline = memo(function MessageTimeline({
                     </Button>
                   )}
                 </div>
-              ) : (!message.is_audio || !message.audio_url) && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+              ) : (!message.is_audio || !message.audio_url) && (mine
+                ? <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                : <MessageResponse className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{message.content}</MessageResponse>)}
               {message.is_audio && message.audio_url && (
                 <VoiceMessagePlayer src={message.audio_url} mine={mine} durationMs={audioDurationMs(message)} mimeType={audioMimeType(message)} />
               )}
@@ -316,6 +319,7 @@ export function ConversarTab({
   initialChatOpen = false,
   initialDraft,
   discussionEpisodeId,
+  entryContext = "regular",
 }: {
   userId: string;
   firstName: string;
@@ -330,6 +334,7 @@ export function ConversarTab({
   initialChatOpen?: boolean;
   initialDraft?: string;
   discussionEpisodeId?: string;
+  entryContext?: "new" | "migration" | "regular";
 }) {
   const navigate = useNavigate();
   const messageCacheKey = `aura-chat-messages:${userId}`;
@@ -541,6 +546,10 @@ export function ConversarTab({
     if (saved) setDraft(saved);
 
     const load = async () => {
+      const { data: initialization } = await supabasePortal.functions.invoke("app-chat", {
+        body: { action: "initialize", entry_context: entryContext },
+      });
+      if (initialization?.message) setChatOpen(true);
       const [{ data, error }, { data: state }] = await Promise.all([
         supabasePortal
           .from("messages")
@@ -669,7 +678,7 @@ export function ConversarTab({
       document.removeEventListener("visibilitychange", onVisibility);
       void supabasePortal.removeChannel(channel);
     };
-  }, [messageCacheKey, userId]);
+  }, [entryContext, messageCacheKey, userId]);
 
   useEffect(() => {
     if (loading || messages.length === 0) return;
@@ -1165,8 +1174,8 @@ export function ConversarTab({
           <div className="mx-auto flex h-full max-w-sm flex-col items-center justify-center text-center">
             <img src={avatarAura} alt="AURA" className="mb-4 h-16 w-16 rounded-full object-cover ring-4 ring-card" />
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Sua conversa com a AURA</p>
-            <p className="mt-2 font-display text-2xl text-foreground">Chegamos ao nosso novo espaço.</p>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Sua história continua aqui. Pode falar do seu jeito, por texto ou áudio.</p>
+            <p className="mt-2 font-display text-2xl text-foreground">Pode falar do seu jeito.</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">A AURA está disponível por texto ou áudio.</p>
           </div>
         )}
 

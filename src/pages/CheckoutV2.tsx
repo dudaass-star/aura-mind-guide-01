@@ -1383,7 +1383,7 @@ const CheckoutV2 = () => {
           });
           if (!verified.error) {
             localStorage.removeItem("aura_checkout_access");
-            navigate("/meu-espaco", { replace: true });
+            navigate("/meu-espaco?tab=conversar&open=1&onboarding=new", { replace: true });
           } else {
             navigate("/obrigado", { replace: true });
           }
