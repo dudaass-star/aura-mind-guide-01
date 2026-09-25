@@ -5867,7 +5867,7 @@ serve(async (req) => {
         // 1. Últimas mensagens (10 em minimal, 40 normal)
         supabase
           .from('messages')
-          .select('role, content, created_at', { count: 'exact' })
+          .select('role, content, created_at, metadata', { count: 'exact' })
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(minimal_context ? 10 : 40),
@@ -5986,7 +5986,7 @@ serve(async (req) => {
 
       // 1. Messages
       if (messagesResult.status === 'fulfilled' && messagesResult.value.data) {
-        const messages = messagesResult.value.data;
+        const messages = messagesResult.value.data.filter((m: any) => m.metadata?.kind !== 'response_failure');
         const count = messagesResult.value.count;
         const lastUserMsg = messages.find((m: any) => m.role === 'user');
         const lastAuraMsg = messages.find((m: any) => m.role === 'assistant');
@@ -8926,7 +8926,9 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
 
   } catch (error) {
     // Detailed logging so HTTP 500s are diagnosable in edge logs
-    const errMsg = error instanceof Error ? error.message : String(error);
+    const errMsg = error instanceof Error ? error.message : typeof error === 'object' && error !== null
+      ? JSON.stringify(error)
+      : String(error);
     const errStack = error instanceof Error ? error.stack : undefined;
     console.error("❌ [AURA-AGENT] Unhandled error:", errMsg);
     if (errStack) console.error("❌ [AURA-AGENT] Stack trace:", errStack);
