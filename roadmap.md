@@ -120,3 +120,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [ ] Unificar coortes, retenção e LTV no painel administrativo.
 - [ ] Executar piloto monitorado de 14–30 dias do ciclo integrado de retenção.
 - [x] Refazer do zero os três conceitos prioritários de anúncios estáticos, com composições próprias para Feed e Stories e CTA previsto desde o início.
+- [ ] Encantar clientes na migração WhatsApp → App, comunicando ganhos reais antes da mudança de canal e reduzindo resistência.
