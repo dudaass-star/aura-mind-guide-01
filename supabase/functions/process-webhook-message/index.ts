@@ -1657,8 +1657,14 @@ Deno.serve(async (req) => {
           .update({ last_user_message_id: currentMessageId })
           .eq('user_id', profile.user_id)
           .eq('owner_token', turnOwnerToken);
-        agentData = await callAuraAgent(false);
-        console.log('🤖 Agent re-response:', JSON.stringify(agentData, null, 2));
+        // A mensagem mais nova já está no histórico; preserve a primeira resposta se a reconsulta falhar.
+        try {
+          agentData = await callAuraAgent(false);
+          console.log('🤖 Agent re-response:', JSON.stringify(agentData, null, 2));
+        } catch (reaccumulationError) {
+          console.error('Falha na re-acumulação; retomada automática necessária:', reaccumulationError);
+          throw reaccumulationError;
+        }
       }
     }
 
