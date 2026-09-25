@@ -993,7 +993,7 @@ export function ConversarTab({
 
   const conversationList = (
     <aside className={cn(
-       "flex h-dvh min-h-0 w-full flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
+       "flex h-full min-h-0 w-full flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
        chatOpen && "hidden",
     )}>
       <header className="border-b border-border/70 bg-card/90 pb-5 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl md:pt-6">
@@ -1119,7 +1119,7 @@ export function ConversarTab({
 
   const openConversation = (
     <section className={cn(
-       "relative h-dvh min-h-0 flex-1 flex-col overflow-hidden bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
+        "relative h-full min-h-0 flex-1 flex-col overflow-hidden bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
       chatOpen ? "flex" : "hidden",
     )}>
       <header className="flex min-h-[calc(4.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-border/70 bg-card/90 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur-xl md:min-h-[4.5rem] md:px-5 md:pt-0">
@@ -1224,7 +1224,7 @@ export function ConversarTab({
       className="portal-chat-theme fixed inset-x-0 min-h-0 overflow-hidden bg-foreground/10 md:relative md:inset-auto md:min-h-dvh md:overflow-visible md:flex md:items-center md:justify-center md:p-6"
       style={mobileViewport ? { height: `${mobileViewport.height}px`, top: `${mobileViewport.top}px` } : { height: "100dvh", top: 0 }}
     >
-       <div className={cn("mx-auto flex w-full overflow-hidden bg-background md:rounded-2xl md:border md:border-border/70 md:shadow-card", chatOpen ? "max-w-4xl" : "max-w-lg")}>
+       <div className={cn("mx-auto flex h-full min-h-0 w-full overflow-hidden bg-background md:h-auto md:rounded-2xl md:border md:border-border/70 md:shadow-card", chatOpen ? "max-w-4xl" : "max-w-lg")}>
         {conversationList}
         {openConversation}
       </div>

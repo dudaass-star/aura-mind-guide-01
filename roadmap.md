@@ -127,3 +127,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Encantar clientes na migração WhatsApp → App, comunicando ganhos reais antes da mudança de canal e reduzindo resistência.
 - [x] Criar e validar a recepção ativa do cliente novo no App, com primeira sessão independente do WhatsApp.
 - [ ] Corrigir os riscos residuais da conversa: detalhamento do erro 500, proteção do TypeError, espera em reenvio duplicado e teste controlado da retomada automática concluídos; causa original do erro 500 não reproduzida, acompanhar novos registros e piloto com clientes reais.
+- [ ] Manter a caixa de mensagem vazia visível assim que o teclado abrir no celular e validar foco e digitação.
