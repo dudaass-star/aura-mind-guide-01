@@ -341,7 +341,6 @@ export function ConversarTab({
   const [sending, setSending] = useState(false);
   const [responding, setResponding] = useState(false);
   const [responseIssue, setResponseIssue] = useState<string | null>(null);
-  const [retryingResponse, setRetryingResponse] = useState(false);
   const [connected, setConnected] = useState(true);
   const [hasOlder, setHasOlder] = useState(false);
   const [showNew, setShowNew] = useState(false);
@@ -778,11 +777,6 @@ export function ConversarTab({
   };
 
   const retryFailedMessage = async (message: ChatMessage) => {
-    if (message.role === "assistant" && isResponseFailure(message)) {
-      awaitingResponseRef.current = { clientId: crypto.randomUUID(), messageId: message.id, createdAt: Date.now() };
-      await retryResponseFor(message.id);
-      return;
-    }
     const clientId = message.client_message_id;
     if (!clientId || sending) return;
     const pending = readOutbox(outboxKey).find((item) => item.clientId === clientId);
@@ -809,37 +803,6 @@ export function ConversarTab({
     setMessages((current) => current.filter((item) => item.id !== message.id));
     recordConversationEvent(userId, "failed_message_deleted", { kind: message.is_audio ? "audio" : "text" });
   };
-
-  const retryResponseFor = async (sourceMessageId?: string) => {
-    const awaiting = awaitingResponseRef.current;
-    if (!awaiting || retryingResponse) return;
-    setRetryingResponse(true);
-    setResponseIssue(null);
-    setResponding(true);
-    recordConversationEvent(userId, "response_retry");
-    const { data, error } = await supabasePortal.functions.invoke("app-chat", {
-      body: { action: "retry_response", source_message_id: sourceMessageId || awaiting.messageId },
-    });
-    if (error || !data?.accepted) {
-      setResponding(false);
-      setResponseIssue("Não consegui retomar agora. Tente mais uma vez em instantes.");
-    } else if (data.already_answered) {
-      awaitingResponseRef.current = null;
-      setResponding(false);
-      setResponseIssue(null);
-    } else {
-      awaitingResponseRef.current = { ...awaiting, clientId: data.retry_id || awaiting.clientId, createdAt: Date.now() };
-      if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
-      responseTimerRef.current = window.setTimeout(() => {
-        if (!awaitingResponseRef.current) return;
-        setResponding(false);
-        setResponseIssue("A resposta ainda não chegou. Você pode tentar novamente.");
-      }, 40_000);
-    }
-    setRetryingResponse(false);
-  };
-
-  const retryResponse = () => retryResponseFor();
 
   const send = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -1183,12 +1146,8 @@ export function ConversarTab({
 
          <form onSubmit={send} className="shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl">
           {responseIssue && (
-            <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2" role="status">
+            <div className="mb-2 flex items-center rounded-lg border border-border bg-muted/50 px-3 py-2" role="status">
               <p className="text-xs font-medium text-foreground">{responseIssue}</p>
-              <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 gap-1 px-2 text-xs" disabled={retryingResponse} onClick={() => void retryResponse()}>
-                {retryingResponse ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                Tentar de novo
-              </Button>
             </div>
           )}
          <div className="flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner focus-within:border-primary/50 focus-within:bg-card focus-within:ring-2 focus-within:ring-ring/20">
