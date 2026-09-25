@@ -7,6 +7,7 @@ import { sendMessage, sendAudio, sendAudioUrl, type SendResult } from "../_share
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { CLICK_DELIVERY_TITLES, prefixWithTitle } from "../_shared/whatsapp-official.ts";
 import { routeNotification } from "../_shared/notification-router.ts";
+import { describeChatError, shouldRecoverChatTurn } from "../_shared/chat-error.ts";
 import {
   getOperationalWhatsAppResponse,
   isImmediateRisk,
@@ -451,6 +452,7 @@ Deno.serve(async (req) => {
   let firstResponseRecorded = false;
   let lockHeartbeatId: number | null = null;
   let automaticRecoveryAttempt = 0;
+  let simulateTransientFailure = false;
 
   try {
     const workerPayload = await req.json();
@@ -468,6 +470,9 @@ Deno.serve(async (req) => {
 
     isInApp = channel === 'in_app';
     currentInboundMessageDbId = typeof inboundMessageDbId === 'string' ? inboundMessageDbId : null;
+    // Somente uma chamada interna explícita para uma conta de demonstração pode provocar a falha de teste.
+    simulateTransientFailure = isInApp && automaticRecoveryAttempt === 0
+      && req.headers.get('x-demo-transient-test') === expectedSecret;
 
     contingencyPhone = cleanPhone;
 
@@ -537,6 +542,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    simulateTransientFailure = simulateTransientFailure && profile.status === 'demo';
 
     // Get instance config for legacy reference
     try {
@@ -1584,6 +1590,10 @@ Deno.serve(async (req) => {
 
     // No aplicativo, uma tentativa normal e uma enxuta evitam espera prolongada.
     // No WhatsApp mantemos a tolerância histórica de três tentativas.
+    if (simulateTransientFailure) {
+      // A retomada interna não encaminha o cabeçalho, portanto esta falha acontece uma única vez.
+      throw new Error('Teste interno: falha transitória 503 antes da chamada ao agente (Agent HTTP 503)');
+    }
     let lastError: any = null;
     console.log(`🚀 [INVOKE] aura-agent for user=${profile.user_id} phone=${cleanPhone?.substring(0, 4) ?? 'in_app'}*** msgLen=${messageText.length} pending_insight=${profile.pending_insight ? 'YES' : 'no'}`);
     const maxAttempts = isInApp ? 2 : 3;
@@ -2049,10 +2059,12 @@ Deno.serve(async (req) => {
 
   } catch (error: unknown) {
     if (lockHeartbeatId !== null) clearInterval(lockHeartbeatId);
+    const describedError = describeChatError(error);
     console.error('❌ Worker processing error:', {
-      message: error instanceof Error ? error.message : String(error),
-      name: error instanceof Error ? error.name : 'unknown',
-      stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
+      message: describedError.message,
+      code: describedError.code,
+      status: describedError.status,
+      stack: describedError.stack?.slice(0, 500),
       phone: contingencyPhone,
       hasProfile: !!profile,
       hasSupabase: !!supabase,
@@ -2075,7 +2087,7 @@ Deno.serve(async (req) => {
         await supabase.from('chat_turn_metrics').update({
           completed_at: new Date().toISOString(),
           status: 'failed',
-          error_code: error instanceof Error ? error.name : 'unknown',
+          error_code: describedError.code || (error instanceof Error ? error.name : 'unknown'),
         }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
       } catch (metricsError) {
         console.error('⚠️ Falha não bloqueante na telemetria do chat:', metricsError);
@@ -2101,9 +2113,7 @@ Deno.serve(async (req) => {
             .order('created_at', { ascending: false })
             .limit(20);
           const alreadyAnswered = newerAssistant?.some((entry) => entry.metadata?.kind !== 'response_failure');
-          const errorStatus = error instanceof Error ? Number(error.message.match(/Agent HTTP (\d{3})/)?.[1]) : NaN;
-          const canRetry = !Number.isFinite(errorStatus) || errorStatus === 429 || errorStatus >= 500;
-          if (!alreadyAnswered && canRetry && automaticRecoveryAttempt < 2) {
+          if (shouldRecoverChatTurn(error, automaticRecoveryAttempt, Boolean(alreadyAnswered))) {
             const nextAttempt = automaticRecoveryAttempt + 1;
             const recoveryPromise = (async () => {
               await new Promise((resolve) => setTimeout(resolve, nextAttempt * 3000));

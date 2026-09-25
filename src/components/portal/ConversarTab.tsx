@@ -373,6 +373,7 @@ export function ConversarTab({
   const discardRecordingRef = useRef(false);
   const awaitingResponseRef = useRef<{ clientId: string; messageId: string; createdAt: number } | null>(null);
   const responseTimerRef = useRef<number | null>(null);
+  const answeredMessageIdsRef = useRef(new Set<string>(cachedMessages.filter((message) => message.role === "assistant" && !isResponseFailure(message)).map(replyTargetId).filter((id): id is string => Boolean(id))));
   const appliedInitialDraftRef = useRef<string | null>(null);
   const outboxKey = `aura-chat-outbox:${userId}`;
   const openReport = (report: ReportCardMetadata) => {
@@ -557,6 +558,12 @@ export function ConversarTab({
       if (!error && data) {
         const hydrated = await hydrateAudioUrls(data as ChatMessage[]);
         const ordered = orderMessages(hydrated);
+        ordered.forEach((message) => {
+          if (message.role === "assistant" && !isResponseFailure(message)) {
+            const target = replyTargetId(message);
+            if (target) answeredMessageIdsRef.current.add(target);
+          }
+        });
         setMessages(ordered);
         writePortalCache(messageCacheKey, ordered.map((message) => ({
           ...message,
@@ -594,8 +601,12 @@ export function ConversarTab({
           const incoming = payload.new as ChatMessage;
           const [hydratedIncoming] = await hydrateAudioUrls([incoming]);
           if (hydratedIncoming) {
+            if (hydratedIncoming.role === "assistant" && !isResponseFailure(hydratedIncoming)) {
+              const target = replyTargetId(hydratedIncoming);
+              if (target) answeredMessageIdsRef.current.add(target);
+            }
             setMessages((current) => mergeMessage(current, hydratedIncoming));
-            if (hydratedIncoming.role === "assistant") {
+            if (hydratedIncoming.role === "assistant" && !isResponseFailure(hydratedIncoming)) {
               const awaiting = awaitingResponseRef.current;
               if (!awaiting || !replyTargetId(hydratedIncoming) || replyTargetId(hydratedIncoming) === awaiting.messageId) {
                 awaitingResponseRef.current = null;
@@ -649,7 +660,19 @@ export function ConversarTab({
         .limit(PAGE_SIZE);
       if (data?.length) {
         const hydrated = await hydrateAudioUrls(data as ChatMessage[]);
+        hydrated.forEach((message) => {
+          if (message.role === "assistant" && !isResponseFailure(message)) {
+            const target = replyTargetId(message);
+            if (target) answeredMessageIdsRef.current.add(target);
+          }
+        });
         setMessages((current) => hydrated.reduce<ChatMessage[]>((acc, message) => mergeMessage(acc, message), current));
+        const awaiting = awaitingResponseRef.current;
+        if (awaiting && answeredMessageIdsRef.current.has(awaiting.messageId)) {
+          awaitingResponseRef.current = null;
+          if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
+          setResponding(false);
+        }
       }
     };
     const onFocus = () => void reconcile();
@@ -741,7 +764,7 @@ export function ConversarTab({
         client_sent_at: pending.createdAt,
       },
     });
-    if (error || !data?.accepted) throw error || new Error(data?.error || "Falha no envio");
+    if (error || !data?.accepted || !data?.message?.id) throw error || new Error(data?.error || "Falha no envio");
     void reportPushConversion("/meu-espaco?tab=conversar", "first14_conversation");
     reportTodayDirectionProgress(userId, "completed", "conversation");
     if (pending.journeyEpisodeId) setActiveDiscussionEpisodeId(undefined);
@@ -760,6 +783,16 @@ export function ConversarTab({
       metadata: data.message.metadata,
       optimistic: false,
     }));
+    if (data.duplicate || answeredMessageIdsRef.current.has(data.message.id)) {
+      if (awaitingResponseRef.current?.messageId === data.message.id) {
+        if (answeredMessageIdsRef.current.has(data.message.id)) {
+          awaitingResponseRef.current = null;
+          if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
+          setResponding(false);
+        }
+      }
+      return;
+    }
     awaitingResponseRef.current = { clientId: pending.clientId, messageId: data.message.id, createdAt: Date.now() };
     setResponding(true);
     if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
