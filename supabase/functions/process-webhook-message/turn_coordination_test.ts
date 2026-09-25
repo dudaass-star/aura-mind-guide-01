@@ -21,6 +21,23 @@ Deno.test("contexto interrompido tem validade", () => {
   assert(SOURCE.includes("15 * 60 * 1000"));
 });
 
+Deno.test("falha anterior encerra o lote acumulado", () => {
+  assert(SOURCE.includes(".eq('status', 'failed')"));
+  assert(SOURCE.includes("latestFailedTurn?.server_received_at"));
+  assert(SOURCE.includes("accumulationBoundary"));
+});
+
+Deno.test("falha na segunda geração não derruba a resposta pronta", () => {
+  assert(SOURCE.includes("preservando resposta pronta e retomando a fala mais recente"));
+  assert(SOURCE.includes("shouldResumeInterruptedTurn = true"));
+});
+
+Deno.test("erro libera trava e descarta contexto pendente defeituoso", () => {
+  assert(SOURCE.includes("pending_content: null"));
+  assert(SOURCE.includes("pending_context: null"));
+  assert(SOURCE.includes("pending_expires_at: null"));
+});
+
 Deno.test("mensagens recebidas usam identidade da origem", () => {
   assert(SOURCE.includes("source_message_id: sourceMessageId"));
   assert(SOURCE.includes("persistirMensagemRecebidaWhatsapp"));
