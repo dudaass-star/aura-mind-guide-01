@@ -1503,7 +1503,7 @@ Deno.serve(async (req) => {
 
     let accumulatedQuery = supabase
       .from('messages')
-      .select('content, created_at')
+      .select('id, content, created_at, client_message_id, source_message_id')
       .eq('user_id', profile.user_id)
       .eq('role', 'user')
       .order('created_at', { ascending: true });
@@ -1516,7 +1516,16 @@ Deno.serve(async (req) => {
 
     if (recentUserMsgs && recentUserMsgs.length > 1) {
       messageText = recentUserMsgs.map(m => m.content).join('\n');
-      inboundMessageCreatedAt = recentUserMsgs[recentUserMsgs.length - 1]?.created_at ?? inboundMessageCreatedAt;
+      const latestAccumulatedMessage = recentUserMsgs[recentUserMsgs.length - 1];
+      inboundMessageCreatedAt = latestAccumulatedMessage?.created_at ?? inboundMessageCreatedAt;
+      currentMessageId = latestAccumulatedMessage?.client_message_id
+        || latestAccumulatedMessage?.source_message_id
+        || latestAccumulatedMessage?.id
+        || currentMessageId;
+      await supabase.from('aura_response_state')
+        .update({ last_user_message_id: currentMessageId })
+        .eq('user_id', profile.user_id)
+        .eq('owner_token', turnOwnerToken);
       console.log(`📦 Accumulated ${recentUserMsgs.length} sequential messages into one`);
     }
 
