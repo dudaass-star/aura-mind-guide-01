@@ -35,7 +35,7 @@ function siteOrigin(req: Request): string {
 function hasValidAccess(profile: { status?: string | null; plan_expires_at?: string | null }) {
   if (BLOCKED_STATUSES.has(profile.status || "")) return false;
   if (profile.plan_expires_at && Date.parse(profile.plan_expires_at) <= Date.now()) return false;
-  return ["active", "trial", "past_due", "payment_failed"].includes(profile.status || "");
+  return ["active", "trial", "past_due", "payment_failed", "canceling", "taster"].includes(profile.status || "");
 }
 
 Deno.serve(async (req) => {
