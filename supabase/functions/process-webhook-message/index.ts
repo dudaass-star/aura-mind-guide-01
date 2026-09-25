@@ -450,9 +450,12 @@ Deno.serve(async (req) => {
   let shouldResumeInterruptedTurn = false;
   let firstResponseRecorded = false;
   let lockHeartbeatId: number | null = null;
+  let automaticRecoveryAttempt = 0;
 
   try {
     const workerPayload = await req.json();
+    automaticRecoveryAttempt = typeof workerPayload.automaticRecoveryAttempt === 'number'
+      ? Math.min(Math.max(Math.floor(workerPayload.automaticRecoveryAttempt), 0), 2) : 0;
     const {
       phone, cleanPhone, messageId, text,
       hasAudio, audioUrl, hasImage, imageCaption,
@@ -1463,14 +1466,14 @@ Deno.serve(async (req) => {
     // ========================================================================
 
     // --- ACCUMULATE sequential user messages since last assistant response ---
-    const { data: lastAssistantMsg } = await supabase
+    const { data: lastAssistantCandidates } = await supabase
       .from('messages')
-      .select('created_at')
+      .select('created_at, metadata')
       .eq('user_id', profile.user_id)
       .eq('role', 'assistant')
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(40);
+    const lastAssistantMsg = lastAssistantCandidates?.find((entry) => entry.metadata?.kind !== 'response_failure');
 
     let accumulatedQuery = supabase
       .from('messages')
@@ -1610,13 +1613,13 @@ Deno.serve(async (req) => {
           user_id: profile.user_id,
           phone: cleanPhone,
           content: messageText.substring(0, 500),
-          error: `aura-agent invoke failed after 3 attempts: ${lastError?.message || 'no agentData'}`,
+          error: `aura-agent invoke failed after ${maxAttempts} attempts: ${lastError?.message || 'no agentData'}`,
           function_name: 'process-webhook-message',
         });
       } catch (logErr) {
         console.error('⚠️ Failed to write failed_message_log:', logErr);
       }
-      throw lastError || new Error('All 3 aura-agent attempts failed');
+      throw lastError || new Error(`All ${maxAttempts} aura-agent attempts failed`);
     }
 
     // Clear pending content after passing to agent
@@ -1654,8 +1657,14 @@ Deno.serve(async (req) => {
           .update({ last_user_message_id: currentMessageId })
           .eq('user_id', profile.user_id)
           .eq('owner_token', turnOwnerToken);
-        agentData = await callAuraAgent(false);
-        console.log('🤖 Agent re-response:', JSON.stringify(agentData, null, 2));
+        // A mensagem mais nova já está no histórico; preserve a primeira resposta se a reconsulta falhar.
+        try {
+          agentData = await callAuraAgent(false);
+          console.log('🤖 Agent re-response:', JSON.stringify(agentData, null, 2));
+        } catch (reaccumulationError) {
+          console.error('Falha na re-acumulação; retomada automática necessária:', reaccumulationError);
+          throw reaccumulationError;
+        }
       }
     }
 
@@ -2075,33 +2084,64 @@ Deno.serve(async (req) => {
 
     if (supabase && isInApp && profile?.user_id && !sentAnyResponse) {
       try {
-        const replyToMessageId = currentInboundMessageDbId;
-        const { data: existingFailure } = await supabase
-          .from('messages')
-          .select('id')
+        const { data: latestInbound } = await supabase.from('messages')
+          .select('id, content, channel, client_message_id, source_message_id, is_audio, audio_url, metadata, created_at')
           .eq('user_id', profile.user_id)
-          .eq('role', 'assistant')
-          .contains('metadata', { kind: 'response_failure', reply_to_message_id: replyToMessageId })
+          .eq('role', 'user')
+          .eq('channel', 'in_app')
+          .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (!existingFailure) {
-          await supabase.from('messages').insert({
-            user_id: profile.user_id,
-            role: 'assistant',
-            content: 'Não consegui concluir minha resposta agora.',
-            channel: 'in_app',
-            delivery_status: 'delivered',
-            metadata: { kind: 'response_failure', reply_to_message_id: replyToMessageId },
-          });
+        if (latestInbound) {
+          const { data: newerAssistant } = await supabase.from('messages')
+            .select('id, metadata')
+            .eq('user_id', profile.user_id)
+            .eq('role', 'assistant')
+            .gt('created_at', latestInbound.created_at)
+            .order('created_at', { ascending: false })
+            .limit(20);
+          const alreadyAnswered = newerAssistant?.some((entry) => entry.metadata?.kind !== 'response_failure');
+          const errorStatus = error instanceof Error ? Number(error.message.match(/Agent HTTP (\d{3})/)?.[1]) : NaN;
+          const canRetry = !Number.isFinite(errorStatus) || errorStatus === 429 || errorStatus >= 500;
+          if (!alreadyAnswered && canRetry && automaticRecoveryAttempt < 2) {
+            const nextAttempt = automaticRecoveryAttempt + 1;
+            const recoveryPromise = (async () => {
+              await new Promise((resolve) => setTimeout(resolve, nextAttempt * 3000));
+              let recoveryAudioUrl = latestInbound.audio_url;
+              const storagePath = latestInbound.metadata?.audio_storage_path;
+              if (latestInbound.is_audio && typeof storagePath === 'string') {
+                const { data: signed } = await supabase.storage.from('chat-audios').createSignedUrl(storagePath, 900);
+                recoveryAudioUrl = signed?.signedUrl || recoveryAudioUrl;
+              }
+              const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/process-webhook-message`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                  'x-internal-secret': Deno.env.get('INTERNAL_WEBHOOK_SECRET') || '',
+                },
+                body: JSON.stringify({
+                  channel: 'in_app', userId: profile.user_id, cleanPhone: profile.phone, phone: profile.phone,
+                  messageId: latestInbound.client_message_id || latestInbound.source_message_id || latestInbound.id,
+                  inboundMessageDbId: latestInbound.id, text: latestInbound.is_audio ? '' : latestInbound.content,
+                  hasAudio: latestInbound.is_audio, audioUrl: recoveryAudioUrl, hasImage: false,
+                  automaticRecoveryAttempt: nextAttempt,
+                }),
+              });
+              if (!response.ok) console.error('Falha na retomada automática:', response.status);
+            })().catch((recoveryError) => console.error('Falha na retomada automática:', recoveryError));
+            (globalThis as any).EdgeRuntime.waitUntil(recoveryPromise);
+          } else if (!alreadyAnswered) {
+            console.error('Resposta indisponível após tentativas automáticas; conversa preservada para recuperação operacional.');
+          }
         }
       } catch (recoveryError) {
-        console.error('⚠️ Falha ao registrar recuperação visível no aplicativo:', recoveryError);
+        console.error('⚠️ Falha na recuperação automática do aplicativo:', recoveryError);
       }
     }
 
-    // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally
     if (!sentAnyResponse) {
-      console.error(`🚨 CRITICAL: User got NO response at all. O aplicativo oferecerá retomada explícita.`);
+      console.error('🚨 CRITICAL: Resposta não entregue; retomada automática ou acompanhamento operacional necessário.');
     } else {
       console.log('ℹ️ Error after response already sent — no action needed');
     }
