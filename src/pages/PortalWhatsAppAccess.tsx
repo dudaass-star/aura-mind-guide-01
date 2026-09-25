@@ -11,6 +11,7 @@ export default function PortalWhatsAppAccess() {
   const { session, loading } = usePortalAuth();
   const started = useRef(false);
   const [error, setError] = useState(false);
+  const [destination, setDestination] = useState("conversar");
 
   useEffect(() => {
     if (started.current || loading || session) return;
@@ -37,11 +38,17 @@ export default function PortalWhatsAppAccess() {
         setError(true);
         return;
       }
+      setDestination(data.destination === "sessoes" || data.destination === "hoje" ? data.destination : "conversar");
       localStorage.setItem("aura-access-source", "whatsapp");
     })();
   }, [loading, session]);
 
-  if (session) return <Navigate to="/meu-espaco" replace />;
+  if (session) {
+    const query = destination === "conversar"
+      ? "?tab=conversar&open=1&migracao=whatsapp"
+      : `?tab=${destination}&migracao=whatsapp`;
+    return <Navigate to={`/meu-espaco${query}`} replace />;
+  }
 
   return (
     <div className="portal-chat-theme min-h-dvh bg-background flex items-center justify-center px-5">

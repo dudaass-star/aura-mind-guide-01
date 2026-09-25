@@ -669,9 +669,7 @@ const CancelSubscription = () => {
                       <Button className="w-full">Abrir o app Olá Aura</Button>
                     </Link>
                     <a
-                      href="https://wa.me/16625255005?text=Oi%2C%20preciso%20de%20ajuda%20com%20minha%20assinatura"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href="mailto:suporte@olaaura.com.br?subject=Ajuda%20com%20minha%20assinatura"
                       className="block"
                     >
                       <Button variant="outline" className="w-full">
@@ -795,7 +793,7 @@ const CancelSubscription = () => {
 
           <p className="text-center text-xs text-muted-foreground mt-6">
             Precisa de ajuda?{" "}
-            <a href="mailto:suporte@aura.app" className="text-primary hover:underline">
+            <a href="mailto:suporte@olaaura.com.br" className="text-primary hover:underline">
               Entre em contato
             </a>
           </p>

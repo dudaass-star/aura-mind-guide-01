@@ -108,8 +108,8 @@ const TermsOfService = () => {
               <h2 className="text-2xl font-semibold mb-4">9. Contato</h2>
               <p className="leading-relaxed">
                 Para dúvidas sobre estes Termos de Uso, entre em contato conosco através do e-mail{" "}
-                <a href="mailto:suporte@aura.app" className="text-primary hover:underline">
-                  suporte@aura.app
+                 <a href="mailto:suporte@olaaura.com.br" className="text-primary hover:underline">
+                   suporte@olaaura.com.br
                 </a>
               </p>
             </section>

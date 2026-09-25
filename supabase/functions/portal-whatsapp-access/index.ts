@@ -9,6 +9,7 @@ const corsHeaders = {
 
 const GENERIC_MESSAGE = "Se o WhatsApp informado estiver ligado a um acesso válido, a Aura enviará o link por lá.";
 const BLOCKED_STATUSES = new Set(["canceled", "inactive", "paused", "trial_expired"]);
+const VALID_DESTINATIONS = new Set(["conversar", "sessoes", "hoje"]);
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -65,7 +66,9 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!profile?.email || !hasValidAccess(profile)) return json({ error: "access_unavailable" }, 403);
 
-      const redirectTo = `${siteOrigin(req)}/meu-espaco`;
+      const destination = VALID_DESTINATIONS.has(String(request.destination)) ? String(request.destination) : "conversar";
+      const destinationQuery = destination === "conversar" ? "?tab=conversar&open=1&migracao=whatsapp" : `?tab=${destination}&migracao=whatsapp`;
+      const redirectTo = `${siteOrigin(req)}/meu-espaco${destinationQuery}`;
       let { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
         type: "magiclink",
         email: profile.email.trim().toLowerCase(),
@@ -84,7 +87,7 @@ Deno.serve(async (req) => {
       const properties = linkData?.properties;
       if (linkError || !properties?.hashed_token) return json({ error: "access_unavailable" }, 500);
 
-      return json({ token_hash: properties.hashed_token, type: properties.verification_type || "magiclink" });
+      return json({ token_hash: properties.hashed_token, type: properties.verification_type || "magiclink", destination });
     }
 
     const internalSecret = req.headers.get("x-internal-secret");
@@ -120,6 +123,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, message: GENERIC_MESSAGE });
     }
 
+    const destination = VALID_DESTINATIONS.has(String(body?.destination)) ? String(body.destination) : "conversar";
     const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
     const token = Array.from(tokenBytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
     const actionHash = await sha256(token);
@@ -127,16 +131,19 @@ Deno.serve(async (req) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     const { data: accessRequest, error: insertError } = await admin
       .from("portal_access_requests")
-      .insert({ profile_id: profile.id, phone_hash: phoneHash, email_hash: emailHash, action_hash: actionHash, expires_at: expiresAt })
+      .insert({ profile_id: profile.id, phone_hash: phoneHash, email_hash: emailHash, action_hash: actionHash, expires_at: expiresAt, destination })
       .select("id")
       .single();
     if (insertError || !accessRequest) throw insertError || new Error("request_create_failed");
 
     const link = `${siteOrigin(req)}/meu-espaco/acesso-whatsapp#token=${encodeURIComponent(token)}`;
     const firstName = profile.name?.trim().split(/\s+/)[0] || "";
-    const isAppInvite = body?.message_variant === "app_invite";
-    const text = isAppInvite
-      ? `${firstName ? `Oi, ${firstName}.` : "Oi."} Tenho uma novidade boa: agora a gente tem um espaço só nosso no aplicativo da AURA.\n\nSuas conversas continuam de onde pararam, mas lá ficou muito melhor para conversar comigo, acompanhar suas sessões, jornadas e tudo o que construímos juntos.\n\nÉ só tocar aqui para entrar:\n${link}\n\nTe espero lá. 💛`
+    const isAppMigration = body?.message_variant === "app_migration";
+    const isAppRedirect = body?.message_variant === "app_redirect";
+    const text = isAppMigration
+      ? `${firstName ? `Oi, ${firstName}.` : "Oi."} A AURA ganhou um espaço próprio para acompanhar você com mais continuidade.\n\nNo app Olá Aura, suas conversas não ficam soltas: você pode falar por texto ou áudio, retomar de onde parou e ver suas sessões, jornadas e descobertas reunidas na mesma história.\n\nA partir de agora, nossas conversas e sessões acontecem por lá. O WhatsApp continua disponível para avisos e ajuda com acesso, pagamento ou conta.\n\nSua mensagem já está no App — é só tocar e continuar:\n${link}\n\nTe encontro lá. 💛`
+      : isAppRedirect
+        ? `Nossa conversa continua no app Olá Aura, junto com todo o seu histórico. Sua mensagem já está lá:\n${link}\n\nPor aqui, sigo ajudando com acesso, pagamento ou conta.`
       : `${firstName ? `Oi, ${firstName}!` : "Oi!"} Seu acesso à AURA está pronto. Toque abaixo para abrir sua conversa:\n\n${link}\n\nEste link vale por 10 minutos e funciona uma única vez. Depois de entrar, seu acesso fica salvo neste aparelho.`;
     // O pedido chega de uma mensagem do próprio cliente, portanto a janela de atendimento está aberta.
     const sent = await sendMessage(normalized, text, undefined, profile.user_id || profile.id);

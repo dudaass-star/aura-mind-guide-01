@@ -133,8 +133,8 @@ const PrivacyPolicy = () => {
               <p className="leading-relaxed">
                 Para exercer seus direitos ou esclarecer dúvidas sobre esta política, entre em contato 
                 com nosso Encarregado de Proteção de Dados através do e-mail{" "}
-                <a href="mailto:suporte@aura.app" className="text-primary hover:underline">
-                  suporte@aura.app
+                 <a href="mailto:suporte@olaaura.com.br" className="text-primary hover:underline">
+                   suporte@olaaura.com.br
                 </a>
               </p>
             </section>
