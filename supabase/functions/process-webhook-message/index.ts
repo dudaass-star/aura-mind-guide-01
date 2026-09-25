@@ -732,84 +732,112 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Migração passiva para o aplicativo: apresenta o novo espaço uma única vez
-    // quando um cliente ativo inicia conversa pelo WhatsApp. Pedidos urgentes,
-    // financeiros e de suporte continuam no fluxo normal, sem qualquer desvio.
-    const canReceiveAppInvite = !isInApp
-      && Boolean(messageText)
-      && ['active', 'trial', 'past_due', 'payment_failed'].includes(profile.status || '')
-      && !(profile as any).last_app_invite_sent_at
-      && !isAppInviteSilentHours()
-      && !mustKeepWhatsAppConversation(messageText || '');
+    // O WhatsApp permanece como porta de entrada, segurança e suporte operacional.
+    // Conversa livre e sessões acontecem somente no App; a fala recebida fica no
+    // histórico para a pessoa continuar sem precisar repetir o que escreveu.
+    const activeForApp = ['active', 'trial', 'past_due', 'payment_failed'].includes(profile.status || '');
+    if (!isInApp && messageText && activeForApp && !isImmediateRisk(messageText)) {
+      const persisted = await persistirMensagemRecebidaWhatsapp(
+        supabase,
+        profile.user_id,
+        messageText,
+        messageId || `msg_${Date.now()}`,
+      );
 
-    if (canReceiveAppInvite) {
-      const claimedAt = new Date().toISOString();
-      const { data: claimed, error: claimError } = await supabase
-        .from('profiles')
-        .update({ last_app_invite_sent_at: claimedAt })
-        .eq('id', profile.id)
-        .is('last_app_invite_sent_at', null)
-        .select('id');
-
-      if (claimError) throw claimError;
-      if (!claimed?.length) {
-        return new Response(JSON.stringify({ success: true, action: 'app_invite_already_claimed' }), {
+      const ratingResult = await handleSessionRating(supabase, profile.user_id, messageText);
+      const confirmationResult = ratingResult.handled
+        ? { handled: false as const }
+        : await handleSessionConfirmation(supabase, profile.user_id, messageText);
+      const deterministicResponse = ratingResult.handled ? ratingResult.response : confirmationResult.response;
+      if (deterministicResponse) {
+        await sendMessage(cleanPhone, deterministicResponse, undefined, profile.user_id);
+        await supabase.from('messages').insert({
+          user_id: profile.user_id,
+          role: 'assistant',
+          content: deterministicResponse,
+          channel: 'whatsapp',
+        });
+        return new Response(JSON.stringify({ success: true, action: ratingResult.handled ? 'rating_handled' : 'confirmation_handled' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      try {
-        await persistirMensagemRecebidaWhatsapp(
-          supabase,
-          profile.user_id,
-          messageText,
-          messageId || `msg_${Date.now()}`,
-        );
-
-        const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
-        if (!internalSecret) throw new Error('INTERNAL_WEBHOOK_SECRET ausente');
-        const inviteResponse = await fetch(`${supabaseUrl}/functions/v1/portal-whatsapp-access`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-            'x-internal-secret': internalSecret,
-          },
-          body: JSON.stringify({ action: 'request', phone: cleanPhone, message_variant: 'app_invite' }),
-        });
-        const inviteResult = await inviteResponse.json().catch(() => ({}));
-        if (!inviteResponse.ok || !inviteResult?.sent) {
-          throw new Error(`Convite não enviado (${inviteResponse.status})`);
-        }
-
-        if (inviteResult.sent_text) {
-          const { error: historyError } = await supabase.from('messages').insert({
+      const operational = getOperationalWhatsAppResponse(messageText);
+      if (operational) {
+        const sendResult = await sendMessage(cleanPhone, operational.text, undefined, profile.user_id);
+        if (sendResult.success) {
+          await supabase.from('messages').insert({
             user_id: profile.user_id,
             role: 'assistant',
-            content: inviteResult.sent_text,
+            content: operational.text,
             channel: 'whatsapp',
+            metadata: { kind: 'operational_support', level: operational.level },
           });
-          if (historyError) throw historyError;
         }
-
-        return new Response(JSON.stringify({ success: true, action: 'app_invite_sent' }), {
+        return new Response(JSON.stringify({ success: sendResult.success, action: `operational_support_level_${operational.level}` }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
-      } catch (inviteError) {
-        await supabase.from('profiles')
-          .update({ last_app_invite_sent_at: null })
-          .eq('id', profile.id)
-          .eq('last_app_invite_sent_at', claimedAt);
-        await logFailedMessage(
-          supabase,
-          profile.user_id,
-          cleanPhone,
-          messageText || '',
-          inviteError instanceof Error ? inviteError.message : String(inviteError),
-          'process-webhook-message:app_invite',
-        );
-        throw inviteError;
       }
+
+      const now = Date.now();
+      const lastRedirectAt = (profile as any).whatsapp_app_redirect_last_sent_at
+        ? new Date((profile as any).whatsapp_app_redirect_last_sent_at).getTime()
+        : 0;
+      const withinRedirectLimit = lastRedirectAt > 0 && now - lastRedirectAt < 24 * 60 * 60 * 1000;
+      if (withinRedirectLimit) {
+        return new Response(JSON.stringify({ success: true, action: 'app_redirect_rate_limited', message_id: persisted.mensagem.id }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const firstMigration = !(profile as any).whatsapp_app_migration_sent_at;
+      const destination = wantsSessionArea(messageText) ? 'sessoes' : 'conversar';
+      const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
+      if (!internalSecret) throw new Error('INTERNAL_WEBHOOK_SECRET ausente');
+      const accessResponse = await fetch(`${supabaseUrl}/functions/v1/portal-whatsapp-access`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+          'x-internal-secret': internalSecret,
+        },
+        body: JSON.stringify({
+          action: 'request',
+          phone: cleanPhone,
+          destination,
+          message_variant: firstMigration ? 'app_migration' : 'app_redirect',
+        }),
+      });
+      const accessResult = await accessResponse.json().catch(() => ({}));
+      if (!accessResponse.ok || !accessResult?.sent) throw new Error(`Redirecionamento ao App não enviado (${accessResponse.status})`);
+
+      const sentAt = new Date().toISOString();
+      await Promise.all([
+        accessResult.sent_text ? supabase.from('messages').insert({
+          user_id: profile.user_id,
+          role: 'assistant',
+          content: accessResult.sent_text,
+          channel: 'whatsapp',
+          metadata: { kind: 'app_migration_redirect', destination },
+        }) : Promise.resolve(),
+        supabase.from('profiles').update({
+          whatsapp_app_migration_sent_at: firstMigration ? sentAt : (profile as any).whatsapp_app_migration_sent_at,
+          whatsapp_app_redirect_last_sent_at: sentAt,
+          whatsapp_app_redirect_count: Number((profile as any).whatsapp_app_redirect_count || 0) + 1,
+          last_app_invite_sent_at: (profile as any).last_app_invite_sent_at || sentAt,
+        }).eq('id', profile.id),
+        supabase.from('portal_value_events').insert({
+          user_id: profile.user_id,
+          feature: destination === 'sessoes' ? 'session' : 'conversation',
+          event_type: firstMigration ? 'whatsapp_migration_presented' : 'whatsapp_redirect_presented',
+          source: 'whatsapp',
+          metadata: { destination, inbound_message_id: persisted.mensagem.id },
+        }),
+      ]);
+
+      return new Response(JSON.stringify({ success: true, action: firstMigration ? 'app_migration_sent' : 'app_redirect_sent' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // ========================================================================
