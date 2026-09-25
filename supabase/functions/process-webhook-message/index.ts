@@ -446,6 +446,7 @@ Deno.serve(async (req) => {
   let agentData: any = null;
   let turnOwnerToken: string | null = null;
   let currentMessageId: string | null = null;
+  let originatingMessageId: string | null = null;
   let currentInboundMessageDbId: string | null = null;
   let isInApp = false;
   let shouldResumeInterruptedTurn = false;
@@ -818,6 +819,7 @@ Deno.serve(async (req) => {
     // INTERRUPTION SYSTEM
     // ========================================================================
     currentMessageId = messageId || `msg_${Date.now()}`;
+    originatingMessageId = currentMessageId;
     turnOwnerToken = crypto.randomUUID();
 
     // ========================================================================
@@ -1481,6 +1483,24 @@ Deno.serve(async (req) => {
       .limit(40);
     const lastAssistantMsg = lastAssistantCandidates?.find((entry) => entry.metadata?.kind !== 'response_failure');
 
+    // Uma falha terminal encerra aquele lote. Sem este limite, uma mensagem nova
+    // podia puxar novamente falas antigas sem resposta e repetir indefinidamente
+    // o mesmo erro.
+    const { data: latestFailedTurn } = isInApp ? await supabase
+      .from('chat_turn_metrics')
+      .select('server_received_at')
+      .eq('user_id', profile.user_id)
+      .eq('channel', 'in_app')
+      .eq('status', 'failed')
+      .order('server_received_at', { ascending: false })
+      .limit(1)
+      .maybeSingle() : { data: null };
+
+    const accumulationBoundary = [lastAssistantMsg?.created_at, latestFailedTurn?.server_received_at]
+      .filter((value): value is string => typeof value === 'string')
+      .sort()
+      .at(-1);
+
     let accumulatedQuery = supabase
       .from('messages')
       .select('content, created_at')
@@ -1488,8 +1508,8 @@ Deno.serve(async (req) => {
       .eq('role', 'user')
       .order('created_at', { ascending: true });
 
-    if (lastAssistantMsg?.created_at) {
-      accumulatedQuery = accumulatedQuery.gt('created_at', lastAssistantMsg.created_at);
+    if (accumulationBoundary) {
+      accumulatedQuery = accumulatedQuery.gt('created_at', accumulationBoundary);
     }
 
     const { data: recentUserMsgs } = await accumulatedQuery;
@@ -1667,13 +1687,15 @@ Deno.serve(async (req) => {
           .update({ last_user_message_id: currentMessageId })
           .eq('user_id', profile.user_id)
           .eq('owner_token', turnOwnerToken);
-        // A mensagem mais nova já está no histórico; preserve a primeira resposta se a reconsulta falhar.
+        // A mensagem mais nova já está no histórico. Se a segunda geração falhar,
+        // não derrubamos a resposta inteira: o turno é retomado pelo mecanismo
+        // abaixo usando somente a fala mais recente.
         try {
           agentData = await callAuraAgent(false);
           console.log('🤖 Agent re-response:', JSON.stringify(agentData, null, 2));
         } catch (reaccumulationError) {
-          console.error('Falha na re-acumulação; retomada automática necessária:', reaccumulationError);
-          throw reaccumulationError;
+          console.error('Falha na re-acumulação; preservando resposta pronta e retomando a fala mais recente:', reaccumulationError);
+          shouldResumeInterruptedTurn = true;
         }
       }
     }
@@ -2036,10 +2058,18 @@ Deno.serve(async (req) => {
     }
 
     if (isInApp && currentMessageId) {
+      const completedAt = new Date().toISOString();
       await supabase.from('chat_turn_metrics').update({
-        completed_at: new Date().toISOString(),
+        completed_at: completedAt,
         status: wasInterrupted ? 'interrupted' : 'completed',
       }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+      if (originatingMessageId && originatingMessageId !== currentMessageId) {
+        await supabase.from('chat_turn_metrics').update({
+          completed_at: completedAt,
+          status: 'interrupted',
+          error_code: 'superseded_by_newer_message',
+        }).eq('user_id', profile.user_id).eq('client_message_id', originatingMessageId);
+      }
     }
 
     if (isInApp && sentAnyResponse && !wasInterrupted && currentMessageId) {
@@ -2085,7 +2115,12 @@ Deno.serve(async (req) => {
     if (supabase && profile?.user_id) {
       try {
         await supabase.from('aura_response_state')
-          .update({ is_responding: false })
+          .update({
+            is_responding: false,
+            pending_content: null,
+            pending_context: null,
+            pending_expires_at: null,
+          })
           .eq('user_id', profile.user_id)
           .eq('owner_token', turnOwnerToken)
           .eq('is_responding', true);

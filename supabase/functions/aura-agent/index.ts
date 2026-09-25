@@ -3863,23 +3863,31 @@ function wantsSession(message: string): boolean {
   return sessionPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
-// Detecta pedido de iniciar sessão - EXPANDIDO
+function normalizarConfirmacaoDeSessao(message: string): string {
+  return message
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Só reconhece início quando a fala inteira é uma confirmação curta ou quando
+// a pessoa menciona explicitamente sessão/encontro. Palavras dentro de uma
+// frase comum nunca podem iniciar uma sessão.
 function wantsToStartSession(message: string): boolean {
-  const lowerMsg = message.toLowerCase();
-  const startPhrases = [
-    'vamos começar', 'vamos comecar', 'pode começar', 'pode comecar',
-    'começar a sessão', 'comecar a sessao', 'iniciar sessão', 'iniciar sessao',
-    'bora começar', 'bora comecar', 'pronta', 'pronto', 'to pronta', 'to pronto',
-    'tô pronta', 'tô pronto', 'sim, vamos', 'sim vamos', 'pode ser agora',
-    'agora é bom', 'agora e bom', 'estou pronta', 'estou pronto',
-    // Novas frases adicionadas
-    'pode iniciar', 'vamos la', 'vamos lá', 'bora la', 'bora lá',
-    'estou aqui', 'to aqui', 'tô aqui', 'ta na hora', 'tá na hora',
-    'está na hora', 'chegou a hora', 'é agora', 'e agora', 'iniciar',
-    'começar', 'comecar', 'iniciar agora', 'sim', 'bora', 'partiu',
-    'pode ser', 'vamos nessa', 'vem', 'manda ver', 'oi', 'ola', 'olá'
-  ];
-  return startPhrases.some(phrase => lowerMsg.includes(phrase));
+  const normalized = normalizarConfirmacaoDeSessao(message);
+  const shortConfirmations = new Set([
+    'vamos', 'bora', 'pode comecar', 'vamos comecar', 'bora comecar',
+    'to pronta', 'to pronto', 'estou pronta', 'estou pronto', 'sim vamos',
+    'pode ser agora', 'agora e bom', 'pode iniciar', 'vamos la', 'bora la',
+    'ta na hora', 'chegou a hora', 'e agora', 'iniciar agora', 'vamos nessa',
+    'manda ver', 'partiu',
+  ]);
+  return shortConfirmations.has(normalized)
+    || /\b(?:comecar|iniciar|fazer|entrar (?:na|no))\b.{0,24}\b(?:sessao|encontro)\b/.test(normalized)
+    || /\b(?:sessao|encontro)\b.{0,24}\b(?:agora|comecar|iniciar)\b/.test(normalized);
 }
 
 // Detecta pedido de encerrar sessão (EXPANDIDO para sinais implícitos)
@@ -5472,6 +5480,7 @@ serve(async (req) => {
           .in('status', ['cancelled', 'no_show'])
           .is('started_at', null)
           .gte('scheduled_at', sevenDaysAgo.toISOString())
+          .lt('scheduled_at', now.toISOString())
           .or('session_summary.is.null,session_summary.neq.reactivation_declined')
           .order('scheduled_at', { ascending: false })
           .limit(1);
@@ -5692,14 +5701,7 @@ serve(async (req) => {
       
       // Função para detectar confirmação EXPLÍCITA de início de sessão
       const confirmsSessionStart = (msg: string): boolean => {
-        const confirmPhrases = [
-          'vamos', 'bora', 'pode comecar', 'pode começar', 'to pronta', 'tô pronta',
-          'to pronto', 'tô pronto', 'estou pronta', 'estou pronto', 'sim', 'simbora',
-          'vamos la', 'vamos lá', 'pode ser', 'quero', 'quero sim', 'claro',
-          'vem', 'começa', 'comeca', 'partiu', 'animada', 'animado', 'preparada', 'preparado'
-        ];
-        const lowerMsg = msg.toLowerCase().trim();
-        return confirmPhrases.some(p => lowerMsg.includes(p));
+        return wantsToStartSession(msg);
       };
       
       // CASO 1: Session-reminder já notificou E usuário confirma explicitamente
@@ -5713,9 +5715,10 @@ serve(async (req) => {
           shouldStartSession = false;
           console.log('🤔 Simple confirmation after notification - will ask for explicit confirmation');
         } else {
-          // Qualquer outra mensagem após notificação = considera como "vamos começar"
-          shouldStartSession = true;
-          console.log('🚀 User messaged after session notification - starting session');
+          // Uma fala comum continua como conversa. A notificação, sozinha, não
+          // transforma qualquer mensagem em aceite de início de sessão.
+          shouldStartSession = false;
+          console.log('💬 Mensagem comum após notificação — mantendo conversa livre');
         }
       }
       // CASO 2: Usuário disse "me chame na hora" - NÃO auto-iniciar
@@ -5774,27 +5777,20 @@ serve(async (req) => {
         _scheduled_at: null,
         _session_id: pendingScheduledSession.id,
       });
-      if (startSessionError) throw startSessionError;
-
-      sessionActive = true;
-      currentSession = { ...pendingScheduledSession, status: 'in_progress', started_at: now };
-      sessionTimeContext = calculateSessionTimeContext(currentSession, null, 0).timeContext;
-      
-      console.log('✅ Session started:', pendingScheduledSession.id);
+      if (startSessionError) {
+        console.error('⚠️ Falha isolada ao iniciar sessão agendada; conversa seguirá normalmente:', startSessionError);
+        shouldStartSession = false;
+      } else {
+        sessionActive = true;
+        currentSession = { ...pendingScheduledSession, status: 'in_progress', started_at: now };
+        sessionTimeContext = calculateSessionTimeContext(currentSession, null, 0).timeContext;
+        console.log('✅ Session started:', pendingScheduledSession.id);
+      }
     }
 
     // Reativar sessão perdida quando usuário confirma que quer fazer agora
     if (!shouldStartSession && !sessionActive && recentMissedSession && !pendingScheduledSession && profile) {
-      // Mover confirmsSessionStart para fora do bloco pendingScheduledSession para reusar
-      const confirmPhrasesMissed = [
-        'vamos', 'bora', 'pode comecar', 'pode começar', 'to pronta', 'tô pronta',
-        'to pronto', 'tô pronto', 'estou pronta', 'estou pronto', 'sim', 'simbora',
-        'vamos la', 'vamos lá', 'pode ser', 'quero', 'quero sim', 'claro',
-        'vem', 'começa', 'comeca', 'partiu', 'animada', 'animado', 'preparada', 'preparado',
-        'quero fazer agora', 'vamos fazer', 'pode ser agora', 'agora'
-      ];
-      const lowerMsg = message.toLowerCase().trim();
-      const userWantsToStartMissedSession = confirmPhrasesMissed.some(p => lowerMsg.includes(p));
+      const userWantsToStartMissedSession = wantsToStartSession(message);
 
       if (userWantsToStartMissedSession) {
         const now = new Date().toISOString();
@@ -5805,14 +5801,15 @@ serve(async (req) => {
           _scheduled_at: null,
           _session_id: recentMissedSession.id,
         });
-        if (reactivateError) throw reactivateError;
-
-        sessionActive = true;
-        currentSession = { ...recentMissedSession, status: 'in_progress', started_at: now };
-        sessionTimeContext = calculateSessionTimeContext(currentSession, null, 0).timeContext;
-        recentMissedSession = null; // Limpar para não injetar contexto de sessão perdida
-
-        console.log('✅ Missed session reactivated:', currentSession.id);
+        if (reactivateError) {
+          console.error('⚠️ Falha isolada ao reativar sessão perdida; conversa seguirá normalmente:', reactivateError);
+        } else {
+          sessionActive = true;
+          currentSession = { ...recentMissedSession, status: 'in_progress', started_at: now };
+          sessionTimeContext = calculateSessionTimeContext(currentSession, null, 0).timeContext;
+          recentMissedSession = null; // Limpar para não injetar contexto de sessão perdida
+          console.log('✅ Missed session reactivated:', currentSession.id);
+        }
       }
     }
 
@@ -6639,23 +6636,25 @@ INSTRUÇÃO: Retome de onde pararam naturalmente. Diga algo como "Que bom que vo
               _scheduled_at: null,
               _session_id: sessionId,
             });
-            if (prearmStartError) throw prearmStartError;
+            if (prearmStartError) {
+              console.error(`⚠️ ${tag} falhou ao iniciar sessão; conversa seguirá normalmente:`, prearmStartError);
+              await supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id);
+            } else {
+              await Promise.all([
+                supabase.from('sessions').update({ session_start_notified: true }).eq('id', sessionId),
+                supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id),
+              ]);
 
-            await Promise.all([
-              supabase.from('sessions').update({ session_start_notified: true }).eq('id', sessionId),
-              supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id),
-            ]);
+              const sessionType = prearmSession.session_type || 'livre';
+              const focusTopic = prearmSession.focus_topic;
+              const durationMin = prearmSession.duration_minutes || 45;
 
-            const sessionType = prearmSession.session_type || 'livre';
-            const focusTopic = prearmSession.focus_topic;
-            const durationMin = prearmSession.duration_minutes || 45;
+              const triggerNote = isSessionStart
+                ? 'O usuário acabou de clicar no botão do template de lembrete de 5 minutos.'
+                : 'O usuário havia confirmado a sessão antes e agora mandou uma mensagem dentro da janela de início.';
+              console.log(`✅ ${tag} sessão ${sessionId} iniciada (delta=${Math.round(minutesUntilScheduled)} min)`);
 
-            const triggerNote = isSessionStart
-              ? 'O usuário acabou de clicar no botão do template de lembrete de 5 minutos.'
-              : 'O usuário havia confirmado a sessão antes e agora mandou uma mensagem dentro da janela de início.';
-            console.log(`✅ ${tag} sessão ${sessionId} iniciada (delta=${Math.round(minutesUntilScheduled)} min)`);
-
-            dynamicContext += `\n\n🚀 SESSÃO TERAPÊUTICA INICIADA AGORA:
+              dynamicContext += `\n\n🚀 SESSÃO TERAPÊUTICA INICIADA AGORA:
 ${triggerNote} A sessão foi iniciada automaticamente.
 
 Tipo: ${sessionType}
@@ -6668,6 +6667,7 @@ INSTRUÇÃO:
 3. Pergunte como o usuário está se sentindo e o que gostaria de trabalhar hoje
 4. Seja acolhedora e profissional — esta é uma sessão terapêutica estruturada
 5. NÃO mencione "clique no botão" ou "confirmação" — pareça natural`;
+            }
           }
         }
 

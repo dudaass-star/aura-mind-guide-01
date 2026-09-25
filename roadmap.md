@@ -5,7 +5,7 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
-- [ ] Compactar horários na conversa e corrigir a resposta automática após duas mensagens seguidas, sem botão de retomada; validar com cliente real.
+- [ ] Compactar horários na conversa e corrigir a resposta automática após duas mensagens seguidas, sem botão de retomada; correção aplicada e validada no fluxo real após publicação.
 
 - [x] Preparar a conta compartilhada fictícia da Marina (33 anos) com acesso por link temporário, histórico coerente, conversa e sessão verificadas para UGC; excluir cobranças, avisos e métricas reais.
 
