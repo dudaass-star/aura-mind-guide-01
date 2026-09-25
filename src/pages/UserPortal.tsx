@@ -80,6 +80,17 @@ const UserPortal = () => {
     || (searchParams.get("push") === "open" && searchParams.get("type") === "new_reply");
 
   useEffect(() => {
+    if (!userId || searchParams.get("migracao") !== "whatsapp") return;
+    void supabasePortal.from("portal_value_events").insert({
+      user_id: userId,
+      feature: initialTab === "sessoes" ? "session" : "conversation",
+      event_type: "whatsapp_migration_opened",
+      source: "whatsapp",
+      metadata: { destination: initialTab },
+    });
+  }, [initialTab, searchParams, userId]);
+
+  useEffect(() => {
     if (activeTab === initialTab) return;
     setVisitedTabs((current) => current.has(initialTab) ? current : new Set(current).add(initialTab));
     setActiveTab(initialTab);
