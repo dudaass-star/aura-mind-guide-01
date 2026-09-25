@@ -39,23 +39,25 @@ Deno.test("telemetria do aplicativo não registra conteúdo", () => {
   assert(metricUpdates.every((snippet) => !snippet.includes("messageText") && !snippet.includes("content:")));
 });
 
-Deno.test("convite para o aplicativo é atômico e enviado uma única vez", () => {
-  assert(SOURCE.includes(".is('last_app_invite_sent_at', null)"));
-  assert(SOURCE.includes("message_variant: 'app_invite'"));
-  assert(SOURCE.includes("action: 'app_invite_sent'"));
+Deno.test("conversa livre no WhatsApp é preservada e redirecionada ao aplicativo", () => {
+  assert(SOURCE.includes("whatsapp_app_migration_sent_at"));
+  assert(SOURCE.includes("message_variant: firstMigration ? 'app_migration' : 'app_redirect'"));
+  assert(SOURCE.includes("persistirMensagemRecebidaWhatsapp"));
+  assert(SOURCE.includes("action: firstMigration ? 'app_migration_sent' : 'app_redirect_sent'"));
 });
 
-Deno.test("convite não interrompe crise, pagamento ou suporte", () => {
-  assert(SOURCE.includes("mustKeepWhatsAppConversation"));
+Deno.test("risco permanece no WhatsApp e suporte operacional não chega ao agente", () => {
+  assert(SOURCE.includes("isImmediateRisk"));
+  assert(SOURCE.includes("getOperationalWhatsAppResponse"));
   assert(SOURCE.includes("'vou me matar'"));
   assert(SOURCE.includes("'pagamento'"));
-  assert(SOURCE.includes("'suporte'"));
+  assert(SOURCE.includes("operational_support_level_"));
 });
 
-Deno.test("falha no convite libera nova tentativa e fica visível", () => {
-  assert(SOURCE.includes(".update({ last_app_invite_sent_at: null })"));
-  assert(SOURCE.includes("'process-webhook-message:app_invite'"));
-  assert(SOURCE.includes("throw inviteError"));
+Deno.test("redirecionamento repetido respeita limite de 24 horas", () => {
+  assert(SOURCE.includes("whatsapp_app_redirect_last_sent_at"));
+  assert(SOURCE.includes("24 * 60 * 60 * 1000"));
+  assert(SOURCE.includes("action: 'app_redirect_rate_limited'"));
 });
 Deno.test("heartbeat mantém a trava ativa enquanto o dono processa", () => {
   if (!SOURCE.includes("setInterval(() =>")) throw new Error("heartbeat ausente");

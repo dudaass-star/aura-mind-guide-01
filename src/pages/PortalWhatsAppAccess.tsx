@@ -30,6 +30,7 @@ export default function PortalWhatsAppAccess() {
         setError(true);
         return;
       }
+      setDestination(data.destination === "sessoes" || data.destination === "hoje" ? data.destination : "conversar");
       const { error: verifyError } = await supabasePortal.auth.verifyOtp({
         token_hash: data.token_hash,
         type: data.type === "signup" ? "signup" : "magiclink",
@@ -38,7 +39,6 @@ export default function PortalWhatsAppAccess() {
         setError(true);
         return;
       }
-      setDestination(data.destination === "sessoes" || data.destination === "hoje" ? data.destination : "conversar");
       localStorage.setItem("aura-access-source", "whatsapp");
     })();
   }, [loading, session]);

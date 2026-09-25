@@ -112,7 +112,7 @@ function getOperationalWhatsAppResponse(message: string): { level: 1 | 2; text: 
   const levelTwo = [
     'estorno', 'reembolso', 'cobrança duplicada', 'cobranca duplicada', 'cobrança indevida', 'cobranca indevida',
     'não reconheço', 'nao reconheco', 'alterar meu email', 'alterar meu e-mail', 'trocar meu email', 'trocar meu e-mail',
-    'alterar meu telefone', 'trocar meu telefone', 'excluir minha conta', 'apagar minha conta', 'excluir meus dados',
+    'alterar meu telefone', 'trocar meu telefone', 'corrigir meu nome', 'alterar meu nome', 'excluir minha conta', 'apagar minha conta', 'excluir meus dados',
     'apagar meus dados', 'corrigir meus dados', 'exportar meus dados', 'cancelamento não funcionou',
     'cancelamento nao funcionou', 'não consegui cancelar', 'nao consegui cancelar',
   ];
@@ -126,13 +126,13 @@ function getOperationalWhatsAppResponse(message: string): { level: 1 | 2; text: 
   if (/(cancelar|cancelamento|parar assinatura)/i.test(normalized)) {
     return { level: 1, text: 'Você pode iniciar o cancelamento com segurança em https://olaaura.com.br/cancelar. Se não conseguir concluir, escreva para suporte@olaaura.com.br com seu nome e telefone cadastrado.' };
   }
-  if (/(pagamento|cobrança|cobranca|cartão|cartao|pix|boleto|assinatura|renovação|renovacao)/i.test(normalized)) {
+  if (/(pagamento|cobrança|cobranca|cartão|cartao|pix|boleto|assinatura|renovação|renovacao|trocar (?:de )?plano|mudar (?:de )?plano)/i.test(normalized)) {
     return { level: 1, text: 'Você encontra os dados do plano e as opções disponíveis no menu da sua conta no app Olá Aura. Se houver uma cobrança incorreta ou for necessária alguma alteração, escreva para suporte@olaaura.com.br com seu nome e telefone cadastrado.' };
   }
   if (/(privacidade|meus dados|lgpd)/i.test(normalized)) {
     return { level: 1, text: 'Você pode consultar nossa Política de Privacidade em https://olaaura.com.br/privacidade. Pedidos de acesso, correção, exportação ou exclusão de dados são tratados com supervisão humana pelo suporte@olaaura.com.br.' };
   }
-  if (/(instalar|instalação|instalacao|notificaç|notificac|onde fica|como entro|como entrar|acesso|código|codigo|app|aplicativo)/i.test(normalized)) {
+  if (/(instalar|instalação|instalacao|notificaç|notificac|onde fica|como entro|como entrar|acesso|código|codigo|\bapp\b|aplicativo)/i.test(normalized)) {
     return { level: 1, text: 'Eu te ajudo por aqui: abra o link de acesso, entre no app Olá Aura e use o menu para instalar o aplicativo ou ativar notificações. Se o link expirou, escreva “quero entrar no aplicativo” e envio outro.' };
   }
   return null;
