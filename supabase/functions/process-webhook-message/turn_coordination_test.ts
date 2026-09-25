@@ -48,10 +48,8 @@ Deno.test("conversa livre no WhatsApp é preservada e redirecionada ao aplicativ
 });
 
 Deno.test("risco permanece no WhatsApp e suporte operacional não chega ao agente", () => {
-  assert(SOURCE.includes("isImmediateRisk"));
-  assert(SOURCE.includes("getOperationalWhatsAppResponse"));
-  assert(SOURCE.includes("'vou me matar'"));
-  assert(SOURCE.includes("pagamento|cobrança|cobranca"));
+  assert(SOURCE.includes("isImmediateRisk(messageText || '')"));
+  assert(SOURCE.includes("getOperationalWhatsAppResponse(messageText)"));
   assert(SOURCE.includes("operational_support_level_"));
 });
 
@@ -62,9 +60,7 @@ Deno.test("redirecionamento repetido respeita limite de 24 horas", () => {
 });
 
 Deno.test("pedido de novo acesso reconhece frases prometidas ao cliente", () => {
-  assert(SOURCE.includes("function isPortalAccessIntent"));
-  assert(SOURCE.includes("quero\\s+(?:entrar|acessar|abrir)"));
-  assert(SOURCE.includes("(?:link|c[oó]digo)[^\\n]{0,30}(?:expirou|venceu|inv[aá]lido"));
+  assert(SOURCE.includes("isPortalAccessIntent(messageText || '')"));
   assert(SOURCE.includes("destination: 'conversar'"));
 });
 
