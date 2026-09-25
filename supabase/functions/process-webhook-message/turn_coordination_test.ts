@@ -40,7 +40,7 @@ Deno.test("telemetria do aplicativo não registra conteúdo", () => {
 });
 
 Deno.test("conversa livre no WhatsApp é preservada e redirecionada ao aplicativo", () => {
-  assert(SOURCE.includes("'payment_failed', 'canceling'"));
+  assert(SOURCE.includes("'payment_failed', 'canceling', 'taster'"));
   assert(SOURCE.includes("whatsapp_app_migration_sent_at"));
   assert(SOURCE.includes("message_variant: firstMigration ? 'app_migration' : 'app_redirect'"));
   assert(SOURCE.includes("persistirMensagemRecebidaWhatsapp"));
@@ -48,10 +48,8 @@ Deno.test("conversa livre no WhatsApp é preservada e redirecionada ao aplicativ
 });
 
 Deno.test("risco permanece no WhatsApp e suporte operacional não chega ao agente", () => {
-  assert(SOURCE.includes("isImmediateRisk"));
-  assert(SOURCE.includes("getOperationalWhatsAppResponse"));
-  assert(SOURCE.includes("'vou me matar'"));
-  assert(SOURCE.includes("pagamento|cobrança|cobranca"));
+  assert(SOURCE.includes("isImmediateRisk(messageText || '')"));
+  assert(SOURCE.includes("getOperationalWhatsAppResponse(messageText)"));
   assert(SOURCE.includes("operational_support_level_"));
 });
 
@@ -59,6 +57,18 @@ Deno.test("redirecionamento repetido respeita limite de 24 horas", () => {
   assert(SOURCE.includes("whatsapp_app_redirect_last_sent_at"));
   assert(SOURCE.includes("24 * 60 * 60 * 1000"));
   assert(SOURCE.includes("action: 'app_redirect_rate_limited'"));
+});
+
+Deno.test("pedido de novo acesso reconhece frases prometidas ao cliente", () => {
+  assert(SOURCE.includes("isPortalAccessIntent(messageText || '')"));
+  assert(SOURCE.includes("destination: 'conversar'"));
+});
+
+Deno.test("áudio sem transcrição e imagem sem legenda também ficam no aplicativo", () => {
+  assert(SOURCE.includes("const hasWhatsappContent = !isInApp"));
+  assert(SOURCE.includes("'[Áudio recebido no WhatsApp]'"));
+  assert(SOURCE.includes("'[Imagem recebida no WhatsApp]'"));
+  assert(SOURCE.includes("if (hasWhatsappContent && activeForApp"));
 });
 Deno.test("heartbeat mantém a trava ativa enquanto o dono processa", () => {
   if (!SOURCE.includes("setInterval(() =>")) throw new Error("heartbeat ausente");

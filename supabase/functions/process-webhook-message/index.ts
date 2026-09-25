@@ -7,6 +7,12 @@ import { sendMessage, sendAudio, sendAudioUrl, type SendResult } from "../_share
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { CLICK_DELIVERY_TITLES, prefixWithTitle } from "../_shared/whatsapp-official.ts";
 import { routeNotification } from "../_shared/notification-router.ts";
+import {
+  getOperationalWhatsAppResponse,
+  isImmediateRisk,
+  isPortalAccessIntent,
+  wantsSessionArea,
+} from "./whatsapp-migration-policy.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -91,55 +97,6 @@ async function persistirMensagemRecebidaWhatsapp(
   }
 
   throw insertError || new Error('A mensagem recebida não foi gravada');
-}
-
-function isImmediateRisk(message: string): boolean {
-  const normalized = (message || '').toLowerCase();
-  const riskPhrases = [
-    'vou me matar', 'vou me suicidar', 'comprei os remédios', 'comprei os remedios',
-    'vou pular', 'tenho um plano', 'me matar', 'suicídio', 'suicidio',
-    'to me cortando', 'tô me cortando', 'estou me cortando',
-    'tomei os comprimidos', 'tomei remédios', 'tomei remedios',
-    'pânico', 'panico', 'não consigo respirar', 'nao consigo respirar',
-    'desesperada', 'desesperado', 'não aguento mais', 'nao aguento mais',
-    'quero morrer', 'prefiro morrer', 'acabar com tudo', 'desisti de viver',
-  ];
-  return riskPhrases.some((phrase) => normalized.includes(phrase));
-}
-
-function getOperationalWhatsAppResponse(message: string): { level: 1 | 2; text: string } | null {
-  const normalized = (message || '').toLowerCase();
-  const levelTwo = [
-    'estorno', 'reembolso', 'cobrança duplicada', 'cobranca duplicada', 'cobrança indevida', 'cobranca indevida',
-    'não reconheço', 'nao reconheco', 'alterar meu email', 'alterar meu e-mail', 'trocar meu email', 'trocar meu e-mail',
-    'alterar meu telefone', 'trocar meu telefone', 'corrigir meu nome', 'alterar meu nome', 'excluir minha conta', 'apagar minha conta', 'excluir meus dados',
-    'apagar meus dados', 'corrigir meus dados', 'exportar meus dados', 'cancelamento não funcionou',
-    'cancelamento nao funcionou', 'não consegui cancelar', 'nao consegui cancelar',
-  ];
-  if (levelTwo.some((phrase) => normalized.includes(phrase))) {
-    return {
-      level: 2,
-      text: 'Esse pedido precisa de uma ação no seu cadastro ou financeiro e será tratado com supervisão humana. Envie um e-mail para suporte@olaaura.com.br com seu nome, telefone cadastrado e uma descrição curta do que precisa. Não é necessário enviar conversas pessoais com a AURA.',
-    };
-  }
-
-  if (/(cancelar|cancelamento|parar assinatura)/i.test(normalized)) {
-    return { level: 1, text: 'Você pode iniciar o cancelamento com segurança em https://olaaura.com.br/cancelar. Se não conseguir concluir, escreva para suporte@olaaura.com.br com seu nome e telefone cadastrado.' };
-  }
-  if (/(pagamento|cobrança|cobranca|cartão|cartao|pix|boleto|assinatura|renovação|renovacao|trocar (?:de )?plano|mudar (?:de )?plano)/i.test(normalized)) {
-    return { level: 1, text: 'Você encontra os dados do plano e as opções disponíveis no menu da sua conta no app Olá Aura. Se houver uma cobrança incorreta ou for necessária alguma alteração, escreva para suporte@olaaura.com.br com seu nome e telefone cadastrado.' };
-  }
-  if (/(privacidade|meus dados|lgpd)/i.test(normalized)) {
-    return { level: 1, text: 'Você pode consultar nossa Política de Privacidade em https://olaaura.com.br/privacidade. Pedidos de acesso, correção, exportação ou exclusão de dados são tratados com supervisão humana pelo suporte@olaaura.com.br.' };
-  }
-  if (/(instalar|instalação|instalacao|notificaç|notificac|onde fica|como entro|como entrar|acesso|código|codigo|\bapp\b|aplicativo)/i.test(normalized)) {
-    return { level: 1, text: 'Eu te ajudo por aqui: abra o link de acesso, entre no app Olá Aura e use o menu para instalar o aplicativo ou ativar notificações. Se o link expirou, escreva “quero entrar no aplicativo” e envio outro.' };
-  }
-  return null;
-}
-
-function wantsSessionArea(message: string): boolean {
-  return /(sessão|sessao|agendar|reagendar|remarcar|horário da sessão|horario da sessao)/i.test(message || '');
 }
 
 // ============================================================================
@@ -544,6 +501,10 @@ Deno.serve(async (req) => {
       console.log('🖼️ Image with caption:', messageText);
     }
 
+    const hasWhatsappContent = !isInApp && (Boolean(messageText?.trim()) || Boolean(hasAudio) || Boolean(hasImage));
+    const whatsappContentText = messageText?.trim()
+      || (hasAudio ? '[Áudio recebido no WhatsApp]' : '[Imagem recebida no WhatsApp]');
+
     // ========================================================================
     // USER LOOKUP
     // ========================================================================
@@ -590,7 +551,7 @@ Deno.serve(async (req) => {
 
     // Recuperação determinística do Meu Espaço. O próprio inbound confirma o número
     // cadastrado e abre a janela necessária para responder com o link de uso único.
-    const portalAccessIntent = /(?:n[aã]o\s+recebi|sem|problema\s+(?:com|no))[^\n]{0,45}c[oó]digo[^\n]{0,55}(?:meu\s+espa[cç]o|painel|entrar|acesso)|entrar\s+(?:no|pelo)\s+(?:meu\s+espa[cç]o|painel|whatsapp)/i.test(messageText || '');
+    const portalAccessIntent = isPortalAccessIntent(messageText || '');
     if (portalAccessIntent) {
       const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
       if (!internalSecret) throw new Error('INTERNAL_WEBHOOK_SECRET ausente');
@@ -601,7 +562,7 @@ Deno.serve(async (req) => {
           'Authorization': `Bearer ${supabaseServiceKey}`,
           'x-internal-secret': internalSecret,
         },
-        body: JSON.stringify({ action: 'request', phone: cleanPhone }),
+        body: JSON.stringify({ action: 'request', phone: cleanPhone, destination: 'conversar' }),
       });
       if (!response.ok) {
         console.error('❌ Falha ao gerar acesso do portal:', response.status, await response.text());
@@ -735,19 +696,23 @@ Deno.serve(async (req) => {
     // O WhatsApp permanece como porta de entrada, segurança e suporte operacional.
     // Conversa livre e sessões acontecem somente no App; a fala recebida fica no
     // histórico para a pessoa continuar sem precisar repetir o que escreveu.
-    const activeForApp = ['active', 'trial', 'past_due', 'payment_failed', 'canceling'].includes(profile.status || '');
-    if (!isInApp && messageText && activeForApp && !isImmediateRisk(messageText)) {
+    const activeForApp = ['active', 'trial', 'past_due', 'payment_failed', 'canceling', 'taster'].includes(profile.status || '');
+    if (hasWhatsappContent && activeForApp && !isImmediateRisk(messageText || '')) {
       const persisted = await persistirMensagemRecebidaWhatsapp(
         supabase,
         profile.user_id,
-        messageText,
+        whatsappContentText,
         messageId || `msg_${Date.now()}`,
       );
 
-      const ratingResult = await handleSessionRating(supabase, profile.user_id, messageText);
+      const ratingResult = messageText
+        ? await handleSessionRating(supabase, profile.user_id, messageText)
+        : { handled: false as const };
       const confirmationResult = ratingResult.handled
         ? { handled: false as const }
-        : await handleSessionConfirmation(supabase, profile.user_id, messageText);
+        : messageText
+          ? await handleSessionConfirmation(supabase, profile.user_id, messageText)
+          : { handled: false as const };
       const deterministicResponse = ratingResult.handled ? ratingResult.response : confirmationResult.response;
       if (deterministicResponse) {
         await sendMessage(cleanPhone, deterministicResponse, undefined, profile.user_id);
@@ -762,7 +727,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      const operational = getOperationalWhatsAppResponse(messageText);
+      const operational = messageText ? getOperationalWhatsAppResponse(messageText) : null;
       if (operational) {
         const sendResult = await sendMessage(cleanPhone, operational.text, undefined, profile.user_id);
         if (sendResult.success) {
@@ -791,7 +756,7 @@ Deno.serve(async (req) => {
       }
 
       const firstMigration = !(profile as any).whatsapp_app_migration_sent_at;
-      const destination = wantsSessionArea(messageText) ? 'sessoes' : 'conversar';
+      const destination = wantsSessionArea(messageText || '') ? 'sessoes' : 'conversar';
       const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
       if (!internalSecret) throw new Error('INTERNAL_WEBHOOK_SECRET ausente');
       const accessResponse = await fetch(`${supabaseUrl}/functions/v1/portal-whatsapp-access`, {
