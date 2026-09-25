@@ -93,18 +93,9 @@ async function persistirMensagemRecebidaWhatsapp(
   throw insertError || new Error('A mensagem recebida não foi gravada');
 }
 
-function isAppInviteSilentHours(): boolean {
-  const hour = Number(new Intl.DateTimeFormat('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    hour: '2-digit',
-    hourCycle: 'h23',
-  }).format(new Date()));
-  return hour >= 22 || hour < 8;
-}
-
-function mustKeepWhatsAppConversation(message: string): boolean {
+function isImmediateRisk(message: string): boolean {
   const normalized = (message || '').toLowerCase();
-  const protectedPhrases = [
+  const riskPhrases = [
     'vou me matar', 'vou me suicidar', 'comprei os remédios', 'comprei os remedios',
     'vou pular', 'tenho um plano', 'me matar', 'suicídio', 'suicidio',
     'to me cortando', 'tô me cortando', 'estou me cortando',
@@ -112,12 +103,43 @@ function mustKeepWhatsAppConversation(message: string): boolean {
     'pânico', 'panico', 'não consigo respirar', 'nao consigo respirar',
     'desesperada', 'desesperado', 'não aguento mais', 'nao aguento mais',
     'quero morrer', 'prefiro morrer', 'acabar com tudo', 'desisti de viver',
-    'pagamento', 'cobrança', 'cobranca', 'cartão', 'cartao', 'pix', 'boleto',
-    'assinatura', 'cancelar', 'cancelamento', 'reativar', 'reembolso',
-    'suporte', 'atendimento', 'ajuda para entrar', 'não consigo entrar',
-    'nao consigo entrar', 'problema no app', 'problema no aplicativo',
   ];
-  return protectedPhrases.some((phrase) => normalized.includes(phrase));
+  return riskPhrases.some((phrase) => normalized.includes(phrase));
+}
+
+function getOperationalWhatsAppResponse(message: string): { level: 1 | 2; text: string } | null {
+  const normalized = (message || '').toLowerCase();
+  const levelTwo = [
+    'estorno', 'reembolso', 'cobrança duplicada', 'cobranca duplicada', 'cobrança indevida', 'cobranca indevida',
+    'não reconheço', 'nao reconheco', 'alterar meu email', 'alterar meu e-mail', 'trocar meu email', 'trocar meu e-mail',
+    'alterar meu telefone', 'trocar meu telefone', 'excluir minha conta', 'apagar minha conta', 'excluir meus dados',
+    'apagar meus dados', 'corrigir meus dados', 'exportar meus dados', 'cancelamento não funcionou',
+    'cancelamento nao funcionou', 'não consegui cancelar', 'nao consegui cancelar',
+  ];
+  if (levelTwo.some((phrase) => normalized.includes(phrase))) {
+    return {
+      level: 2,
+      text: 'Esse pedido precisa de uma ação no seu cadastro ou financeiro e será tratado com supervisão humana. Envie um e-mail para suporte@olaaura.com.br com seu nome, telefone cadastrado e uma descrição curta do que precisa. Não é necessário enviar conversas pessoais com a AURA.',
+    };
+  }
+
+  if (/(cancelar|cancelamento|parar assinatura)/i.test(normalized)) {
+    return { level: 1, text: 'Você pode iniciar o cancelamento com segurança em https://olaaura.com.br/cancelar. Se não conseguir concluir, escreva para suporte@olaaura.com.br com seu nome e telefone cadastrado.' };
+  }
+  if (/(pagamento|cobrança|cobranca|cartão|cartao|pix|boleto|assinatura|renovação|renovacao)/i.test(normalized)) {
+    return { level: 1, text: 'Você encontra os dados do plano e as opções disponíveis no menu da sua conta no app Olá Aura. Se houver uma cobrança incorreta ou for necessária alguma alteração, escreva para suporte@olaaura.com.br com seu nome e telefone cadastrado.' };
+  }
+  if (/(privacidade|meus dados|lgpd)/i.test(normalized)) {
+    return { level: 1, text: 'Você pode consultar nossa Política de Privacidade em https://olaaura.com.br/privacidade. Pedidos de acesso, correção, exportação ou exclusão de dados são tratados com supervisão humana pelo suporte@olaaura.com.br.' };
+  }
+  if (/(instalar|instalação|instalacao|notificaç|notificac|onde fica|como entro|como entrar|acesso|código|codigo|app|aplicativo)/i.test(normalized)) {
+    return { level: 1, text: 'Eu te ajudo por aqui: abra o link de acesso, entre no app Olá Aura e use o menu para instalar o aplicativo ou ativar notificações. Se o link expirou, escreva “quero entrar no aplicativo” e envio outro.' };
+  }
+  return null;
+}
+
+function wantsSessionArea(message: string): boolean {
+  return /(sessão|sessao|agendar|reagendar|remarcar|horário da sessão|horario da sessao)/i.test(message || '');
 }
 
 // ============================================================================
