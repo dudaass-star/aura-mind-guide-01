@@ -231,7 +231,7 @@ const MessageTimeline = memo(function MessageTimeline({
           <div key={message.id} data-chat-message className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
               "min-w-0 max-w-[86%] text-[15px] leading-relaxed md:max-w-[76%]",
-              message.is_audio && message.audio_url ? "px-2.5 py-2" : "px-4 py-3",
+              message.is_audio && message.audio_url ? "px-2.5 py-2" : mine ? "px-3 py-1.5" : "px-2 py-1.5",
               mine ? "rounded-2xl rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : message.is_audio ? "rounded-2xl rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm" : "text-foreground",
               message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
             )} data-message-bubble>
@@ -340,7 +340,6 @@ export function ConversarTab({
   const [loading, setLoading] = useState(cachedMessages.length === 0);
   const [sending, setSending] = useState(false);
   const [responding, setResponding] = useState(false);
-  const [responseIssue, setResponseIssue] = useState<string | null>(null);
   const [connected, setConnected] = useState(true);
   const [hasOlder, setHasOlder] = useState(false);
   const [showNew, setShowNew] = useState(false);
@@ -579,7 +578,6 @@ export function ConversarTab({
             messageId: latestUserMessage.id,
             createdAt: responseStartedAt,
           };
-          setResponseIssue("A resposta demorou mais que o esperado.");
         }
       }
       setLoading(false);
@@ -602,7 +600,6 @@ export function ConversarTab({
               if (!awaiting || !replyTargetId(hydratedIncoming) || replyTargetId(hydratedIncoming) === awaiting.messageId) {
                 awaitingResponseRef.current = null;
                 if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
-                setResponseIssue(null);
                 recordConversationEvent(userId, "response_received", {
                   response_seconds: awaiting ? Math.round((Date.now() - awaiting.createdAt) / 100) / 10 : null,
                 });
@@ -628,7 +625,6 @@ export function ConversarTab({
           const remainingMs = Math.max(0, 40_000 - Math.max(0, Date.now() - startedAt));
           responseTimerRef.current = window.setTimeout(() => {
             setResponding(false);
-            setResponseIssue("A resposta demorou mais que o esperado.");
             recordConversationEvent(userId, "response_timeout", { seconds: 40, source: "response_state" });
           }, remainingMs);
         },
@@ -766,12 +762,10 @@ export function ConversarTab({
     }));
     awaitingResponseRef.current = { clientId: pending.clientId, messageId: data.message.id, createdAt: Date.now() };
     setResponding(true);
-    setResponseIssue(null);
     if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
     responseTimerRef.current = window.setTimeout(() => {
       if (!awaitingResponseRef.current) return;
       setResponding(false);
-      setResponseIssue("A resposta demorou mais que o esperado.");
       recordConversationEvent(userId, "response_timeout", { seconds: 40 });
     }, 40_000);
   };
@@ -830,7 +824,6 @@ export function ConversarTab({
     localStorage.removeItem(`aura-chat-draft:${userId}`);
     setSending(true);
     setResponding(true);
-    setResponseIssue(null);
     enqueueOutbox(pending);
     scrollToBottom();
 
@@ -1145,11 +1138,6 @@ export function ConversarTab({
       )}
 
          <form onSubmit={send} className="shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl">
-          {responseIssue && (
-            <div className="mb-2 flex items-center rounded-lg border border-border bg-muted/50 px-3 py-2" role="status">
-              <p className="text-xs font-medium text-foreground">{responseIssue}</p>
-            </div>
-          )}
          <div className="flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner focus-within:border-primary/50 focus-within:bg-card focus-within:ring-2 focus-within:ring-ring/20">
           {recording ? (
             <>
