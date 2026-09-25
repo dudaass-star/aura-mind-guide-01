@@ -6667,6 +6667,7 @@ INSTRUÇÃO:
 3. Pergunte como o usuário está se sentindo e o que gostaria de trabalhar hoje
 4. Seja acolhedora e profissional — esta é uma sessão terapêutica estruturada
 5. NÃO mencione "clique no botão" ou "confirmação" — pareça natural`;
+            }
           }
         }
 
