@@ -128,6 +128,7 @@ Deno.serve(async (req) => {
           role: "assistant",
           content: welcomeText,
           channel: "in_app",
+          client_message_id: welcomeSource,
           source_message_id: welcomeSource,
           delivery_status: "delivered",
           is_audio: false,
