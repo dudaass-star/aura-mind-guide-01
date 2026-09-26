@@ -15,6 +15,7 @@ import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 import { rememberPushAttribution, reportPushPresence } from "@/lib/push-notifications";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
+import { isAppStandalone } from "@/components/portal/InstallAppMenuItem";
 
 type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes";
 
@@ -80,6 +81,18 @@ const UserPortal = () => {
     || searchParams.get("migracao") === "whatsapp"
     || Boolean(discussionEpisodeId)
     || (searchParams.get("push") === "open" && searchParams.get("type") === "new_reply");
+
+  useEffect(() => {
+    if (!userId || linkStatus !== "linked" || !isAppStandalone()) return;
+    void supabasePortal.from("portal_value_events").insert({
+      user_id: userId,
+      feature: "app",
+      event_type: "standalone_opened",
+      source: "app",
+    }).then(({ error }) => {
+      if (error) console.warn("Não foi possível registrar a abertura pela tela inicial");
+    });
+  }, [userId, linkStatus]);
 
   useEffect(() => {
     if (!userId || searchParams.get("migracao") !== "whatsapp") return;

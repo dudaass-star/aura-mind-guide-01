@@ -114,6 +114,7 @@ export default function AdminUsers() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [ratings, setRatings] = useState<Record<string, RatingAgg>>({});
   const [sessionStats, setSessionStats] = useState<Record<string, SessionStats>>({});
+  const [standaloneOpens, setStandaloneOpens] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -195,6 +196,7 @@ export default function AdminUsers() {
       setProfiles([]);
       setTotal(0);
       setRatings({});
+      setStandaloneOpens({});
     } else {
       const list = (data || []) as Profile[];
       setTotal(count || 0);
@@ -203,6 +205,19 @@ export default function AdminUsers() {
         fetchRatings(userIds),
         fetchSessionStats(userIds),
       ]);
+      const opens = await Promise.all(userIds.map(async (userId) => {
+        const { data, error } = await supabase
+          .from('portal_value_events')
+          .select('created_at')
+          .eq('user_id', userId)
+          .eq('feature', 'app')
+          .eq('event_type', 'standalone_opened')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (error) console.warn('Não foi possível consultar o uso pela tela inicial');
+        return [userId, data?.[0]?.created_at] as const;
+      }));
+      setStandaloneOpens(Object.fromEntries(opens.filter((entry): entry is readonly [string, string] => Boolean(entry[1]))));
       // Ordenação client-side por rating
       let finalList = list;
       if (sortFilter === 'highest_rating' || sortFilter === 'lowest_rating') {
@@ -622,14 +637,15 @@ export default function AdminUsers() {
               <TableHead>Rating médio</TableHead>
               <TableHead>Criado em</TableHead>
               <TableHead>Último contato</TableHead>
+               <TableHead title="Última abertura pelo ícone da tela inicial; sem registro não significa que não foi instalado">Tela inicial</TableHead>
               <TableHead>Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
             ) : profiles.length === 0 ? (
-              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
+              <TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
             ) : profiles.map((p) => {
               const s = sessionStats[p.user_id];
               const d0 = getD0Status(p, s);
@@ -712,6 +728,11 @@ export default function AdminUsers() {
                 </TableCell>
                 <TableCell className="text-sm">{fmt(p.created_at)}</TableCell>
                 <TableCell className="text-sm">{fmt(p.last_user_message_at)}</TableCell>
+                <TableCell className="text-sm whitespace-nowrap" title={standaloneOpens[p.user_id] ? 'Última abertura confirmada pelo ícone da tela inicial' : 'Sem abertura registrada desde o início do acompanhamento'}>
+                  {standaloneOpens[p.user_id]
+                    ? new Date(standaloneOpens[p.user_id]).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    : 'Sem registro'}
+                </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
                     <Pencil className="h-4 w-4" />
