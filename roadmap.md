@@ -6,7 +6,7 @@
 # Roadmap
 
 - [x] Registrar por cliente a abertura pelo ícone da tela inicial e exibir a última abertura na Gestão de Usuários, sem presumir instalação por acesso no navegador.
-- [ ] Corrigir e validar o botão administrativo que copia o link temporário da conta de demonstração da Marina, incluindo entrada direta no App.
+- [x] Corrigir e validar o botão administrativo que copia o link temporário da conta de demonstração da Marina, incluindo entrada direta no App.
 
 - [ ] Compactar horários na conversa e corrigir a resposta automática após duas mensagens seguidas, sem botão de retomada; correção aplicada e validada no fluxo real após publicação.
 
