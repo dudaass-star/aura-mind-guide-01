@@ -2,11 +2,21 @@
 // Uso: suporte/admin, quando o cliente não recebe o código por email
 // (ex.: filtro de Hotmail/Outlook). Somente admins autenticados.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "npm:zod@3.25.76";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const RequestSchema = z.object({
+  profile_id: z.string().uuid().optional(),
+  email: z.string().email().max(320).optional(),
+  phone: z.string().min(8).max(20).optional(),
+  redirect_to: z.literal('https://olaaura.com.br/meu-espaco').optional(),
+}).refine((value) => Boolean(value.profile_id || value.email || value.phone), {
+  message: 'Informe o perfil, email ou telefone',
+});
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -25,7 +35,10 @@ Deno.serve(async (req) => {
     const asCaller = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: claims } = await asCaller.auth.getClaims();
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    if (!token) throw new Error('unauthorized');
+    const { data: claims, error: claimsError } = await asCaller.auth.getClaims(token);
+    if (claimsError) throw new Error('unauthorized');
     const callerId = claims?.claims?.sub as string | undefined;
     if (!callerId) throw new Error('unauthorized');
 
@@ -36,9 +49,11 @@ Deno.serve(async (req) => {
     if (!isAdmin) throw new Error('forbidden');
 
     // 2) resolve o email do cliente (por profile_id, email ou telefone)
-    const body = await req.json().catch(() => ({}));
+    const parsed = RequestSchema.safeParse(await req.json().catch(() => ({})));
+    if (!parsed.success) throw new Error('invalid_request');
+    const body = parsed.data;
     let email: string | null = (body.email ?? null)?.toString()?.trim()?.toLowerCase() || null;
-    const redirectTo: string = body.redirect_to || 'https://olaaura.com.br/meu-espaco';
+    const redirectTo = body.redirect_to || 'https://olaaura.com.br/meu-espaco';
 
     if (!email && (body.profile_id || body.phone)) {
       const query = admin.from('profiles').select('email, phone').limit(1);

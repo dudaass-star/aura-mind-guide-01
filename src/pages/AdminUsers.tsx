@@ -358,14 +358,29 @@ export default function AdminUsers() {
     if (!editProfile) return;
     setPortalLinkLoading(true);
     try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (sessionError || !accessToken) {
+        throw new Error('Sua sessão administrativa expirou. Entre novamente para gerar o link.');
+      }
+
       // Gera um magic link real de auth (o portal não usa mais token na URL).
       const { data, error } = await supabase.functions.invoke('admin-portal-magic-link', {
+        headers: { Authorization: `Bearer ${accessToken}` },
         body: {
           profile_id: editProfile.id,
           redirect_to: 'https://olaaura.com.br/meu-espaco',
         },
       });
-      if (error) throw error;
+      if (error) {
+        let message = error.message;
+        const response = 'context' in error ? error.context : undefined;
+        if (response instanceof Response) {
+          const payload = await response.clone().json().catch(() => null);
+          if (payload && typeof payload.error === 'string') message = payload.error;
+        }
+        throw new Error(message);
+      }
       if (!data?.link) throw new Error(data?.error || 'Não foi possível gerar o link');
 
       await navigator.clipboard.writeText(data.link);
@@ -375,10 +390,15 @@ export default function AdminUsers() {
         description: `Válido por 1h — envie para ${data.email}. Ao clicar, o cliente entra direto no app Olá Aura.`,
       });
       setTimeout(() => setPortalLinkCopied(false), 3000);
-    } catch (err: any) {
-      const msg = err?.message === 'email_not_found'
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : '';
+      const msg = errorMessage === 'email_not_found'
         ? 'Esse cliente não tem email cadastrado no perfil.'
-        : err?.message || 'Não foi possível gerar o link';
+        : errorMessage === 'unauthorized'
+          ? 'Sua sessão administrativa expirou. Entre novamente para gerar o link.'
+          : errorMessage === 'forbidden'
+            ? 'Sua conta não tem permissão para gerar links de acesso.'
+            : errorMessage || 'Não foi possível gerar o link';
       toast({ title: 'Erro', description: msg, variant: 'destructive' });
     } finally {
       setPortalLinkLoading(false);
