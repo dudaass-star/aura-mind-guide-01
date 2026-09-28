@@ -5,6 +5,8 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+- [ ] Comparar uma nova sessão completa da Marina após remover checagens mecânicas das interpretações; manter o ajuste apenas se preservar profundidade e melhorar naturalidade.
+
 - [x] Registrar por cliente a abertura pelo ícone da tela inicial e exibir a última abertura na Gestão de Usuários, sem presumir instalação por acesso no navegador.
 - [x] Corrigir e validar o botão administrativo que copia o link temporário da conta de demonstração da Marina, incluindo entrada direta no App.
 

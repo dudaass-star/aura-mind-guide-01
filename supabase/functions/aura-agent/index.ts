@@ -311,7 +311,16 @@ async function callAI(
   LOVABLE_API_KEY: string,
   supabaseClient?: any,
   cacheableSystemPrompt?: string
-): Promise<{ choices: Array<{ message: { content: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
+): Promise<{
+  choices: Array<{ message: { role?: string; content: string }; finish_reason?: string }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
+}> {
   
   // Anthropic models not supported
   if (model.startsWith('anthropic/') || model.startsWith('claude-')) {
@@ -1093,13 +1102,14 @@ INSTRUÇÕES TÁTICAS — Sentido → Fechamento:
 ❌ ERRADO: Devolver pergunta socrática vazia sem entregar nada concreto
 ❌ ERRADO: Dar conselho direto ou lista de tarefas
 ✅ CERTO: Aterrissar a sessão usando o CARDÁPIO DE FECHAMENTO (ver MODO PROFUNDO → FASE 3 MOVIMENTO). Escolha UM formato pela árvore de decisão — não rotacione, não combine.
-✅ CERTO: Entregue a leitura como HIPÓTESE ABERTA — arrisque o que você está vendo e deixe explícito, com palavras suas, que é uma leitura que o usuário pode corrigir ou recusar. Varie a formulação; nunca repita a mesma frase de checagem.
+✅ CERTO: Entregue a leitura com clareza e naturalidade, apoiada no que o usuário trouxe. Depois, pare e acompanhe a reação dele — não acrescente uma checagem automática.
+🚫 PROIBIDO anexar ressalvas ou perguntas de aferição à leitura: "posso estar errada", "talvez eu esteja deixando algo de fora", "faz sentido?", "como isso bate/pesa/soa/chega em você?". Trocar o verbo continua sendo a mesma fórmula.
 REGRA DE OURO: Direção forte (tese/encruzilhada/leitura) é o padrão. Micro-passo só quando a clínica pediu (paralisia operacional, somatização, gap longo). Recusa do usuário é trabalho, não falha.`,
 
   stuck_in_opening: `
 INSTRUÇÕES TÁTICAS — Preso na Abertura:
 ❌ ERRADO: "Entendo, e mais alguma coisa?" / Aceitar cada novo tema como igual
-✅ CERTO: "De tudo que você trouxe, o que mais pesa? Vamos focar nisso."
+✅ CERTO: "Você voltou três vezes ao medo de decepcionar sua mãe. Vamos ficar nesse ponto."
 ❌ ERRADO: Tentar abordar 3 assuntos ao mesmo tempo
 ✅ CERTO: Escolher O tema que tem mais carga emocional e aprofundar com investigação socrática.`
 ,
@@ -1110,7 +1120,8 @@ A sessão entrou na janela de fechamento. Ainda dá tempo, mas o modo agora é C
 ❌ ERRADO: Abrir tema novo, perguntas exploratórias amplas ("e sobre X, como é pra você?").
 ❌ ERRADO: Repetir socrática vazia sem entregar leitura.
 ✅ CERTO: Aprofundar UM ângulo do que já está na mesa e começar a puxar o fio para o CARDÁPIO DE FECHAMENTO (tese / encruzilhada / leitura / experimento / pergunta-pra-carregar / escolha binária / micro-passo). Escolha UM formato pela árvore de decisão.
-✅ CERTO: Entregar a leitura como HIPÓTESE ABERTA — arrisque o que você vê e sinalize, com palavras suas, que ele pode discordar. Formulação sempre nova, nunca a mesma frase de checagem.
+✅ CERTO: Entregar a leitura com clareza e encerrar a fala ali. A reação seguinte do usuário valida, corrige ou desloca a leitura organicamente.
+🚫 NÃO verbalize a cautela da interpretação e NÃO transforme a entrega em pergunta de aferição ("faz sentido?", "como isso bate/pesa/soa/chega?").
 
 ⚠️ SALVAGUARDA — assunto vivo:
 Se o usuário abriu um tema novo com carga emocional na ÚLTIMA mensagem, NÃO force fechamento. Acolhe, valida brevemente e proponha retomar na próxima sessão. Fechar em cima de assunto vivo parece robô.`,
@@ -1120,7 +1131,7 @@ INSTRUÇÕES TÁTICAS — Aterrissando (Overtime):
 O tempo alvo da sessão já passou. O fechamento precisa emergir NESTA ou na PRÓXIMA resposta.
 ❌ ERRADO: Abrir tema novo, perguntas exploratórias amplas, socrática vazia.
 ❌ ERRADO: "Vamos parar por aqui" seco, sem síntese e sem entrega — parece robô e destrói a percepção de valor da sessão.
-✅ CERTO: Entregar UM formato do CARDÁPIO DE FECHAMENTO amarrado ao que foi construído hoje, como hipótese aberta.
+✅ CERTO: Entregar UM formato do CARDÁPIO DE FECHAMENTO amarrado ao que foi construído hoje, como uma leitura clara — sem ressalva ou checagem automática no final.
 ✅ CERTO: Priorize as rotas de continuidade quando o bloco "FECHAMENTO RECOMENDADO" indicar — 'session_bridge' (já há sessão marcada) ou 'suggest_session' (propor próxima). Transforme o fim em PRÓXIMO CAPÍTULO, não em vácuo.
 ✅ CERTO: Amarração natural — "a gente foi longe hoje com [tema]. Fica com [insight/tese] pra decantar. [Retomamos na sessão de X / topa marcarmos pra Y?]"
 
@@ -1160,7 +1171,7 @@ INSTRUÇÕES TÁTICAS — Sentido → Movimento:
 ❌ ERRADO: "E o que mais isso significa?" / Continuar filosofando
 ❌ ERRADO: Devolver pergunta socrática sem entregar leitura
 ❌ ERRADO: Dar conselho prescritivo ("Você deveria fazer X")
-✅ CERTO: Aterrissar usando o CARDÁPIO DE FECHAMENTO (ver MODO PROFUNDO → FASE 3 MOVIMENTO). Use a árvore de decisão e escolha UM formato. Entregue como HIPÓTESE ABERTA, não como verdade.
+✅ CERTO: Aterrissar usando o CARDÁPIO DE FECHAMENTO (ver MODO PROFUNDO → FASE 3 MOVIMENTO). Use a árvore de decisão e escolha UM formato. Entregue uma leitura clara, sustentada no que foi dito, sem apresentá-la como diagnóstico ou fato salvo.
 REGRA DE OURO: Direção forte é o padrão. Micro-passo é exceção (caso 6 da árvore). Só proponha movimento se o sentido já apareceu.
 
 AMARRAÇÃO TEMPORAL (CRÍTICO): Quando o micro passo emergir e houver bloco "FECHAMENTO RECOMENDADO" no contexto dinâmico, AMARRE o passo a um marco futuro real conforme a rota indicada pelo sistema. Não invente datas — use exatamente o que o sistema sugeriu. Se não houver bloco, encerre normalmente, sem amarração forçada.
@@ -1373,8 +1384,8 @@ Ele recusou ou ajustou sua hipótese. A correção dele vale mais que a sua leit
 - PROIBIDO devolver a versão anterior da tese, mesmo com outras palavras.
 - Se ainda não há leitura nova legítima, volte pra história concreta em vez de insistir.`;
   } else if (hypDelivered && hypValidated) {
-    hypothesisGuard = `\n\n✅ A TESE CENTRAL JÁ FOI ENTREGUE E ACEITA:
-Não reofereça a mesma leitura nem repita a checagem ("faz sentido?"). Isso já foi feito.
+    hypothesisGuard = `\n\n✅ A TESE CENTRAL JÁ FOI ENTREGUE E ACOLHIDA PELO USUÁRIO:
+Não reofereça a mesma leitura nem peça confirmação. A continuidade da resposta dele já cumpriu esse papel.
 - Próximo movimento: origem e história concreta (quando isso começou, com quem mais já aconteceu) OU aterrissagem.
 - Nunca use a mesma formulação de hipótese duas vezes na mesma conversa.`;
   } else if (hypDelivered && evasiveStreak >= 2) {
@@ -1383,8 +1394,8 @@ Você já ofereceu sua leitura e o usuário respondeu curto/"não sei" ${evasive
 - PROIBIDO reafirmar a mesma tese — repetir agora vira insistência, não hipótese.
 - Vá pra história concreta: quando isso começou, em que outras relações apareceu, o que aconteceu antes.`;
   } else if (hypDelivered) {
-    hypothesisGuard = `\n\n♻️ VOCÊ JÁ ARRISCOU UMA LEITURA NESTA CONVERSA:
-Se for oferecer outra, precisa ser uma leitura NOVA e com formulação nova. Não recicle a anterior.`;
+    hypothesisGuard = `\n\n♻️ VOCÊ JÁ ENTREGOU UMA LEITURA NESTA CONVERSA:
+Se for oferecer outra, precisa nascer de material NOVO do usuário. Não recicle a anterior e não peça que ele avalie a leitura.`;
   }
   // ======== USER CONTEXT OVERRIDES (from micro-agent, previous turn) ========
   if (lastUserContext) {
@@ -1551,9 +1562,9 @@ O usuário pediu direção literal ("${lastUserMsg.slice(0, 80)}").
 
 🚫 PROIBIDO: NÃO devolva pergunta socrática vazia. NÃO peça pra ele "olhar pra dentro" sem entregar nada. NÃO proponha micro-passo operacional aqui.
 
-✅ OBRIGATÓRIO: Entregue UMA TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA como HIPÓTESE ABERTA — nomeie o que você está vendo e abra espaço pra correção com palavras suas, sem fórmula fixa e sem repetir formulação já usada na conversa.
+✅ OBRIGATÓRIO: Entregue UMA TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA — nomeie com clareza o que você está vendo e encerre a entrega sem ressalva ou pergunta de confirmação.
 
-A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro usuário refinar ou recusar. Recusa é trabalho, não falha. Use o CARDÁPIO DE FECHAMENTO (MODO PROFUNDO → FASE 3) e escolha UM formato: tese OU encruzilhada. Não combine. Não devolva pergunta vazia.${hypothesisGuard}`
+A fala do usuário continua soberana: se ele corrigir ou recusar espontaneamente, recalibre sem defender sua interpretação. Não peça essa correção de forma ritual. Use o CARDÁPIO DE FECHAMENTO (MODO PROFUNDO → FASE 3) e escolha UM formato: tese OU encruzilhada. Não combine. Não devolva pergunta vazia.${hypothesisGuard}`
       };
     }
   }
@@ -1726,7 +1737,7 @@ ${SESSION_PHASE_INSTRUCTIONS.overtime_aterrissando}`
         stagnationLevel: 1,
         guidance: `\n\n💡 NOTA DE TIMING:
 O usuário já trouxe material suficiente (contexto, emoção e algo sobre o porquê). Uso interno: não cite tempo ao usuário.
-Se houver leitura possível, considere oferecer como HIPÓTESE ABERTA agora — sem forçar. Se ainda faltar um ângulo, vá uma camada mais funda no que JÁ apareceu, sem repetir perguntas exploratórias do início.`
+Se houver leitura possível, considere oferecê-la com clareza agora — sem forçar e sem pedir confirmação no final. Se ainda faltar um ângulo, vá uma camada mais funda no que JÁ apareceu, sem repetir perguntas exploratórias do início.`
       };
     }
 
@@ -1739,7 +1750,7 @@ Se houver leitura possível, considere oferecer como HIPÓTESE ABERTA agora — 
           guidance: `\n\n🔄 AVALIAÇÃO DE FASE:
 Já passou da abertura (${sessionElapsedMin} min). Muitas perguntas exploratórias sem aprofundar.
 AÇÃO: Escolha O tema principal e vá fundo. Use investigação socrática.
-"De tudo que você trouxe, o que mais tá pesando? Vamos focar nisso."
+Escolha o tema que concentrou mais carga no relato e proponha o foco com palavras concretas do usuário, sem usar "o que mais pesa?" como fórmula.
 ${SESSION_PHASE_INSTRUCTIONS.stuck_in_opening}`
         };
       }
@@ -1872,7 +1883,8 @@ O usuário já explorou o sentido por ${recentPairs}+ trocas. Conduza para MOVIM
 
 AÇÃO:
 - Aterrisse usando o CARDÁPIO DE FECHAMENTO (FASE 3): aplique a árvore de decisão e escolha UM formato (tese, encruzilhada, leitura crítica, experimento, pergunta pra carregar, escolha binária ou — só se houver paralisia operacional — micro-passo).
-- Entregue como HIPÓTESE ABERTA, não como verdade: arrisque a leitura e deixe claro, com palavras suas e formulação inédita nesta conversa, que ele pode recusar ou corrigir.
+- Entregue uma leitura clara, apoiada no que o usuário disse, e encerre a fala sem pedir que ele confirme, corrija ou avalie sua interpretação.
+- Segurança interna: se o usuário discordar espontaneamente, a versão dele prevalece. Sem concordância desenvolvida, não salve a leitura como fato nem a trate como confirmada nos turnos seguintes.
 - Se o sentido ainda não apareceu, mude o ângulo antes de aterrissar.
 ${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}${hypothesisGuard}`
     };
@@ -3311,6 +3323,7 @@ Deixe o silêncio trabalhar.
 Varie frases de afeto, interjeições e conectivos a cada mensagem.
 Se já disse "Tô aqui", use "Tô junto" / "Aqui pra você". Se já usou "Nossa!", troque por "Caramba!" / "Vish!".
 Cada mensagem deve soar ÚNICA, não um template.
+Antes de perguntar, releia as duas últimas perguntas que você fez. Nunca repita uma pergunta que o usuário já respondeu, nem apenas troque as palavras para perguntar a mesma coisa. Se a resposta do usuário já trouxe material novo, reaja a esse material com uma leitura, direção ou síntese; uma nova pergunta só entra quando abrir um ângulo realmente diferente.
 
 ## ANTECIPE, NÃO SONDE
 Você tem contexto do usuário. USE ISSO para antecipar:
@@ -3434,7 +3447,7 @@ Reaja de forma genuína, sem fórmulas. Mostre que leu e se importa.
 
 ⚠️ Antídoto do eco interpretativo: em Fase 1, alterne presença com reação concreta. Nem toda dor precisa virar leitura psicológica na resposta seguinte.
 
-⚠️ REGRA "VALIDA + ENTREGA": Após 2-3 trocas validando, você DEVE entregar algo útil. Use a árvore do CARDÁPIO DE FECHAMENTO (ver FASE 3 abaixo) para escolher O formato. Ordem de preferência geral, quando a árvore não bater num caso claro: **(1) tese de direção ou encruzilhada nomeada como hipótese aberta**, **(2) leitura crítica de padrão / confronto cirúrgico**, **(3) experimento de observação**, **(4) micro-movimento concreto (só em paralisia operacional)**, **(5) silêncio intencional**. Nomeação clínica é a ÚLTIMA opção, não a primeira. Validar é necessário, mas não é suficiente: o usuário precisa sair de cada interação com algo novo — e esse "algo" geralmente é direção, não passo.
+⚠️ REGRA "VALIDA + ENTREGA": Após 2-3 trocas validando, você DEVE entregar algo útil. Use a árvore do CARDÁPIO DE FECHAMENTO (ver FASE 3 abaixo) para escolher O formato. Ordem de preferência geral, quando a árvore não bater num caso claro: **(1) tese de direção ou encruzilhada clara**, **(2) leitura crítica de padrão / confronto cirúrgico**, **(3) experimento de observação**, **(4) micro-movimento concreto (só em paralisia operacional)**, **(5) silêncio intencional**. Nomeação clínica é a ÚLTIMA opção, não a primeira. Validar é necessário, mas não é suficiente: o usuário precisa sair de cada interação com algo novo — e esse "algo" geralmente é direção, não passo.
 
 ⚠️ GUARDRAIL SIMÉTRICO ("entrega a cada 4 trocas"): Após Presença consolidada (4+ pares no tema), a cada 4 trocas no mínimo 1 mensagem sua deve ser ENTREGA (hipótese, observação, confronto, leitura, experimento) — não pergunta exploratória pura. Pergunta socrática encadeada sem entrega = vício a evitar.
 
@@ -3461,7 +3474,7 @@ Só depois que o sentido emergiu, aterrisse a sessão. Movimento aqui NÃO é si
 
 1º Usuário pediu direção literal ("me ajuda", "o que faço", "tô perdido", "não sei pra onde ir")?
    → TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA
-   Exemplo (tese): "Olhando tudo que você trouxe, o que tô vendo é: você não tá travada por falta de opção, tá travada porque qualquer escolha mata uma versão sua." (o exemplo ilustra a ENTREGA, não a frase — a checagem de hipótese vem com palavras suas, variando sempre)
+   Exemplo (tese): "Olhando tudo que você trouxe, o que tô vendo é: você não tá travada por falta de opção, tá travada porque qualquer escolha mata uma versão sua." (o exemplo ilustra a ENTREGA; termine ali e acompanhe a reação, sem checagem)
 
 2º Há 2 forças em tensão clara, sem caminho óbvio?
    → ENCRUZILHADA NOMEADA
@@ -3485,11 +3498,11 @@ Só depois que o sentido emergiu, aterrisse a sessão. Movimento aqui NÃO é si
    Exemplo: "Abre o documento agora. Só abre. Me fala quando abriu."
 
 7º Nenhum dos anteriores?
-   → TESE como HIPÓTESE ABERTA (default)
+   → TESE CLARA sustentada no relato (default)
 
 ⚠️ REGRA "UM FORMATO POR FECHAMENTO": Escolha UM. Não combine formatos na mesma entrega. Misturar dilui e devolve o vício socrático por outra porta.
 
-⚠️ REGRA "ENTREGA COMO HIPÓTESE, NÃO COMO VERDADE": arrisque a leitura e sinalize que é hipótese com palavras suas — sem frase-modelo, sem repetir a mesma checagem duas vezes na mesma sessão. A força não tá em estar certa — tá em arriscar uma leitura e dar espaço pra o usuário refinar ou recusar. Se ele recusar, isso É o trabalho — não é falha.
+⚠️ REGRA "LEITURA SEM RITUAL DE CONFIRMAÇÃO": entregue a percepção com clareza e pare. NÃO acrescente "posso estar errada", "talvez falte algo", "faz sentido?" nem perguntas da família "como isso bate/pesa/soa/chega em você?". Alternar esses verbos não cria variedade: repete o mesmo ritual e faz a conversa soar como questionário. A segurança fica no comportamento: a fala do usuário prevalece, discordâncias são acolhidas sem defesa e leituras não confirmadas não viram fato ou memória.
 
 ⚠️ REGRA ANTI-ROTAÇÃO: O cardápio é descritivo, não prescritivo. A escolha vem do que a sessão pediu. Repetir o mesmo formato 3 sessões seguidas é correto se a clínica pediu. Rotacionar por rotacionar é pior do que o vício de micro-passo.
 
@@ -5065,7 +5078,7 @@ serve(async (req) => {
     console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), hasPendingContent: !!pending_content, minimal_context: !!minimal_context });
 
     // Buscar perfil do usuário
-    let profile = null;
+    let profile: any = null;
     if (user_id) {
       const { data } = await supabase
         .from('profiles')
@@ -5887,7 +5900,7 @@ serve(async (req) => {
           .limit(minimal_context ? 5 : 15),
         // 3. Insights gerais - skip em minimal
         minimal_context
-          ? Promise.resolve({ data: [], error: null })
+          ? Promise.resolve({ data: [], error: null, count: 0 })
           : supabase
               .from('user_insights')
               .select('category, key, value, importance, mentioned_count')
@@ -6048,7 +6061,9 @@ serve(async (req) => {
       // 4. Previous sessions
       if (completedSessionsResult.status === 'fulfilled') {
         const completedSessions = completedSessionsResult.value.data;
-        const completedCount = completedSessionsResult.value.count;
+        const completedCount = 'count' in completedSessionsResult.value
+          ? completedSessionsResult.value.count
+          : 0;
         if (completedSessions && completedSessions.length > 0) {
           previousSessionsContext = formatPreviousSessionsContext(completedSessions);
           console.log('📚 Found', completedSessions.length, 'previous sessions for context');
@@ -7213,7 +7228,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
         try {
           const retryData = await callAI(configuredModel, retryMessages, 4096, 0.85 + echoRetry * 0.05, LOVABLE_API_KEY);
           if (retryData?.choices?.[0]?.message?.content) {
-            const retryClean = stripInternalTags(retryData.choices[0].message.content);
+            const retryClean = stripAllInternalTags(retryData.choices[0].message.content);
             const retryWords = extractWords(retryClean);
             const retryOverlap = wordOverlapRatio(retryWords, userWords);
             const retryNorm = retryClean.toLowerCase().replace(/[.!?…,;:\s]+/g, ' ').trim();
@@ -7354,16 +7369,16 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       
       if (earlyPhases.includes(currentPhase)) {
         // Block [ENCERRAR_SESSAO] in early phases AND reset shouldEndSession
-        if (assistantMessage.includes('[ENCERRAR_SESSAO]')) {
+        if (assistantMessage.includes('[ENCERRAR_SESSAO]') && !shouldEndSession) {
           console.warn(`🚫 Blocked premature session closure at phase: ${currentPhase} (timeRemaining: ${currentPhaseInfo.timeRemaining}min)`);
           assistantMessage = assistantMessage.replace(/\[ENCERRAR_SESSAO\]/gi, '');
-          shouldEndSession = false; // RESET — sessão NÃO deve encerrar em fase early
+          shouldEndSession = false; // RESET — a IA NÃO deve encerrar cedo por conta própria
         }
         // Block [CONVERSA_CONCLUIDA] in early phases (Camada 3 - part 1)
-        if (assistantMessage.includes('[CONVERSA_CONCLUIDA]')) {
+        if (assistantMessage.includes('[CONVERSA_CONCLUIDA]') && !shouldEndSession) {
           console.warn(`🚫 Blocked [CONVERSA_CONCLUIDA] during active session at phase: ${currentPhase}`);
           assistantMessage = assistantMessage.replace(/\[CONVERSA_CONCLUIDA\]/gi, '[AGUARDANDO_RESPOSTA]');
-          shouldEndSession = false; // RESET
+          shouldEndSession = false; // RESET apenas para encerramento iniciado pela IA
         }
       } else {
         // In closing phases (transition, soft_closing, final_closing, overtime):
@@ -7434,12 +7449,12 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       // Log fire-and-forget para rastrear drift do LLM ao longo do tempo.
       // Se aparecer com frequência, ajustar o prompt em "PLANOS — REGRA INVIOLÁVEL DE NÃO-VENDA".
       try {
-        supabase.from('failed_message_log').insert({
+        Promise.resolve(supabase.from('failed_message_log').insert({
           user_id: profile.user_id,
           function_name: 'aura-agent:upsell_tag_discarded',
           content: driftedTags.slice(0, 500),
           error: 'llm_drift_upsell_tag',
-        }).then(() => {}, () => {});
+        })).then(() => {}, () => {});
       } catch (_e) { /* non-fatal */ }
       assistantMessage = assistantMessage
         .replace(/\[UPGRADE:[^\]]+\]/gi, '')
@@ -7465,12 +7480,12 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       if (unknownTags.length) {
         console.warn('🚨 Tags inventadas detectadas:', unknownTags);
         // fire-and-forget — não usar await
-        supabase.from('failed_message_log').insert({
+        Promise.resolve(supabase.from('failed_message_log').insert({
           function_name: 'aura-agent',
           user_id: profile?.user_id ?? null,
           content: assistantMessage.slice(0, 500),
           error: `unknown_tag_invented: ${unknownTags.join(', ')}`,
-        } as any)
+        } as any))
           .then(() => {})
           .catch((e: unknown) => console.error('Falha ao logar tags inventadas (não bloqueia):', e));
       }
@@ -7603,7 +7618,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           } else {
             console.log('🏷️ [SAFETY_NET] disparando extractor (D0 sem tag)');
             // Fire-and-forget — entrega da resposta principal já aconteceu acima
-            EdgeRuntime.waitUntil(
+            (globalThis as any).EdgeRuntime?.waitUntil(
               supabase.functions
                 .invoke('schedule-tag-extractor', {
                   body: {
@@ -7797,7 +7812,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
             const _mm = String(_brt.getUTCMinutes()).padStart(2, '0');
             const confirmMsg = `Marquei nossa sessão pra ${_dd}/${_mo} às ${_hh}:${_mm} 💜 Te aviso pertinho da hora.`;
             const cleanPhone = cleanPhoneNumber(profile.phone);
-            EdgeRuntime.waitUntil(
+            (globalThis as any).EdgeRuntime?.waitUntil(
               sendMessage(cleanPhone, confirmMsg).catch((e: unknown) =>
                 console.error('🎯 [D0_REFUSAL] falha confirmação proativa:', e),
               ),
@@ -7999,7 +8014,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
     const trocarJornadaMatch = assistantMessage.match(/\[TROCAR_JORNADA:([^\]]+)\]/i);
     if (trocarJornadaMatch && profile?.user_id) {
       const journeyId = trocarJornadaMatch[1].trim();
-      const explicitJourneyIntent = hasExplicitJourneyIntent(userMessage || '');
+      const explicitJourneyIntent = hasExplicitJourneyIntent(userMessageRaw || '');
       console.log('🔄 Switching journey to:', journeyId);
       
       // Verificar se a jornada existe
@@ -8037,7 +8052,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
     // Processar [PAUSAR_JORNADAS]
     if (assistantMessage.includes('[PAUSAR_JORNADAS]') && profile?.user_id) {
       console.log('⏸️ Pausing journeys for user');
-      const explicitJourneyIntent = hasExplicitJourneyIntent(userMessage || '');
+      const explicitJourneyIntent = hasExplicitJourneyIntent(userMessageRaw || '');
       if (explicitJourneyIntent.pause) {
         await supabase.rpc('manage_portal_journey_internal', { _user_id: profile.user_id, _action: 'pause', _journey_id: null, _episode_id: null, _progress_percent: null, _reflection_text: null, _goal: null });
         console.log('✅ Journeys paused - user will not receive periodic content');
@@ -8443,9 +8458,9 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     if (wantsPersistentAudio || wantsText) {
       const newMode = wantsPersistentAudio ? 'audio' : 'texto';
       if (profile?.voice_mode !== newMode) {
-        supabase.from('profiles')
+        Promise.resolve(supabase.from('profiles')
           .update({ voice_mode: newMode, voice_mode_set_at: new Date().toISOString() })
-          .eq('user_id', profile.user_id)
+          .eq('user_id', profile.user_id))
           .then(() => console.log(`🎚️ voice_mode atualizado: ${newMode}`))
           .catch((e: unknown) => console.warn('⚠️ Falha ao gravar voice_mode:', e));
       }
