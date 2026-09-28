@@ -136,3 +136,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Simular seis trocas reais pelo App com a conta Marina, conferir respostas geradas pela AURA, continuidade e correção aceita; manter intacto o histórico fictício escrito anteriormente.
 - [ ] Substituir o histórico escrito manualmente por conversas reais somente após aprovação explícita; preservar a sessão e os resumos existentes.
 - [x] Testar pelo App uma nova sessão completa da Marina, com respostas reais da AURA, abertura, aprofundamento, fechamento e resumo; preservar a sessão anterior e avaliar honestamente o resultado; corrigir e revalidar o encerramento explícito descoberto no teste.
+- [x] Solicitar e registrar a avaliação no fim da sessão dentro do App, refletindo a última nota e a média na Gestão de Usuários; validado com a sessão concluída da Marina sem repetir o encontro.

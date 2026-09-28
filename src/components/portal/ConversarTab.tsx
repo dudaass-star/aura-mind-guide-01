@@ -1,6 +1,6 @@
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Sun, Trash2, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -104,6 +104,11 @@ type PendingMessage = {
   audioDurationMs?: number;
   journeyEpisodeId?: string;
   createdAt: string;
+};
+
+type PendingSessionRating = {
+  id: string;
+  ended_at: string;
 };
 
 function readOutbox(key: string): PendingMessage[] {
@@ -346,6 +351,9 @@ export function ConversarTab({
   const [recording, setRecording] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
   const [audioError, setAudioError] = useState("");
+  const [pendingRating, setPendingRating] = useState<PendingSessionRating | null>(null);
+  const [ratingSaving, setRatingSaving] = useState(false);
+  const [ratingError, setRatingError] = useState("");
   const [activeDiscussionEpisodeId, setActiveDiscussionEpisodeId] = useState(discussionEpisodeId);
   const [chatOpen, setChatOpen] = useState(() => initialChatOpen || localStorage.getItem(`aura-chat-open:${userId}`) === "true");
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
@@ -385,6 +393,46 @@ export function ConversarTab({
   const openEpisode = (episode: JourneyEpisodeCardMetadata) => {
     void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "journey", event_type: "journey_card_opened", source: "conversation", metadata: { episode_id: episode.episode_id } as Json });
     navigate(episode.path);
+  };
+
+  const refreshPendingRating = async () => {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: completed } = await supabasePortal
+      .from("sessions")
+      .select("id,ended_at")
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .gte("ended_at", cutoff)
+      .order("ended_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!completed?.id || !completed.ended_at) {
+      setPendingRating(null);
+      return;
+    }
+    const { data: existing } = await supabasePortal
+      .from("session_ratings")
+      .select("session_id")
+      .eq("session_id", completed.id)
+      .maybeSingle();
+    setPendingRating(existing ? null : completed as PendingSessionRating);
+  };
+
+  const saveSessionRating = async (rating: number) => {
+    if (!pendingRating || ratingSaving) return;
+    setRatingSaving(true);
+    setRatingError("");
+    const { data, error } = await supabasePortal.functions.invoke("manage-portal-session", {
+      body: { action: "rate", sessionId: pendingRating.id, rating },
+    });
+    if (error || data?.error) {
+      setRatingError("Não consegui guardar sua nota. Tente mais uma vez.");
+      setRatingSaving(false);
+      return;
+    }
+    recordConversationEvent(userId, "rated", { session_id: pendingRating.id, rating, source: "conversation" });
+    setPendingRating(null);
+    setRatingSaving(false);
   };
 
   useEffect(() => {
@@ -588,6 +636,7 @@ export function ConversarTab({
         }
       }
       setLoading(false);
+      void refreshPendingRating();
     };
     void load();
 
@@ -615,6 +664,7 @@ export function ConversarTab({
                   response_seconds: awaiting ? Math.round((Date.now() - awaiting.createdAt) / 100) / 10 : null,
                 });
               }
+              window.setTimeout(() => void refreshPendingRating(), 1200);
             }
           }
           if (nearBottomRef.current) setTimeout(() => scrollToBottom(), 0);
@@ -1161,6 +1211,29 @@ export function ConversarTab({
         )}
 
           <MessageTimeline messages={messages} responding={responding} onOpenReport={openReport} onOpenEpisode={openEpisode} onRetry={(message) => void retryFailedMessage(message)} onDelete={deleteFailedMessage} />
+          {pendingRating && !responding && (
+            <section className="mt-4 max-w-[86%] rounded-lg border border-border bg-card p-4 shadow-sm" aria-label="Avaliar sessão">
+              <p className="text-sm font-semibold text-foreground">Antes de fechar, como foi nossa sessão hoje?</p>
+              <p className="mt-1 text-xs text-muted-foreground">Sua resposta ajuda a AURA a melhorar os próximos encontros.</p>
+              <div className="mt-3 flex gap-1" role="group" aria-label="Nota da sessão">
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <Button
+                    key={rating}
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10"
+                    disabled={ratingSaving}
+                    onClick={() => void saveSessionRating(rating)}
+                    aria-label={`Dar nota ${rating}`}
+                  >
+                    <Star className="h-5 w-5 text-primary" />
+                  </Button>
+                ))}
+              </div>
+              {ratingError && <p className="mt-2 text-xs text-destructive">{ratingError}</p>}
+            </section>
+          )}
       </div>
 
       {showNew && (
