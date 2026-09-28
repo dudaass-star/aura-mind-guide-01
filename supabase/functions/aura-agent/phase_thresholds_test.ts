@@ -124,6 +124,14 @@ Deno.test("Naturalidade: não repete pergunta já respondida nem cria questioná
     /uma nova pergunta só entra quando abrir um ângulo realmente diferente/.test(SOURCE),
     "A pergunta voltou a ser obrigatória mesmo sem um ângulo novo."
   );
+  assert(
+    /não faça perguntas em duas respostas consecutivas/.test(SOURCE),
+    "A proteção contra cadência de questionário em respostas consecutivas sumiu."
+  );
+  assert(
+    /Uma resposta afirmativa, sem interrogação, também conduz/.test(SOURCE),
+    "A orientação para conduzir sem transformar toda fala em pergunta sumiu."
+  );
 });
 
 Deno.test("Encerramento: pedido explícito do usuário não é bloqueado pela fase da sessão", () => {
