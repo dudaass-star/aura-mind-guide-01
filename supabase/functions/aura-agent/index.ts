@@ -1100,7 +1100,7 @@ REGRA DE OURO: Direção forte (tese/encruzilhada/leitura) é o padrão. Micro-p
   stuck_in_opening: `
 INSTRUÇÕES TÁTICAS — Preso na Abertura:
 ❌ ERRADO: "Entendo, e mais alguma coisa?" / Aceitar cada novo tema como igual
-✅ CERTO: "De tudo que você trouxe, o que mais pesa? Vamos focar nisso."
+✅ CERTO: "Você voltou três vezes ao medo de decepcionar sua mãe. Vamos ficar nesse ponto."
 ❌ ERRADO: Tentar abordar 3 assuntos ao mesmo tempo
 ✅ CERTO: Escolher O tema que tem mais carga emocional e aprofundar com investigação socrática.`
 ,
