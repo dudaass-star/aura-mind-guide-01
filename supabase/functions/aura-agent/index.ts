@@ -7452,7 +7452,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           function_name: 'aura-agent:upsell_tag_discarded',
           content: driftedTags.slice(0, 500),
           error: 'llm_drift_upsell_tag',
-        }).then(() => {}, () => {});
+        })).then(() => {}, () => {});
       } catch (_e) { /* non-fatal */ }
       assistantMessage = assistantMessage
         .replace(/\[UPGRADE:[^\]]+\]/gi, '')
@@ -7478,7 +7478,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       if (unknownTags.length) {
         console.warn('🚨 Tags inventadas detectadas:', unknownTags);
         // fire-and-forget — não usar await
-        supabase.from('failed_message_log').insert({
+        Promise.resolve(supabase.from('failed_message_log').insert({
           function_name: 'aura-agent',
           user_id: profile?.user_id ?? null,
           content: assistantMessage.slice(0, 500),
