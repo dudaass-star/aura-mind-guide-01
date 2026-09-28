@@ -5078,7 +5078,7 @@ serve(async (req) => {
     console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), hasPendingContent: !!pending_content, minimal_context: !!minimal_context });
 
     // Buscar perfil do usuário
-    let profile: Record<string, any> | null = null;
+    let profile: any = null;
     if (user_id) {
       const { data } = await supabase
         .from('profiles')
@@ -6061,7 +6061,9 @@ serve(async (req) => {
       // 4. Previous sessions
       if (completedSessionsResult.status === 'fulfilled') {
         const completedSessions = completedSessionsResult.value.data;
-        const completedCount = completedSessionsResult.value.count;
+        const completedCount = 'count' in completedSessionsResult.value
+          ? completedSessionsResult.value.count
+          : 0;
         if (completedSessions && completedSessions.length > 0) {
           previousSessionsContext = formatPreviousSessionsContext(completedSessions);
           console.log('📚 Found', completedSessions.length, 'previous sessions for context');
