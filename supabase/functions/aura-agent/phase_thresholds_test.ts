@@ -115,6 +115,28 @@ Deno.test("Naturalidade: instruções táticas não obrigam verbalizar correçã
   }
 });
 
+Deno.test("Naturalidade: não repete pergunta já respondida nem cria questionário em sequência", () => {
+  assert(
+    /Nunca repita uma pergunta que o usuário já respondeu/.test(SOURCE),
+    "A proteção contra repetir perguntas já respondidas sumiu."
+  );
+  assert(
+    /uma nova pergunta só entra quando abrir um ângulo realmente diferente/.test(SOURCE),
+    "A pergunta voltou a ser obrigatória mesmo sem um ângulo novo."
+  );
+});
+
+Deno.test("Encerramento: pedido explícito do usuário não é bloqueado pela fase da sessão", () => {
+  assert(
+    /assistantMessage\.includes\('\[ENCERRAR_SESSAO\]'\) && !shouldEndSession/.test(SOURCE),
+    "A trava de encerramento precoce voltou a bloquear pedidos explícitos do usuário."
+  );
+  assert(
+    /assistantMessage\.includes\('\[CONVERSA_CONCLUIDA\]'\) && !shouldEndSession/.test(SOURCE),
+    "A conversão de conversa concluída voltou a apagar o pedido explícito do usuário."
+  );
+});
+
 Deno.test("Fase 2 — Postura Clínica: princípio mestre está no prompt geral", () => {
   assert(
     /POSTURA CL[IÍ]NICA \(princ[ií]pio mestre\)/.test(SOURCE),

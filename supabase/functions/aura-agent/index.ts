@@ -311,7 +311,16 @@ async function callAI(
   LOVABLE_API_KEY: string,
   supabaseClient?: any,
   cacheableSystemPrompt?: string
-): Promise<{ choices: Array<{ message: { content: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
+): Promise<{
+  choices: Array<{ message: { role?: string; content: string }; finish_reason?: string }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
+}> {
   
   // Anthropic models not supported
   if (model.startsWith('anthropic/') || model.startsWith('claude-')) {
@@ -3314,6 +3323,7 @@ Deixe o silêncio trabalhar.
 Varie frases de afeto, interjeições e conectivos a cada mensagem.
 Se já disse "Tô aqui", use "Tô junto" / "Aqui pra você". Se já usou "Nossa!", troque por "Caramba!" / "Vish!".
 Cada mensagem deve soar ÚNICA, não um template.
+Antes de perguntar, releia as duas últimas perguntas que você fez. Nunca repita uma pergunta que o usuário já respondeu, nem apenas troque as palavras para perguntar a mesma coisa. Se a resposta do usuário já trouxe material novo, reaja a esse material com uma leitura, direção ou síntese; uma nova pergunta só entra quando abrir um ângulo realmente diferente.
 
 ## ANTECIPE, NÃO SONDE
 Você tem contexto do usuário. USE ISSO para antecipar:
@@ -5068,7 +5078,7 @@ serve(async (req) => {
     console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), hasPendingContent: !!pending_content, minimal_context: !!minimal_context });
 
     // Buscar perfil do usuário
-    let profile = null;
+    let profile: Record<string, any> | null = null;
     if (user_id) {
       const { data } = await supabase
         .from('profiles')
@@ -5890,7 +5900,7 @@ serve(async (req) => {
           .limit(minimal_context ? 5 : 15),
         // 3. Insights gerais - skip em minimal
         minimal_context
-          ? Promise.resolve({ data: [], error: null })
+          ? Promise.resolve({ data: [], error: null, count: 0 })
           : supabase
               .from('user_insights')
               .select('category, key, value, importance, mentioned_count')
@@ -7216,7 +7226,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
         try {
           const retryData = await callAI(configuredModel, retryMessages, 4096, 0.85 + echoRetry * 0.05, LOVABLE_API_KEY);
           if (retryData?.choices?.[0]?.message?.content) {
-            const retryClean = stripInternalTags(retryData.choices[0].message.content);
+            const retryClean = stripAllInternalTags(retryData.choices[0].message.content);
             const retryWords = extractWords(retryClean);
             const retryOverlap = wordOverlapRatio(retryWords, userWords);
             const retryNorm = retryClean.toLowerCase().replace(/[.!?…,;:\s]+/g, ' ').trim();
@@ -7357,16 +7367,16 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       
       if (earlyPhases.includes(currentPhase)) {
         // Block [ENCERRAR_SESSAO] in early phases AND reset shouldEndSession
-        if (assistantMessage.includes('[ENCERRAR_SESSAO]')) {
+        if (assistantMessage.includes('[ENCERRAR_SESSAO]') && !shouldEndSession) {
           console.warn(`🚫 Blocked premature session closure at phase: ${currentPhase} (timeRemaining: ${currentPhaseInfo.timeRemaining}min)`);
           assistantMessage = assistantMessage.replace(/\[ENCERRAR_SESSAO\]/gi, '');
-          shouldEndSession = false; // RESET — sessão NÃO deve encerrar em fase early
+          shouldEndSession = false; // RESET — a IA NÃO deve encerrar cedo por conta própria
         }
         // Block [CONVERSA_CONCLUIDA] in early phases (Camada 3 - part 1)
-        if (assistantMessage.includes('[CONVERSA_CONCLUIDA]')) {
+        if (assistantMessage.includes('[CONVERSA_CONCLUIDA]') && !shouldEndSession) {
           console.warn(`🚫 Blocked [CONVERSA_CONCLUIDA] during active session at phase: ${currentPhase}`);
           assistantMessage = assistantMessage.replace(/\[CONVERSA_CONCLUIDA\]/gi, '[AGUARDANDO_RESPOSTA]');
-          shouldEndSession = false; // RESET
+          shouldEndSession = false; // RESET apenas para encerramento iniciado pela IA
         }
       } else {
         // In closing phases (transition, soft_closing, final_closing, overtime):
@@ -7437,7 +7447,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       // Log fire-and-forget para rastrear drift do LLM ao longo do tempo.
       // Se aparecer com frequência, ajustar o prompt em "PLANOS — REGRA INVIOLÁVEL DE NÃO-VENDA".
       try {
-        supabase.from('failed_message_log').insert({
+        Promise.resolve(supabase.from('failed_message_log').insert({
           user_id: profile.user_id,
           function_name: 'aura-agent:upsell_tag_discarded',
           content: driftedTags.slice(0, 500),
@@ -7473,7 +7483,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           user_id: profile?.user_id ?? null,
           content: assistantMessage.slice(0, 500),
           error: `unknown_tag_invented: ${unknownTags.join(', ')}`,
-        } as any)
+        } as any))
           .then(() => {})
           .catch((e: unknown) => console.error('Falha ao logar tags inventadas (não bloqueia):', e));
       }
@@ -7606,7 +7616,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           } else {
             console.log('🏷️ [SAFETY_NET] disparando extractor (D0 sem tag)');
             // Fire-and-forget — entrega da resposta principal já aconteceu acima
-            EdgeRuntime.waitUntil(
+            (globalThis as any).EdgeRuntime?.waitUntil(
               supabase.functions
                 .invoke('schedule-tag-extractor', {
                   body: {
@@ -7800,7 +7810,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
             const _mm = String(_brt.getUTCMinutes()).padStart(2, '0');
             const confirmMsg = `Marquei nossa sessão pra ${_dd}/${_mo} às ${_hh}:${_mm} 💜 Te aviso pertinho da hora.`;
             const cleanPhone = cleanPhoneNumber(profile.phone);
-            EdgeRuntime.waitUntil(
+            (globalThis as any).EdgeRuntime?.waitUntil(
               sendMessage(cleanPhone, confirmMsg).catch((e: unknown) =>
                 console.error('🎯 [D0_REFUSAL] falha confirmação proativa:', e),
               ),
@@ -8002,7 +8012,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
     const trocarJornadaMatch = assistantMessage.match(/\[TROCAR_JORNADA:([^\]]+)\]/i);
     if (trocarJornadaMatch && profile?.user_id) {
       const journeyId = trocarJornadaMatch[1].trim();
-      const explicitJourneyIntent = hasExplicitJourneyIntent(userMessage || '');
+      const explicitJourneyIntent = hasExplicitJourneyIntent(userMessageRaw || '');
       console.log('🔄 Switching journey to:', journeyId);
       
       // Verificar se a jornada existe
@@ -8040,7 +8050,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
     // Processar [PAUSAR_JORNADAS]
     if (assistantMessage.includes('[PAUSAR_JORNADAS]') && profile?.user_id) {
       console.log('⏸️ Pausing journeys for user');
-      const explicitJourneyIntent = hasExplicitJourneyIntent(userMessage || '');
+      const explicitJourneyIntent = hasExplicitJourneyIntent(userMessageRaw || '');
       if (explicitJourneyIntent.pause) {
         await supabase.rpc('manage_portal_journey_internal', { _user_id: profile.user_id, _action: 'pause', _journey_id: null, _episode_id: null, _progress_percent: null, _reflection_text: null, _goal: null });
         console.log('✅ Journeys paused - user will not receive periodic content');
@@ -8446,9 +8456,9 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     if (wantsPersistentAudio || wantsText) {
       const newMode = wantsPersistentAudio ? 'audio' : 'texto';
       if (profile?.voice_mode !== newMode) {
-        supabase.from('profiles')
+        Promise.resolve(supabase.from('profiles')
           .update({ voice_mode: newMode, voice_mode_set_at: new Date().toISOString() })
-          .eq('user_id', profile.user_id)
+          .eq('user_id', profile.user_id))
           .then(() => console.log(`🎚️ voice_mode atualizado: ${newMode}`))
           .catch((e: unknown) => console.warn('⚠️ Falha ao gravar voice_mode:', e));
       }
