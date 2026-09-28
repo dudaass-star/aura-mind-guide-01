@@ -83,6 +83,38 @@ Deno.test("Fase 1 — Presença: regra 'VALIDA + ENTREGA' está no prompt", () =
   );
 });
 
+Deno.test("Naturalidade: leituras não exigem ritual explícito de confirmação", () => {
+  assert(
+    /LEITURA SEM RITUAL DE CONFIRMAÇÃO/.test(SOURCE),
+    "A regra central contra checagem mecânica de interpretações sumiu."
+  );
+  assert(
+    /como isso bate\/pesa\/soa\/chega em você/.test(SOURCE),
+    "A família de perguntas repetitivas deixou de estar explicitamente bloqueada."
+  );
+  assert(
+    /a fala do usuário prevalece/i.test(SOURCE),
+    "A proteção interna que dá primazia à correção do usuário sumiu."
+  );
+  assert(
+    /leituras não confirmadas não viram fato ou memória/i.test(SOURCE),
+    "A proteção contra salvar interpretação não confirmada sumiu."
+  );
+});
+
+Deno.test("Naturalidade: instruções táticas não obrigam verbalizar correção ou discordância", () => {
+  const bannedObligations = [
+    "deixe explícito, com palavras suas, que é uma leitura que o usuário pode corrigir ou recusar",
+    "sinalize, com palavras suas, que ele pode discordar",
+    "abra espaço pra correção com palavras suas",
+    "deixe claro, com palavras suas e formulação inédita nesta conversa, que ele pode recusar ou corrigir",
+  ];
+
+  for (const instruction of bannedObligations) {
+    assert(!SOURCE.includes(instruction), `Obrigação antiga ainda presente: ${instruction}`);
+  }
+});
+
 Deno.test("Fase 2 — Postura Clínica: princípio mestre está no prompt geral", () => {
   assert(
     /POSTURA CL[IÍ]NICA \(princ[ií]pio mestre\)/.test(SOURCE),
