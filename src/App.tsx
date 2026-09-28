@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { PortalAuthProvider } from "./contexts/PortalAuthContext";
 import GA4RouteTracker from "./components/GA4RouteTracker";
 import MetaRouteTracker from "./components/MetaRouteTracker";
@@ -57,6 +57,10 @@ const BlogPost = lazy(() => import("./pages/BlogPost"));
 const Pagamento = lazy(() => import("./pages/Pagamento"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
+const PortalRoute = ({ children }: { children: ReactNode }) => (
+  <PortalAuthProvider>{children}</PortalAuthProvider>
+);
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -100,7 +104,6 @@ const App = () => (
           <ScrollToTop />
           <GA4RouteTracker />
           <MetaRouteTracker />
-          <PortalAuthProvider>
           <Suspense fallback={<div className="min-h-screen bg-background" aria-label="Abrindo Olá Aura" />}>
           <Routes>
             <Route path="/" element={<RootRedirect />} />
@@ -137,10 +140,10 @@ const App = () => (
             <Route path="/guia" element={<UserGuide />} />
             <Route path="/episodio/:id" element={<Episode />} />
             <Route path="/unsubscribe" element={<Unsubscribe />} />
-            <Route path="/meu-espaco" element={<UserPortal />} />
-            <Route path="/meu-espaco/entrar" element={<PortalLogin />} />
-            <Route path="/meu-espaco/auth/callback" element={<PortalAuthCallback />} />
-            <Route path="/meu-espaco/acesso-whatsapp" element={<PortalWhatsAppAccess />} />
+            <Route path="/meu-espaco" element={<PortalRoute><UserPortal /></PortalRoute>} />
+            <Route path="/meu-espaco/entrar" element={<PortalRoute><PortalLogin /></PortalRoute>} />
+            <Route path="/meu-espaco/auth/callback" element={<PortalRoute><PortalAuthCallback /></PortalRoute>} />
+            <Route path="/meu-espaco/acesso-whatsapp" element={<PortalRoute><PortalWhatsAppAccess /></PortalRoute>} />
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/pagamento" element={<Pagamento />} />
@@ -150,7 +153,6 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
-          </PortalAuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
