@@ -620,7 +620,7 @@ export function ConversarTab({
   useEffect(() => {
     if (!pendingRating) return;
     nearBottomRef.current = true;
-    const timer = window.setTimeout(() => scrollToBottom("smooth"), 120);
+    const timer = window.setTimeout(() => scrollToBottom("auto"), 120);
     return () => window.clearTimeout(timer);
   }, [pendingRating]);
 
