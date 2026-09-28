@@ -618,6 +618,13 @@ export function ConversarTab({
   }, [responding]);
 
   useEffect(() => {
+    if (!pendingRating) return;
+    nearBottomRef.current = true;
+    const timer = window.setTimeout(() => scrollToBottom("smooth"), 120);
+    return () => window.clearTimeout(timer);
+  }, [pendingRating]);
+
+  useEffect(() => {
     localStorage.removeItem(`aura-chat-open:${userId}`);
     const saved = localStorage.getItem(`aura-chat-draft:${userId}`);
     if (saved) setDraft(saved);
