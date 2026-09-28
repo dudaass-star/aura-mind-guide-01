@@ -143,6 +143,9 @@
   --portal-audio-foreground: 270 31% 45%;
   --portal-profile: 350 45% 92%;
   --portal-profile-foreground: 350 34% 45%;
+  --portal-session-header: 153 25% 91%;
+  --portal-session-canvas: 153 18% 93%;
+  --portal-session-composer: 153 22% 95%;
   font-family: "Figtree", ui-sans-serif, system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 
@@ -215,6 +218,18 @@
 .portal-primary-conversation {
   background-color: hsl(var(--portal-conversation));
   border-color: hsl(var(--portal-conversation-border));
+}
+
+.portal-session-header {
+  background-color: hsl(var(--portal-session-header) / 0.96);
+}
+
+.portal-session-canvas {
+  background-color: hsl(var(--portal-session-canvas));
+}
+
+.portal-session-composer {
+  background-color: hsl(var(--portal-session-composer) / 0.97);
 }
 
 .portal-area-conversation {

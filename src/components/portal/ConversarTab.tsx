@@ -111,6 +111,12 @@ type PendingSessionRating = {
   ended_at: string;
 };
 
+type ActiveSession = {
+  id: string;
+  started_at: string;
+  duration_minutes: number;
+};
+
 function readOutbox(key: string): PendingMessage[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(key) || "[]") as PendingMessage[] | PendingMessage;
@@ -354,6 +360,8 @@ export function ConversarTab({
   const [pendingRating, setPendingRating] = useState<PendingSessionRating | null>(null);
   const [ratingSaving, setRatingSaving] = useState(false);
   const [ratingError, setRatingError] = useState("");
+  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+  const [sessionClock, setSessionClock] = useState(Date.now());
   const [activeDiscussionEpisodeId, setActiveDiscussionEpisodeId] = useState(discussionEpisodeId);
   const [chatOpen, setChatOpen] = useState(() => initialChatOpen || localStorage.getItem(`aura-chat-open:${userId}`) === "true");
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
@@ -418,6 +426,29 @@ export function ConversarTab({
     setPendingRating(existing ? null : completed as PendingSessionRating);
   };
 
+  const refreshActiveSession = async () => {
+    const { data } = await supabasePortal
+      .from("sessions")
+      .select("id,started_at,duration_minutes")
+      .eq("user_id", userId)
+      .eq("status", "in_progress")
+      .not("started_at", "is", null)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setActiveSession(data?.started_at ? data as ActiveSession : null);
+    setSessionClock(Date.now());
+  };
+
+  const sessionElapsedMinutes = activeSession
+    ? Math.max(0, Math.floor((sessionClock - new Date(activeSession.started_at).getTime()) / 60_000))
+    : 0;
+  const sessionDurationMinutes = activeSession?.duration_minutes || 45;
+  const sessionProgress = activeSession
+    ? Math.min(100, Math.max(2, (sessionElapsedMinutes / sessionDurationMinutes) * 100))
+    : 0;
+  const sessionClosing = Boolean(activeSession && sessionElapsedMinutes >= Math.max(0, sessionDurationMinutes - 5));
+
   const saveSessionRating = async (rating: number) => {
     if (!pendingRating || ratingSaving) return;
     setRatingSaving(true);
@@ -462,6 +493,12 @@ export function ConversarTab({
   useEffect(() => {
     if (initialChatOpen) setChatOpen(true);
   }, [initialChatOpen]);
+
+  useEffect(() => {
+    if (!activeSession) return;
+    const timer = window.setInterval(() => setSessionClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [activeSession]);
 
   useEffect(() => {
     if (!initialDraft || appliedInitialDraftRef.current === initialDraft) return;
@@ -637,6 +674,7 @@ export function ConversarTab({
       }
       setLoading(false);
       void refreshPendingRating();
+      void refreshActiveSession();
     };
     void load();
 
@@ -688,6 +726,14 @@ export function ConversarTab({
             setResponding(false);
             recordConversationEvent(userId, "response_timeout", { seconds: 40, source: "response_state" });
           }, remainingMs);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sessions", filter: `user_id=eq.${userId}` },
+        () => {
+          void refreshActiveSession();
+          window.setTimeout(() => void refreshPendingRating(), 900);
         },
       )
       .subscribe((status) => {
@@ -1169,10 +1215,11 @@ export function ConversarTab({
 
   const openConversation = (
     <section className={cn(
-        "relative h-full min-h-0 flex-1 flex-col overflow-hidden bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
+        "relative h-full min-h-0 flex-1 flex-col overflow-hidden bg-background transition-colors duration-500 md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
+      activeSession && "portal-session-mode",
       chatOpen ? "flex" : "hidden",
     )}>
-      <header className="flex min-h-[calc(4.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-border/70 bg-card/90 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur-xl md:min-h-[4.5rem] md:px-5 md:pt-0">
+      <header className={cn("relative flex min-h-[calc(4.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-border/70 bg-card/90 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur-xl transition-colors duration-500 md:min-h-[4.5rem] md:px-5 md:pt-0", activeSession && "portal-session-header")}>
          <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => setChatOpen(false)} aria-label="Voltar para conversas">
           <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -1182,8 +1229,21 @@ export function ConversarTab({
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="truncate font-body text-base font-bold text-foreground">AURA</h2>
-           <p className="truncate text-xs text-muted-foreground">{responding ? "respondendo…" : connected ? "disponível" : "reconectando…"}</p>
+          {activeSession ? (
+            <div className="flex min-w-0 items-center gap-2 text-xs">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+              <span className="truncate font-semibold text-foreground">{sessionClosing ? "Momento de fechamento" : "Sessão em andamento"}</span>
+              <span className="shrink-0 text-muted-foreground">{Math.min(sessionElapsedMinutes, sessionDurationMinutes)} de {sessionDurationMinutes} min</span>
+            </div>
+          ) : (
+            <p className="truncate text-xs text-muted-foreground">{responding ? "respondendo…" : connected ? "disponível" : "reconectando…"}</p>
+          )}
         </div>
+        {activeSession && (
+          <div className="absolute inset-x-0 bottom-0 h-0.5 bg-border/50" aria-hidden="true">
+            <div className="h-full bg-primary transition-[width] duration-700 ease-out" style={{ width: `${sessionProgress}%` }} />
+          </div>
+        )}
       </header>
 
       <div
@@ -1193,7 +1253,7 @@ export function ConversarTab({
           nearBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 150;
           if (nearBottomRef.current) setShowNew(false);
         }}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-secondary/45 px-4 py-5 sm:px-5"
+        className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain bg-secondary/45 px-4 py-5 transition-colors duration-500 sm:px-5", activeSession && "portal-session-canvas")}
       >
         {hasOlder && (
           <Button type="button" variant="ghost" size="sm" className="mx-auto mb-5 flex" onClick={() => void loadOlder()}>
@@ -1242,7 +1302,7 @@ export function ConversarTab({
         </Button>
       )}
 
-         <form onSubmit={send} className="shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl">
+         <form onSubmit={send} className={cn("shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl transition-colors duration-500", activeSession && "portal-session-composer")}>
          <div className="flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner focus-within:border-primary/50 focus-within:bg-card focus-within:ring-2 focus-within:ring-ring/20">
           {recording ? (
             <>
