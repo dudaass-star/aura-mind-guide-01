@@ -133,3 +133,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Manter a caixa de mensagem vazia visível assim que o teclado abrir no celular e validar foco e digitação em navegador móvel com teclado simulado; confirmar em aparelho físico no piloto.
 
 - [x] Limpar as mensagens técnicas da conta Marina e validar que somente o histórico fictício coerente permanece visível, preservando sessão, resumos e memórias.
+- [x] Simular seis trocas reais pelo App com a conta Marina, conferir respostas geradas pela AURA, continuidade e correção aceita; manter intacto o histórico fictício escrito anteriormente.
+- [ ] Substituir o histórico escrito manualmente por conversas reais somente após aprovação explícita; preservar a sessão e os resumos existentes.
