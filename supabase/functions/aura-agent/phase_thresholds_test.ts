@@ -278,6 +278,21 @@ Deno.test("Fechamento: teto operacional é 2x a duração prevista", () => {
   );
 });
 
+Deno.test("Fechamento: pedido explícito aceita linguagem natural com artigo ou pronome", () => {
+  assert(
+    /\(\?:encerrar\|terminar\|finalizar\|acabar\|parar\|fechar\)/.test(SOURCE),
+    "O detector deixou de reconhecer os verbos explícitos de encerramento."
+  );
+  assert(
+    /\(\?:sessao\|encontro\)/.test(SOURCE),
+    "O detector deixou de vincular o encerramento à sessão ou encontro."
+  );
+  assert(
+    /\(\?:\\s\+\\w\+\)\{0,3\}/.test(SOURCE),
+    "O detector voltou a exigir verbo e sessão colados, sem aceitar 'a/nossa sessão'."
+  );
+});
+
 // ============================================================
 // UNIFICAÇÃO DOS JUÍZES DE RECUSA DE FECHAMENTO
 // A rede de segurança pós-geração e o avaliador de fase precisam usar

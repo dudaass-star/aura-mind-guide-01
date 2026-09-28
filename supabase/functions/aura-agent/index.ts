@@ -3890,17 +3890,26 @@ function wantsToStartSession(message: string): boolean {
     || /\b(?:sessao|encontro)\b.{0,24}\b(?:agora|comecar|iniciar)\b/.test(normalized);
 }
 
-// Detecta pedido de encerrar sessão (EXPANDIDO para sinais implícitos)
+// Detecta pedido explícito de encerrar a sessão, aceitando artigos e pronomes
+// naturais ("encerrar a sessão", "fechar nossa sessão") sem confundir despedidas
+// comuns fora do encontro.
 function wantsToEndSession(message: string): boolean {
-  const lowerMsg = message.toLowerCase();
+  const normalized = message
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   const endPhrases = [
-    'encerrar sessão', 'encerrar sessao', 'terminar sessão', 'terminar sessao',
-    'finalizar sessão', 'finalizar sessao', 'acabar sessão', 'acabar sessao',
-    'parar sessão', 'parar sessao', 'pode encerrar', 'pode terminar',
-    'terminar por aqui', 'encerrar por aqui', 'já chega', 'ja chega',
-    'por hoje é isso', 'por hoje e isso', 'vamos parar'
+    'pode encerrar', 'pode terminar', 'pode finalizar',
+    'terminar por aqui', 'encerrar por aqui', 'fechar por aqui',
+    'ja chega', 'por hoje e isso', 'vamos parar'
   ];
-  return endPhrases.some(phrase => lowerMsg.includes(phrase));
+  const explicitSessionClosure = /\b(?:encerrar|terminar|finalizar|acabar|parar|fechar)\b(?:\s+\w+){0,3}\s+\b(?:sessao|encontro)\b/.test(normalized)
+    || /\b(?:sessao|encontro)\b(?:\s+\w+){0,3}\s+\b(?:encerrar|terminar|finalizar|acabar|parar|fechar)\b/.test(normalized);
+
+  return explicitSessionClosure || endPhrases.some((phrase) => normalized.includes(phrase));
 }
 
 // Detecta se o usuário quer PAUSAR a sessão (sair agora, continuar depois)
