@@ -31,7 +31,7 @@ interface Profile {
   whatsapp_provider: string | null;
 }
 
-interface RatingAgg { avg: number; count: number; }
+interface RatingAgg { avg: number; count: number; latest: number; latestAt: string; }
 
 interface AbandonedSession {
   id: string;
@@ -259,18 +259,22 @@ export default function AdminUsers() {
     if (!userIds.length) { setRatings({}); return {}; }
     const { data, error } = await supabase
       .from('session_ratings')
-      .select('user_id, rating')
+      .select('user_id, rating, created_at')
       .in('user_id', userIds);
     if (error) { console.error('Error fetching ratings:', error); setRatings({}); return {}; }
-    const agg: Record<string, { sum: number; count: number }> = {};
+    const agg: Record<string, { sum: number; count: number; latest: number; latestAt: string }> = {};
     (data || []).forEach((r: any) => {
-      if (!agg[r.user_id]) agg[r.user_id] = { sum: 0, count: 0 };
+      if (!agg[r.user_id]) agg[r.user_id] = { sum: 0, count: 0, latest: r.rating, latestAt: r.created_at };
       agg[r.user_id].sum += r.rating;
       agg[r.user_id].count += 1;
+      if (new Date(r.created_at).getTime() > new Date(agg[r.user_id].latestAt).getTime()) {
+        agg[r.user_id].latest = r.rating;
+        agg[r.user_id].latestAt = r.created_at;
+      }
     });
     const result: Record<string, RatingAgg> = {};
     Object.entries(agg).forEach(([uid, v]) => {
-      result[uid] = { avg: v.sum / v.count, count: v.count };
+      result[uid] = { avg: v.sum / v.count, count: v.count, latest: v.latest, latestAt: v.latestAt };
     });
     setRatings(result);
     return result;
@@ -654,7 +658,7 @@ export default function AdminUsers() {
               <TableHead>Sessões</TableHead>
               <TableHead>Última sessão</TableHead>
               <TableHead>D0</TableHead>
-              <TableHead>Rating médio</TableHead>
+              <TableHead>Avaliação</TableHead>
               <TableHead>Criado em</TableHead>
               <TableHead>Último contato</TableHead>
                <TableHead title="Última abertura pelo ícone da tela inicial; sem registro não significa que não foi instalado">Tela inicial</TableHead>
@@ -737,8 +741,8 @@ export default function AdminUsers() {
                   {r ? (
                     <span className="inline-flex items-center gap-1">
                       <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                      <span className={r.avg <= 3 ? 'text-red-700 font-semibold' : ''}>{r.avg.toFixed(1)}</span>
-                      <span className="text-muted-foreground">({r.count}/{done || '–'})</span>
+                      <span className={r.latest <= 3 ? 'text-red-700 font-semibold' : ''}>{r.latest}</span>
+                      <span className="text-muted-foreground" title={`Média ${r.avg.toFixed(1)} em ${r.count} avaliações`}>· média {r.avg.toFixed(1)} ({r.count}/{done || '–'})</span>
                     </span>
                   ) : doneWithoutRating ? (
                     <span className="inline-flex items-center gap-1 text-amber-700" title="Sessão concluída sem rating capturado">
@@ -801,8 +805,8 @@ export default function AdminUsers() {
                   {' '}· setup: {String(editProfile.needs_schedule_setup ?? false)}
                 </p>
                 <p>
-                  Rating médio: {ratings[editProfile.user_id]
-                    ? `${ratings[editProfile.user_id].avg.toFixed(2)} ⭐ em ${ratings[editProfile.user_id].count} sessões`
+                  Avaliação: {ratings[editProfile.user_id]
+                    ? `última ${ratings[editProfile.user_id].latest} ⭐ · média ${ratings[editProfile.user_id].avg.toFixed(2)} em ${ratings[editProfile.user_id].count} sessões`
                     : '—'}
                 </p>
               </div>
