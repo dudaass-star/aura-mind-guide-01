@@ -137,3 +137,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [ ] Substituir o histórico escrito manualmente por conversas reais somente após aprovação explícita; preservar a sessão e os resumos existentes.
 - [x] Testar pelo App uma nova sessão completa da Marina, com respostas reais da AURA, abertura, aprofundamento, fechamento e resumo; preservar a sessão anterior e avaliar honestamente o resultado; corrigir e revalidar o encerramento explícito descoberto no teste.
 - [x] Solicitar e registrar a avaliação no fim da sessão dentro do App, refletindo a última nota e a média na Gestão de Usuários; validado com a sessão concluída da Marina sem repetir o encontro.
+- [x] Diferenciar visualmente a conversa durante uma sessão, com estado no topo, tempo decorrido, progresso discreto e fechamento apenas no cabeçalho; validado em celular e desktop sem repetir uma sessão completa.
