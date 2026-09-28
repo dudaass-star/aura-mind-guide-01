@@ -6,6 +6,7 @@
 # Roadmap
 
 - [x] Comparar uma nova sessão completa da Marina, eliminar checagens mecânicas e impedir cadência de questionário sem perder profundidade.
+- [x] Validar novamente o fechamento da Marina sem reabrir investigação após a despedida.
 
 - [x] Registrar por cliente a abertura pelo ícone da tela inicial e exibir a última abertura na Gestão de Usuários, sem presumir instalação por acesso no navegador.
 - [x] Corrigir e validar o botão administrativo que copia o link temporário da conta de demonstração da Marina, incluindo entrada direta no App.

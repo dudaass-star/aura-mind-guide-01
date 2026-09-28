@@ -134,6 +134,31 @@ Deno.test("Naturalidade: não repete pergunta já respondida nem cria questioná
   );
 });
 
+Deno.test("Naturalidade em sessão: exploração não obriga observação e pergunta no mesmo turno", () => {
+  const bannedCadence = [
+    "exploração normal — observação + pergunta",
+    "1 observação perceptiva + 1 pergunta que abre. Por turno.",
+    "EXPLORAÇÃO. Vá mais fundo. Uma observação + uma pergunta.",
+  ];
+
+  for (const instruction of bannedCadence) {
+    assert(!SOURCE.includes(instruction), `Cadência obrigatória antiga ainda presente: ${instruction}`);
+  }
+
+  assert(
+    /não combine observação e pergunta por padrão/.test(SOURCE),
+    "A exploração deixou de orientar alternância sem fórmula obrigatória."
+  );
+  assert(
+    /Se a resposta anterior da AURA terminou com pergunta, a próxima deve reagir/.test(SOURCE),
+    "A proteção específica contra perguntas consecutivas sumiu da sessão."
+  );
+  assert(
+    /Não termine com pergunta por hábito e não faça perguntas em respostas consecutivas/.test(SOURCE),
+    "O reforço dinâmico da exploração voltou a induzir questionário."
+  );
+});
+
 Deno.test("Encerramento: pedido explícito do usuário não é bloqueado pela fase da sessão", () => {
   assert(
     /assistantMessage\.includes\('\[ENCERRAR_SESSAO\]'\) && !shouldEndSession/.test(SOURCE),
@@ -142,6 +167,32 @@ Deno.test("Encerramento: pedido explícito do usuário não é bloqueado pela fa
   assert(
     /assistantMessage\.includes\('\[CONVERSA_CONCLUIDA\]'\) && !shouldEndSession/.test(SOURCE),
     "A conversão de conversa concluída voltou a apagar o pedido explícito do usuário."
+  );
+});
+
+Deno.test("Naturalidade no encerramento: pedido explícito não reabre investigação", () => {
+  assert(
+    /depois de sintetizar e se despedir, termine ali/.test(SOURCE),
+    "O encerramento voltou a permitir uma nova investigação depois da despedida."
+  );
+  assert(
+    /NÃO faça outro convite nem termine com pergunta corporal, emocional ou reflexiva/.test(SOURCE),
+    "A proteção dinâmica contra check-in artificial no fechamento sumiu."
+  );
+  assert(
+    SOURCE.includes('"como você tá sentindo seu corpo agora?"'),
+    "O exemplo real que reabriu a sessão deixou de estar explicitamente bloqueado."
+  );
+});
+
+Deno.test("Naturalidade: não inventa sensação corporal nem troca a checagem por equivalente", () => {
+  assert(
+    SOURCE.includes('"como tá sendo sustentar isso?"'),
+    "A variação observada de checagem ritual deixou de estar explicitamente bloqueada."
+  );
+  assert(
+    /Não invente sensação corporal que a pessoa não relatou/.test(SOURCE),
+    "A proteção contra atribuir sensação corporal ao usuário sumiu."
   );
 });
 
