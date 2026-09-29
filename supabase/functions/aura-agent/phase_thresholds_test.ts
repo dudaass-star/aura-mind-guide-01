@@ -5,6 +5,7 @@
 // estão no código e que não voltaram resíduos antigos (>= 7 / >= 8).
 
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { detectLiveDisclosure } from "./phase-safety.ts";
 
 const SOURCE_PATH = new URL("./index.ts", import.meta.url);
 const SOURCE = await Deno.readTextFile(SOURCE_PATH);
@@ -262,6 +263,44 @@ Deno.test("Fase 1 — extractor: schema declara information_density / user_refle
     /"user_engaged_with_commitment":\s*true/.test(SOURCE),
     "Campo user_engaged_with_commitment sumiu do schema do micro-agent extractor."
   );
+});
+
+Deno.test("Microagente: distingue relato novo de elaboração própria de sentido", () => {
+  assert(SOURCE.includes('apenas continuar contando a história permanece "presenca"'));
+  assert(SOURCE.includes('"Agora percebo que talvez eu tenha aprendido ali a ficar sempre em alerta" → sentido'));
+  assert(SOURCE.includes('"Depois aconteceu outra coisa que nunca contei" → presenca'));
+});
+
+Deno.test("Microagente: declara e persiste revelação sensível nova", () => {
+  assert(/"new_sensitive_disclosure":\s*true/.test(SOURCE));
+  assert(/new_sensitive_disclosure: actions\.new_sensitive_disclosure/.test(SOURCE));
+  assert(SOURCE.includes('Uma nova revelação mantém aura_phase="presenca"'));
+});
+
+Deno.test("Cenário Lilian — revelação traumática aos 30min mantém Presença", () => {
+  const result = detectLiveDisclosure("Só que quando eu olhei pra dentro do carro, ele estava com o pênis pra fora, segurando.");
+  assertEquals(result.isSensitiveDisclosure, true);
+  assertEquals(result.shouldHoldPresence, true);
+  assert(SOURCE.includes("if (sessionActive && liveDisclosure.shouldHoldPresence)"));
+});
+
+Deno.test("Relato longo ainda aberto bloqueia costura mesmo sem palavra traumática", () => {
+  const result = detectLiveDisclosure("Depois disso eu saí de casa, fui até a rua de baixo e encontrei minha irmã. Eu ainda não tinha contado a ela o que aconteceu, então comecei pelo começo, expliquei a discussão e tudo o que veio depois naquele dia.");
+  assertEquals(result.isSubstantiveNarrative, true);
+  assertEquals(result.shouldHoldPresence, true);
+});
+
+Deno.test("Reflexão genuína não é confundida com nova revelação", () => {
+  const result = detectLiveDisclosure("Agora eu percebo que talvez eu tenha aprendido ali a ficar sempre em alerta.");
+  assertEquals(result.shouldHoldPresence, false);
+});
+
+Deno.test("Fechamento aos 60% virou sinal condicional, nunca ordem obrigatória", () => {
+  assert(SOURCE.includes("SINAL DE PRONTIDÃO PARA COSTURA"));
+  assert(SOURCE.includes("Isto NÃO é ordem de fechamento"));
+  assert(SOURCE.includes("!hasLiveDisclosure"));
+  assert(!SOURCE.includes("REDE DE SEGURANÇA — FECHAMENTO OBRIGATÓRIO"));
+  assert(!SOURCE.includes("AÇÃO OBRIGATÓRIA AGORA: dê forma ao que ficou vivo"));
 });
 
 Deno.test("Fase 1 — extractor: definição ESTRITA de information_density (3 elementos)", () => {

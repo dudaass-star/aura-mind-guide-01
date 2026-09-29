@@ -5,6 +5,7 @@ import { sendMessage } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { pickNextJourney, hasExplicitJourneyIntent } from "../_shared/journey-helper.ts";
 import { describeChatError } from "../_shared/chat-error.ts";
+import { detectLiveDisclosure } from "./phase-safety.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -808,6 +809,7 @@ interface ExtractedActions {
   // Fase 1 — sinais novos para o Phase Evaluator enxergar conteúdo (não só clock/contagem).
   information_density?: 'low' | 'medium' | 'saturated';
   user_reflection_mode?: boolean;
+  new_sensitive_disclosure?: boolean;
   user_engaged_with_commitment?: boolean;
   // Anti-loop de reframe: estado mínimo da hipótese central (evita reinjetar
   // "entregue como hipótese" turno após turno e transformar leitura em insistência).
@@ -828,6 +830,7 @@ interface UserContextState {
   parked_turns?: number;
   information_density?: string;
   user_reflection_mode?: boolean;
+  new_sensitive_disclosure?: boolean;
   user_engaged_with_commitment?: boolean;
   aura_hypothesis_delivered?: boolean;
   user_validated_hypothesis?: boolean;
@@ -874,6 +877,7 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
   "topic_parked": true,
   "information_density": "low|medium|saturated",
   "user_reflection_mode": true,
+  "new_sensitive_disclosure": true,
   "user_engaged_with_commitment": true,
   "aura_hypothesis_delivered": true,
   "user_validated_hypothesis": true,
@@ -891,7 +895,12 @@ REGRAS:
 - topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com a mensagem IMEDIATAMENTE anterior dele (não com o início da conversa). "shifted" = mudou de assunto parcialmente em relação à última mensagem, "new_topic" = tema completamente novo vs a última mensagem, "same_topic" = continuação do mesmo tema da última mensagem. IMPORTANTE: se o usuário mudou de tema no turno anterior e agora CONTINUA nesse novo tema, classifique como "same_topic" (ele está aprofundando o novo assunto).
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
 - IMPORTANTE sobre engagement_level: Alguns usuários são naturalmente sucintos. Só classifique como "disengaged" se houver mudança clara de padrão OU evasão ativa (ex: "tanto faz", "sei lá", "ok"). Respostas curtas com conteúdo emocional genuíno = "engaged", não "short_answers".
-- aura_phase: classifique a fase que o TURNO DO USUÁRIO autoriza (NUNCA a resposta da assistente). "presenca" = ele trouxe fato/situação com carga, desabafo, ou pediu escuta. "sentido" = ele mesmo buscou significado, causa, padrão, ou elaborou sobre uma leitura. "movimento" = ele mesmo falou de ação, decisão ou próximo passo. Se o turno do usuário não autoriza nenhuma das três (assunto neutro, prático, social, brincadeira), OMITA o campo.
+- aura_phase: classifique a fase que o TURNO DO USUÁRIO autoriza (NUNCA a resposta da assistente). "presenca" = ele trouxe fato/situação com carga, desabafo, pediu escuta OU continuou narrando um acontecimento, lembrança, revelação, correção ou detalhe novo — mesmo que o relato seja profundo, longo ou emocionalmente carregado. "sentido" exige elaboração PRÓPRIA do usuário sobre significado, causa, padrão ou compreensão; apenas continuar contando a história permanece "presenca". "movimento" = ele mesmo falou de ação, decisão ou próximo passo. Se o turno não autoriza nenhuma das três (assunto neutro, prático, social, brincadeira), OMITA o campo.
+- CONTRASTES OBRIGATÓRIOS DE aura_phase:
+  • "Quando eu tinha dez anos, um homem me chamou para entrar no carro" → presenca (relato/revelação)
+  • "Depois aconteceu outra coisa que nunca contei" → presenca (continuação com material novo)
+  • "Agora percebo que talvez eu tenha aprendido ali a ficar sempre em alerta" → sentido (elaboração própria)
+  • "Acho que isso explica por que hoje não consigo relaxar" → sentido (relação de significado feita pelo usuário)
 - user_turn_weight: "light" ou "loaded". "loaded" = o turno do usuário tem carga emocional, OU responde com precisão a uma pergunta emocional/direta da assistente, mesmo em uma palavra ("não", "consegui", "piorou"). "light" = assunto neutro, prático, social, humor, piada, ou evasão. O TAMANHO da mensagem NÃO decide: resposta curta com conteúdo genuíno é "loaded"; update prático longo é "light". Em dúvida, marque "loaded".
 - topic_parked: true SOMENTE se o usuário desviou para algo leve/prático MAS o assunto anterior dele ainda tinha carga viva (ficou em aberto). false se não havia assunto carregado antes, ou se o usuário trouxe um assunto novo com carga própria.
 - information_density: avalia a SATURAÇÃO de material terapêutico na conversa do USUÁRIO até aqui. Use definição ESTRITA:
@@ -905,11 +914,12 @@ REGRAS:
   • "talvez seja porque quando criança…"
   • "nunca tinha pensado, mas…"
   NÃO marque true para concordância passiva ("ah faz sentido", "é verdade", "exatamente", "concordo", "tem razão"). Concordar com a assistente ≠ refletir. Em dúvida, marque false.
+- new_sensitive_disclosure: true quando a mensagem ATUAL revela ou acrescenta material sensível ainda vivo — trauma, abuso, violência, risco, segredo doloroso ou lembrança de forte vulnerabilidade. false para mera referência a algo já elaborado, concordância com uma leitura ou reflexão abstrata sem nova revelação. Uma nova revelação mantém aura_phase="presenca", mesmo quando já houve insight antes.
 - user_engaged_with_commitment: true APENAS se a ÚLTIMA pergunta de COMPROMISSO/PRÓXIMO PASSO/MOVIMENTO da assistente foi respondida pelo usuário de forma CONCRETA (nomeou ação, prazo, intenção objetiva). false se o usuário evadiu, mudou de assunto, ignorou, ou respondeu vago ("vou pensar", "talvez", "sei lá"). Se a assistente NÃO fez pergunta de compromisso, marque false.
 - aura_hypothesis_delivered: true se a ASSISTENTE, nesta resposta, arriscou uma LEITURA/TESE/INTERPRETAÇÃO sobre o usuário (nomeou um padrão, uma tensão, um motivo por trás do comportamento). false se ela só acolheu, validou ou fez perguntas exploratórias.
 - user_validated_hypothesis: true SOMENTE se o USUÁRIO elaborou por conta própria sobre a leitura oferecida (trouxe conteúdo novo, exemplo, consequência ou correção parcial que mostra que pensou sobre ela). NÃO conta como validação: resposta de até 4 palavras; concordância seca ("isso mesmo", "sim", "faz sentido", "é isso", "ok"); resposta que é só uma pergunta de volta ("Como?", "E aí?", "E o que eu faço?"). Nesses casos retorne false — concordância por polidez não autoriza aprofundar a mesma leitura.
 - user_rejected_hypothesis: true se o USUÁRIO corrigiu ou recusou a leitura ("não é isso", "não é medo de ficar sozinha, é medo de ficar sem ele"). false caso contrário.
-- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, user_turn_weight, topic_parked, information_density, user_reflection_mode, user_engaged_with_commitment, aura_hypothesis_delivered, user_validated_hypothesis, user_rejected_hypothesis (aura_phase é o único opcional: só quando o turno do usuário autoriza)
+- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, user_turn_weight, topic_parked, information_density, user_reflection_mode, new_sensitive_disclosure, user_engaged_with_commitment, aura_hypothesis_delivered, user_validated_hypothesis, user_rejected_hypothesis (aura_phase é o único opcional: só quando o turno do usuário autoriza)
 - Se nada mais for relevante, retorne apenas esses campos
 Apenas o JSON, sem markdown.`;
 
@@ -1375,6 +1385,10 @@ function evaluateTherapeuticPhase(
   const hypValidated = lastUserContext?.user_validated_hypothesis === true;
   const hypRejected = lastUserContext?.user_rejected_hypothesis === true;
   const evasiveStreak = lastUserContext?.short_answer_streak || 0;
+  const currentUserMessage = [...messageHistory].reverse().find(m => m.role === 'user')?.content || '';
+  const liveDisclosure = detectLiveDisclosure(currentUserMessage);
+  const hasLiveDisclosure = liveDisclosure.shouldHoldPresence
+    || lastUserContext?.new_sensitive_disclosure === true;
 
   let hypothesisGuard = '';
   if (hypRejected) {
@@ -1422,6 +1436,17 @@ Apenas esteja presente, valide o que ele sente, e ofereça segurança emocional.
 ${lastUserContext.user_emotional_state === 'crisis' ? 'Se houver risco, siga o protocolo de segurança.' : ''}`
         };
       }
+    }
+
+    if (lastUserContext.new_sensitive_disclosure === true) {
+      console.log('🫶 Phase evaluator: new_sensitive_disclosure=true → mantendo Presença');
+      return {
+        detectedPhase: 'presenca',
+        stagnationLevel: 0,
+        guidance: `\n\n🫶 REVELAÇÃO SENSÍVEL EM CURSO:
+O usuário acabou de revelar material sensível ou traumático ainda vivo.
+Permaneça em PRESENÇA: acolha e acompanhe o que ele está contando. Não transforme interpretação em conclusão, não proponha movimento e não costure fechamento agora.`
+      };
     }
 
     // Priority 2: Short answer streak (check BEFORE topic shift so it's not silenced)
@@ -1492,6 +1517,17 @@ O usuário fez uma pergunta prática do dia a dia. Isso é desvio legítimo, nã
     .filter(m => m.role === 'assistant')
     .slice(-6)
     .map(m => m.content.toLowerCase());
+
+  if (sessionActive && liveDisclosure.shouldHoldPresence) {
+    console.log(`🫶 Phase evaluator: material vivo no turno atual (sensitive=${liveDisclosure.isSensitiveDisclosure}, narrative=${liveDisclosure.isSubstantiveNarrative}) → mantendo Presença`);
+    return {
+      detectedPhase: 'presenca',
+      stagnationLevel: 0,
+      guidance: `\n\n🫶 MATERIAL VIVO NO TURNO ATUAL:
+O usuário está narrando ou revelando conteúdo novo. Isso prevalece sobre o relógio e sobre qualquer insight já alcançado.
+Continue em PRESENÇA. Acolha o material atual sem resumir, concluir, propor movimento ou iniciar fechamento. Uma revelação nova reabre temporariamente a exploração.`
+    };
+  }
 
   if (recentAssistant.length < 2 && !lastUserContext?.aura_phase) {
     return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
@@ -1651,14 +1687,14 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
       }
     }
 
-    // ======== REDE DE SEGURANÇA DE FECHAMENTO ========
-    // Sentido sustentado em reframe/development, sem pergunta de closure
-    // emitida ainda, e já passou de 60% do tempo da sessão → força movimento.
-    // Dispara 1x (detector previne loop no turno seguinte).
+    // ======== SINAL DE PRONTIDÃO PARA COSTURA ========
+    // Depois de 60% do encontro, elaboração própria pode sugerir costura —
+    // nunca fechamento obrigatório. Material vivo bloqueia.
     if (
       ['reframe', 'development'].includes(sessionPhase) &&
       detectedPhase === 'sentido' &&
-      sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6)
+      sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6) &&
+      !hasLiveDisclosure
     ) {
       // Um compromisso aceito desarma este nudge; sem ele, a orientação pede
       // aterrissagem, mas nunca uma tarefa obrigatória. O encerramento pode
@@ -1667,14 +1703,14 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
       if (userClosedLoop) {
         console.log(`✅ user_engaged_with_commitment=true — closure efetivo, skipping safety net`);
       } else {
-        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min, userEngaged=${lastUserContext?.user_engaged_with_commitment})`);
+        console.log(`🧵 Landing readiness signal (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min, userEngaged=${lastUserContext?.user_engaged_with_commitment})`);
         return {
           detectedPhase: 'sentido',
           stagnationLevel: 1,
-          guidance: `\n\n🛡️ REDE DE SEGURANÇA — FECHAMENTO OBRIGATÓRIO:
-Você já está em SENTIDO há vários turnos e a sessão está avançada (uso interno: nunca cite tempo ao usuário).
-Ainda NÃO houve aterrissagem clara nesta sessão.
-AÇÃO OBRIGATÓRIA AGORA: dê forma ao que ficou vivo, sem obrigar passo concreto nem aceite ritual.
+          guidance: `\n\n🧵 SINAL DE PRONTIDÃO PARA COSTURA:
+Uma compreensão central já surgiu e pode estar amadurecendo. Isto NÃO é ordem de fechamento.
+Antes de costurar, leia o último turno: se o usuário continuou o relato, acrescentou informação, revelou algo, corrigiu a leitura ou aumentou a vulnerabilidade, permaneça em Presença.
+Só comece a aterrissagem quando a fala tiver desacelerado e o usuário estiver elaborando a compreensão já construída — nunca apenas porque o tempo avançou.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
         };
       }
@@ -2214,6 +2250,7 @@ async function processExtractedActions(
         parked_turns: parkedTurns,
         information_density: actions.information_density,
         user_reflection_mode: actions.user_reflection_mode,
+        new_sensitive_disclosure: actions.new_sensitive_disclosure,
         user_engaged_with_commitment: actions.user_engaged_with_commitment,
         aura_hypothesis_delivered: hypothesisDelivered,
         user_validated_hypothesis: hypothesisValidated,
@@ -4044,6 +4081,8 @@ let timeContext = `
 - Fase atual: ${phaseLabel}
 
 ⏱️ REGRA DE OURO DO TEMPO: o relógio é SEU, não do usuário. NUNCA cite minutos decorridos ou restantes, nunca diga "faltam X minutos", "estamos no fim do tempo" ou "nosso tempo está acabando". O que fecha uma sessão é o material ter chegado a um lugar — não o relógio. Se o momento é importante, o tempo espera.
+
+🫶 SOBERANIA DO MATERIAL VIVO: uma lembrança, revelação, correção ou detalhe novo prevalece sobre qualquer orientação de movimento ou fechamento. Enquanto o cliente estiver narrando material vivo, acompanhe-o em Presença; não transforme acolhimento ou interpretação em despedida.
 
 
 🚨🚨🚨 ATENÇÃO: ISTO É UMA SESSÃO ESPECIAL, NÃO UMA CONVERSA NORMAL! 🚨🚨🚨
