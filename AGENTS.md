@@ -10,3 +10,4 @@
 - A avaliação de uma sessão concluída é solicitada na própria conversa do App e registrada pelo fluxo autenticado de experiência; isso não depende de telefone nem do pós-sessão no WhatsApp.
 - Sessões em andamento mudam suavemente o contexto visual da conversa e mostram progresso no cabeçalho; o aviso de fechamento nunca entra como mensagem da AURA.
 - AURA evita confirmação ritual e perguntas seguidas; ao encerrar, sintetiza sem novo check-in.
+- Salvar o fio entre sessões separado de compromissos evita tarefas artificiais e permite retomada natural mesmo sem data.

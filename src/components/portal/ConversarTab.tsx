@@ -15,6 +15,7 @@ import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
 import type { Json } from "@/integrations/supabase/types";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { MessageResponse } from "@/components/ai-elements/message";
+import { sanitizePortalText } from "@/components/portal/sanitize";
 
 type ChatMessage = {
   id: string;
@@ -109,6 +110,7 @@ type PendingMessage = {
 type PendingSessionRating = {
   id: string;
   ended_at: string;
+  continuity_thread: string | null;
 };
 
 type ActiveSession = {
@@ -407,7 +409,7 @@ export function ConversarTab({
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: completed } = await supabasePortal
       .from("sessions")
-      .select("id,ended_at")
+      .select("id,ended_at,continuity_thread")
       .eq("user_id", userId)
       .eq("status", "completed")
       .gte("ended_at", cutoff)
@@ -1278,6 +1280,12 @@ export function ConversarTab({
         )}
 
           <MessageTimeline messages={messages} responding={responding} onOpenReport={openReport} onOpenEpisode={openEpisode} onRetry={(message) => void retryFailedMessage(message)} onDelete={deleteFailedMessage} />
+          {pendingRating?.continuity_thread && !responding && (
+            <div className="mt-4 max-w-[86%] border-l-2 border-primary pl-4" aria-label="Para o próximo encontro">
+              <p className="text-xs font-semibold text-primary">Para o próximo encontro</p>
+              <p className="mt-1 text-sm leading-relaxed text-foreground">{sanitizePortalText(pendingRating.continuity_thread)}</p>
+            </div>
+          )}
           {pendingRating && !responding && (
             <section className="mt-4 max-w-[86%] rounded-lg border border-border bg-card p-4 shadow-sm" aria-label="Avaliar sessão">
               <p className="text-sm font-semibold text-foreground">Antes de fechar, como foi nossa sessão hoje?</p>

@@ -3242,6 +3242,7 @@ export type Database = {
           commitment_confirmed: boolean | null
           commitments: Json | null
           confirmation_requested: boolean | null
+          continuity_thread: string | null
           created_at: string
           created_by: string
           duration_minutes: number
@@ -3283,6 +3284,7 @@ export type Database = {
           commitment_confirmed?: boolean | null
           commitments?: Json | null
           confirmation_requested?: boolean | null
+          continuity_thread?: string | null
           created_at?: string
           created_by?: string
           duration_minutes?: number
@@ -3324,6 +3326,7 @@ export type Database = {
           commitment_confirmed?: boolean | null
           commitments?: Json | null
           confirmation_requested?: boolean | null
+          continuity_thread?: string | null
           created_at?: string
           created_by?: string
           duration_minutes?: number

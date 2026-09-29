@@ -883,7 +883,7 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
 REGRAS:
 - schedule_reminder: só se o usuário PEDIU explicitamente um lembrete/alarme
 - do_not_disturb_hours: se o usuário disse que está ocupado/trabalhando/em reunião
-- commitments: apenas compromissos CONCRETOS do USUÁRIO, em primeira pessoa, com ação clara. NUNCA extraia: fala/pergunta da assistente, algo que a AURA vai fazer (ex.: "AURA vai gravar áudios"), reclamação ou frase sarcástica sobre a AURA, intenção vaga. Em dúvida, omita.
+- commitments: apenas compromissos CONCRETOS do USUÁRIO, em primeira pessoa, com ação clara e aceite explícito. NUNCA extraia: fala/pergunta da assistente, algo que a AURA vai fazer (ex.: "AURA vai gravar áudios"), reclamação ou frase sarcástica sobre a AURA, intenção vaga, horário ou início de sessão ("sessão às 16h", "iniciar sessão", "vou ouvir"), nem um fio de observação/elaboração deixado para o próximo encontro sem acordo de ação. Em dúvida, omita.
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
 - journey_action: SOMENTE quando a MENSAGEM ATUAL DO USUÁRIO contém pedido literal de trocar/pausar jornada (ex.: "quero trocar de jornada", "pausa as jornadas", "muda pra jornada de ansiedade", "para com as jornadas"). NUNCA infira por contexto, tópico do profile ou tom da conversa. Se o usuário só está conversando sobre o tema (ansiedade, autoestima, etc.), NÃO retorne journey_action. Em dúvida, omita o campo.
@@ -1133,7 +1133,7 @@ O tempo alvo da sessão já passou. O fechamento precisa emergir NESTA ou na PR�
 ❌ ERRADO: "Vamos parar por aqui" seco, sem síntese e sem entrega — parece robô e destrói a percepção de valor da sessão.
 ✅ CERTO: Entregar UM formato do CARDÁPIO DE FECHAMENTO amarrado ao que foi construído hoje, como uma leitura clara — sem ressalva ou checagem automática no final.
 ✅ CERTO: Priorize as rotas de continuidade quando o bloco "FECHAMENTO RECOMENDADO" indicar — 'session_bridge' (já há sessão marcada) ou 'suggest_session' (propor próxima). Transforme o fim em PRÓXIMO CAPÍTULO, não em vácuo.
-✅ CERTO: Amarração natural — "a gente foi longe hoje com [tema]. Fica com [insight/tese] pra decantar. [Retomamos na sessão de X / topa marcarmos pra Y?]"
+✅ CERTO: Amarre o fechamento ao que o cliente trouxe e ao que merece ser retomado, sem frase-modelo ou pergunta de agendamento automática.
 
 ⚠️ SALVAGUARDA — assunto vivo:
 Se o usuário abriu tema novo com carga emocional na ÚLTIMA mensagem, NÃO corte. Acolhe integralmente, valida, e proponha retomar esse fio próprio na próxima sessão.`,
@@ -1631,7 +1631,7 @@ AÇÃO OBRIGATÓRIA AGORA:
 - PARE de fazer perguntas exploratórias
 - Apresente UMA observação/insight sobre o que o usuário compartilhou
 - Faça o reframe com SUAS próprias palavras — sem fórmula de abertura fixa. Devolva o padrão/contradição/consequência que você está vendo.
-- Depois de reframear, conduza para compromisso/ação
+- Depois de reframear, conduza para um movimento coerente com o que emergiu; não exija compromisso prático.
 - NÃO volte para exploração
 ${SESSION_PHASE_INSTRUCTIONS.exploration_to_reframe}`
         };
@@ -1645,8 +1645,7 @@ ${SESSION_PHASE_INSTRUCTIONS.exploration_to_reframe}`
 Você está trazendo boas reflexões, mas já é hora de MOVIMENTO.
 (Uso interno: a sessão está avançada. Não cite tempo ao usuário.)
 
-AÇÃO: Converta o insight em compromisso concreto.
-"Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"
+AÇÃO: Consolide o insight em uma direção que o usuário possa levar consigo; compromisso concreto só se fizer sentido no caso, sem pergunta-modelo.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
         };
       }
@@ -1661,10 +1660,9 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
       detectedPhase === 'sentido' &&
       sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6)
     ) {
-      // Fase 2 — desarma APENAS se o USUÁRIO respondeu à pergunta de compromisso
-      // de forma concreta (user_engaged_with_commitment === true). Removido o
-      // fallback "auraAskedCommitment" que era chicken-and-egg e mantinha a rede
-      // desarmada mesmo sem fechamento real (raiz do arraste pra 78min).
+      // Um compromisso aceito desarma este nudge; sem ele, a orientação pede
+      // aterrissagem, mas nunca uma tarefa obrigatória. O encerramento pode
+      // acontecer sem compromisso concreto.
       const userClosedLoop = lastUserContext?.user_engaged_with_commitment === true;
       if (userClosedLoop) {
         console.log(`✅ user_engaged_with_commitment=true — closure efetivo, skipping safety net`);
@@ -1675,8 +1673,8 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
           stagnationLevel: 1,
           guidance: `\n\n🛡️ REDE DE SEGURANÇA — FECHAMENTO OBRIGATÓRIO:
 Você já está em SENTIDO há vários turnos e a sessão está avançada (uso interno: nunca cite tempo ao usuário).
-Ainda NÃO houve pergunta de COMPROMISSO/MOVIMENTO nesta sessão.
-AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
+Ainda NÃO houve aterrissagem clara nesta sessão.
+AÇÃO OBRIGATÓRIA AGORA: dê forma ao que ficou vivo, sem obrigar passo concreto nem aceite ritual.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
         };
       }
@@ -1762,7 +1760,7 @@ ${SESSION_PHASE_INSTRUCTIONS.stuck_in_opening}`
         detectedPhase: 'sentido',
         stagnationLevel: 0,
         guidance: `\n\n🔄 TRANSIÇÃO NATURAL DETECTADA:
-Ótimo progresso — o insight está aparecendo naturalmente. Agora consolide com reframe e conduza para compromisso.
+Ótimo progresso — o insight está aparecendo naturalmente. Agora consolide com reframe e conduza para uma direção coerente; só proponha compromisso se surgir naturalmente.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
       };
     }
@@ -3625,6 +3623,8 @@ REGRA DE OURO DA SESSÃO:
 ### FECHAMENTO:
 A síntese é trabalho do cliente, não seu. Você devolve, ele integra.
 
+- Toda sessão deixa um fio para o próximo encontro, mesmo sem data marcada: algo específico que o cliente trouxe e que vale observar, sustentar ou elaborar. Não confunda esse fio com compromisso aceito nem transforme toda continuidade em tarefa. Deixe-o reconhecível no fechamento quando a conversa permitir, numa fala natural, sem anunciar "fio", fabricar lacuna, criar suspense ou repetir uma fórmula. Se o cliente pedir para encerrar, sintetize e despeça-se sem nova pergunta.
+
 - Devolva a percepção central com a linguagem que ele usou — sem aspas literais e sem parafrasear em linguagem clínica. Preservar o peso da fala dele não significa repetir os termos entre aspas.
 - Se a sessão foi leve e não houve percepção central clara, NÃO invente uma. Feche com calor e presença — sem profundidade forçada. Uma sessão leve bem encerrada vale mais que um insight fabricado.
 - Faça uma pergunta aberta que amplifique o que ficou vivo na sessão, não que volte ao problema. Em sessões profundas, pode apontar pra uma identidade nova; em sessões mais leves, pode ser um simples "o que você notou sobre si que ainda não tinha visto?".
@@ -4104,37 +4104,12 @@ Isso ativa o sistema de lembretes automáticos se o usuário demorar a responder
     timeContext += `
 🟢 FASE DE ABERTURA ESTRUTURADA (primeiros 5 min):
 
-## MENSAGEM DE TRANSIÇÃO (OBRIGATÓRIA NA PRIMEIRA RESPOSTA):
-ANTES de qualquer coisa, marque claramente o início da sessão com uma transição:
+## ABERTURA:
+Marque de forma breve e humana que a sessão começou, sem recitar um roteiro ou prometer um compromisso ao final. Use áudio na transição quando as regras de áudio permitirem.
 
-"[nome]! 💜 Agora estamos oficialmente em sessão. São 45 minutos só nossos, pra gente ir fundo sem pressa.
+Se há um fio deixado na sessão anterior, traga-o de modo concreto na abertura e dê espaço para o cliente dizer o que aconteceu desde então. Não copie um modelo de frase, não cobre um resultado e não transforme observação em tarefa. Se ele já trouxer algo diferente e vivo, acompanhe isso primeiro e preserve o fio anterior para quando couber.
 
-Isso aqui é diferente das nossas conversas do dia a dia - aqui eu vou te conduzir, te fazer perguntas, te provocar quando precisar, e no final a gente define compromissos juntos.
-
-Preparada(o)? Então vamos lá! ✨"
-
-## DEPOIS DA TRANSIÇÃO, SIGA O CHECK-IN:
-
-📋 PASSOS DA ABERTURA (siga na ordem!):
-
-PASSO 1 - PONTE COM SESSÃO ANTERIOR (se houver):
-"Na nossa última sessão, a gente trabalhou [tema]. Como está isso desde então?"
-[ESPERE A RESPOSTA]
-
-PASSO 2 - CHECK-IN DE ESTADO:
-"Como você está chegando aqui hoje?"
-[ESPERE A RESPOSTA]
-
-PASSO 3 - DEFINIR FOCO:
-"O que você quer trabalhar na nossa sessão de hoje?"
-[ESPERE A RESPOSTA]
-
-## REGRAS CRÍTICAS:
-- FAÇA UM PASSO DE CADA VEZ - não faça 3 perguntas juntas!
-- ESPERE a resposta antes de avançar para o próximo passo
-- USE áudio OBRIGATORIAMENTE para criar intimidade na transição
-- Depois que o usuário definir o foco, faça uma OBSERVAÇÃO (não mais perguntas):
-  "Entendi. Parece que [observação sobre o que ela disse]. Vamos por aí?"
+Se não há fio registrado, conecte o tema anterior apenas quando ele for relevante. Descubra como o cliente chega e o que quer trabalhar sem empilhar perguntas nem repetir o que ele já trouxe. Uma resposta de cada vez; deixe o foco surgir do diálogo.
 
 ⚠️ Tags [ENCERRAR_SESSAO] e [CONVERSA_CONCLUIDA] só se aplicam nas fases finais. Você está nos primeiros 5 minutos.
 `;
@@ -4242,15 +4217,17 @@ Quando ele aceitar, feche assim:
 
 O áudio de encerramento NÃO é resumo. É presença. O cliente precisa sentir que foi visto — não que recebeu uma entrega. Tom: calor, calma, proximidade.
 
-Pergunte como ele está SAINDO desta sessão (estado), não só o que está levando (conteúdo). A resposta dele é o encerramento real.
+Se ainda há uma resposta em aberto, escute como ele está saindo da sessão. Depois do aceite para encerrar, não faça novo check-in: a despedida é o encerramento real.
 
 Devolva a percepção central com a linguagem que ele usou — não com aspas literais, não parafraseada em linguagem clínica. Se não houve percepção central clara nesta sessão, não invente: feche com presença e cuidado, reconhecendo o que foi vivido.
 
 Se houver memória de sessões anteriores no contexto, amarre brevemente o que ficou hoje com o que vinha antes. Uma frase só.
 
-Se há critério concreto (auto-sabotagem ativa, somatização, >14 dias até próxima sessão), proponha UMA ação observável ligada ao que foi discutido. Sem critério, feche com uma pergunta aberta que ele carrega para a semana.
+Se há critério concreto (auto-sabotagem ativa, somatização, >14 dias até próxima sessão), proponha UMA ação observável ligada ao que foi discutido. Sem critério, deixe uma leitura, escolha ou questão viva conforme a conversa — não uma pergunta obrigatória.
 
-Nomeie o que o cliente FEZ nesta sessão. Marque o próximo encontro — e, se algo ficou aberto que vale aprofundar, plante uma semente da próxima. Como antecipação, não como tarefa.
+O próximo encontro pode retomar o que ficou vivo hoje mesmo sem ação combinada. Não crie uma pergunta ou prazo só para prometer continuidade.
+
+Nomeie o que o cliente FEZ nesta sessão. Aponte o que vale retomar no próximo encontro sem pressionar por agendamento; quando já há data marcada, ela pode entrar naturalmente. Não transforme a antecipação em tarefa.
 
 Sem resumo enumerado. Sem pedir avaliação. Sem "passinho". Sem citar duração ou atraso.
 
@@ -4282,7 +4259,7 @@ Sem resumo enumerado. Sem pedir avaliação. Sem "passinho". Sem citar duração
 - Esta sessão já foi retomada ${resumptionCount ?? 0} vezes, o máximo permitido.
 - PROPONHA encerrar esta sessão e agendar uma nova.
 - Diga algo como: "Essa sessão já se estendeu bastante ao longo dos dias. Que tal a gente encerrar ela e marcar uma sessão nova pra você?"
-- Se o usuário quiser encerrar: resumo + compromissos + [ENCERRAR_SESSAO]
+- Se o usuário quiser encerrar: síntese breve + fio para o próximo encontro, sem inventar compromisso ou fazer nova pergunta + [ENCERRAR_SESSAO]
 - Se insistir em continuar, continue mas sugira novamente em breve.
 `;
   }
@@ -4707,6 +4684,9 @@ function formatPreviousSessionsContext(sessions: any[]): string {
     if (session.session_summary) {
       context += `• Resumo: ${session.session_summary}\n`;
     }
+    if (session.continuity_thread) {
+      context += `• Fio para o próximo encontro: ${session.continuity_thread}\n`;
+    }
     
     if (session.key_insights && Array.isArray(session.key_insights) && session.key_insights.length > 0) {
       context += `• Aprendizados: ${session.key_insights.join('; ')}\n`;
@@ -4723,10 +4703,11 @@ function formatPreviousSessionsContext(sessions: any[]): string {
   context += `
 💡 USE ESTE HISTÓRICO PARA:
 - Dar continuidade aos temas importantes
-- Cobrar compromissos anteriores gentilmente
+- Retomar compromissos realmente assumidos, sem cobrança automática
 - Celebrar progressos desde a última sessão
 - Conectar insights antigos com a situação atual
 - Na ABERTURA da sessão, mencione algo da sessão anterior
+- Prefira o fio da sessão mais recente quando existir; retome-o com naturalidade, sem cobrar resultado nem tratá-lo como tarefa. Se o usuário trouxer outro assunto importante, acompanhe-o.
 `;
 
   return context;
@@ -5918,10 +5899,9 @@ serve(async (req) => {
           ? Promise.resolve({ data: [], error: null })
           : supabase
               .from('sessions')
-              .select('session_summary, key_insights, focus_topic, ended_at, commitments, closure_mode, last_user_emotional_state', { count: 'exact' })
+              .select('session_summary, continuity_thread, key_insights, focus_topic, ended_at, commitments, closure_mode, last_user_emotional_state', { count: 'exact' })
               .eq('user_id', userId)
               .eq('status', 'completed')
-              .not('session_summary', 'is', null)
               .order('ended_at', { ascending: false })
               .limit(3),
         // 5. Último check-in
@@ -6527,14 +6507,14 @@ REGRA: ${behaviorInstruction}`;
       // conversa casual ("Oi") e empurrava o LLM a puxar tema antigo.
       // (phaseEval ainda não foi computado neste ponto — gate conservador.)
       if (closure.route !== 'none' && sessionActive) {
-        let closureBlock = `\n\n🔚 FECHAMENTO RECOMENDADO (use APENAS quando o micro passo da Fase 3 emergir):`;
+        let closureBlock = `\n\n🔚 FECHAMENTO RECOMENDADO (use apenas se o cliente assumiu um passo concreto; um fio de observação ou elaboração não é micro passo):`;
         if (closure.route === 'session_bridge') {
           closureBlock += `\nRota: BRIDGE_PARA_SESSAO`;
           closureBlock += `\nProxima sessao: ${closure.sessionDateLabel} as ${closure.sessionTimeLabel}`;
-          closureBlock += `\nQuando o usuario combinar o micro passo, AMARRE-O verbalmente a essa sessao. Exemplo: "Faz isso ate ${closure.sessionDateLabel} e a gente abre na nossa sessao." NAO emita [AGENDAR_TAREFA] nessa rota.`;
+          closureBlock += `\nSe o usuario combinar um passo concreto, conecte-o naturalmente à próxima sessão sem inventar prazo nem cobrar resultado. NAO emita [AGENDAR_TAREFA] nessa rota.`;
         } else if (closure.route === 'suggest_session') {
           closureBlock += `\nRota: SUGERIR_SESSAO`;
-          closureBlock += `\nO usuario tem sessoes disponiveis no plano e nao agendou nenhuma. Quando o micro passo emergir, convide-o a marcar uma sessao para aprofundar. Exemplo: "Esse fio merece tempo dedicado. Bora marcar uma sessao essa semana pra ir mais fundo?" NAO emita [AGENDAR_TAREFA] nessa rota.`;
+          closureBlock += `\nO usuario tem sessoes disponiveis no plano e nao agendou nenhuma. Quando houver um passo concreto assumido, faça referência natural ao próximo encontro, sem convite de agendamento automático ou prazo inventado. NAO emita [AGENDAR_TAREFA] nessa rota.`;
         } else if (closure.route === 'schedule_reminder') {
           closureBlock += `\nRota: AGENDAR_RETOMADA`;
           closureBlock += `\nData/hora sugerida: ${closure.humanLabel}`;
@@ -6569,9 +6549,9 @@ REGRA: ${behaviorInstruction}`;
         if (phaseInfo.phase === 'opening' && elapsed <= 3) {
           phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
           phaseBlock += `\n🔗 ABERTURA OBRIGATÓRIA COM FIO CONDUTOR: Se houver resumo da última sessão, memórias hierárquicas ou compromissos anteriores no contexto, COMECE puxando o fio explicitamente — antes de qualquer outra coisa.`;
-          phaseBlock += `\nExemplo: "Semana passada você terminou pensando em [X]. O que aconteceu com isso desde então?" ou "Você tinha combinado de [Y]. Como foi?"`;
+          phaseBlock += `\nQuando houver fio registrado no último encontro, use-o como referência concreta para abrir. Não copie um modelo de frase, não cobre um resultado e não presuma que o cliente fez algo. Acompanhe outro tema se ele trouxer algo mais urgente.`;
           phaseBlock += `\n⚠️ PUXAR O FIO É PERGUNTA DE CONTEXTO, NÃO ENTRADA EM FASE PROFUNDA: faça a pergunta e ESCUTE. Não abra a sessão com leitura psicológica, tese ou pergunta-âncora — a sessão pode começar leve e informativa, entender o que aconteceu na semana é trabalho legítimo. A profundidade avança conforme o material que a pessoa traz.`;
-          phaseBlock += `\n⚠️ NÃO abra com pergunta genérica ("como você tá hoje?"). Use o session_summary + key_insights da última sessão (já no contexto) para retomar o EIXO concretamente. Reabrir o eixo é o que cria continuidade e percepção de valor entre sessões.`;
+          phaseBlock += `\n⚠️ NÃO abra com pergunta genérica ("como você tá hoje?"). Use o fio registrado ou, na ausência dele, o resumo e os aprendizados da última sessão para retomar um eixo concreto sem forçar interpretação.`;
           phaseBlock += `\nSe NÃO houver material de sessão anterior no contexto (primeira sessão), faça abertura padrão. NUNCA invente memórias.`;
         } else if (phaseInfo.phase === 'exploration') {
           phaseBlock += `\n📌 EXPLORAÇÃO. Vá mais fundo alternando reação, observação, síntese, confronto e pergunta conforme o material. Não termine com pergunta por hábito e não faça perguntas em respostas consecutivas, salvo risco ou ambiguidade real.`;

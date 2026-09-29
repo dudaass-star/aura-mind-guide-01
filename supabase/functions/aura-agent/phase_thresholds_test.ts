@@ -9,6 +9,13 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 const SOURCE_PATH = new URL("./index.ts", import.meta.url);
 const SOURCE = await Deno.readTextFile(SOURCE_PATH);
 
+Deno.test("Continuidade: fio independente de compromisso e abertura sem frase-modelo", () => {
+  assert(SOURCE.includes("session.continuity_thread"), "Fio não chega ao contexto das sessões anteriores.");
+  assert(SOURCE.includes("session_summary, continuity_thread, key_insights"), "Fio não é consultado no histórico.");
+  assert(SOURCE.includes("Não copie um modelo de frase, não cobre um resultado"), "A abertura voltou a induzir frase ou cobrança mecânica.");
+  assert(SOURCE.includes("Não confunda esse fio com compromisso aceito"), "Fio e compromisso voltaram a se misturar.");
+});
+
 Deno.test("Phase Evaluator: gatilho de Presença → Sentido usa recentPairs >= 4", () => {
   const matches = SOURCE.match(/recentPairs\s*>=\s*4\s*&&\s*detectedPhase\s*===\s*['"]presenca['"]/g);
   assert(matches && matches.length === 1, `Esperava exatamente 1 ocorrência de "recentPairs >= 4 && detectedPhase === 'presenca'", encontrei ${matches?.length ?? 0}`);
