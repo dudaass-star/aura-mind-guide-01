@@ -16,6 +16,21 @@ Deno.test("Continuidade: fio independente de compromisso e abertura sem frase-mo
   assert(SOURCE.includes("Não confunda esse fio com compromisso aceito"), "Fio e compromisso voltaram a se misturar.");
 });
 
+Deno.test("Continuidade: anúncio vago não apaga o fio na primeira resposta", () => {
+  assert(
+    SOURCE.includes('Um anúncio vago como "aconteceu uma coisa" ainda não apresenta outro tema'),
+    "A abertura voltou a tratar anúncio vago como tema novo e abandonar o fio anterior."
+  );
+  assert(
+    SOURCE.includes("use-o como referência concreta na PRIMEIRA resposta da abertura"),
+    "O reforço dinâmico deixou de exigir o fio já na primeira resposta."
+  );
+  assert(
+    SOURCE.includes("conteúdo concreto mais urgente ou claramente mais vivo"),
+    "A exceção para priorizar outro assunto ficou ampla demais."
+  );
+});
+
 Deno.test("Phase Evaluator: gatilho de Presença → Sentido usa recentPairs >= 4", () => {
   const matches = SOURCE.match(/recentPairs\s*>=\s*4\s*&&\s*detectedPhase\s*===\s*['"]presenca['"]/g);
   assert(matches && matches.length === 1, `Esperava exatamente 1 ocorrência de "recentPairs >= 4 && detectedPhase === 'presenca'", encontrei ${matches?.length ?? 0}`);

@@ -4107,7 +4107,7 @@ Isso ativa o sistema de lembretes automáticos se o usuário demorar a responder
 ## ABERTURA:
 Marque de forma breve e humana que a sessão começou, sem recitar um roteiro ou prometer um compromisso ao final. Use áudio na transição quando as regras de áudio permitirem.
 
-Se há um fio deixado na sessão anterior, traga-o de modo concreto na abertura e dê espaço para o cliente dizer o que aconteceu desde então. Não copie um modelo de frase, não cobre um resultado e não transforme observação em tarefa. Se ele já trouxer algo diferente e vivo, acompanhe isso primeiro e preserve o fio anterior para quando couber.
+Se há um fio deixado na sessão anterior, traga-o de modo concreto na primeira resposta da abertura e dê espaço para o cliente dizer o que aconteceu desde então. Não copie um modelo de frase, não cobre um resultado e não transforme observação em tarefa. Um anúncio vago como "aconteceu uma coisa" ainda não apresenta outro tema: reconheça brevemente o fio antes de perguntar pelo acontecimento. Só priorize outro assunto quando o cliente já trouxer conteúdo concreto mais urgente ou claramente mais vivo; nesse caso, acompanhe-o primeiro e preserve o fio anterior para quando couber.
 
 Se não há fio registrado, conecte o tema anterior apenas quando ele for relevante. Descubra como o cliente chega e o que quer trabalhar sem empilhar perguntas nem repetir o que ele já trouxe. Uma resposta de cada vez; deixe o foco surgir do diálogo.
 
@@ -6549,7 +6549,7 @@ REGRA: ${behaviorInstruction}`;
         if (phaseInfo.phase === 'opening' && elapsed <= 3) {
           phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
           phaseBlock += `\n🔗 ABERTURA OBRIGATÓRIA COM FIO CONDUTOR: Se houver resumo da última sessão, memórias hierárquicas ou compromissos anteriores no contexto, COMECE puxando o fio explicitamente — antes de qualquer outra coisa.`;
-          phaseBlock += `\nQuando houver fio registrado no último encontro, use-o como referência concreta para abrir. Não copie um modelo de frase, não cobre um resultado e não presuma que o cliente fez algo. Acompanhe outro tema se ele trouxer algo mais urgente.`;
+          phaseBlock += `\nQuando houver fio registrado no último encontro, use-o como referência concreta na PRIMEIRA resposta da abertura. Não copie um modelo de frase, não cobre um resultado e não presuma que o cliente fez algo. "Aconteceu uma coisa" ou outro anúncio vago não substitui o fio: reconheça-o brevemente antes de perguntar pelo acontecimento. Só acompanhe primeiro outro tema quando o cliente já trouxer conteúdo concreto mais urgente ou claramente mais vivo.`;
           phaseBlock += `\n⚠️ PUXAR O FIO É PERGUNTA DE CONTEXTO, NÃO ENTRADA EM FASE PROFUNDA: faça a pergunta e ESCUTE. Não abra a sessão com leitura psicológica, tese ou pergunta-âncora — a sessão pode começar leve e informativa, entender o que aconteceu na semana é trabalho legítimo. A profundidade avança conforme o material que a pessoa traz.`;
           phaseBlock += `\n⚠️ NÃO abra com pergunta genérica ("como você tá hoje?"). Use o fio registrado ou, na ausência dele, o resumo e os aprendizados da última sessão para retomar um eixo concreto sem forçar interpretação.`;
           phaseBlock += `\nSe NÃO houver material de sessão anterior no contexto (primeira sessão), faça abertura padrão. NUNCA invente memórias.`;
