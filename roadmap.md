@@ -5,7 +5,8 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
-- [ ] Deixar um fio legítimo em cada sessão concluída, registrá-lo separadamente e retomá-lo no encontro seguinte sem fala padronizada, tarefa artificial ou cobrança.
+- [x] Deixar um fio legítimo em cada sessão concluída, registrá-lo separadamente e retomá-lo no encontro seguinte sem fala padronizada, tarefa artificial ou cobrança.
+- [ ] Validar a passagem completa do fio entre duas sessões reais novas; depende de uma sessão concluída após esta mudança e do encontro seguinte.
 
 - [x] Comparar uma nova sessão completa da Marina, eliminar checagens mecânicas e impedir cadência de questionário sem perder profundidade.
 - [x] Validar novamente o fechamento da Marina sem reabrir investigação após a despedida.
