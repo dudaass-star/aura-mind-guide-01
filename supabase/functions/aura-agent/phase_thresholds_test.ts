@@ -30,12 +30,16 @@ Deno.test("Continuidade: anúncio vago não apaga o fio na primeira resposta", (
     "A exceção para priorizar outro assunto ficou ampla demais."
   );
   assert(
-    SOURCE.includes("TODO o intervalo desde o último encontro até agora"),
-    "A abertura deixou de cobrir o período completo entre as sessões."
+    SOURCE.includes("Considere naturalmente o tempo real entre as sessões"),
+    "A abertura deixou de considerar o intervalo real entre as sessões."
   );
   assert(
-    SOURCE.includes('não a restrinja a "hoje", "agora" ou ao acontecimento mais recente'),
-    "A abertura pode voltar a estreitar a continuidade apenas para o dia atual."
+    SOURCE.includes('se elas ocorreram no mesmo dia, falar de "hoje" pode ser adequado'),
+    "A abertura voltou a proibir uma referência natural ao dia atual."
+  );
+  assert(
+    SOURCE.includes("se houve dias ou semanas de intervalo, abra espaço para todo esse período"),
+    "A abertura pode voltar a ignorar os dias entre encontros mais distantes."
   );
 });
 
