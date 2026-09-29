@@ -4729,7 +4729,7 @@ function formatPreviousSessionsContext(sessions: any[]): string {
   context += `
 💡 USE ESTE HISTÓRICO PARA:
 - Dar continuidade aos temas importantes
-- Cobrar compromissos anteriores gentilmente
+- Retomar compromissos realmente assumidos, sem cobrança automática
 - Celebrar progressos desde a última sessão
 - Conectar insights antigos com a situação atual
 - Na ABERTURA da sessão, mencione algo da sessão anterior
@@ -5928,7 +5928,6 @@ serve(async (req) => {
               .select('session_summary, continuity_thread, key_insights, focus_topic, ended_at, commitments, closure_mode, last_user_emotional_state', { count: 'exact' })
               .eq('user_id', userId)
               .eq('status', 'completed')
-              .not('session_summary', 'is', null)
               .order('ended_at', { ascending: false })
               .limit(3),
         // 5. Último check-in
