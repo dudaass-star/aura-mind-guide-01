@@ -116,6 +116,7 @@ REGRAS GERAIS:
 - summary: 2-3 frases sobre o tema central e a virada que aconteceu na sessão
 - key_insights: pelo menos 2 quando possível (mudanças de perspectiva, padrões nomeados, reconhecimentos)
 - commitments: array vazio É VÁLIDO se a sessão foi puramente emocional/exploratória
+- continuity_thread: UM eixo específico que ficou vivo para retomar no próximo encontro: escolha, tensão, observação ou movimento do usuário. Baseie-se somente no que aconteceu na conversa. Não invente pendência, prazo, obrigação ou fala da AURA. Mesmo sem ação prática, identifique o eixo real; se não houver evidência suficiente, use null.
 - Português brasileiro claro, na voz do usuário (1ª pessoa quando fizer sentido)`;
 
 const EXTRACTION_TOOL = {
@@ -146,6 +147,10 @@ const EXTRACTION_TOOL = {
             additionalProperties: false,
           },
           description: "Compromissos práticos assumidos (pode ser vazio se sessão foi puramente emocional)",
+        },
+        continuity_thread: {
+          type: ["string", "null"],
+          description: "Um eixo específico e verificável para retomar no próximo encontro; null se não houver evidência suficiente.",
         },
         theme_label: {
           type: ["string", "null"],
@@ -196,6 +201,7 @@ const EXTRACTION_TOOL = {
         "summary",
         "key_insights",
         "commitments",
+        "continuity_thread",
         "theme_label",
         "reframe_text",
         "closure_type",
@@ -214,6 +220,7 @@ interface ExtractionResult {
   summary: string;
   key_insights: string[];
   commitments: Array<{ title: string }>;
+  continuity_thread: string | null;
   theme_label: string | null;
   reframe_text: string | null;
   closure_type: string | null;
@@ -301,6 +308,9 @@ async function callExtractor(
       commitments: Array.isArray(parsed.commitments)
         ? parsed.commitments.filter((c: any) => c && typeof c.title === "string")
         : [],
+      continuity_thread: typeof parsed.continuity_thread === "string" && parsed.continuity_thread.trim()
+        ? parsed.continuity_thread.trim().slice(0, 500)
+        : null,
       theme_label,
       reframe_text,
       closure_type,
@@ -380,6 +390,7 @@ Deno.serve(async (req) => {
           session_summary: "Sessão muito curta para análise estruturada.",
           key_insights: [],
           commitments: [],
+          continuity_thread: null,
         })
         .eq("id", sessionId);
       return new Response(
@@ -411,6 +422,7 @@ Deno.serve(async (req) => {
         session_summary: result.summary,
         key_insights: result.key_insights,
         commitments: result.commitments,
+        continuity_thread: result.continuity_thread,
         theme_label: result.theme_label,
         reframe_text: result.reframe_text,
         closure_type: result.closure_type,

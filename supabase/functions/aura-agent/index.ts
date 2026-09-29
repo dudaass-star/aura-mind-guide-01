@@ -3625,6 +3625,8 @@ REGRA DE OURO DA SESSÃO:
 ### FECHAMENTO:
 A síntese é trabalho do cliente, não seu. Você devolve, ele integra.
 
+- Toda sessão deixa um fio para o próximo encontro, mesmo sem data marcada: algo específico que o cliente trouxe e que vale observar, sustentar ou elaborar. Não confunda esse fio com compromisso aceito nem transforme toda continuidade em tarefa. Deixe-o reconhecível no fechamento quando a conversa permitir, numa fala natural, sem anunciar "fio", fabricar lacuna, criar suspense ou repetir uma fórmula. Se o cliente pedir para encerrar, sintetize e despeça-se sem nova pergunta.
+
 - Devolva a percepção central com a linguagem que ele usou — sem aspas literais e sem parafrasear em linguagem clínica. Preservar o peso da fala dele não significa repetir os termos entre aspas.
 - Se a sessão foi leve e não houve percepção central clara, NÃO invente uma. Feche com calor e presença — sem profundidade forçada. Uma sessão leve bem encerrada vale mais que um insight fabricado.
 - Faça uma pergunta aberta que amplifique o que ficou vivo na sessão, não que volte ao problema. Em sessões profundas, pode apontar pra uma identidade nova; em sessões mais leves, pode ser um simples "o que você notou sobre si que ainda não tinha visto?".
@@ -4250,6 +4252,8 @@ Se houver memória de sessões anteriores no contexto, amarre brevemente o que f
 
 Se há critério concreto (auto-sabotagem ativa, somatização, >14 dias até próxima sessão), proponha UMA ação observável ligada ao que foi discutido. Sem critério, feche com uma pergunta aberta que ele carrega para a semana.
 
+O próximo encontro pode retomar o que ficou vivo hoje mesmo sem ação combinada. Não crie uma pergunta ou prazo só para prometer continuidade.
+
 Nomeie o que o cliente FEZ nesta sessão. Marque o próximo encontro — e, se algo ficou aberto que vale aprofundar, plante uma semente da próxima. Como antecipação, não como tarefa.
 
 Sem resumo enumerado. Sem pedir avaliação. Sem "passinho". Sem citar duração ou atraso.
@@ -4707,6 +4711,9 @@ function formatPreviousSessionsContext(sessions: any[]): string {
     if (session.session_summary) {
       context += `• Resumo: ${session.session_summary}\n`;
     }
+    if (session.continuity_thread) {
+      context += `• Fio para o próximo encontro: ${session.continuity_thread}\n`;
+    }
     
     if (session.key_insights && Array.isArray(session.key_insights) && session.key_insights.length > 0) {
       context += `• Aprendizados: ${session.key_insights.join('; ')}\n`;
@@ -4727,6 +4734,7 @@ function formatPreviousSessionsContext(sessions: any[]): string {
 - Celebrar progressos desde a última sessão
 - Conectar insights antigos com a situação atual
 - Na ABERTURA da sessão, mencione algo da sessão anterior
+- Prefira o fio da sessão mais recente quando existir; retome-o com naturalidade, sem cobrar resultado nem tratá-lo como tarefa. Se o usuário trouxer outro assunto importante, acompanhe-o.
 `;
 
   return context;
@@ -5918,7 +5926,7 @@ serve(async (req) => {
           ? Promise.resolve({ data: [], error: null })
           : supabase
               .from('sessions')
-              .select('session_summary, key_insights, focus_topic, ended_at, commitments, closure_mode, last_user_emotional_state', { count: 'exact' })
+              .select('session_summary, continuity_thread, key_insights, focus_topic, ended_at, commitments, closure_mode, last_user_emotional_state', { count: 'exact' })
               .eq('user_id', userId)
               .eq('status', 'completed')
               .not('session_summary', 'is', null)
@@ -6569,9 +6577,9 @@ REGRA: ${behaviorInstruction}`;
         if (phaseInfo.phase === 'opening' && elapsed <= 3) {
           phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
           phaseBlock += `\n🔗 ABERTURA OBRIGATÓRIA COM FIO CONDUTOR: Se houver resumo da última sessão, memórias hierárquicas ou compromissos anteriores no contexto, COMECE puxando o fio explicitamente — antes de qualquer outra coisa.`;
-          phaseBlock += `\nExemplo: "Semana passada você terminou pensando em [X]. O que aconteceu com isso desde então?" ou "Você tinha combinado de [Y]. Como foi?"`;
+          phaseBlock += `\nQuando houver fio registrado no último encontro, use-o como referência concreta para abrir. Não copie um modelo de frase, não cobre um resultado e não presuma que o cliente fez algo. Acompanhe outro tema se ele trouxer algo mais urgente.`;
           phaseBlock += `\n⚠️ PUXAR O FIO É PERGUNTA DE CONTEXTO, NÃO ENTRADA EM FASE PROFUNDA: faça a pergunta e ESCUTE. Não abra a sessão com leitura psicológica, tese ou pergunta-âncora — a sessão pode começar leve e informativa, entender o que aconteceu na semana é trabalho legítimo. A profundidade avança conforme o material que a pessoa traz.`;
-          phaseBlock += `\n⚠️ NÃO abra com pergunta genérica ("como você tá hoje?"). Use o session_summary + key_insights da última sessão (já no contexto) para retomar o EIXO concretamente. Reabrir o eixo é o que cria continuidade e percepção de valor entre sessões.`;
+          phaseBlock += `\n⚠️ NÃO abra com pergunta genérica ("como você tá hoje?"). Use o fio registrado ou, na ausência dele, o resumo e os aprendizados da última sessão para retomar um eixo concreto sem forçar interpretação.`;
           phaseBlock += `\nSe NÃO houver material de sessão anterior no contexto (primeira sessão), faça abertura padrão. NUNCA invente memórias.`;
         } else if (phaseInfo.phase === 'exploration') {
           phaseBlock += `\n📌 EXPLORAÇÃO. Vá mais fundo alternando reação, observação, síntese, confronto e pergunta conforme o material. Não termine com pergunta por hábito e não faça perguntas em respostas consecutivas, salvo risco ou ambiguidade real.`;

@@ -25,6 +25,7 @@ type PortalSession = {
   status: string;
   theme_label?: string | null;
   session_summary?: string | null;
+  continuity_thread?: string | null;
   reframe_text?: string | null;
   closure_type?: string | null;
   closure_text?: string | null;
@@ -141,7 +142,7 @@ export function SessoesTab({
     queryKey: ["portal-sessions", userId],
     queryFn: async () => {
       const { data, error } = await supabasePortal.from("sessions")
-        .select("id, scheduled_at, ended_at, status, focus_topic, theme_label, session_summary, reframe_text, closure_type, closure_text, preparation_note, reframe_feedback, reframe_feedback_text")
+        .select("id, scheduled_at, ended_at, status, focus_topic, theme_label, session_summary, continuity_thread, reframe_text, closure_type, closure_text, preparation_note, reframe_feedback, reframe_feedback_text")
         .eq("user_id", userId).order("scheduled_at", { ascending: false }).limit(150);
       if (error) throw error;
       return (data || []) as PortalSession[];
@@ -392,6 +393,7 @@ export function SessoesTab({
                 </summary>
                 <div className="mt-4 space-y-4 border-t border-border pt-4">
                   {session.session_summary && <div><p className="mb-1 text-xs font-bold uppercase text-primary">Resumo</p><p className="text-sm leading-relaxed">{sanitizePortalText(session.session_summary)}</p></div>}
+                  {session.continuity_thread && <div><p className="mb-1 text-xs font-bold uppercase text-primary">Para o próximo encontro</p><p className="text-sm leading-relaxed">{sanitizePortalText(session.continuity_thread)}</p></div>}
                   {session.reframe_text && <div className="rounded-lg bg-secondary/50 p-3"><p className="mb-1 text-xs font-bold uppercase text-primary">Uma leitura possível</p><p className="text-sm leading-relaxed">{sanitizePortalText(session.reframe_text)}</p><p className="mt-2 text-xs text-muted-foreground">Veja se isso faz sentido para você.</p>{!session.reframe_feedback ? <div className="mt-3 flex gap-2"><Button type="button" variant="outline" size="sm" onClick={() => void saveExperience("confirm_reframe", session)}><Check /> Faz sentido</Button><Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedSession(session); setCorrection(""); setCorrectionOpen(true); }}>Quero ajustar</Button></div> : <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-primary"><Check size={14} />{session.reframe_feedback === "confirmed" ? "Você confirmou esta leitura." : "Seu ajuste foi guardado."}</p>}</div>}
                   {session.closure_text && <div><p className="mb-1 text-xs font-bold uppercase text-primary">Fechamento</p><p className="border-l-2 border-accent pl-3 text-sm italic leading-relaxed">“{sanitizePortalText(session.closure_text)}”</p></div>}
                   {!rating && <div><p className="mb-2 text-xs font-bold uppercase text-primary">Como foi este encontro?</p><div className="flex gap-1">{[1, 2, 3, 4, 5].map((value) => <Button key={value} type="button" variant="ghost" size="icon" className="h-9 w-9" onClick={() => void saveExperience("rate", session, undefined, value)} aria-label={`Dar nota ${value}`}><Star className="text-primary" /></Button>)}</div></div>}
