@@ -29,6 +29,14 @@ Deno.test("Continuidade: anúncio vago não apaga o fio na primeira resposta", (
     SOURCE.includes("conteúdo concreto mais urgente ou claramente mais vivo"),
     "A exceção para priorizar outro assunto ficou ampla demais."
   );
+  assert(
+    SOURCE.includes("TODO o intervalo desde o último encontro até agora"),
+    "A abertura deixou de cobrir o período completo entre as sessões."
+  );
+  assert(
+    SOURCE.includes('não a restrinja a "hoje", "agora" ou ao acontecimento mais recente'),
+    "A abertura pode voltar a estreitar a continuidade apenas para o dia atual."
+  );
 });
 
 Deno.test("Phase Evaluator: gatilho de Presença → Sentido usa recentPairs >= 4", () => {
