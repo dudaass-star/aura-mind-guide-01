@@ -5,6 +5,9 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+- [ ] Criar links individuais da conta demo válidos por 7 dias, com entrada direta e sessão persistente.
+- [ ] Preservar a jornada fictícia da Marina e remover somente as simulações técnicas posteriores.
+
 - [x] Deixar um fio legítimo em cada sessão concluída, registrá-lo separadamente e retomá-lo no encontro seguinte sem fala padronizada, tarefa artificial ou cobrança.
 - [ ] Validar a passagem completa do fio entre duas sessões reais novas; depende de uma sessão concluída após esta mudança e do encontro seguinte.
 - [x] Impedir fechamento prematuro quando o cliente ainda revela ou narra material vivo, com classificação semântica, trava determinística e simulações contrastantes.

@@ -368,13 +368,15 @@ export default function AdminUsers() {
         throw new Error('Sua sessão administrativa expirou. Entre novamente para gerar o link.');
       }
 
-      // Gera um magic link real de auth (o portal não usa mais token na URL).
-      const { data, error } = await supabase.functions.invoke('admin-portal-magic-link', {
+      const isDemo = editProfile.status === 'demo';
+      const { data, error } = await supabase.functions.invoke(isDemo ? 'demo-access-invite' : 'admin-portal-magic-link', {
         headers: { Authorization: `Bearer ${accessToken}` },
-        body: {
-          profile_id: editProfile.id,
-          redirect_to: 'https://olaaura.com.br/meu-espaco',
-        },
+        body: isDemo
+          ? { action: 'create', profile_id: editProfile.id }
+          : {
+              profile_id: editProfile.id,
+              redirect_to: 'https://olaaura.com.br/meu-espaco',
+            },
       });
       if (error) {
         let message = error.message;
@@ -391,7 +393,7 @@ export default function AdminUsers() {
       setPortalLinkCopied(true);
       toast({
         title: 'Link de acesso copiado!',
-        description: `Válido por 1h — envie para ${data.email}. Ao clicar, o cliente entra direto no app Olá Aura.`,
+        description: `${isDemo ? 'Válido por 7 dias' : 'Válido por 1h'} — envie para ${data.email}. Ao clicar, a pessoa entra direto no app Olá Aura.`,
       });
       setTimeout(() => setPortalLinkCopied(false), 3000);
     } catch (err: unknown) {
