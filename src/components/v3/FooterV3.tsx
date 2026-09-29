@@ -44,7 +44,7 @@ const FooterV3 = () => (
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-white/65 mb-3">Siga a AURA</p>
           <ul className="space-y-2 text-sm text-white/75">
-            <li><a href="https://instagram.com/olaaura.app" target="_blank" rel="noreferrer" className="hover:text-white">Instagram</a></li>
+            <li><a href="https://www.instagram.com/olaaura_oficial/" target="_blank" rel="noreferrer" className="hover:text-white">Instagram</a></li>
             <li><Link to="/cancelar" className="hover:text-white">Cancelar assinatura</Link></li>
           </ul>
         </div>
