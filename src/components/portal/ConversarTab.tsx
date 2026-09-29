@@ -15,6 +15,7 @@ import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
 import type { Json } from "@/integrations/supabase/types";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { MessageResponse } from "@/components/ai-elements/message";
+import { sanitizePortalText } from "@/components/portal/sanitize";
 
 type ChatMessage = {
   id: string;
