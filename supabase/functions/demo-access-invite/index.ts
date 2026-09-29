@@ -3,12 +3,16 @@ import { z } from "npm:zod@3.25.76";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const RequestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("create"), profile_id: z.string().uuid() }),
-  z.object({ action: z.literal("consume"), token: z.string().min(40).max(300) }),
+  z.object({
+    action: z.literal("consume"),
+    token: z.string().min(40).max(300),
+  }),
 ]);
 
 const DEMO_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -22,17 +26,29 @@ function json(body: unknown, status = 200) {
 
 function base64Url(bytes: Uint8Array) {
   let binary = "";
-  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(
+    /=+$/g,
+    "",
+  );
 }
 
 async function sha256(value: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest)).map((byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   try {
@@ -52,7 +68,8 @@ Deno.serve(async (req) => {
       const asCaller = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: claims, error: claimsError } = await asCaller.auth.getClaims(callerToken);
+      const { data: claims, error: claimsError } = await asCaller.auth
+        .getClaims(callerToken);
       const callerId = claims?.claims?.sub as string | undefined;
       if (claimsError || !callerId) return json({ error: "unauthorized" }, 401);
 
@@ -67,7 +84,9 @@ Deno.serve(async (req) => {
         .select("id, email, status")
         .eq("id", parsed.data.profile_id)
         .maybeSingle();
-      if (profileError || !profile) return json({ error: "profile_not_found" }, 404);
+      if (profileError || !profile) {
+        return json({ error: "profile_not_found" }, 404);
+      }
       if (profile.status !== "demo") return json({ error: "demo_only" }, 400);
       if (!profile.email) return json({ error: "email_not_found" }, 400);
 
@@ -77,18 +96,21 @@ Deno.serve(async (req) => {
       const tokenHash = await sha256(token);
       const expiresAt = new Date(Date.now() + DEMO_LINK_TTL_MS).toISOString();
 
-      const { error: insertError } = await admin.from("demo_access_invites").insert({
-        profile_id: profile.id,
-        token_hash: tokenHash,
-        expires_at: expiresAt,
-        created_by: callerId,
-      });
+      const { error: insertError } = await admin.from("demo_access_invites")
+        .insert({
+          profile_id: profile.id,
+          token_hash: tokenHash,
+          expires_at: expiresAt,
+          created_by: callerId,
+        });
       if (insertError) throw insertError;
 
       return json({
         status: "ok",
         email: profile.email,
-        link: `https://olaaura.com.br/meu-espaco/convite-demo?token=${encodeURIComponent(token)}`,
+        link: `https://olaaura.com.br/meu-espaco/convite-demo?token=${
+          encodeURIComponent(token)
+        }`,
         expires_at: expiresAt,
         expires_in_days: 7,
       });
@@ -98,23 +120,30 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
     const { data: invite, error: inviteError } = await admin
       .from("demo_access_invites")
-      .select("id, profile_id, expires_at, use_count, profiles!inner(email, status)")
+      .select(
+        "id, profile_id, expires_at, use_count, profiles!inner(email, status)",
+      )
       .eq("token_hash", tokenHash)
       .is("revoked_at", null)
       .gt("expires_at", now)
       .maybeSingle();
 
-    if (inviteError || !invite) return json({ error: "invalid_or_expired" }, 400);
-    const profile = Array.isArray(invite.profiles) ? invite.profiles[0] : invite.profiles;
+    if (inviteError || !invite) {
+      return json({ error: "invalid_or_expired" }, 400);
+    }
+    const profile = Array.isArray(invite.profiles)
+      ? invite.profiles[0]
+      : invite.profiles;
     if (!profile || profile.status !== "demo" || !profile.email) {
       return json({ error: "invalid_or_expired" }, 400);
     }
 
-    let { data: authLink, error: authError } = await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email: profile.email,
-      options: { redirectTo: "https://olaaura.com.br/meu-espaco" },
-    });
+    let { data: authLink, error: authError } = await admin.auth.admin
+      .generateLink({
+        type: "magiclink",
+        email: profile.email,
+        options: { redirectTo: "https://olaaura.com.br/meu-espaco" },
+      });
     if (authError && /not found|does not exist/i.test(authError.message)) {
       const signup = await admin.auth.admin.generateLink({
         type: "signup",

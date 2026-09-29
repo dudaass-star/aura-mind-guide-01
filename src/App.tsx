@@ -50,6 +50,7 @@ const UserPortal = lazy(() => userPortalModule ?? import("./pages/UserPortal"));
 const PortalLogin = lazy(() => import("./pages/PortalLogin"));
 const PortalWhatsAppAccess = lazy(() => import("./pages/PortalWhatsAppAccess"));
 const PortalAuthCallback = lazy(() => import("./pages/PortalAuthCallback"));
+const DemoInviteAccess = lazy(() => import("./pages/DemoInviteAccess"));
 const ReautorizarPix = lazy(() => import("./pages/ReautorizarPix"));
 const PixTaster = lazy(() => import("./pages/PixTaster"));
 const Blog = lazy(() => import("./pages/Blog"));
@@ -144,6 +145,7 @@ const App = () => (
             <Route path="/meu-espaco/entrar" element={<PortalRoute><PortalLogin /></PortalRoute>} />
             <Route path="/meu-espaco/auth/callback" element={<PortalRoute><PortalAuthCallback /></PortalRoute>} />
             <Route path="/meu-espaco/acesso-whatsapp" element={<PortalRoute><PortalWhatsAppAccess /></PortalRoute>} />
+            <Route path="/meu-espaco/convite-demo" element={<PortalRoute><DemoInviteAccess /></PortalRoute>} />
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/pagamento" element={<Pagamento />} />
