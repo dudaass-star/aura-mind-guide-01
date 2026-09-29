@@ -883,7 +883,7 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
 REGRAS:
 - schedule_reminder: só se o usuário PEDIU explicitamente um lembrete/alarme
 - do_not_disturb_hours: se o usuário disse que está ocupado/trabalhando/em reunião
-- commitments: apenas compromissos CONCRETOS do USUÁRIO, em primeira pessoa, com ação clara. NUNCA extraia: fala/pergunta da assistente, algo que a AURA vai fazer (ex.: "AURA vai gravar áudios"), reclamação ou frase sarcástica sobre a AURA, intenção vaga. Em dúvida, omita.
+- commitments: apenas compromissos CONCRETOS do USUÁRIO, em primeira pessoa, com ação clara e aceite explícito. NUNCA extraia: fala/pergunta da assistente, algo que a AURA vai fazer (ex.: "AURA vai gravar áudios"), reclamação ou frase sarcástica sobre a AURA, intenção vaga, horário ou início de sessão ("sessão às 16h", "iniciar sessão", "vou ouvir"), nem um fio de observação/elaboração deixado para o próximo encontro sem acordo de ação. Em dúvida, omita.
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
 - journey_action: SOMENTE quando a MENSAGEM ATUAL DO USUÁRIO contém pedido literal de trocar/pausar jornada (ex.: "quero trocar de jornada", "pausa as jornadas", "muda pra jornada de ansiedade", "para com as jornadas"). NUNCA infira por contexto, tópico do profile ou tom da conversa. Se o usuário só está conversando sobre o tema (ansiedade, autoestima, etc.), NÃO retorne journey_action. Em dúvida, omita o campo.
@@ -1760,7 +1760,7 @@ ${SESSION_PHASE_INSTRUCTIONS.stuck_in_opening}`
         detectedPhase: 'sentido',
         stagnationLevel: 0,
         guidance: `\n\n🔄 TRANSIÇÃO NATURAL DETECTADA:
-Ótimo progresso — o insight está aparecendo naturalmente. Agora consolide com reframe e conduza para compromisso.
+Ótimo progresso — o insight está aparecendo naturalmente. Agora consolide com reframe e conduza para uma direção coerente; só proponha compromisso se surgir naturalmente.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
       };
     }
@@ -4109,7 +4109,7 @@ ANTES de qualquer coisa, marque claramente o início da sessão com uma transiç
 
 "[nome]! 💜 Agora estamos oficialmente em sessão. São 45 minutos só nossos, pra gente ir fundo sem pressa.
 
-Isso aqui é diferente das nossas conversas do dia a dia - aqui eu vou te conduzir, te fazer perguntas, te provocar quando precisar, e no final a gente define compromissos juntos.
+Isso aqui é diferente das nossas conversas do dia a dia - aqui eu vou te conduzir, te fazer perguntas, te provocar quando precisar, e no final a gente vê o que vale levar para o próximo encontro.
 
 Preparada(o)? Então vamos lá! ✨"
 
@@ -4284,7 +4284,7 @@ Sem resumo enumerado. Sem pedir avaliação. Sem "passinho". Sem citar duração
 - Esta sessão já foi retomada ${resumptionCount ?? 0} vezes, o máximo permitido.
 - PROPONHA encerrar esta sessão e agendar uma nova.
 - Diga algo como: "Essa sessão já se estendeu bastante ao longo dos dias. Que tal a gente encerrar ela e marcar uma sessão nova pra você?"
-- Se o usuário quiser encerrar: resumo + compromissos + [ENCERRAR_SESSAO]
+- Se o usuário quiser encerrar: síntese breve + fio para o próximo encontro, sem inventar compromisso ou fazer nova pergunta + [ENCERRAR_SESSAO]
 - Se insistir em continuar, continue mas sugira novamente em breve.
 `;
   }

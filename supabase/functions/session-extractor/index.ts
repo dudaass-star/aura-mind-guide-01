@@ -43,6 +43,8 @@ Um COMPROMISSO é uma ação concreta que o usuário se comprometeu a fazer entr
 - Insights/aprendizados (vão no campo 'key_insights')
 - Promessas sem ação ("vou pensar nisso")
 - Coisas que a AURA disse mas o usuário NÃO respondeu/aceitou
+- Agendar ou iniciar a própria sessão, horários da agenda e ações da AURA ("vou ouvir", "sessão às 16h", "iniciar sessão")
+- Observação ou questão deixada para o próximo encontro sem acordo explícito de ação; isso é continuidade, não compromisso
 
 ──────────────────────────────────────────
 EXEMPLOS REAIS (estude o padrão):
@@ -116,7 +118,7 @@ REGRAS GERAIS:
 - summary: 2-3 frases sobre o tema central e a virada que aconteceu na sessão
 - key_insights: pelo menos 2 quando possível (mudanças de perspectiva, padrões nomeados, reconhecimentos)
 - commitments: array vazio É VÁLIDO se a sessão foi puramente emocional/exploratória
-- continuity_thread: UM eixo específico para o próximo encontro que a AURA de fato deixou no fechamento, sustentado pela conversa: escolha, tensão, observação ou movimento do usuário. Reescreva concisamente sem inventar pendência, prazo, obrigação ou fala da AURA. Não extraia apenas do resumo: se não houve fechamento com essa ponte ou evidência suficiente, use null. Não exija aceite para observação ou elaboração; uma ação só é compromisso se o usuário aceitou explicitamente.
+- continuity_thread: UM eixo específico para o próximo encontro que a AURA de fato deixou na sua fala de fechamento, sustentado pela conversa: escolha, tensão, observação ou movimento do usuário. Confira a última fala de fechamento da AURA como fonte, não apenas o resumo, as mensagens do usuário ou sugestões anteriores da AURA. Reescreva concisamente sem inventar pendência, prazo, obrigação ou fala da AURA. Se ela não deixou uma ponte reconhecível nesse fechamento, ou não há evidência suficiente, use null. Não exija aceite para observação ou elaboração; uma ação só é compromisso se o usuário aceitou explicitamente.
 - Português brasileiro claro, na voz do usuário (1ª pessoa quando fizer sentido)`;
 
 const EXTRACTION_TOOL = {
