@@ -4242,7 +4242,7 @@ Quando ele aceitar, feche assim:
 
 O áudio de encerramento NÃO é resumo. É presença. O cliente precisa sentir que foi visto — não que recebeu uma entrega. Tom: calor, calma, proximidade.
 
-Pergunte como ele está SAINDO desta sessão (estado), não só o que está levando (conteúdo). A resposta dele é o encerramento real.
+Se ainda há uma resposta em aberto, escute como ele está saindo da sessão. Depois do aceite para encerrar, não faça novo check-in: a despedida é o encerramento real.
 
 Devolva a percepção central com a linguagem que ele usou — não com aspas literais, não parafraseada em linguagem clínica. Se não houve percepção central clara nesta sessão, não invente: feche com presença e cuidado, reconhecendo o que foi vivido.
 
@@ -4252,7 +4252,7 @@ Se há critério concreto (auto-sabotagem ativa, somatização, >14 dias até pr
 
 O próximo encontro pode retomar o que ficou vivo hoje mesmo sem ação combinada. Não crie uma pergunta ou prazo só para prometer continuidade.
 
-Nomeie o que o cliente FEZ nesta sessão. Marque o próximo encontro — e, se algo ficou aberto que vale aprofundar, plante uma semente da próxima. Como antecipação, não como tarefa.
+Nomeie o que o cliente FEZ nesta sessão. Aponte o que vale retomar no próximo encontro sem pressionar por agendamento; quando já há data marcada, ela pode entrar naturalmente. Não transforme a antecipação em tarefa.
 
 Sem resumo enumerado. Sem pedir avaliação. Sem "passinho". Sem citar duração ou atraso.
 
@@ -6532,14 +6532,14 @@ REGRA: ${behaviorInstruction}`;
       // conversa casual ("Oi") e empurrava o LLM a puxar tema antigo.
       // (phaseEval ainda não foi computado neste ponto — gate conservador.)
       if (closure.route !== 'none' && sessionActive) {
-        let closureBlock = `\n\n🔚 FECHAMENTO RECOMENDADO (use APENAS quando o micro passo da Fase 3 emergir):`;
+        let closureBlock = `\n\n🔚 FECHAMENTO RECOMENDADO (use apenas se o cliente assumiu um passo concreto; um fio de observação ou elaboração não é micro passo):`;
         if (closure.route === 'session_bridge') {
           closureBlock += `\nRota: BRIDGE_PARA_SESSAO`;
           closureBlock += `\nProxima sessao: ${closure.sessionDateLabel} as ${closure.sessionTimeLabel}`;
-          closureBlock += `\nQuando o usuario combinar o micro passo, AMARRE-O verbalmente a essa sessao. Exemplo: "Faz isso ate ${closure.sessionDateLabel} e a gente abre na nossa sessao." NAO emita [AGENDAR_TAREFA] nessa rota.`;
+          closureBlock += `\nSe o usuario combinar um passo concreto, conecte-o naturalmente à próxima sessão sem inventar prazo nem cobrar resultado. NAO emita [AGENDAR_TAREFA] nessa rota.`;
         } else if (closure.route === 'suggest_session') {
           closureBlock += `\nRota: SUGERIR_SESSAO`;
-          closureBlock += `\nO usuario tem sessoes disponiveis no plano e nao agendou nenhuma. Quando o micro passo emergir, convide-o a marcar uma sessao para aprofundar. Exemplo: "Esse fio merece tempo dedicado. Bora marcar uma sessao essa semana pra ir mais fundo?" NAO emita [AGENDAR_TAREFA] nessa rota.`;
+          closureBlock += `\nO usuario tem sessoes disponiveis no plano e nao agendou nenhuma. Quando houver um passo concreto assumido, faça referência natural ao próximo encontro, sem convite de agendamento automático ou prazo inventado. NAO emita [AGENDAR_TAREFA] nessa rota.`;
         } else if (closure.route === 'schedule_reminder') {
           closureBlock += `\nRota: AGENDAR_RETOMADA`;
           closureBlock += `\nData/hora sugerida: ${closure.humanLabel}`;
