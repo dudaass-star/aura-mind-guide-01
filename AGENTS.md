@@ -9,5 +9,5 @@
 - Pedidos explícitos de encerrar uma sessão aceitam artigos e pronomes entre o verbo e “sessão/encontro”; isso reconhece a fala natural sem transformar despedidas comuns em encerramento.
 - A avaliação de uma sessão concluída é solicitada na própria conversa do App e registrada pelo fluxo autenticado de experiência; isso não depende de telefone nem do pós-sessão no WhatsApp.
 - Sessões em andamento mudam suavemente o contexto visual da conversa e mostram progresso no cabeçalho; o aviso de fechamento nunca entra como mensagem da AURA.
-- AURA evita confirmação ritual e perguntas seguidas; ao encerrar, sintetiza sem novo check-in.
+- AURA evita confirmação ritual e perguntas seguidas; revelação nova mantém Presença e impede fechamento por tempo.
 - Salvar o fio separado de compromissos e retomá-lo por todo o período entre encontros preserva continuidade sem tarefa artificial.
