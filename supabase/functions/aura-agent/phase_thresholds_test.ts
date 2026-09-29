@@ -295,6 +295,13 @@ Deno.test("Reflexão genuína não é confundida com nova revelação", () => {
   assertEquals(result.shouldHoldPresence, false);
 });
 
+Deno.test("Conversa desacelerada e pronta para costura não é bloqueada", () => {
+  const result = detectLiveDisclosure("Agora ficou claro para mim. Quero levar essa compreensão e observar minhas escolhas até o próximo encontro.");
+  assertEquals(result.isSensitiveDisclosure, false);
+  assertEquals(result.isSubstantiveNarrative, false);
+  assertEquals(result.shouldHoldPresence, false);
+});
+
 Deno.test("Fechamento aos 60% virou sinal condicional, nunca ordem obrigatória", () => {
   assert(SOURCE.includes("SINAL DE PRONTIDÃO PARA COSTURA"));
   assert(SOURCE.includes("Isto NÃO é ordem de fechamento"));
