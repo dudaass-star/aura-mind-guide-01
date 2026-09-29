@@ -19,7 +19,7 @@ export function detectLiveDisclosure(userMessage?: string | null): LiveDisclosur
   const isSensitiveDisclosure = SENSITIVE_DISCLOSURE_REGEX.test(text);
   const isNarrating = NARRATIVE_DISCLOSURE_REGEX.test(text);
   const isReflectingOnMeaning = REFLECTIVE_MEANING_REGEX.test(text);
-  const isSubstantiveNarrative = !isReflectingOnMeaning && (text.length >= 160 || isNarrating);
+  const isSubstantiveNarrative = !isReflectingOnMeaning && isNarrating && text.length >= 80;
 
   return {
     isSensitiveDisclosure,
