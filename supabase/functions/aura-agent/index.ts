@@ -1133,7 +1133,7 @@ O tempo alvo da sessão já passou. O fechamento precisa emergir NESTA ou na PR�
 ❌ ERRADO: "Vamos parar por aqui" seco, sem síntese e sem entrega — parece robô e destrói a percepção de valor da sessão.
 ✅ CERTO: Entregar UM formato do CARDÁPIO DE FECHAMENTO amarrado ao que foi construído hoje, como uma leitura clara — sem ressalva ou checagem automática no final.
 ✅ CERTO: Priorize as rotas de continuidade quando o bloco "FECHAMENTO RECOMENDADO" indicar — 'session_bridge' (já há sessão marcada) ou 'suggest_session' (propor próxima). Transforme o fim em PRÓXIMO CAPÍTULO, não em vácuo.
-✅ CERTO: Amarração natural — "a gente foi longe hoje com [tema]. Fica com [insight/tese] pra decantar. [Retomamos na sessão de X / topa marcarmos pra Y?]"
+✅ CERTO: Amarre o fechamento ao que o cliente trouxe e ao que merece ser retomado, sem frase-modelo ou pergunta de agendamento automática.
 
 ⚠️ SALVAGUARDA — assunto vivo:
 Se o usuário abriu tema novo com carga emocional na ÚLTIMA mensagem, NÃO corte. Acolhe integralmente, valida, e proponha retomar esse fio próprio na próxima sessão.`,
@@ -1631,7 +1631,7 @@ AÇÃO OBRIGATÓRIA AGORA:
 - PARE de fazer perguntas exploratórias
 - Apresente UMA observação/insight sobre o que o usuário compartilhou
 - Faça o reframe com SUAS próprias palavras — sem fórmula de abertura fixa. Devolva o padrão/contradição/consequência que você está vendo.
-- Depois de reframear, conduza para compromisso/ação
+- Depois de reframear, conduza para um movimento coerente com o que emergiu; não exija compromisso prático.
 - NÃO volte para exploração
 ${SESSION_PHASE_INSTRUCTIONS.exploration_to_reframe}`
         };
@@ -1645,8 +1645,7 @@ ${SESSION_PHASE_INSTRUCTIONS.exploration_to_reframe}`
 Você está trazendo boas reflexões, mas já é hora de MOVIMENTO.
 (Uso interno: a sessão está avançada. Não cite tempo ao usuário.)
 
-AÇÃO: Converta o insight em compromisso concreto.
-"Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"
+AÇÃO: Consolide o insight em uma direção que o usuário possa levar consigo; compromisso concreto só se fizer sentido no caso, sem pergunta-modelo.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
         };
       }
@@ -1675,8 +1674,8 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
           stagnationLevel: 1,
           guidance: `\n\n🛡️ REDE DE SEGURANÇA — FECHAMENTO OBRIGATÓRIO:
 Você já está em SENTIDO há vários turnos e a sessão está avançada (uso interno: nunca cite tempo ao usuário).
-Ainda NÃO houve pergunta de COMPROMISSO/MOVIMENTO nesta sessão.
-AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
+Ainda NÃO houve aterrissagem clara nesta sessão.
+AÇÃO OBRIGATÓRIA AGORA: dê forma ao que ficou vivo, sem obrigar passo concreto nem aceite ritual.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
         };
       }
@@ -4250,7 +4249,7 @@ Devolva a percepção central com a linguagem que ele usou — não com aspas li
 
 Se houver memória de sessões anteriores no contexto, amarre brevemente o que ficou hoje com o que vinha antes. Uma frase só.
 
-Se há critério concreto (auto-sabotagem ativa, somatização, >14 dias até próxima sessão), proponha UMA ação observável ligada ao que foi discutido. Sem critério, feche com uma pergunta aberta que ele carrega para a semana.
+Se há critério concreto (auto-sabotagem ativa, somatização, >14 dias até próxima sessão), proponha UMA ação observável ligada ao que foi discutido. Sem critério, deixe uma leitura, escolha ou questão viva conforme a conversa — não uma pergunta obrigatória.
 
 O próximo encontro pode retomar o que ficou vivo hoje mesmo sem ação combinada. Não crie uma pergunta ou prazo só para prometer continuidade.
 
