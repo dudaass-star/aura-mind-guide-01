@@ -1660,10 +1660,9 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
       detectedPhase === 'sentido' &&
       sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6)
     ) {
-      // Fase 2 — desarma APENAS se o USUÁRIO respondeu à pergunta de compromisso
-      // de forma concreta (user_engaged_with_commitment === true). Removido o
-      // fallback "auraAskedCommitment" que era chicken-and-egg e mantinha a rede
-      // desarmada mesmo sem fechamento real (raiz do arraste pra 78min).
+      // Um compromisso aceito desarma este nudge; sem ele, a orientação pede
+      // aterrissagem, mas nunca uma tarefa obrigatória. O encerramento pode
+      // acontecer sem compromisso concreto.
       const userClosedLoop = lastUserContext?.user_engaged_with_commitment === true;
       if (userClosedLoop) {
         console.log(`✅ user_engaged_with_commitment=true — closure efetivo, skipping safety net`);

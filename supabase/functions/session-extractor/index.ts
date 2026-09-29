@@ -116,7 +116,7 @@ REGRAS GERAIS:
 - summary: 2-3 frases sobre o tema central e a virada que aconteceu na sessão
 - key_insights: pelo menos 2 quando possível (mudanças de perspectiva, padrões nomeados, reconhecimentos)
 - commitments: array vazio É VÁLIDO se a sessão foi puramente emocional/exploratória
-- continuity_thread: UM eixo específico que ficou vivo para retomar no próximo encontro: escolha, tensão, observação ou movimento do usuário. Baseie-se somente no que aconteceu na conversa. Não invente pendência, prazo, obrigação ou fala da AURA. Mesmo sem ação prática, identifique o eixo real; se não houver evidência suficiente, use null.
+- continuity_thread: UM eixo específico para o próximo encontro que a AURA de fato deixou no fechamento, sustentado pela conversa: escolha, tensão, observação ou movimento do usuário. Reescreva concisamente sem inventar pendência, prazo, obrigação ou fala da AURA. Não extraia apenas do resumo: se não houve fechamento com essa ponte ou evidência suficiente, use null. Não exija aceite para observação ou elaboração; uma ação só é compromisso se o usuário aceitou explicitamente.
 - Português brasileiro claro, na voz do usuário (1ª pessoa quando fizer sentido)`;
 
 const EXTRACTION_TOOL = {
