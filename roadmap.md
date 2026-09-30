@@ -9,6 +9,7 @@
 - [x] Simular a confirmação no navegador com uma conta autorizada: mostrar a solicitação, enviar telefone à função real, abrir a conta e manter o acesso após recarregar; a busca inicial foi controlada apenas para reproduzir a tela sem alterar cadastros.
 - [x] Consolidar o histórico da Isabella no acesso atual e confirmar entrada, recarga e leitura completa.
 - [x] Tornar atômico o vínculo de contas antigas ao acesso atual, impedindo que novas tentativas dividam dados entre identidades.
+- [x] Impedir que falha momentânea ao consultar o PIX vire indisponibilidade, com novas tentativas, verificação no clique e diagnóstico detalhado.
 
 - [x] Criar links individuais da conta demo válidos por 7 dias, com entrada direta e sessão persistente.
 - [x] Preservar a jornada fictícia da Marina e remover somente as simulações técnicas posteriores.
