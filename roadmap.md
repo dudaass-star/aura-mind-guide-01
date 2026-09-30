@@ -7,7 +7,7 @@
 
 - [x] Corrigir a confirmação de WhatsApp no acesso ao App: enviar o telefone mesmo com verificação automática concorrente, aceitar corpo sem content-length e manter a tela estável para mostrar o resultado.
 - [x] Simular a confirmação no navegador com uma conta autorizada: mostrar a solicitação, enviar telefone à função real, abrir a conta e manter o acesso após recarregar; a busca inicial foi controlada apenas para reproduzir a tela sem alterar cadastros.
-- [ ] Consolidar o histórico da Isabella no acesso atual e confirmar entrada, recarga e leitura completa.
+- [x] Consolidar o histórico da Isabella no acesso atual e confirmar entrada, recarga e leitura completa.
 - [x] Tornar atômico o vínculo de contas antigas ao acesso atual, impedindo que novas tentativas dividam dados entre identidades.
 
 - [x] Criar links individuais da conta demo válidos por 7 dias, com entrada direta e sessão persistente.
