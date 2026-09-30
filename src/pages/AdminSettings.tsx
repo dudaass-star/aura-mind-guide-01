@@ -30,8 +30,8 @@ const CARD_GATEWAYS = [
   { value: 'asaas', label: 'Asaas', description: 'Formulário nativo no /v2. PCI SAQ A-EP. Suporta parcelado.' },
 ];
 
-// Trilho de PIX Automático (Bacen). O checkout só mostra PIX quando o trilho
-// escolhido passa na sonda de saúde — por isso o botão "Testar trilho" antes de salvar.
+// Trilho de PIX Automático (Bacen). A sonda serve para diagnóstico; somente a
+// opção "Desligado" impede novas compras por PIX.
 const PIX_RAILS = [
   { value: 'woovi', label: 'Woovi', description: 'QR composto: entrada promocional + mandato fixo em 1 scan.' },
   { value: 'inter', label: 'Banco Inter', description: 'Jornada 2 (aprovação separada). Trial de 7 dias grátis.' },
@@ -391,7 +391,7 @@ export default function AdminSettings() {
                 <CardTitle>Trilho de PIX Automático</CardTitle>
               </div>
               <CardDescription>
-                Define qual provedor gera os mandatos de débito automático no /v2. O PIX só aparece no checkout se o trilho estiver saudável — teste antes de salvar.
+                 Define qual provedor gera novos pagamentos no checkout. O teste serve para diagnóstico; apenas “Desligado” pausa o PIX para clientes.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
