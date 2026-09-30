@@ -163,6 +163,21 @@ Deno.serve(async (req) => {
     // Se qualquer vínculo falhar, nenhuma tabela fica parcialmente migrada.
     const oldUserId = legacy.user_id;
     if (oldUserId && oldUserId !== newUserId) {
+      const { data: oldIdentity, error: oldIdentityError } = await admin.auth.admin.getUserById(oldUserId);
+      if (oldIdentityError && oldIdentityError.status !== 404) {
+        console.error("🔗 [link] old-identity lookup error", oldIdentityError);
+        return new Response(JSON.stringify({ error: "lookup_failed" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (oldIdentity?.user) {
+        console.log("🔗 [link] identity_conflict (existing auth identity)");
+        return new Response(JSON.stringify({ linked: false, reason: "phone_taken" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const { data: consolidation, error: consolidationError } = await admin.rpc(
         "consolidate_portal_identity",
         { _profile_id: legacy.id, _new_user_id: newUserId },
