@@ -68,3 +68,19 @@ Deno.test("não repete erro definitivo de dados", async () => {
   assertEquals(result.outcome, "definitive_failure");
   assertEquals(calls, 1);
 });
+
+Deno.test("retomada consulta antes de recriar a operação", async () => {
+  let posts = 0;
+  const call: WooviCaller = async (_path, init) => {
+    if (init?.method === "POST") posts += 1;
+    return response(200, { subscription: { globalID: "sub_existente" } });
+  };
+  const result = await createWithWooviReconciliation(call, {
+    createPath: "/api/v1/subscriptions",
+    lookupPath: "/api/v1/subscriptions/corr_1",
+    body: { correlationID: "corr_1" },
+    lookupFirst: true,
+  });
+  assertEquals(result.outcome, "recovered");
+  assertEquals(posts, 0);
+});

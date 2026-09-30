@@ -563,6 +563,7 @@ Deno.serve(async (req) => {
         createPath: "/api/v1/charge",
         lookupPath: `/api/v1/charge/${encodeURIComponent(String(cobCorrelationId))}`,
         body: chargePayload,
+        lookupFirst: !!priorIntent,
       });
       const cobRes = chargeCreation.response;
       if (!cobRes.ok) {
@@ -605,6 +606,7 @@ Deno.serve(async (req) => {
         createPath: "/api/v1/subscriptions",
         lookupPath: `/api/v1/subscriptions/${encodeURIComponent(correlationId)}`,
         body: subscriptionPayload,
+        lookupFirst: !!priorIntent,
       });
       const created = subscriptionCreation.response;
       if (!created.ok) {
@@ -678,6 +680,7 @@ Deno.serve(async (req) => {
         createPath: "/api/v1/subscriptions",
         lookupPath: `/api/v1/subscriptions/${encodeURIComponent(correlationId)}`,
         body: subscriptionPayload,
+        lookupFirst: !!priorIntent,
       });
       const created = subscriptionCreation.response;
       if (!created.ok) {
