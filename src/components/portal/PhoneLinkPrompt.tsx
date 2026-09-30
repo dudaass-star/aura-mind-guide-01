@@ -84,7 +84,7 @@ export function PhoneLinkPrompt() {
 
             <Button
               type="submit"
-              disabled={!isValid || submitting || linkStatus === "linking"}
+              disabled={!isValid || submitting || linkStatus === "linking_phone"}
               className="w-full bg-accent text-accent-foreground rounded-lg py-3 font-medium font-['Nunito'] flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {submitting && <Loader2 size={16} className="animate-spin" />}

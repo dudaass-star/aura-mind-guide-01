@@ -13,6 +13,7 @@ function linkedRecently(userId: string) {
 export type LinkStatus =
   | "idle"
   | "linking"
+  | "linking_phone"
   | "linked"
   | "needs_phone"
   | "phone_taken"
@@ -50,7 +51,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
       if (!phone || pending === "linked") return pending;
     }
     const request = (async (): Promise<LinkStatus> => {
-      setLinkStatus("linking");
+      setLinkStatus(phone ? "linking_phone" : "linking");
       try {
         const { data, error } = await supabasePortal.functions.invoke("link-portal-account", {
           body: { ...(phone ? { phone } : {}) },

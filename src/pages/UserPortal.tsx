@@ -324,10 +324,10 @@ const UserPortal = () => {
   if (!session) return <Navigate to="/meu-espaco/entrar" replace />;
 
   // Aguardando vinculação ao profile legado
-  if (linkStatus === "idle") return <PortalLoading />;
+  if (linkStatus === "idle" || linkStatus === "linking") return <PortalLoading />;
 
   // Não achou profile por email → pede telefone
-  if (linkStatus === "needs_phone" || linkStatus === "phone_taken" || linkStatus === "error" || linkStatus === "linking") {
+  if (linkStatus === "needs_phone" || linkStatus === "phone_taken" || linkStatus === "error" || linkStatus === "linking_phone") {
     return <PhoneLinkPrompt />;
   }
 
