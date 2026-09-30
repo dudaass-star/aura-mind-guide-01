@@ -159,54 +159,44 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 4) Propaga o novo user_id para tabelas relacionadas ANTES de atualizar o profile,
-    // porque várias delas têm FK para profiles.user_id e bloqueariam o update.
+    // 4) Consolida profile e histórico em uma única transação no banco.
+    // Se qualquer vínculo falhar, nenhuma tabela fica parcialmente migrada.
     const oldUserId = legacy.user_id;
     if (oldUserId && oldUserId !== newUserId) {
-      const tables = [
-        "messages", "sessions", "session_themes", "session_ratings",
-        "commitments", "checkins", "monthly_letters", "monthly_reports",
-        "time_capsules", "user_milestones", "user_evolution_summary",
-        "weekly_questions", "user_journey_history", "scheduled_tasks",
-        "conversation_followups", "aura_response_state",
-        "user_insights", "user_meditation_history", "weekly_plans",
-        "asaas_payments",
-      ];
-      const results = await Promise.allSettled(
-        tables.map((t) =>
-          admin.from(t).update({ user_id: newUserId }).eq("user_id", oldUserId)
-        )
+      const { data: consolidation, error: consolidationError } = await admin.rpc(
+        "consolidate_portal_identity",
+        { _profile_id: legacy.id, _new_user_id: newUserId },
       );
-      const failed = results
-        .map((r, i) => ({ r, t: tables[i] }))
-        .filter(({ r }) => r.status === "rejected" || (r.status === "fulfilled" && (r.value as any)?.error));
-      if (failed.length > 0) {
-        for (const { r, t } of failed) {
-          const err = r.status === "rejected" ? r.reason : (r.value as any)?.error;
-          console.error(`🔗 [link] propagate-fail table=${t}`, err);
-        }
+      if (consolidationError) {
+        console.error("🔗 [link] consolidation error", consolidationError);
+        return new Response(JSON.stringify({ error: "link_failed" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      console.log(
+        `🔗 [link] consolidation-ok profile=${legacy.id} oldUid=${oldUserId.slice(0, 8)} newUid=${newUserId.slice(0, 8)} tables=${Object.keys(consolidation?.moved_tables ?? {}).length}`,
+      );
+    } else if (!oldUserId) {
+      const updatePayload: Record<string, unknown> = {
+        user_id: newUserId,
+        updated_at: new Date().toISOString(),
+      };
+      if (!legacy.email && email) updatePayload.email = email;
+
+      const { error: updateError } = await admin
+        .from("profiles")
+        .update(updatePayload)
+        .eq("id", legacy.id);
+      if (updateError) {
+        console.error("🔗 [link] empty-profile update error", updateError);
+        return new Response(JSON.stringify({ error: "link_failed" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
 
-    // 5) Atualiza user_id do profile existente para o novo auth.uid() (e preenche email se faltava).
-    const updatePayload: Record<string, unknown> = {
-      user_id: newUserId,
-      updated_at: new Date().toISOString(),
-    };
-    if (!legacy.email && email) updatePayload.email = email;
-
-    const { error: updErr } = await admin
-      .from("profiles")
-      .update(updatePayload)
-      .eq("id", legacy.id);
-
-    if (updErr) {
-      console.error("🔗 [link] update error", updErr);
-      return new Response(JSON.stringify({ error: "link_failed", detail: updErr.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
     console.log(`🔗 [link] update-ok profile=${legacy.id} newUid=${newUserId.slice(0, 8)} matchedBy=${matchedBy}`);
 
     console.log(`✅ Linked auth uid ${newUserId} to legacy profile (matchedBy: ${matchedBy})`);
