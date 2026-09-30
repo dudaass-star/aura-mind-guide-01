@@ -633,7 +633,7 @@ Deno.serve(async (req) => {
       const returnedValue = Number(sub?.value);
       if (!Number.isFinite(returnedValue) || returnedValue !== amountCents) {
         await wooviFetch(`/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, { method: "PUT" }).catch(() => {});
-        await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});
+        await wooviFetch(`/api/v1/charge/${encodeURIComponent(String(cobCorrelationId))}`, { method: "DELETE" }).catch(() => {});
         await supabase.from("woovi_subscriptions").update({
           creation_status: "compensated", status: "FALHA_VALIDACAO",
           last_error: `mandato retornou valor inesperado: ${Number.isFinite(returnedValue) ? returnedValue : "ausente"}`,
@@ -643,7 +643,7 @@ Deno.serve(async (req) => {
       }
       const recEmv = pixRec?.emv as string | undefined;
       if (!recEmv) {
-        await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});
+        await wooviFetch(`/api/v1/charge/${encodeURIComponent(String(cobCorrelationId))}`, { method: "DELETE" }).catch(() => {});
         await supabase.from("woovi_subscriptions").update({
           creation_status: "failed", status: "FALHA_CRIACAO",
           last_error: "mandato sem pixRecurring.emv",
@@ -653,7 +653,7 @@ Deno.serve(async (req) => {
       }
       const recUrl = extractWooviUrl(recEmv, "rec");
       if (!recUrl) {
-        await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});
+        await wooviFetch(`/api/v1/charge/${encodeURIComponent(String(cobCorrelationId))}`, { method: "DELETE" }).catch(() => {});
         await supabase.from("woovi_subscriptions").update({
           creation_status: "failed", status: "FALHA_CRIACAO",
           last_error: "URL /rec/ não encontrada no EMV do mandato",
