@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2, Phone } from "lucide-react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
+import { Button } from "@/components/ui/button";
 
 function formatPhone(raw: string): string {
   const d = raw.replace(/\D/g, "").slice(0, 11);
@@ -25,7 +26,6 @@ export function PhoneLinkPrompt() {
     setSubmitting(true);
     setError(null);
     const result = await linkByPhone(digits);
-    console.warn("[PhoneLinkPrompt] linkByPhone result:", result);
     setSubmitting(false);
     if (result === "phone_taken") {
       setError("Esse número já está vinculado a outra conta. Fala com a gente pelo WhatsApp da Aura pra ajustar.");
@@ -82,22 +82,23 @@ export function PhoneLinkPrompt() {
               </div>
             )}
 
-            <button
+            <Button
               type="submit"
-              disabled={!isValid || submitting || linkStatus === "linking"}
+              disabled={!isValid || submitting || linkStatus === "linking_phone"}
               className="w-full bg-accent text-accent-foreground rounded-lg py-3 font-medium font-['Nunito'] flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {submitting && <Loader2 size={16} className="animate-spin" />}
               <span>Confirmar</span>
-            </button>
+            </Button>
           </form>
 
-          <button
+          <Button
+            variant="ghost"
             onClick={signOut}
             className="mt-6 w-full text-sm text-muted-foreground hover:text-accent transition-colors font-['Nunito']"
           >
             Sair e entrar com outra conta
-          </button>
+          </Button>
         </div>
       </div>
     </div>

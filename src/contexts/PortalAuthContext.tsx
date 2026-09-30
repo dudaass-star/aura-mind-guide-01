@@ -13,6 +13,7 @@ function linkedRecently(userId: string) {
 export type LinkStatus =
   | "idle"
   | "linking"
+  | "linking_phone"
   | "linked"
   | "needs_phone"
   | "phone_taken"
@@ -43,12 +44,17 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
   const linkPromiseRef = useRef<Promise<LinkStatus> | null>(null);
 
   const runLink = async (phone?: string, expectedUserId?: string): Promise<LinkStatus> => {
-    if (linkPromiseRef.current) return linkPromiseRef.current;
+    if (linkPromiseRef.current) {
+      const pending = await linkPromiseRef.current;
+      // A busca automática por e-mail pode terminar depois que a pessoa digitou
+      // o telefone. Nesse caso, a tentativa com telefone ainda precisa acontecer.
+      if (!phone || pending === "linked") return pending;
+    }
     const request = (async (): Promise<LinkStatus> => {
-      setLinkStatus("linking");
+      setLinkStatus(phone ? "linking_phone" : "linking");
       try {
         const { data, error } = await supabasePortal.functions.invoke("link-portal-account", {
-          body: phone ? { phone } : undefined,
+          body: { ...(phone ? { phone } : {}) },
         });
         if (error) {
           console.warn("link-portal-account error", error);
@@ -71,7 +77,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
         setLinkStatus("error");
         return "error";
       } finally {
-        linkPromiseRef.current = null;
+        if (linkPromiseRef.current === request) linkPromiseRef.current = null;
       }
     })();
     linkPromiseRef.current = request;

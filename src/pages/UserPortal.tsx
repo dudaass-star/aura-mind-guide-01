@@ -327,7 +327,7 @@ const UserPortal = () => {
   if (linkStatus === "idle" || linkStatus === "linking") return <PortalLoading />;
 
   // Não achou profile por email → pede telefone
-  if (linkStatus === "needs_phone" || linkStatus === "phone_taken" || linkStatus === "error") {
+  if (linkStatus === "needs_phone" || linkStatus === "phone_taken" || linkStatus === "error" || linkStatus === "linking_phone") {
     return <PhoneLinkPrompt />;
   }
 
