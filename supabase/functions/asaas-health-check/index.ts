@@ -1,11 +1,11 @@
 // Edge function: asaas-health-check
 // Sonda o trilho de PIX recorrente e grava o resultado em
-// system_config.pix_rail_status. O checkout lê esse registro (SELECT rápido, sem
-// cold start de função) pra decidir se mostra ou esconde o PIX.
+// system_config.pix_rail_status. Esse registro é exclusivamente diagnóstico:
+// nunca autoriza nem bloqueia uma compra no checkout.
 //
 // Motivo: com a conta Asaas bloqueada (401 nos endpoints operacionais), todo
-// cliente que escolhia PIX gerava um QR que nunca nascia — venda perdida
-// silenciosa. Melhor não oferecer do que oferecer quebrado.
+// cliente que escolhia PIX gerava um QR que nunca nascia. O desligamento de
+// emergência agora é exclusivamente manual (`pix_gateway = off`).
 //
 // Roda via cron a cada 15 min e também pode ser chamada manualmente com
 // x-internal-secret.
