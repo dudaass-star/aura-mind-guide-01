@@ -21,6 +21,7 @@ import { composeQr, extractWooviUrl } from "../_shared/pix-emv.ts";
 import { buildFixedPixRecurringOptions } from "../_shared/woovi-subscription-payload.ts";
 import { saveMetaIdentity } from "../_shared/meta-identity.ts";
 import { saveCheckoutAccessClaim } from "../_shared/checkout-access.ts";
+import { createWithWooviReconciliation } from "../_shared/woovi-create-recovery.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -433,10 +434,11 @@ Deno.serve(async (req) => {
     // Clique repetido / retomada de página reaproveitam o mesmo mandato enquanto
     // o QR continua válido — nunca criamos dois débitos automáticos para a mesma
     // intenção de checkout.
+    let priorIntent: Record<string, any> | null = null;
     if (requestKey) {
       const { data: prior } = await supabase
         .from("woovi_subscriptions")
-        .select("subscription_id, plan, billing_period, is_trial, trial_value_cents, value_cents, qr_payload, qr_encoded_image, qr_expires_at, status, creation_status, next_charge_date")
+        .select("id, subscription_id, correlation_id, entry_charge_correlation_id, plan, billing_period, is_trial, trial_value_cents, value_cents, qr_payload, qr_encoded_image, qr_expires_at, status, creation_status, next_charge_date, updated_at")
         .eq("request_key", requestKey).maybeSingle();
       const reusable = prior?.creation_status === "completed"
         && prior.qr_payload
@@ -465,8 +467,13 @@ Deno.serve(async (req) => {
           reused: true,
         });
       }
-      if (prior && prior.creation_status === "creating") {
+      const stillOwned = prior?.creation_status === "creating"
+        && Date.parse(String(prior.updated_at || "")) > Date.now() - 45_000;
+      if (stillOwned) {
         return json({ error: "Sua autorização ainda está sendo preparada. Tente novamente em alguns segundos." }, 409);
+      }
+      if (prior && ["creating", "reconciling"].includes(String(prior.creation_status))) {
+        priorIntent = prior;
       }
     }
 
@@ -479,17 +486,20 @@ Deno.serve(async (req) => {
     const nextChargeDate = withTrial
       ? brtDate(firstChargeDate)
       : brtDate(addMonths(now, CYCLE_MONTHS[billing]));
-    const correlationId = crypto.randomUUID();
+    const correlationId = String(priorIntent?.correlation_id || crypto.randomUUID());
     // Campo "contrato" mostrado no mandato: a Woovi limita a 30 caracteres.
     const comment = `Aura ${PLAN_NAMES[plan]}/${PERIOD_LABELS[billing]}`.slice(0, 29);
 
     // Reserva local antes de criar recurso financeiro remoto: se algo cair no
     // meio, a auditoria tem evidência e consegue reconciliar.
-    const attemptId = crypto.randomUUID();
-    const { error: attemptErr } = await supabase.from("woovi_subscriptions").insert({
-      id: attemptId,
+    const attemptId = String(priorIntent?.id || crypto.randomUUID());
+    const cobCorrelationId = withTrial
+      ? String(priorIntent?.entry_charge_correlation_id || crypto.randomUUID())
+      : null;
+    const intentValues = {
       request_key: requestKey,
       correlation_id: correlationId,
+      entry_charge_correlation_id: cobCorrelationId,
       plan,
       billing_period: billing,
       frequency: WOOVI_FREQUENCY[billing],
@@ -509,7 +519,11 @@ Deno.serve(async (req) => {
       fbc: fbc || null,
       ga_client_id: gaClientId || null,
       retention_offer_id: retentionOfferId,
-    });
+      last_error: null,
+    };
+    const { error: attemptErr } = priorIntent
+      ? await supabase.from("woovi_subscriptions").update(intentValues).eq("id", attemptId)
+      : await supabase.from("woovi_subscriptions").insert({ id: attemptId, ...intentValues });
     if (attemptErr) {
       if (attemptErr.code === "23505") {
         return json({ error: "Esta autorização já está sendo processada. Tente novamente em alguns segundos." }, 409);
@@ -529,7 +543,6 @@ Deno.serve(async (req) => {
     let qrPayload = "";
     let sub: Record<string, any> | undefined;
     let pixRec: Record<string, any> | undefined;
-    let cobCorrelationId: string | null = null;
     let rawPayload: unknown = null;
 
     if (withTrial) {
@@ -538,25 +551,28 @@ Deno.serve(async (req) => {
       // variável". A entrada (R$ 6,90) vem de uma cobrança avulsa (tag 26 /cob/);
       // o mandato (tag 80 /rec/) só autoriza débitos a partir de D+7. O BR Code
       // final é composto manualmente (composeQr) para os dois num único scan.
-      cobCorrelationId = crypto.randomUUID();
-
-      const cobRes = await wooviFetch<Record<string, any>>("/api/v1/charge", {
-        method: "POST",
-        body: {
+      const chargePayload = {
           correlationID: cobCorrelationId,
           value: entryCents,
           paymentType: "DYNAMIC",
           comment,
           expiresIn: QR_TTL_SECONDS,
           customer,
-        },
+      };
+      const chargeCreation = await createWithWooviReconciliation<Record<string, any>>(wooviFetch, {
+        createPath: "/api/v1/charge",
+        lookupPath: `/api/v1/charge/${encodeURIComponent(String(cobCorrelationId))}`,
+        body: chargePayload,
       });
+      const cobRes = chargeCreation.response;
       if (!cobRes.ok) {
+        const ambiguous = chargeCreation.outcome === "unknown";
         await supabase.from("woovi_subscriptions").update({
-          creation_status: "failed", status: "FALHA_CRIACAO",
+          creation_status: ambiguous ? "reconciling" : "failed",
+          status: ambiguous ? "RESULTADO_DESCONHECIDO" : "FALHA_CRIACAO",
           last_error: `cobrança de entrada HTTP ${cobRes.status}: ${cobRes.raw.slice(0, 240)}`,
         }).eq("id", attemptId);
-        if (isTemporaryWooviFailure(cobRes.status)) {
+        if (ambiguous || isTemporaryWooviFailure(cobRes.status)) {
           return json({ error: wooviFailureMessage(cobRes.status), temporary: true }, 503);
         }
         return json({ error: wooviFailureMessage(cobRes.status) }, 422);
@@ -573,9 +589,7 @@ Deno.serve(async (req) => {
       }
 
       // Mandato recorrente em Jornada 2 (só autorização; 1ª parcela em D+7).
-      const created = await wooviFetch<Record<string, any>>("/api/v1/subscriptions", {
-        method: "POST",
-        body: {
+      const subscriptionPayload = {
           name: `Aura ${PLAN_NAMES[plan]}`,
           value: amountCents,
           correlationID: correlationId,
@@ -586,16 +600,26 @@ Deno.serve(async (req) => {
           dayDue: DAY_DUE,
           pixRecurringOptions: buildFixedPixRecurringOptions("ONLY_RECURRENCY"),
           customer,
-        },
+      };
+      const subscriptionCreation = await createWithWooviReconciliation<Record<string, any>>(wooviFetch, {
+        createPath: "/api/v1/subscriptions",
+        lookupPath: `/api/v1/subscriptions/${encodeURIComponent(correlationId)}`,
+        body: subscriptionPayload,
       });
+      const created = subscriptionCreation.response;
       if (!created.ok) {
-        // Cobrança de entrada já existe — cancela pra não deixar órfã.
-        await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});
+        const ambiguous = subscriptionCreation.outcome === "unknown";
+        // Só compensa quando sabemos que o mandato não foi criado. Em resultado
+        // desconhecido, a auditoria reconcilia antes de tocar na cobrança.
+        if (!ambiguous) {
+          await wooviFetch(`/api/v1/charge/${encodeURIComponent(String(cobCorrelationId))}`, { method: "DELETE" }).catch(() => {});
+        }
         await supabase.from("woovi_subscriptions").update({
-          creation_status: "failed", status: "FALHA_CRIACAO",
+          creation_status: ambiguous ? "reconciling" : "failed",
+          status: ambiguous ? "RESULTADO_DESCONHECIDO" : "FALHA_CRIACAO",
           last_error: `mandato HTTP ${created.status}: ${created.raw.slice(0, 240)}`,
         }).eq("id", attemptId);
-        if (isTemporaryWooviFailure(created.status)) {
+        if (ambiguous || isTemporaryWooviFailure(created.status)) {
           return json({ error: wooviFailureMessage(created.status), temporary: true }, 503);
         }
         return json({ error: wooviFailureMessage(created.status) }, 422);
@@ -638,9 +662,7 @@ Deno.serve(async (req) => {
       qrPayload = composeQr(cobBrCode, recUrl);
     } else {
       // ---- Nativo Jornada 3 (sem trial: valor fixo, sem variabilidade) ----
-      const created = await wooviFetch<Record<string, any>>("/api/v1/subscriptions", {
-        method: "POST",
-        body: {
+      const subscriptionPayload = {
           name: `Aura ${PLAN_NAMES[plan]}`,
           value: entryCents,
           correlationID: correlationId,
@@ -651,14 +673,21 @@ Deno.serve(async (req) => {
           dayDue: DAY_DUE,
           pixRecurringOptions: buildFixedPixRecurringOptions("PAYMENT_ON_APPROVAL"),
           customer,
-        },
+      };
+      const subscriptionCreation = await createWithWooviReconciliation<Record<string, any>>(wooviFetch, {
+        createPath: "/api/v1/subscriptions",
+        lookupPath: `/api/v1/subscriptions/${encodeURIComponent(correlationId)}`,
+        body: subscriptionPayload,
       });
+      const created = subscriptionCreation.response;
       if (!created.ok) {
+        const ambiguous = subscriptionCreation.outcome === "unknown";
         await supabase.from("woovi_subscriptions").update({
-          creation_status: "failed", status: "FALHA_CRIACAO",
+          creation_status: ambiguous ? "reconciling" : "failed",
+          status: ambiguous ? "RESULTADO_DESCONHECIDO" : "FALHA_CRIACAO",
           last_error: `Woovi recusou a assinatura HTTP ${created.status}: ${created.raw.slice(0, 240)}`,
         }).eq("id", attemptId);
-        if (isTemporaryWooviFailure(created.status)) {
+        if (ambiguous || isTemporaryWooviFailure(created.status)) {
           return json({ error: wooviFailureMessage(created.status), temporary: true }, 503);
         }
         return json({ error: wooviFailureMessage(created.status) }, 422);
