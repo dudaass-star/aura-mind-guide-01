@@ -5,7 +5,7 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
-- [x] Corrigir a confirmação de WhatsApp no acesso ao App: enviar o telefone mesmo com verificação automática concorrente, aceitar corpo sem content-length e mostrar o resultado sem voltar silenciosamente à confirmação.
+- [x] Corrigir a confirmação de WhatsApp no acesso ao App: enviar o telefone mesmo com verificação automática concorrente, aceitar corpo sem content-length e manter a tela estável para mostrar o resultado.
 
 - [x] Criar links individuais da conta demo válidos por 7 dias, com entrada direta e sessão persistente.
 - [x] Preservar a jornada fictícia da Marina e remover somente as simulações técnicas posteriores.
