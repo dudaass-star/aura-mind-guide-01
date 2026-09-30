@@ -261,14 +261,9 @@ const CheckoutV2 = () => {
   const [cardGateway, setCardGateway] = useState<"stripe" | "asaas">("stripe");
   // Quando gateway=asaas, submit do form abre o AsaasCardForm ao invés do embed Stripe.
   const [asaasCardOpen, setAsaasCardOpen] = useState(false);
-  // Saúde do trilho de PIX recorrente, gravada pela função asaas-health-check.
-  // Começa `false` de propósito: se a leitura falhar, o padrão é NÃO oferecer PIX.
-  // Oferecer PIX com o trilho fora do ar gera um QR que nunca nasce — o cliente
-  // acha que pagou e a venda morre em silêncio.
-  const [pixRailUp, setPixRailUp] = useState(false);
-  // Enquanto a config não chega, "PIX escondido" é só o estado inicial — não é
-  // trilho fora do ar. Sem isso o funil registrava rail_down em todo acesso.
-  const [railConfigLoaded, setRailConfigLoaded] = useState(false);
+  // Separa carregamento, erro de consulta e queda confirmada do PIX.
+  const [pixRailStatus, setPixRailStatus] = useState<"checking" | "up" | "down" | "error">("checking");
+  const [pixRailChecking, setPixRailChecking] = useState(false);
   // Banco que executa o PIX Automático (Bacen). Trocado por system_config.pix_gateway.
   const [pixGateway, setPixGateway] = useState<"asaas" | "inter" | "woovi">("asaas");
 
@@ -328,48 +323,78 @@ const CheckoutV2 = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Busca gateway de cartão ativo (só afeta rota do cartão, não do PIX) e a
-  // saúde do trilho de PIX. Uma leitura só, dois usos.
-  useEffect(() => {
-    (async () => {
-      const { data: rows } = await supabase
+  const readPixRailStatus = useCallback(async (reason: "initial" | "selection" | "payment") => {
+    setPixRailChecking(true);
+    if (reason === "initial") setPixRailStatus("checking");
+    let lastError = "sem resposta";
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const startedAt = performance.now();
+      const { data: rows, error } = await supabase
         .from("system_config")
         .select("key, value")
         .in("key", ["card_gateway", "pix_rail_status", "pix_gateway"]);
 
-      const parse = (raw: unknown): unknown => {
-        // JSONB pode voltar como string pura ("asaas") ou como JSON string ('"asaas"').
-        if (typeof raw === "string") {
-          try { return JSON.parse(raw); } catch { return raw; }
-        }
-        return raw;
-      };
+      if (!error && rows) {
+        const parse = (raw: unknown): unknown => {
+          if (typeof raw === "string") {
+            try { return JSON.parse(raw); } catch { return raw; }
+          }
+          return raw;
+        };
+        const card = rows.find((row) => row.key === "card_gateway");
+        const parsedCard = card ? parse(card.value) : null;
+        if (parsedCard === "asaas" || parsedCard === "stripe") setCardGateway(parsedCard);
 
-      const data = rows?.find((r) => r.key === "card_gateway");
-      if (data?.value !== undefined && data?.value !== null) {
-        const v = parse(data.value);
-        if (v === "asaas" || v === "stripe") setCardGateway(v);
+        const rail = rows.find((row) => row.key === "pix_gateway");
+        const parsedRail = rail ? parse(rail.value) : null;
+        const activeRail =
+          parsedRail === "inter" || parsedRail === "asaas" || parsedRail === "woovi" ? parsedRail : null;
+        if (activeRail) setPixGateway(activeRail);
+
+        const health = rows.find((row) => row.key === "pix_rail_status");
+        const parsedHealth = health
+          ? (parse(health.value) as { healthy?: boolean; gateway?: string; checkedAt?: string } | null)
+          : null;
+        const complete = Boolean(activeRail && parsedHealth && typeof parsedHealth.healthy === "boolean");
+        const matchesRail = Boolean(activeRail && parsedHealth?.gateway === activeRail);
+
+        if (complete && matchesRail) {
+          const nextStatus = parsedHealth?.healthy === true ? "up" : "down";
+          setPixRailStatus(nextStatus);
+          setPixRailChecking(false);
+          logFunnel("pix_rail_check_ok", {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            paymentMethod: "pix",
+            detail: `${reason}:${nextStatus}`,
+            meta: { attempt, durationMs: Math.round(performance.now() - startedAt), gateway: activeRail, checkedAt: parsedHealth?.checkedAt ?? null },
+          });
+          return nextStatus;
+        }
+        lastError = !complete ? "config_incomplete" : "gateway_mismatch";
+      } else {
+        lastError = error ? `${error.code || "query_error"}:${error.message}` : "empty_response";
       }
 
-      // Qual banco atende o PIX Automático hoje (system_config.pix_gateway).
-      const rail = rows?.find((r) => r.key === "pix_gateway");
-      const parsedRail = rail ? parse(rail.value) : null;
-      const activeRail =
-        parsedRail === "inter" || parsedRail === "asaas" || parsedRail === "woovi" ? parsedRail : null;
-      if (activeRail) setPixGateway(activeRail);
+      if (attempt < 3) await new Promise((resolve) => window.setTimeout(resolve, attempt * 350));
+    }
 
-      // Saúde só vale se for do trilho que está em uso. Um status antigo de
-      // outro gateway (ex.: Asaas com 401) não pode derrubar o trilho atual.
-      const health = rows?.find((r) => r.key === "pix_rail_status");
-      const parsedHealth = health
-        ? (parse(health.value) as { healthy?: boolean; gateway?: string } | null)
-        : null;
-      const healthMatchesRail =
-        !parsedHealth?.gateway || !activeRail || parsedHealth.gateway === activeRail;
-      setPixRailUp(parsedHealth?.healthy === true && healthMatchesRail);
-      setRailConfigLoaded(true);
-    })();
-  }, []);
+    setPixRailStatus("error");
+    setPixRailChecking(false);
+    logFunnel("pix_rail_check_error", {
+      plan: selectedPlan,
+      billing: billingPeriod,
+      paymentMethod: "pix",
+      detail: `${reason}:${lastError}`,
+      meta: { attempts: 3 },
+    });
+    return "error" as const;
+  }, [billingPeriod, selectedPlan]);
+
+  useEffect(() => {
+    void readPixRailStatus("initial");
+  }, [readPixRailStatus]);
 
   // Exit-intent (mesma regra do V1: desktop >= 768px)
   useEffect(() => {
@@ -419,21 +444,23 @@ const CheckoutV2 = () => {
   const currentMonthlyEquivalent = getPeriodMonthlyEquivalent(currentPlan, billingPeriod);
   const pixEnabled = isPixPeriod(billingPeriod);
 
-  // PIX é o padrão em qualquer ciclo (à vista nos longos, PIX Automático no
-  // mensal) — desde que exista trilho de PIX no ar. Sem trilho, só cartão.
+  const pixRailUp = pixRailStatus === "up";
+
+  // Só troca para cartão quando a indisponibilidade foi confirmada.
   useEffect(() => {
-    setPayMethod(pixRailUp ? "pix" : "card");
-  }, [billingPeriod, pixRailUp]);
+    if (pixRailStatus === "up") setPayMethod("pix");
+    if (pixRailStatus === "down") setPayMethod("card");
+  }, [billingPeriod, pixRailStatus]);
 
   // Registra uma vez, por sessão de checkout, que o PIX foi escondido. É esse
   // número que diz quanto custa o trilho estar fora do ar.
   const railDownLogged = useRef(false);
   useEffect(() => {
-    if (!railConfigLoaded || pixRailUp || railDownLogged.current) return;
+    if (pixRailStatus !== "down" || railDownLogged.current) return;
     railDownLogged.current = true;
     logFunnel("pix_rail_down", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "card" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pixRailUp, railConfigLoaded]);
+  }, [pixRailStatus]);
 
   // Abas de ciclo com preço/mês, total do ciclo e economia em reais (do plano selecionado).
   const cycleItems: CycleTabItem[] = useMemo(
@@ -1031,12 +1058,17 @@ const CheckoutV2 = () => {
 
   // Abre o modal PIX. Valida os 3 campos comuns antes (mesma regra do CTA cartão).
   // `mode` define se vamos chamar a edge one-time ou a de subscription.
-  const handleOpenPix = (mode: "one-time" | "subscription" = "one-time") => {
-    // Guarda final: mesmo que a UI escape, nunca abrir o modal de PIX com o
-    // trilho fora do ar. Cai pro cartão em vez de gerar QR que não nasce.
-    if (!pixRailUp) {
+  const handleOpenPix = async (mode: "one-time" | "subscription" = "one-time") => {
+    logFunnel("pix_rail_recheck", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "pix" });
+    const currentRailStatus = await readPixRailStatus("payment");
+    if (currentRailStatus === "error") {
+      toast.error("Não conseguimos verificar o PIX agora. Confira sua conexão e tente novamente.");
+      return;
+    }
+    if (currentRailStatus === "down") {
       setPayMethod("card");
       logFunnel("pix_blocked_rail_down", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "pix" });
+      toast.info("O PIX está temporariamente indisponível. Você pode tentar novamente ou usar cartão.");
       return;
     }
     const nextErrors: { name?: string; email?: string; phone?: string } = {};
@@ -1848,17 +1880,24 @@ const CheckoutV2 = () => {
                   Antes eram dois botões com valores diferentes no rótulo e o PIX
                   parecia custar 5x mais que o cartão. */}
               <div className="space-y-3 pt-1">
-                {pixRailUp ? (
+                {pixRailStatus !== "down" ? (
                   <PaymentMethodToggle
                   value={payMethod}
-                  onChange={setPayMethod}
+                  onChange={(method) => {
+                    setPayMethod(method);
+                    if (method === "pix" && pixRailStatus === "error") void readPixRailStatus("selection");
+                  }}
                   cardHint={
                     pixEnabled
                       ? `R$ ${currentPrice}/${periodLabel}`
                       : `7 dias por R$ ${currentPlan.trialPrice}`
                   }
                   pixHint={
-                    pixEnabled
+                    pixRailChecking
+                      ? "Verificando disponibilidade..."
+                      : pixRailStatus === "error"
+                        ? "Toque para verificar novamente"
+                        : pixEnabled
                       ? `R$ ${currentPrice} à vista`
                       : `7 dias por R$ ${currentPlan.trialPrice}`
                   }
@@ -1911,10 +1950,10 @@ const CheckoutV2 = () => {
                   type={payMethod === "card" ? "submit" : "button"}
                   variant="sage"
                   size="cta"
-                  onClick={payMethod === "pix" ? () => handleOpenPix("subscription") : undefined}
+                  onClick={payMethod === "pix" ? () => void handleOpenPix("subscription") : undefined}
                   className={`w-full whitespace-normal leading-tight ck-cta-text ${!isFormValid ? "opacity-70" : ""}`}
-                  disabled={payMethod === "card" && isLoading}
-                  aria-disabled={!isFormValid || (payMethod === "card" && isLoading)}
+                  disabled={(payMethod === "card" && isLoading) || (payMethod === "pix" && pixRailChecking)}
+                  aria-disabled={!isFormValid || (payMethod === "card" && isLoading) || (payMethod === "pix" && pixRailChecking)}
                 >
                   {payMethod === "card" ? (
                     <CreditCard className="w-5 h-5" />
@@ -1928,7 +1967,9 @@ const CheckoutV2 = () => {
                         : pixEnabled
                           ? `Assinar por R$ ${currentPrice}`
                           : `Começar por R$ ${currentPlan.trialPrice}`
-                      : pixEnabled
+                      : pixRailChecking
+                        ? "Verificando PIX..."
+                        : pixEnabled
                         ? `Pagar com PIX — R$ ${currentPrice}`
                         : `Pagar com PIX — R$ ${currentPlan.trialPrice}`}
                   </span>
@@ -1980,7 +2021,7 @@ const CheckoutV2 = () => {
             anchorId="checkout-primary-cta"
             todayLabel={`R$ ${todayAmount}`}
             ctaLabel={
-              pixEnabled && pixRailUp ? "Pagar com PIX" : `Começar por R$ ${todayAmount}`
+              payMethod === "pix" ? (pixRailChecking ? "Verificando PIX..." : "Pagar com PIX") : `Começar por R$ ${todayAmount}`
             }
             onClick={() => {
               // Antes esse clique com formulário vazio virava "form_invalid" e
