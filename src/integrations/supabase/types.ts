@@ -5089,6 +5089,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      consolidate_portal_identity: {
+        Args: { _new_user_id: string; _profile_id: string }
+        Returns: Json
+      }
       consume_portal_access_request: {
         Args: { _action_hash: string }
         Returns: {
