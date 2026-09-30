@@ -41,14 +41,21 @@ Deno.serve(async (req) => {
     const newUserId = claims.claims.sub as string;
     const email = (claims.claims.email as string | undefined)?.toLowerCase().trim();
 
-    // Lê telefone opcional do body (fallback quando email não bate).
+    // Lê telefone opcional do body; requisições chunked podem não ter content-length.
     let phoneInput: string | undefined;
     try {
-      if (req.headers.get("content-length") && req.headers.get("content-length") !== "0") {
-        const body = await req.json().catch(() => ({}));
-        if (body && typeof body.phone === "string") phoneInput = body.phone;
+      const body = await req.json();
+      if (body && typeof body.phone === "string") {
+        const digits = body.phone.replace(/\D/g, "");
+        if (!/^\d{10,11}$/.test(digits)) {
+          return new Response(JSON.stringify({ error: "invalid_phone" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        phoneInput = digits;
       }
-    } catch (_) { /* body opcional */ }
+    } catch (_) { /* corpo vazio: busca automática apenas pelo e-mail */ }
 
     // Diagnóstico (mascarado): prefixo do email e últimos 4 dígitos do phone.
     const emailMask = email ? `${email.slice(0, 3)}***@${email.split("@")[1] ?? "?"}` : "(none)";
@@ -121,19 +128,19 @@ Deno.serve(async (req) => {
           matchedBy = "phone";
           console.log(`🔗 [link] phone-hit profile=${data.id} legacyUid=${data.user_id?.slice(0, 8) ?? "null"}`);
 
-          // Proteção: se o profile já está vinculado a outro auth user ativo, recusa.
+           // Não transferir perfil vinculado a uma identidade real só pela posse
+           // do número: suporte deve verificar a titularidade antes da troca.
           if (data.user_id && data.user_id !== newUserId) {
-            const { data: existingUser } = await admin.auth.admin.getUserById(data.user_id);
-            const lastSignIn = existingUser?.user?.last_sign_in_at;
-            // Só bloqueia se o outro auth user existir E tiver logado nos últimos 30 dias.
-            // Profiles com user_id "fantasma" (UUID gerado pelo WhatsApp sem auth real)
-            // ou auth users antigos que nunca voltaram não devem travar o vínculo legítimo.
-            const recentlyActive = lastSignIn
-              ? (Date.now() - new Date(lastSignIn).getTime()) < 30 * 24 * 60 * 60 * 1000
-              : false;
-            console.log(`🔗 [link] phone-taken-check existingUser=${existingUser?.user?.id?.slice(0, 8) ?? "null"} lastSignIn=${lastSignIn ?? "null"} recentlyActive=${recentlyActive}`);
-            if (recentlyActive) {
-              console.log(`🔗 [link] phone_taken (recent activity within 30d)`);
+             const { data: existingUser, error: existingError } = await admin.auth.admin.getUserById(data.user_id);
+             if (existingError && existingError.status !== 404) {
+               console.error("🔗 [link] existing-user lookup error", existingError);
+               return new Response(JSON.stringify({ error: "lookup_failed" }), {
+                 status: 500,
+                 headers: { ...corsHeaders, "Content-Type": "application/json" },
+               });
+             }
+             if (existingUser?.user) {
+               console.log(`🔗 [link] phone_taken (existing auth identity)`);
               return new Response(JSON.stringify({ linked: false, reason: "phone_taken" }), {
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
               });
