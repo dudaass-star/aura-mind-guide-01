@@ -10,7 +10,7 @@
 - [x] Consolidar o histórico da Isabella no acesso atual e confirmar entrada, recarga e leitura completa.
 - [x] Tornar atômico o vínculo de contas antigas ao acesso atual, impedindo que novas tentativas dividam dados entre identidades.
 - [x] Impedir que falha momentânea ao consultar o PIX vire indisponibilidade, com novas tentativas, verificação no clique e diagnóstico detalhado.
-- [ ] Concluir a correção estrutural do PIX: compra independente da sonda, intenção idempotente, reconciliação de resposta ambígua e recuperação automática de tentativas presas.
+- [x] Concluir a correção estrutural do PIX: compra independente da sonda, intenção idempotente, reconciliação de resposta ambígua e recuperação automática de tentativas presas.
 
 - [x] Criar links individuais da conta demo válidos por 7 dias, com entrada direta e sessão persistente.
 - [x] Preservar a jornada fictícia da Marina e remover somente as simulações técnicas posteriores.

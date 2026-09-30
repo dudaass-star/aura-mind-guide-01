@@ -11,4 +11,4 @@
 - Sessões em andamento mudam suavemente o contexto visual da conversa e mostram progresso no cabeçalho; o aviso de fechamento nunca entra como mensagem da AURA.
 - AURA evita confirmação ritual e perguntas seguidas; revelação nova mantém Presença e impede fechamento por tempo.
 - O fio entre encontros fica separado de compromissos e é retomado sem tarefa artificial.
-- O checkout só bloqueia PIX com queda confirmada; consulta falha é repetida e revalidada no clique.
+- PIX: sonda só diagnostica; o checkout bloqueia apenas com `pix_gateway=off` e reconcilia pela mesma identidade.

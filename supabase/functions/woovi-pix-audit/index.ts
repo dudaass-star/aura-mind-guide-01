@@ -287,13 +287,66 @@ Deno.serve(async (req) => {
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
     reautorizacao: [], ciclo_sem_cobranca: [], cobertura: [], status_sincronizado: [],
-    duplicados: [], vencimento_backfill: [],
+    duplicados: [], vencimento_backfill: [], criacoes_reconciliadas: [],
     erros: [],
   };
 
   try {
     const now = new Date();
     const graceBefore = new Date(now.getTime() - PARTIAL_GRACE_MINUTES * 60 * 1000).toISOString();
+
+    // Recupera intenções cuja resposta pode ter se perdido após chegar à Woovi.
+    // Reinvoca a criação com a MESMA requestKey: a função consulta os mesmos
+    // correlationIDs antes de repetir, então não nasce uma segunda cobrança.
+    const { data: uncertainCreations, error: uncertainErr } = await supabase
+      .from("woovi_subscriptions")
+      .select("id, request_key, plan, billing_period, customer_name, customer_email, customer_phone, customer_cpf, creation_status, updated_at")
+      .in("creation_status", ["creating", "reconciling"])
+      .lt("updated_at", new Date(now.getTime() - 60_000).toISOString())
+      .not("request_key", "is", null)
+      .order("updated_at", { ascending: true })
+      .limit(25);
+    if (uncertainErr) {
+      report.erros.push({ etapa: "criacoes_incertas", erro: uncertainErr.message });
+    }
+    for (const pending of uncertainCreations || []) {
+      const storedKey = String(pending.request_key || "");
+      const requestKey = storedKey.startsWith("checkout:") ? storedKey.slice("checkout:".length) : "";
+      if (!requestKey) continue;
+      if (dryRun) {
+        report.criacoes_reconciliadas.push({ id: pending.id, estado: pending.creation_status, dryRun: true });
+        continue;
+      }
+      const url = Deno.env.get("SUPABASE_URL");
+      const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (!url || !key) {
+        report.erros.push({ etapa: "reconciliar_criacao", id: pending.id, erro: "configuração interna ausente" });
+        continue;
+      }
+      try {
+        const response = await fetch(`${url}/functions/v1/criar-pix-recorrente-woovi`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            plan: pending.plan,
+            billing: pending.billing_period,
+            name: pending.customer_name,
+            email: pending.customer_email,
+            phone: pending.customer_phone,
+            cpf: pending.customer_cpf,
+            requestKey,
+          }),
+        });
+        report.criacoes_reconciliadas.push({ id: pending.id, status: response.status, recuperada: response.ok });
+      } catch (error) {
+        report.erros.push({
+          etapa: "reconciliar_criacao",
+          id: pending.id,
+          erro: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     // 10 dias: precisa cobrir a janela inteira do trial (7 dias) + a virada do
     // dia 7 sem mandato, que é quando abrimos a régua de retenção.
     const since = new Date(now.getTime() - 10 * 86400000).toISOString();
