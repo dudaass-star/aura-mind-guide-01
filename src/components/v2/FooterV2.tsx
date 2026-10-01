@@ -28,6 +28,7 @@ const FooterV2 = () => (
             <li><a href="#depoimentos" className="hover:text-white">Depoimentos</a></li>
             <li><a href="#precos" className="hover:text-white">Planos</a></li>
             <li><Link to="/blog" className="hover:text-white">Blog</Link></li>
+            <li><Link to="/movimento" className="hover:text-white">Movimento Olá Aura</Link></li>
           </ul>
         </div>
 

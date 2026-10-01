@@ -4,7 +4,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import { ArrowLeft, BookOpen, Sparkles, Headphones, Lock, Sun, Calendar, User } from "lucide-react";
+import { ArrowLeft, BookOpen, Sparkles, Headphones, HeartHandshake, Lock, Sun, Calendar, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
@@ -17,7 +17,7 @@ import { rememberPushAttribution, reportPushPresence } from "@/lib/push-notifica
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { isAppStandalone } from "@/components/portal/InstallAppMenuItem";
 
-type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes";
+type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "movimento";
 
 const loadHoje = () => import("@/components/portal/HojeTab");
 const loadSessoes = () => import("@/components/portal/SessoesTab");
@@ -25,12 +25,14 @@ const loadJornadas = () => import("@/components/portal/JornadasTab");
 const loadInsights = () => import("@/components/portal/InsightsTab");
 const loadMeditacoes = () => import("@/components/portal/MeditacoesTab");
 const loadSobre = () => import("@/components/portal/SobreVoceTab");
+const loadMovimento = () => import("@/components/movement/MovementDashboard");
 const HojeTab = lazy(() => loadHoje().then((module) => ({ default: module.HojeTab })));
 const SessoesTab = lazy(() => loadSessoes().then((module) => ({ default: module.SessoesTab })));
 const JornadasTab = lazy(() => loadJornadas().then((module) => ({ default: module.JornadasTab })));
 const InsightsTab = lazy(() => loadInsights().then((module) => ({ default: module.InsightsTab })));
 const MeditacoesTab = lazy(() => loadMeditacoes().then((module) => ({ default: module.MeditacoesTab })));
 const SobreVoceTab = lazy(() => loadSobre().then((module) => ({ default: module.SobreVoceTab })));
+const MovementDashboard = lazy(() => loadMovimento().then((module) => ({ default: module.MovementDashboard })));
 
 const AREA_LOADERS: Record<Exclude<TabId, "conversar">, () => Promise<unknown>> = {
   hoje: loadHoje,
@@ -39,6 +41,7 @@ const AREA_LOADERS: Record<Exclude<TabId, "conversar">, () => Promise<unknown>> 
   insights: loadInsights,
   meditacoes: loadMeditacoes,
   sobre: loadSobre,
+  movimento: loadMovimento,
 };
 
 const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebrow: string; icon: React.ElementType; tone: string }> = {
@@ -48,6 +51,7 @@ const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebro
   insights: { label: "Percurso", eyebrow: "Sua evolução", icon: Sparkles, tone: "portal-area-journey" },
   meditacoes: { label: "Meditações", eyebrow: "Sua pausa", icon: Headphones, tone: "portal-area-audio" },
   sobre: { label: "Sobre você", eyebrow: "Sua história", icon: User, tone: "portal-area-profile" },
+  movimento: { label: "Movimento", eyebrow: "Algo maior", icon: HeartHandshake, tone: "portal-area-movement" },
 };
 
 const UserPortal = () => {
@@ -59,7 +63,7 @@ const UserPortal = () => {
     ? "sobre"
     : rawTab === "percurso"
       ? "insights"
-      : rawTab && ["conversar", "hoje", "sessoes", "jornadas", "insights", "sobre", "meditacoes"].includes(rawTab)
+      : rawTab && ["conversar", "hoje", "sessoes", "jornadas", "insights", "sobre", "meditacoes", "movimento"].includes(rawTab)
         ? rawTab as TabId
         : "conversar";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
@@ -200,6 +204,8 @@ const UserPortal = () => {
           ? "practice"
           : id === "sobre"
             ? "profile"
+             : id === "movimento"
+               ? "movement"
             : id === "conversar"
               ? "conversation"
               : null;
@@ -498,6 +504,7 @@ const UserPortal = () => {
           {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("meditacoes") && <div className={activeTab === "meditacoes" ? "block" : "hidden"} aria-hidden={activeTab !== "meditacoes"}><MeditacoesTab userId={userId} /></div>}
+          {visitedTabs.has("movimento") && <div className={activeTab === "movimento" ? "block" : "hidden"} aria-hidden={activeTab !== "movimento"}><MovementDashboard userId={userId} suggestedName={profile?.name || ""} embedded /></div>}
           </Suspense>
         </div>
 

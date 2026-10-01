@@ -37,6 +37,7 @@ const HeaderV2 = () => {
           <nav className="hidden md:flex items-center gap-7">
             <Link to="/guia" className={linkBase}>Guia</Link>
             <Link to="/blog" className={linkBase}>Blog</Link>
+            <Link to="/movimento" className={linkBase}>Movimento</Link>
             <a href="#precos" className={linkBase}>Preços</a>
             <a href="#faq" className={linkBase}>FAQ</a>
             <Link
@@ -63,6 +64,7 @@ const HeaderV2 = () => {
             <div className="flex flex-col gap-4">
               <Link to="/guia" className={linkBase} onClick={() => setIsMenuOpen(false)}>Guia</Link>
               <Link to="/blog" className={linkBase} onClick={() => setIsMenuOpen(false)}>Blog</Link>
+              <Link to="/movimento" className={linkBase} onClick={() => setIsMenuOpen(false)}>Movimento</Link>
               <a href="#precos" className={linkBase} onClick={() => setIsMenuOpen(false)}>Preços</a>
               <a href="#faq" className={linkBase} onClick={() => setIsMenuOpen(false)}>FAQ</a>
               <Link

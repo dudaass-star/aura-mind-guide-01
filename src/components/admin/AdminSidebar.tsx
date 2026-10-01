@@ -16,6 +16,7 @@ import {
   Eye,
   Server,
   Settings,
+  HeartHandshake,
 } from "lucide-react";
 
 import {
@@ -39,6 +40,7 @@ const groups: { label: string; items: Item[] }[] = [
       { title: "Engajamento", url: "/admin/engajamento", icon: LayoutDashboard },
       { title: "Usuários", url: "/admin/usuarios", icon: Users },
       { title: "Sessões", url: "/admin/sessoes", icon: CalendarDays },
+      { title: "Movimento", url: "/admin/movimento", icon: HeartHandshake },
     ],
   },
   {

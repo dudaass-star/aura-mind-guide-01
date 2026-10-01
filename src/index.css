@@ -143,6 +143,8 @@
   --portal-audio-foreground: 270 31% 45%;
   --portal-profile: 350 45% 92%;
   --portal-profile-foreground: 350 34% 45%;
+  --portal-movement: 42 58% 88%;
+  --portal-movement-foreground: 18 42% 37%;
   --portal-session-header: 153 25% 91%;
   --portal-session-canvas: 153 18% 93%;
   --portal-session-composer: 153 22% 95%;
@@ -235,6 +237,22 @@
 .portal-area-conversation {
   background-color: hsl(var(--portal-conversation));
   color: hsl(var(--foreground));
+}
+
+.portal-area-movement {
+  background-color: hsl(var(--portal-movement));
+  color: hsl(var(--portal-movement-foreground));
+}
+
+.movement-theme {
+  --primary: 153 31% 36%;
+  --primary-foreground: 90 20% 98%;
+  --secondary: 41 44% 91%;
+  --secondary-foreground: 150 8% 18%;
+  --accent: 19 53% 54%;
+  --accent-foreground: 30 30% 98%;
+  --foreground: 150 8% 15%;
+  --border: 138 11% 82%;
 }
 
 .portal-login-page main {
