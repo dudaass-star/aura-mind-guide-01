@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,10 @@ import avatarAura from "@/assets/avatar-aura.jpg";
 export default function PortalAuthCallback() {
   const { session, loading } = usePortalAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [timedOut, setTimedOut] = useState(false);
-  const destination = sessionStorage.getItem("aura-portal-destination") === "/movimento/area" ? "/movimento/area" : "/meu-espaco";
+  const requestedDestination = searchParams.get("destino") || sessionStorage.getItem("aura-portal-destination");
+  const destination = requestedDestination?.startsWith("/movimento/area") ? requestedDestination : "/meu-espaco";
 
   useEffect(() => {
     if (loading || session) return;
@@ -58,7 +60,7 @@ export default function PortalAuthCallback() {
             <p className="text-sm text-muted-foreground font-body mb-5">
               A confirmação do Google não terminou neste navegador.
             </p>
-            <Button onClick={() => navigate("/meu-espaco/entrar", { replace: true })} className="w-full h-11 font-body">
+            <Button onClick={() => navigate(`/meu-espaco/entrar${destination.startsWith("/movimento/area") ? `?destino=movimento${destination.includes("?por=") ? `&por=${encodeURIComponent(destination.split("?por=")[1] || "")}` : ""}` : ""}`, { replace: true })} className="w-full h-11 font-body">
               Voltar para entrar
             </Button>
           </>

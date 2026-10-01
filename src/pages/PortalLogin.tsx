@@ -32,7 +32,10 @@ export default function PortalLogin() {
   const [verifying, setVerifying] = useState(false);
   const [resendIn, setResendIn] = useState(0);
 
-  const destination = searchParams.get("destino") === "movimento" ? "/movimento/area" : "/meu-espaco";
+  const movementReferral = searchParams.get("por");
+  const destination = searchParams.get("destino") === "movimento"
+    ? `/movimento/area${movementReferral ? `?por=${encodeURIComponent(movementReferral)}` : ""}`
+    : "/meu-espaco";
 
   useEffect(() => {
     if (!loading && session) navigate(destination, { replace: true });
@@ -55,7 +58,7 @@ export default function PortalLogin() {
       sessionStorage.setItem("aura-portal-destination", destination);
     } catch {}
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/meu-espaco/auth/callback",
+      redirect_uri: `${window.location.origin}/meu-espaco/auth/callback?destino=${encodeURIComponent(destination)}`,
     });
     if (result.error) {
       try { sessionStorage.removeItem("aura-oauth-target"); } catch {}
