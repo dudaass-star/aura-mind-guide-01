@@ -171,3 +171,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Dar valor próprio ao Participante com impacto coletivo, Mural, mensagem da causa e conquistas de pertencimento antes do convite para ser Embaixador
 - [x] Humanizar a seção Como participar com uma imagem documental de pertencimento e camisetas Olá Aura, preservando o grupo no recorte móvel
 - [x] Refazer a imagem do Movimento com maioria feminina e camisetas verdes fotografadas de forma natural
+- [x] Aplicar o logo oficial branco nas camisetas do grupo, respeitando tecido, dobras e perspectiva

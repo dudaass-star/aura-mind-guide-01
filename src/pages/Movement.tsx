@@ -5,7 +5,7 @@ import { ArrowRight, Award, Check, HeartHandshake, Menu, MessageCircle, Route, S
 import { Button } from "@/components/ui/button";
 import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 import movementImage from "@/assets/movimento-ola-aura.jpg";
-import movementGroupImage from "@/assets/movimento-grupo-abraco-natural.jpg";
+import movementGroupImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
 import { MOVEMENT_ACHIEVEMENTS, PARTICIPANT_ACHIEVEMENTS, recordMovementReach } from "@/lib/movement";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 
