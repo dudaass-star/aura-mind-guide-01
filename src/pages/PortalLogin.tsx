@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { auraWhatsAppLink } from "@/components/portal/whatsapp";
+import { migrateDefaultSessionToPortal } from "@/contexts/portalSessionBridge";
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
@@ -31,6 +32,7 @@ export default function PortalLogin() {
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const movementReferral = searchParams.get("por");
   const isMovementEntry = searchParams.get("destino") === "movimento";
@@ -77,16 +79,30 @@ export default function PortalLogin() {
       sessionStorage.setItem("aura-oauth-target", "portal");
       sessionStorage.setItem("aura-portal-destination", destination);
     } catch {}
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: `${window.location.origin}/meu-espaco/auth/callback?destino=${encodeURIComponent(destination)}`,
-    });
-    if (result.error) {
+    setGoogleLoading(true);
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: `${window.location.origin}/meu-espaco/auth/callback?destino=${encodeURIComponent(destination)}`,
+      });
+      if (result.redirected) return;
+      if (result.error) throw result.error;
+
+      const migrated = await migrateDefaultSessionToPortal();
+      if (!migrated) {
+        const { data } = await supabasePortal.auth.getSession();
+        if (!data.session) throw new Error("A sessão do Google não chegou ao aplicativo.");
+      }
+      sessionStorage.removeItem("aura-portal-destination");
+      navigate(destination, { replace: true });
+    } catch {
       try { sessionStorage.removeItem("aura-oauth-target"); } catch {}
       toast({
         title: "Não conseguimos entrar",
         description: "Tente de novo em instantes.",
         variant: "destructive",
       });
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -248,9 +264,10 @@ export default function PortalLogin() {
                   type="button"
                   className="w-full h-12 mb-4 font-body shadow-sm"
                   onClick={handleGoogle}
+                  disabled={googleLoading}
                 >
-                  <GoogleIcon />
-                  <span className="ml-2">{isMovementEntry ? "Participar com Google" : "Continuar com Google"}</span>
+                  {googleLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleIcon />}
+                  <span className="ml-2">{googleLoading ? "Entrando…" : isMovementEntry ? "Participar com Google" : "Continuar com Google"}</span>
                 </Button>
 
                 <form onSubmit={handleSendOtp} className="space-y-3">
