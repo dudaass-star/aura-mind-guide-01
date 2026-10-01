@@ -2195,6 +2195,8 @@ export type Database = {
       movement_recognitions: {
         Row: {
           body: string
+          consent_decision: string
+          consented_at: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -2206,6 +2208,8 @@ export type Database = {
         }
         Insert: {
           body: string
+          consent_decision?: string
+          consented_at?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -2217,6 +2221,8 @@ export type Database = {
         }
         Update: {
           body?: string
+          consent_decision?: string
+          consented_at?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -5327,6 +5333,10 @@ export type Database = {
         Returns: number
       }
       movement_public_snapshot: { Args: never; Returns: Json }
+      movement_recognition_consent_internal: {
+        Args: { _decision: string; _recognition_id: string; _user_id: string }
+        Returns: Json
+      }
       movement_safe_name: {
         Args: { _mode: string; _name: string }
         Returns: string
