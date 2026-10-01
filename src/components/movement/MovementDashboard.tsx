@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { claimMovementReferral, decideMovementRecognition, MOVEMENT_ACHIEVEMENTS } from "@/lib/movement";
 import { toast } from "@/hooks/use-toast";
@@ -94,16 +95,25 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   if (loading) return <div className="py-20 text-center text-sm text-muted-foreground">Abrindo o Movimento…</div>;
 
   if (!member) return (
-    <div className="mx-auto max-w-xl py-4">
-      <p className="text-xs font-bold uppercase text-primary">Movimento Olá Aura</p>
-      <h2 className="mt-3 font-display text-3xl font-semibold">Faça parte de algo que pode chegar muito além de você.</h2>
-      <p className="mt-4 leading-relaxed text-muted-foreground">Você não precisa ser cliente, ter seguidores ou vender nada. Basta acreditar que mais pessoas merecem acesso a compreensão e direção.</p>
-      <div className="mt-8 space-y-5 border-y border-border py-7">
-        <label className="block"><span className="mb-2 block text-sm font-semibold">Como devemos chamar você?</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" /></label>
-        <label className="block"><span className="mb-2 block text-sm font-semibold">Como aparecer no Mural?</span><select value={displayMode} onChange={(e) => setDisplayMode(e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="first_name">Primeiro nome</option><option value="full_name">Nome completo</option><option value="initials">Iniciais</option><option value="private">Participação privada</option></select></label>
-        <label className="flex items-start gap-3"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-1 h-4 w-4 accent-primary" /><span className="text-sm leading-relaxed">Quero ajudar essa ideia a chegar a mais pessoas de forma respeitosa, verdadeira e sem pressão.</span></label>
-      </div>
-      <Button className="mt-6 w-full sm:w-auto" size="lg" disabled={!accepted || !name.trim() || saving} onClick={createMember}><HeartHandshake /> {saving ? "Entrando…" : "Quero fazer parte"}</Button>
+    <div className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 sm:py-14 lg:grid-cols-[.85fr_1.15fr] lg:gap-20 lg:py-20">
+      <section className="lg:pt-3">
+        <p className="text-xs font-bold uppercase text-primary">Seu primeiro passo</p>
+        <h2 className="mt-3 font-display text-3xl font-semibold sm:text-4xl">Faça parte de algo que pode chegar muito além de você.</h2>
+        <p className="mt-4 leading-relaxed text-muted-foreground">Você não precisa ser cliente, ter seguidores ou vender nada. Basta acreditar que mais pessoas merecem acesso a compreensão e direção.</p>
+        <div className="mt-7 hidden space-y-5 border-t border-border pt-7 lg:block">
+          {["Receba seu link pessoal", "Compartilhe somente com quem fizer sentido", "Acompanhe o impacto sem expor ninguém"].map((item) => <div key={item} className="flex items-center gap-3 text-sm font-semibold"><CheckCircle2 className="h-5 w-5 shrink-0 text-primary" /><span>{item}</span></div>)}
+        </div>
+      </section>
+      <section className="border-t border-border pt-7 lg:border-l lg:border-t-0 lg:pl-12 lg:pt-1">
+        <p className="font-display text-xl font-semibold">Como você quer participar?</p>
+        <p className="mt-1 text-sm text-muted-foreground">Você controla como seu nome aparece e pode mudar isso depois.</p>
+        <div className="mt-6 space-y-5">
+          <label className="block"><span className="mb-2 block text-sm font-semibold">Como devemos chamar você?</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" /></label>
+          <label className="block"><span className="mb-2 block text-sm font-semibold">Como aparecer no Mural?</span><select value={displayMode} onChange={(e) => setDisplayMode(e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="first_name">Primeiro nome</option><option value="full_name">Nome completo</option><option value="initials">Iniciais</option><option value="private">Participação privada</option></select></label>
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-4"><Checkbox checked={accepted} onCheckedChange={(value) => setAccepted(value === true)} className="mt-0.5" /><span className="text-sm leading-relaxed">Quero ajudar essa ideia a chegar a mais pessoas de forma respeitosa, verdadeira e sem pressão.</span></label>
+        </div>
+        <Button className="mt-6 w-full sm:w-auto" size="lg" disabled={!accepted || !name.trim() || saving} onClick={createMember}><HeartHandshake /> {saving ? "Entrando…" : "Quero fazer parte"}</Button>
+      </section>
     </div>
   );
 
