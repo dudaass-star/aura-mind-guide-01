@@ -84,7 +84,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const createMember = async () => {
     if (!name.trim() || !accepted) return;
     setSaving(true);
-    const { data, error } = await supabasePortal.from("movement_members").insert({ user_id: userId, public_name: name.trim(), display_mode: displayMode }).select("*").single();
+    const { data, error } = await supabasePortal.from("movement_members").insert({ user_id: userId, public_name: name.trim(), display_mode: displayMode, receive_updates: false }).select("*").single();
     setSaving(false);
     if (error) return toast({ title: "Não conseguimos concluir agora", description: "Tente novamente em instantes.", variant: "destructive" });
     setMember(data);
