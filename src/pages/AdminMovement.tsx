@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Award, Eye, EyeOff, HeartHandshake, Loader2, Plus, RefreshCw, ShieldCheck, Users } from "lucide-react";
+import { Award, EyeOff, HeartHandshake, Loader2, Plus, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
