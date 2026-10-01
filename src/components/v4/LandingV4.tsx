@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, CalendarDays, Check, CheckCheck, CheckCircle2, ChevronDown,
   ChevronLeft, ChevronRight, ChevronUp, LockKeyhole, Menu, MessageCircle, Mic, MoreVertical, NotebookPen,
-  Headphones, Pencil, Play, Plus, Quote, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, UserRound, X,
+  Headphones, HeartHandshake, Pencil, Play, Plus, Quote, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, UserRound, Users, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { checkoutHref, trackLandingCta } from "@/lib/landing-analytics";
@@ -42,6 +42,7 @@ export function HeaderV4() {
         <nav className="hidden items-center gap-7 md:flex">
           <a href="#experiencia" className="text-sm font-semibold text-primary-foreground/70 transition-colors hover:text-primary-foreground">A experiência</a>
           <a href="#como-funciona" className="text-sm font-semibold text-primary-foreground/70 transition-colors hover:text-primary-foreground">Como funciona</a>
+           <Link to="/movimento" className="text-sm font-semibold text-primary-foreground/70 transition-colors hover:text-primary-foreground">Movimento</Link>
           <a href="#precos" className="text-sm font-semibold text-primary-foreground/70 transition-colors hover:text-primary-foreground">Planos</a>
           <Cta source="header" label="Experimentar a AURA (v4 header)" className="rounded-full px-6">Experimentar a AURA</Cta>
         </nav>
@@ -54,6 +55,7 @@ export function HeaderV4() {
           <div className="mx-auto flex max-w-7xl flex-col gap-4">
             <a href="#experiencia" onClick={() => setOpen(false)} className="text-sm font-semibold text-primary-foreground/80">A experiência</a>
             <a href="#como-funciona" onClick={() => setOpen(false)} className="text-sm font-semibold text-primary-foreground/80">Como funciona</a>
+             <Link to="/movimento" onClick={() => setOpen(false)} className="text-sm font-semibold text-primary-foreground/80">Movimento</Link>
             <a href="#precos" onClick={() => setOpen(false)} className="text-sm font-semibold text-primary-foreground/80">Planos</a>
             <Cta source="header" label="Experimentar a AURA (v4 menu)" className="w-full">Experimentar a AURA</Cta>
           </div>
@@ -356,6 +358,10 @@ export function SocialProofV4() {
   return <section aria-label="Avaliações reais" className="v4-ink-soft py-14 sm:py-16"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="grid gap-8 lg:grid-cols-[1fr_1.15fr] lg:items-center"><div><p className="text-xs font-bold uppercase text-primary">Experiência avaliada por quem já viveu uma sessão</p><h2 className="v4-balance mt-3 font-display text-3xl font-semibold leading-tight text-primary-foreground sm:text-4xl">Não precisa confiar só no que a página promete.</h2><p className="mt-4 max-w-lg text-sm leading-relaxed text-primary-foreground/65">As notas vêm de avaliações registradas ao final de sessões reais com a AURA.</p></div><div className="grid grid-cols-2 divide-x divide-primary-foreground/15 border-y border-primary-foreground/15 py-5 text-center"><div className="px-3"><strong className="block font-display text-3xl text-primary-foreground">4,6/5</strong><span className="mt-1 block text-[11px] text-primary-foreground/55">média das sessões</span></div><div className="px-3"><strong className="block font-display text-3xl text-primary-foreground">3 em cada 4</strong><span className="mt-1 block text-[11px] text-primary-foreground/55">deram nota máxima</span></div></div></div></div></section>;
 }
 
+export function MovementV4() {
+  return <section className="bg-background py-20 sm:py-28"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="grid gap-10 border-y border-border py-12 lg:grid-cols-[1.1fr_.9fr] lg:items-center"><div><p className="text-xs font-bold uppercase text-primary">Movimento Olá Aura</p><h2 className="v4-balance mt-4 font-display text-4xl font-semibold leading-tight sm:text-5xl">Compreender a si mesmo não deveria ser privilégio de poucos.</h2><p className="mt-5 max-w-2xl leading-relaxed text-muted-foreground">Faça parte de uma comunidade que compartilha uma possibilidade de apoio e direção com respeito, verdade e sem pressão.</p><Button asChild size="lg" className="mt-7"><Link to="/movimento">Conhecer o Movimento <ArrowRight /></Link></Button></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">{[{icon:HeartHandshake,text:"Participação livre, sem comissão ou venda."},{icon:Users,text:"Reconhecimento pelo impacto, sem ranking."}].map(({icon:Icon,text})=><div key={text} className="flex items-center gap-4 rounded-lg border bg-card p-5"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-primary"><Icon className="h-5 w-5" /></span><p className="font-semibold">{text}</p></div>)}</div></div></div></section>;
+}
+
 const plans: { id: PlanId; name: string; sessions: string; description: string; trialPrice: string; primary?: boolean }[] = [
   { id: "essencial", name: "Essencial", sessions: "1 encontro por mês", description: "A forma mais simples de começar a viver a experiência completa da AURA.", trialPrice: "R$ 6,90", primary: true },
   { id: "direcao", name: "Direção", sessions: "4 encontros por mês", description: "Para quem quer continuidade e um espaço semanal de profundidade.", trialPrice: "R$ 9,90" },
@@ -388,7 +394,7 @@ export function ClosingV4() {
 }
 
 export function FooterV4() {
-  return <footer className="v4-ink-soft border-t border-primary-foreground/10 py-12 text-primary-foreground"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="grid gap-8 sm:grid-cols-3"><div><img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto brightness-0 invert" /><p className="mt-3 max-w-xs text-xs leading-relaxed text-primary-foreground/55">Uma inteligência que acompanha sua história e ajuda você a transformar percepção em movimento.</p></div><div><p className="text-xs font-bold uppercase text-primary-foreground/50">Acesso</p><div className="mt-4 flex flex-col gap-2 text-sm text-primary-foreground/70"><Link to="/meu-espaco">Entrar no App</Link><Link to="/blog">Blog</Link><a href="mailto:suporte@olaaura.com.br">Suporte</a></div></div><div><p className="text-xs font-bold uppercase text-primary-foreground/50">Confiança</p><div className="mt-4 flex flex-col gap-2 text-sm text-primary-foreground/70"><Link to="/privacidade">Privacidade</Link><Link to="/termos">Termos de uso</Link><Link to="/cancelar">Cancelar assinatura</Link></div></div></div><div className="mt-10 flex flex-col gap-3 border-t border-primary-foreground/10 pt-6 text-xs text-primary-foreground/45 sm:flex-row sm:items-center sm:justify-between"><p>© {new Date().getFullYear()} Olá AURA.</p><p className="flex items-center gap-2"><LockKeyhole className="h-3.5 w-3.5" /> AURA não substitui atendimento profissional.</p></div></div></footer>;
+  return <footer className="v4-ink-soft border-t border-primary-foreground/10 py-12 text-primary-foreground"><div className="mx-auto max-w-6xl px-5 sm:px-8"><div className="grid gap-8 sm:grid-cols-3"><div><img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto brightness-0 invert" /><p className="mt-3 max-w-xs text-xs leading-relaxed text-primary-foreground/55">Uma inteligência que acompanha sua história e ajuda você a transformar percepção em movimento.</p></div><div><p className="text-xs font-bold uppercase text-primary-foreground/50">Acesso</p><div className="mt-4 flex flex-col gap-2 text-sm text-primary-foreground/70"><Link to="/meu-espaco">Entrar no App</Link><Link to="/movimento">Movimento Olá Aura</Link><Link to="/blog">Blog</Link><a href="mailto:suporte@olaaura.com.br">Suporte</a></div></div><div><p className="text-xs font-bold uppercase text-primary-foreground/50">Confiança</p><div className="mt-4 flex flex-col gap-2 text-sm text-primary-foreground/70"><Link to="/privacidade">Privacidade</Link><Link to="/termos">Termos de uso</Link><Link to="/cancelar">Cancelar assinatura</Link></div></div></div><div className="mt-10 flex flex-col gap-3 border-t border-primary-foreground/10 pt-6 text-xs text-primary-foreground/45 sm:flex-row sm:items-center sm:justify-between"><p>© {new Date().getFullYear()} Olá AURA.</p><p className="flex items-center gap-2"><LockKeyhole className="h-3.5 w-3.5" /> AURA não substitui atendimento profissional.</p></div></div></footer>;
 }
 
 export function StickyCtaV4() {
