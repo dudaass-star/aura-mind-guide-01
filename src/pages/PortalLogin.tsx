@@ -34,8 +34,9 @@ export default function PortalLogin() {
 
   const movementReferral = searchParams.get("por");
   const isMovementEntry = searchParams.get("destino") === "movimento";
+  const isAmbassadorEntry = isMovementEntry && searchParams.get("papel") === "embaixador";
   const destination = isMovementEntry
-    ? `/movimento/area${movementReferral ? `?por=${encodeURIComponent(movementReferral)}` : ""}`
+    ? `/movimento/area?${new URLSearchParams({ ...(movementReferral ? { por: movementReferral } : {}), ...(isAmbassadorEntry ? { papel: "embaixador" } : {}) }).toString()}`
     : "/meu-espaco";
 
   const handleBack = () => {
