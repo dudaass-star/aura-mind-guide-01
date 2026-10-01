@@ -32,12 +32,12 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const [shareMessage, setShareMessage] = useState(messages.personal);
 
   const load = async () => {
-    const { data } = await (supabasePortal.from("movement_members" as any) as any).select("*").eq("user_id", userId).maybeSingle();
+    const { data } = await supabasePortal.from("movement_members").select("*").eq("user_id", userId).maybeSingle();
     if (data) {
       setMember(data);
       const [{ data: rows }, { data: recognitionRows }] = await Promise.all([
-        (supabasePortal.from("movement_referrals" as any) as any).select("reached_at,started_at,continued_at,is_valid").eq("member_id", data.id).order("reached_at", { ascending: false }),
-        (supabasePortal.from("movement_recognitions" as any) as any).select("id,kind,title,body,status,consent_decision,created_at").eq("member_id", data.id).order("created_at", { ascending: false }),
+        supabasePortal.from("movement_referrals").select("reached_at,started_at,continued_at,is_valid").eq("member_id", data.id).order("reached_at", { ascending: false }),
+        supabasePortal.from("movement_recognitions").select("id,kind,title,body,status,consent_decision,created_at").eq("member_id", data.id).order("created_at", { ascending: false }),
       ]);
       setReferrals(rows || []);
       setRecognitions(recognitionRows || []);
@@ -67,7 +67,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const createMember = async () => {
     if (!name.trim() || !accepted) return;
     setSaving(true);
-    const { data, error } = await (supabasePortal.from("movement_members" as any) as any).insert({ user_id: userId, public_name: name.trim(), display_mode: displayMode }).select("*").single();
+    const { data, error } = await supabasePortal.from("movement_members").insert({ user_id: userId, public_name: name.trim(), display_mode: displayMode }).select("*").single();
     setSaving(false);
     if (error) return toast({ title: "Não conseguimos concluir agora", description: "Tente novamente em instantes.", variant: "destructive" });
     setMember(data);
@@ -77,7 +77,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const updatePreference = async (field: "show_achievements" | "receive_updates", value: boolean) => {
     if (!member) return;
     setMember({ ...member, [field]: value });
-    await (supabasePortal.from("movement_members" as any) as any).update({ [field]: value }).eq("id", member.id);
+    await supabasePortal.from("movement_members").update({ [field]: value }).eq("id", member.id);
   };
 
   const recordEvent = (eventType: string, metadata: Record<string, string> = {}) => {

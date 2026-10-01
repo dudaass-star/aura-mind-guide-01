@@ -132,7 +132,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.warn("portal signOut failed", e);
     }
-    try { sessionStorage.removeItem("aura-oauth-target"); } catch {}
+    try { sessionStorage.removeItem("aura-oauth-target"); } catch (error) { console.warn("Falha ao limpar destino do acesso", error); }
     if (session?.user?.id) localStorage.removeItem(`aura-portal-linked:${session.user.id}`);
     setSession(null);
     setLinkStatus("idle");
