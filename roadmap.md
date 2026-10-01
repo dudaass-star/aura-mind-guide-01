@@ -168,3 +168,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Medir pessoas alcançadas, que começaram e que continuaram com proteção contra duplicidade
 - [x] Criar painel, compartilhamento, conquistas, privacidade e mural sem ranking
 - [x] Criar administração e validar a jornada completa no celular e no computador
+- [x] Dar valor próprio ao Participante com impacto coletivo, Mural, mensagem da causa e conquistas de pertencimento antes do convite para ser Embaixador
