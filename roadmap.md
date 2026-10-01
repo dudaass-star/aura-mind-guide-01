@@ -174,3 +174,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Aplicar o logo oficial branco nas camisetas do grupo, respeitando tecido, dobras e perspectiva
 - [x] Direcionar os botões do topo para a escolha de participação e destacar Embaixador primeiro no celular, mantendo Participante como alternativa clara.
 - [x] Diferenciar a confirmação de entrada de Participante e Embaixador, concluindo a adesão como Embaixador em um único passo.
+- [x] Apresentar concretamente o aplicativo antes da escolha e personalizar a entrada de Participante e Embaixador com benefícios próprios.
