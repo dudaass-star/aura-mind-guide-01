@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Mail, ArrowRight, MessageCircle, RefreshCw, MessagesSquare, BookOpen, CalendarDays, Headphones, HeartHandshake, Link2, Award, Sparkles } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import logoOlaAura from "@/assets/logo-ola-aura.png";
+import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { auraWhatsAppLink } from "@/components/portal/whatsapp";
 
@@ -153,7 +153,7 @@ export default function PortalLogin() {
         <header className="border-b border-border/70 bg-card/90 backdrop-blur-xl">
           <div className="max-w-lg mx-auto px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-center">
             <Link to="/" aria-label="Olá Aura — página inicial">
-              <img src={logoOlaAura} alt="Olá Aura" className="h-12 w-auto" />
+              <img src={logoOlaAura} alt="Olá Aura" className="h-8 w-auto" />
             </Link>
           </div>
         </header>
