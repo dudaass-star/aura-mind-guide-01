@@ -40,3 +40,4 @@
 - [Continuidade sem pontuação](mem://features/portal/continuidade-sem-pontuacao) — Estados qualitativos sem nota, comparação ou recompensa por exposição pessoal
 - [Escala operacional do aplicativo](mem://technical/app-scale-first14) — Lotes, retomada segura, idempotência, métricas e validação de carga para rotinas recorrentes
 - [Perfil oficial no Instagram](mem://marketing/instagram-profile) — O perfil oficial da Olá Aura é @olaaura_oficial; usar o endereço correspondente no site e nas campanhas
+- [Representação visual do público](mem://marketing/audience-visual-representation) — Imagens da Olá Aura devem refletir um público predominantemente feminino, com poucos homens e aparência documental natural
