@@ -6,7 +6,7 @@ import { lovable } from "@/integrations/lovable";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Mail, ArrowRight, MessageCircle, RefreshCw, MessagesSquare, BookOpen, CalendarDays, Headphones, HeartHandshake, Link2, Award, Sparkles } from "lucide-react";
+import { Loader2, Mail, ArrowRight, ArrowLeft, MessageCircle, RefreshCw, MessagesSquare, BookOpen, CalendarDays, Headphones, HeartHandshake, Link2, Award, Sparkles } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
@@ -37,6 +37,24 @@ export default function PortalLogin() {
   const destination = isMovementEntry
     ? `/movimento/area${movementReferral ? `?por=${encodeURIComponent(movementReferral)}` : ""}`
     : "/meu-espaco";
+
+  const handleBack = () => {
+    if (step === "otp") {
+      setStep("email");
+      setOtp("");
+      return;
+    }
+
+    const fallback = isMovementEntry
+      ? `/movimento${movementReferral ? `?por=${encodeURIComponent(movementReferral)}` : ""}`
+      : "/";
+    const cameFromSameSite = document.referrer.startsWith(window.location.origin);
+    if (cameFromSameSite && window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate(fallback);
+  };
 
   useEffect(() => {
     if (!loading && session) navigate(destination, { replace: true });
@@ -151,7 +169,17 @@ export default function PortalLogin() {
       </Helmet>
       <div className="portal-chat-theme portal-login-page min-h-dvh bg-background text-foreground flex flex-col">
         <header className="border-b border-border/70 bg-card/90 backdrop-blur-xl">
-          <div className="max-w-lg mx-auto px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-center">
+          <div className="relative max-w-lg mx-auto px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-center">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={handleBack}
+              aria-label={step === "otp" ? "Voltar para o email" : "Voltar para a página anterior"}
+              className="absolute left-3 bottom-1.5 h-10 w-10 text-muted-foreground"
+            >
+              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+            </Button>
             <Link to="/" aria-label="Olá Aura — página inicial">
               <img src={logoOlaAura} alt="Olá Aura" className="h-8 w-auto" />
             </Link>
@@ -351,18 +379,6 @@ export default function PortalLogin() {
                 <p className="text-xs text-muted-foreground text-center font-body">
                   Envie a mensagem pronta. A Aura responderá com um link seguro para entrar.
                 </p>
-
-                <Button
-                  type="button"
-                  variant="link"
-                  onClick={() => {
-                    setStep("email");
-                    setOtp("");
-                  }}
-                  className="mx-auto flex h-auto text-xs text-muted-foreground font-body"
-                >
-                  Usar outro email
-                </Button>
               </div>
             )}
 
