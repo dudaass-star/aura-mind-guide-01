@@ -38,6 +38,13 @@ export async function claimMovementReferral() {
   return !error && Boolean(data?.result);
 }
 
+export async function decideMovementRecognition(recognitionId: string, decision: "accepted" | "declined") {
+  const { data, error } = await supabasePortal.functions.invoke("movement-public", {
+    body: { action: "recognition-consent", recognitionId, decision },
+  });
+  return { ok: !error && Boolean(data?.result?.ok), error };
+}
+
 export const MOVEMENT_ACHIEVEMENTS = [
   { id: "member", name: "Eu Faço Parte", description: "Aderiu ao Movimento.", threshold: 0, metric: "member" },
   { id: "first", name: "Primeiro Encontro", description: "Ajudou alguém a iniciar uma conversa.", threshold: 1, metric: "started" },
