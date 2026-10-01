@@ -17,7 +17,7 @@ export default function Movement() {
 
   useEffect(() => {
     if (code) void recordMovementReach(code).then((result) => setSharedBy(result?.shared_by || null));
-    void (supabasePortal.rpc as any)("movement_public_snapshot").then(({ data }: any) => setSnapshot(data));
+    void supabasePortal.functions.invoke("movement-public", { body: { action: "snapshot" } }).then(({ data }) => setSnapshot(data?.result || null));
   }, [code]);
 
   return <div className="movement-theme min-h-screen bg-background text-foreground">

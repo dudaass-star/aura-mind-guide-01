@@ -99,7 +99,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
           <div><p className="font-display text-3xl font-semibold">{counts.started}</p><p className="mt-1 text-xs text-muted-foreground">Começaram</p></div>
           <div><p className="font-display text-3xl font-semibold">{counts.continued}</p><p className="mt-1 text-xs text-muted-foreground">Continuaram</p></div>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Alcançadas abriram seu convite. Começaram iniciaram uma conversa. Continuaram escolheram um plano.</p>
+        <p className="mt-3 text-xs text-muted-foreground">Alcançadas abriram seu convite. Começaram iniciaram uma conversa. Continuaram decidiram seguir com o acompanhamento.</p>
       </section>
       {nextAchievement && <section className="flex items-start gap-4 border-l-2 border-primary pl-5"><Sprout className="mt-1 h-6 w-6 shrink-0 text-primary" /><div><p className="text-xs font-bold uppercase text-primary">Seu próximo marco</p><h3 className="mt-1 font-display text-xl font-semibold">{nextAchievement.name}</h3><p className="mt-1 text-sm text-muted-foreground">{nextAchievement.description}</p></div></section>}
       <section>

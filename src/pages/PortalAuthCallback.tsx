@@ -12,6 +12,7 @@ export default function PortalAuthCallback() {
   const { session, loading } = usePortalAuth();
   const navigate = useNavigate();
   const [timedOut, setTimedOut] = useState(false);
+  const destination = sessionStorage.getItem("aura-portal-destination") === "/movimento/area" ? "/movimento/area" : "/meu-espaco";
 
   useEffect(() => {
     if (loading || session) return;
@@ -21,7 +22,8 @@ export default function PortalAuthCallback() {
       const migrated = await migrateDefaultSessionToPortal();
       if (cancelled) return;
       if (migrated) {
-        navigate("/meu-espaco", { replace: true });
+        sessionStorage.removeItem("aura-portal-destination");
+        navigate(destination, { replace: true });
         return;
       }
       window.setTimeout(() => {
@@ -33,9 +35,12 @@ export default function PortalAuthCallback() {
     return () => {
       cancelled = true;
     };
-  }, [loading, navigate, session]);
+  }, [destination, loading, navigate, session]);
 
-  if (session) return <Navigate to="/meu-espaco" replace />;
+  if (session) {
+    sessionStorage.removeItem("aura-portal-destination");
+    return <Navigate to={destination} replace />;
+  }
 
   return (
     <div className="portal-chat-theme min-h-dvh bg-background flex items-center justify-center px-5">
