@@ -1,6 +1,6 @@
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, Loader2, LogOut, Mic, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Trash2, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, HeartHandshake, Loader2, LogOut, Mic, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -328,8 +328,8 @@ export function ConversarTab({
 }: {
   userId: string;
   firstName: string;
-  onNavigate?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes") => void;
-  onPrefetch?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes") => void;
+  onNavigate?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "movimento") => void;
+  onPrefetch?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "movimento") => void;
   onOpenBilling: () => void;
   onChangePlan: () => void;
   onSignOut: () => void;
@@ -1090,6 +1090,7 @@ export function ConversarTab({
     { label: "Percurso", detail: "O que vem mudando", tab: "insights", icon: Sparkles, tone: "portal-area-journey" },
     { label: "Meditações", detail: "Pausas guiadas para você", tab: "meditacoes", icon: Headphones, tone: "portal-area-audio" },
     { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound, tone: "portal-area-profile" },
+    { label: "Movimento", detail: "Faça parte de algo maior", tab: "movimento", icon: HeartHandshake, tone: "portal-area-movement" },
   ] as const;
   const navigateFromConversation = (tab: typeof appAreas[number]["tab"]) => {
     recordConversationEvent(userId, "area_opened_from_conversation", { destination: tab });

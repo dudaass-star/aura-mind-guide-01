@@ -56,6 +56,9 @@ const PixTaster = lazy(() => import("./pages/PixTaster"));
 const Blog = lazy(() => import("./pages/Blog"));
 const BlogPost = lazy(() => import("./pages/BlogPost"));
 const Pagamento = lazy(() => import("./pages/Pagamento"));
+const Movement = lazy(() => import("./pages/Movement"));
+const MovementArea = lazy(() => import("./pages/MovementArea"));
+const AdminMovement = lazy(() => import("./pages/AdminMovement"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const PortalRoute = ({ children }: { children: ReactNode }) => (
@@ -137,6 +140,7 @@ const App = () => (
               <Route path="/admin/suporte/gaps" element={<AdminSupportGaps />} />
               <Route path="/admin/whatsapp-inbox" element={<AdminWhatsappRecovery />} />
               <Route path="/admin/sessoes" element={<AdminSessions />} />
+              <Route path="/admin/movimento" element={<AdminMovement />} />
             </Route>
             <Route path="/guia" element={<UserGuide />} />
             <Route path="/episodio/:id" element={<Episode />} />
@@ -149,6 +153,8 @@ const App = () => (
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/pagamento" element={<Pagamento />} />
+            <Route path="/movimento" element={<Movement />} />
+            <Route path="/movimento/area" element={<PortalRoute><MovementArea /></PortalRoute>} />
             <Route path="/reautorizar-pix" element={<ReautorizarPix />} />
             <Route path="/pix/:token" element={<PixTaster />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
