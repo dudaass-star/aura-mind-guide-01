@@ -11,5 +11,7 @@
 - Sessões em andamento mudam suavemente o contexto visual da conversa e mostram progresso no cabeçalho; o aviso de fechamento nunca entra como mensagem da AURA.
 - AURA evita confirmação ritual e perguntas seguidas; revelação nova mantém Presença e impede fechamento por tempo.
 - O fio entre encontros fica separado de compromissos e é retomado sem tarefa artificial.
-- PIX: sonda só diagnostica; o checkout bloqueia apenas com `pix_gateway=off` e reconcilia pela mesma identidade.- O Movimento Olá Aura separa alcance, primeira conversa e continuidade; participação pública é opcional e reconhecimento não usa ranking comercial.
+- PIX: sonda só diagnostica; o checkout bloqueia apenas com `pix_gateway=off` e reconcilia pela mesma identidade.
+- O Movimento Olá Aura separa alcance, primeira conversa e continuidade; participação pública é opcional e reconhecimento não usa ranking comercial.
 - A atribuição do Movimento é reivindicada na autenticação global do App e o Mural exige consentimento individual; isso preserva impacto e privacidade sem depender de visitar a área do Movimento.
+- Participante e Embaixador são papéis distintos; link, divulgação, impacto e conquistas de indicação exigem adesão voluntária registrada em `movement_members.ambassador_since`.

@@ -16,9 +16,11 @@ export default function PortalAuthCallback() {
   const requestedDestination = searchParams.get("destino") || sessionStorage.getItem("aura-portal-destination");
   const destination = requestedDestination?.startsWith("/movimento/area") ? requestedDestination : "/meu-espaco";
   const isMovementEntry = destination.startsWith("/movimento/area");
-  const movementReferral = destination.includes("?por=") ? destination.split("?por=")[1] || "" : "";
+  const movementDestinationParams = new URLSearchParams(destination.split("?")[1] || "");
+  const movementReferral = movementDestinationParams.get("por") || "";
+  const isAmbassadorEntry = movementDestinationParams.get("papel") === "embaixador";
   const loginDestination = isMovementEntry
-    ? `/meu-espaco/entrar?destino=movimento${movementReferral ? `&por=${encodeURIComponent(movementReferral)}` : ""}`
+    ? `/meu-espaco/entrar?destino=movimento${movementReferral ? `&por=${encodeURIComponent(movementReferral)}` : ""}${isAmbassadorEntry ? "&papel=embaixador" : ""}`
     : "/meu-espaco/entrar";
 
   const handleBack = () => {

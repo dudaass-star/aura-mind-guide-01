@@ -164,6 +164,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Criar adesão aberta, perfil de Embaixador e acesso de não clientes
 - [x] Criar entrada gratuita própria do Movimento e abrir diretamente a adesão após o acesso
 - [x] Incluir retorno em todas as etapas de acesso do Movimento, preservando indicação e destino
+- [x] Separar participante de Embaixador, tornando divulgação, link e impacto uma escolha voluntária posterior
 - [x] Medir pessoas alcançadas, que começaram e que continuaram com proteção contra duplicidade
 - [x] Criar painel, compartilhamento, conquistas, privacidade e mural sem ranking
 - [x] Criar administração e validar a jornada completa no celular e no computador

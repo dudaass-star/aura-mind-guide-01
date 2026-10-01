@@ -2152,6 +2152,7 @@ export type Database = {
       }
       movement_members: {
         Row: {
+          ambassador_since: string | null
           commitment_accepted_at: string
           created_at: string
           display_mode: string
@@ -2165,6 +2166,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ambassador_since?: string | null
           commitment_accepted_at?: string
           created_at?: string
           display_mode?: string
@@ -2178,6 +2180,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ambassador_since?: string | null
           commitment_accepted_at?: string
           created_at?: string
           display_mode?: string
