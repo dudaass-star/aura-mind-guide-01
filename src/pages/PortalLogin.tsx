@@ -6,9 +6,9 @@ import { lovable } from "@/integrations/lovable";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Mail, ArrowRight, MessageCircle, RefreshCw, MessagesSquare, BookOpen, CalendarDays, Headphones } from "lucide-react";
+import { Loader2, Mail, ArrowRight, MessageCircle, RefreshCw, MessagesSquare, BookOpen, CalendarDays, Headphones, HeartHandshake, Link2, Award, Sparkles } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import logoOlaAura from "@/assets/logo-ola-aura.png";
+import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { auraWhatsAppLink } from "@/components/portal/whatsapp";
 
@@ -33,7 +33,8 @@ export default function PortalLogin() {
   const [resendIn, setResendIn] = useState(0);
 
   const movementReferral = searchParams.get("por");
-  const destination = searchParams.get("destino") === "movimento"
+  const isMovementEntry = searchParams.get("destino") === "movimento";
+  const destination = isMovementEntry
     ? `/movimento/area${movementReferral ? `?por=${encodeURIComponent(movementReferral)}` : ""}`
     : "/meu-espaco";
 
@@ -145,14 +146,14 @@ export default function PortalLogin() {
   return (
     <>
       <Helmet>
-        <title>Entrar no aplicativo | Olá Aura</title>
+        <title>{isMovementEntry ? "Faça parte do Movimento | Olá Aura" : "Entrar no aplicativo | Olá Aura"}</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
       <div className="portal-chat-theme portal-login-page min-h-dvh bg-background text-foreground flex flex-col">
         <header className="border-b border-border/70 bg-card/90 backdrop-blur-xl">
           <div className="max-w-lg mx-auto px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-center">
             <Link to="/" aria-label="Olá Aura — página inicial">
-              <img src={logoOlaAura} alt="Olá Aura" className="h-12 w-auto" />
+              <img src={logoOlaAura} alt="Olá Aura" className="h-8 w-auto" />
             </Link>
           </div>
         </header>
@@ -160,32 +161,57 @@ export default function PortalLogin() {
         <main className="flex-1 px-5 py-7 sm:py-9">
           <div className="mx-auto w-full max-w-sm">
             <div className="mb-5 flex flex-col items-center text-center">
-              <div className="relative mb-3">
-                <img src={avatarAura} alt="AURA" className="h-16 w-16 rounded-full object-cover ring-4 ring-secondary" />
-                <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-[3px] border-background bg-primary" aria-hidden="true" />
-              </div>
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Olá Aura, sempre por perto</p>
+              {isMovementEntry ? (
+                <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-secondary text-primary ring-4 ring-secondary/50">
+                  <HeartHandshake className="h-8 w-8" aria-hidden="true" />
+                </div>
+              ) : (
+                <div className="relative mb-3">
+                  <img src={avatarAura} alt="AURA" className="h-16 w-16 rounded-full object-cover ring-4 ring-secondary" />
+                  <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-[3px] border-background bg-primary" aria-hidden="true" />
+                </div>
+              )}
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
+                {isMovementEntry ? "Movimento Olá Aura" : "Olá Aura, sempre por perto"}
+              </p>
               <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">
-                Entre na Olá Aura
+                {isMovementEntry ? "Entre para fazer parte" : "Entre na Olá Aura"}
               </h1>
               <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground font-body">
-                Continue suas conversas e acesse tudo o que acompanha você.
+                {isMovementEntry
+                  ? "Crie sua conta gratuita para receber seu link pessoal, acompanhar seu impacto e suas conquistas. Não é preciso ser cliente."
+                  : "Continue suas conversas e acesse tudo o que acompanha você."}
               </p>
             </div>
 
-            <div className="mb-6 grid grid-cols-4 border-y border-border/70 py-3" aria-label="Recursos do aplicativo">
-              {[
-                { label: "Conversa", icon: MessagesSquare, tone: "portal-area-conversation" },
-                { label: "Jornadas", icon: BookOpen, tone: "portal-area-content" },
-                { label: "Sessões", icon: CalendarDays, tone: "portal-area-sessions" },
-                { label: "Meditações", icon: Headphones, tone: "portal-area-audio" },
-              ].map(({ label, icon: Icon, tone }) => (
-                <div key={label} className="flex min-w-0 flex-col items-center gap-1.5 px-1 text-center">
-                  <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tone}`}><Icon className="h-4 w-4" /></span>
-                  <span className="w-full truncate text-[10px] font-semibold text-muted-foreground">{label}</span>
-                </div>
-              ))}
-            </div>
+            {isMovementEntry ? (
+              <div className="mb-6 grid grid-cols-3 border-y border-border/70 py-3" aria-label="O que você recebe ao participar">
+                {[
+                  { label: "Link pessoal", icon: Link2 },
+                  { label: "Seu impacto", icon: Sparkles },
+                  { label: "Conquistas", icon: Award },
+                ].map(({ label, icon: Icon }) => (
+                  <div key={label} className="flex min-w-0 flex-col items-center gap-1.5 px-1 text-center">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-primary"><Icon className="h-4 w-4" /></span>
+                    <span className="w-full text-[10px] font-semibold text-muted-foreground">{label}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mb-6 grid grid-cols-4 border-y border-border/70 py-3" aria-label="Recursos do aplicativo">
+                {[
+                  { label: "Conversa", icon: MessagesSquare, tone: "portal-area-conversation" },
+                  { label: "Jornadas", icon: BookOpen, tone: "portal-area-content" },
+                  { label: "Sessões", icon: CalendarDays, tone: "portal-area-sessions" },
+                  { label: "Meditações", icon: Headphones, tone: "portal-area-audio" },
+                ].map(({ label, icon: Icon, tone }) => (
+                  <div key={label} className="flex min-w-0 flex-col items-center gap-1.5 px-1 text-center">
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tone}`}><Icon className="h-4 w-4" /></span>
+                    <span className="w-full truncate text-[10px] font-semibold text-muted-foreground">{label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {step === "email" && (
               <>
@@ -195,7 +221,7 @@ export default function PortalLogin() {
                   onClick={handleGoogle}
                 >
                   <GoogleIcon />
-                  <span className="ml-2">Continuar com Google</span>
+                  <span className="ml-2">{isMovementEntry ? "Participar com Google" : "Continuar com Google"}</span>
                 </Button>
 
                 <form onSubmit={handleSendOtp} className="space-y-3">
@@ -224,7 +250,7 @@ export default function PortalLogin() {
                     ) : (
                       <>
                         <Mail size={16} />
-                        <span className="ml-2">Entrar por email</span>
+                        <span className="ml-2">{isMovementEntry ? "Participar por email" : "Entrar por email"}</span>
                       </>
                     )}
                   </Button>
@@ -238,12 +264,14 @@ export default function PortalLogin() {
 
                 <Button asChild type="button" variant="ghost" className="w-full min-h-11 h-auto py-2.5 font-body text-muted-foreground">
                   <a
-                    href={auraWhatsAppLink("Quero receber um link de acesso ao aplicativo Olá Aura no meu WhatsApp cadastrado.")}
+                    href={auraWhatsAppLink(isMovementEntry
+                      ? "Quero ajuda para entrar gratuitamente no Movimento Olá Aura."
+                      : "Quero receber um link de acesso ao aplicativo Olá Aura no meu WhatsApp cadastrado.")}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
                     <MessageCircle size={17} />
-                    <span className="ml-2">Receber link pelo WhatsApp</span>
+                    <span className="ml-2">{isMovementEntry ? "Pedir ajuda pelo WhatsApp" : "Receber link pelo WhatsApp"}</span>
                   </a>
                 </Button>
               </>
@@ -284,7 +312,7 @@ export default function PortalLogin() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <>
-                      <span>Entrar</span>
+                      <span>{isMovementEntry ? "Fazer parte" : "Entrar"}</span>
                       <ArrowRight size={16} className="ml-2" />
                     </>
                   )}
@@ -310,12 +338,14 @@ export default function PortalLogin() {
 
                 <Button asChild type="button" variant="outline" className="w-full min-h-11 h-auto bg-card py-2.5 font-body">
                   <a
-                    href={auraWhatsAppLink("Não recebi o código. Quero entrar no aplicativo Olá Aura.")}
+                    href={auraWhatsAppLink(isMovementEntry
+                      ? "Não recebi o código. Quero entrar gratuitamente no Movimento Olá Aura."
+                      : "Não recebi o código. Quero entrar no aplicativo Olá Aura.")}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
                     <MessageCircle size={17} />
-                    <span className="ml-2">Entrar pelo WhatsApp cadastrado</span>
+                    <span className="ml-2">{isMovementEntry ? "Pedir ajuda pelo WhatsApp" : "Entrar pelo WhatsApp cadastrado"}</span>
                   </a>
                 </Button>
                 <p className="text-xs text-muted-foreground text-center font-body">
