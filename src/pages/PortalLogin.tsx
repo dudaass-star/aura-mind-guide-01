@@ -6,7 +6,7 @@ import { lovable } from "@/integrations/lovable";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Mail, ArrowRight, ArrowLeft, MessageCircle, RefreshCw, MessagesSquare, BookOpen, CalendarDays, Headphones, HeartHandshake, Link2, Award, Sparkles } from "lucide-react";
+import { Loader2, Mail, ArrowRight, ArrowLeft, MessageCircle, RefreshCw, MessagesSquare, BookOpen, CalendarDays, Headphones, HeartHandshake, Link2, Award, Sparkles, Users, ShieldCheck } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
@@ -220,22 +220,28 @@ export default function PortalLogin() {
                 {isMovementEntry ? "Movimento Olá Aura" : "Olá Aura, sempre por perto"}
               </p>
               <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">
-                {isMovementEntry ? "Entre para fazer parte" : "Entre na Olá Aura"}
+                {isAmbassadorEntry ? "Entre como Embaixador" : isMovementEntry ? "Entre para fazer parte" : "Entre na Olá Aura"}
               </h1>
               <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground font-body">
-                {isMovementEntry
-                  ? "Crie sua conta gratuita para receber seu link pessoal, acompanhar seu impacto e suas conquistas. Não é preciso ser cliente."
+                {isAmbassadorEntry
+                  ? "Receba seu link pessoal, compartilhe do seu jeito e acompanhe o impacto."
+                  : isMovementEntry
+                  ? "Participe gratuitamente, acompanhe o Movimento e receba conquistas de pertencimento."
                   : "Continue suas conversas e acesse tudo o que acompanha você."}
               </p>
             </div>
 
             {isMovementEntry ? (
               <div className="mb-6 grid grid-cols-3 border-y border-border/70 py-3" aria-label="O que você recebe ao participar">
-                {[
+                {(isAmbassadorEntry ? [
                   { label: "Link pessoal", icon: Link2 },
                   { label: "Seu impacto", icon: Sparkles },
                   { label: "Conquistas", icon: Award },
-                ].map(({ label, icon: Icon }) => (
+                ] : [
+                  { label: "Movimento", icon: Users },
+                  { label: "Conquistas", icon: Award },
+                  { label: "Privacidade", icon: ShieldCheck },
+                ]).map(({ label, icon: Icon }) => (
                   <div key={label} className="flex min-w-0 flex-col items-center gap-1.5 px-1 text-center">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-primary"><Icon className="h-4 w-4" /></span>
                     <span className="w-full text-[10px] font-semibold text-muted-foreground">{label}</span>
