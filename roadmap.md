@@ -161,4 +161,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Criar adesão aberta, perfil de Embaixador e acesso de não clientes
 - [x] Medir pessoas alcançadas, que começaram e que continuaram com proteção contra duplicidade
 - [x] Criar painel, compartilhamento, conquistas, privacidade e mural sem ranking
-- [ ] Criar administração e validar a jornada completa no celular e no computador
+- [x] Criar administração e validar a jornada completa no celular e no computador
