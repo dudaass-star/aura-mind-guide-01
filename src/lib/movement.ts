@@ -16,20 +16,26 @@ export async function recordMovementReach(code: string) {
   const normalized = code.trim().toLowerCase();
   if (!normalized) return null;
   localStorage.setItem(MOVEMENT_REFERRAL_CODE, normalized);
-  const { data } = await (supabasePortal.rpc as any)("record_movement_reach", {
-    _referral_code: normalized,
-    _visitor_key: getMovementVisitorKey(),
+  const { data, error } = await supabasePortal.functions.invoke("movement-public", {
+    body: {
+      action: "reach",
+      referralCode: normalized,
+      visitorKey: getMovementVisitorKey(),
+    },
   });
-  return data as { recorded?: boolean; shared_by?: string } | null;
+  if (error) return null;
+  return data?.result as { recorded?: boolean; shared_by?: string } | null;
 }
 
 export async function claimMovementReferral() {
   const visitorKey = localStorage.getItem(MOVEMENT_VISITOR_KEY);
   const referralCode = localStorage.getItem(MOVEMENT_REFERRAL_CODE);
   if (!visitorKey || !referralCode) return false;
-  const { data, error } = await (supabasePortal.rpc as any)("claim_movement_referral", { _visitor_key: visitorKey });
-  if (!error && data) localStorage.removeItem(MOVEMENT_REFERRAL_CODE);
-  return !error && Boolean(data);
+  const { data, error } = await supabasePortal.functions.invoke("movement-public", {
+    body: { action: "claim", visitorKey },
+  });
+  if (!error && data?.result) localStorage.removeItem(MOVEMENT_REFERRAL_CODE);
+  return !error && Boolean(data?.result);
 }
 
 export const MOVEMENT_ACHIEVEMENTS = [

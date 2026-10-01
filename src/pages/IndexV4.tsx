@@ -5,7 +5,7 @@ import { trackMetaViewContent } from "@/lib/meta-pixel";
 import { useLandingEngagement } from "@/lib/landing-analytics";
 import {
   ClosingV4, ConnectedAppValueV4, ConversationDemoV4, FaqV4, FooterV4, HeaderV4, HeroV4, HowItWorksV4,
-  PricingV4, ProductExperienceV4, SocialProofV4, StickyCtaV4,
+  MovementV4, PricingV4, ProductExperienceV4, SocialProofV4, StickyCtaV4,
 } from "@/components/v4/LandingV4";
 import "@/styles/v4-theme.css";
 
@@ -38,6 +38,7 @@ const IndexV4 = () => {
           <ProductExperienceV4 />
           <ConnectedAppValueV4 />
           <HowItWorksV4 />
+          <MovementV4 />
           <SocialProofV4 />
           <PricingV4 />
           <FaqV4 />

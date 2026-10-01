@@ -13,6 +13,7 @@ import FAQV2 from "@/components/v2/FAQV2";
 import FinalCTAV2 from "@/components/v2/FinalCTAV2";
 import FooterV2 from "@/components/v2/FooterV2";
 import StickyMobileCTAV2 from "@/components/v2/StickyMobileCTAV2";
+import MovementV2 from "@/components/v2/MovementV2";
 import { trackViewItem } from "@/lib/ga4";
 import { trackMetaViewContent } from "@/lib/meta-pixel";
 import { useLandingEngagement } from "@/lib/landing-analytics";
@@ -74,6 +75,7 @@ const IndexV2 = () => {
           <DemoV2 />
           <BenefitsGridV2 />
           <HowItWorksV2 />
+          <MovementV2 />
           <TestimonialsV2 />
           <PricingV2 />
           <FAQV2 />

@@ -157,8 +157,8 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Diferenciar visualmente a conversa durante uma sessão, com estado no topo, tempo decorrido, progresso discreto e fechamento apenas no cabeçalho; validado em celular e desktop sem repetir uma sessão completa.
 
 ## Movimento Olá Aura
-- [ ] Criar presença pública permanente, manifesto e entrada no site
-- [ ] Criar adesão aberta, perfil de Embaixador e acesso de não clientes
-- [ ] Medir pessoas alcançadas, que começaram e que continuaram com proteção contra duplicidade
-- [ ] Criar painel, compartilhamento, conquistas, privacidade e mural sem ranking
-- [ ] Criar administração e validar a jornada completa no celular e no computador
+- [x] Criar presença pública permanente, manifesto e entrada no site
+- [x] Criar adesão aberta, perfil de Embaixador e acesso de não clientes
+- [x] Medir pessoas alcançadas, que começaram e que continuaram com proteção contra duplicidade
+- [x] Criar painel, compartilhamento, conquistas, privacidade e mural sem ranking
+- [x] Criar administração e validar a jornada completa no celular e no computador

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { lovable } from "@/integrations/lovable";
@@ -24,6 +24,7 @@ const GoogleIcon = () => (
 export default function PortalLogin() {
   const { session, loading } = usePortalAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"email" | "otp">("email");
@@ -31,9 +32,11 @@ export default function PortalLogin() {
   const [verifying, setVerifying] = useState(false);
   const [resendIn, setResendIn] = useState(0);
 
+  const destination = searchParams.get("destino") === "movimento" ? "/movimento/area" : "/meu-espaco";
+
   useEffect(() => {
-    if (!loading && session) navigate("/meu-espaco", { replace: true });
-  }, [loading, session, navigate]);
+    if (!loading && session) navigate(destination, { replace: true });
+  }, [destination, loading, session, navigate]);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -49,6 +52,7 @@ export default function PortalLogin() {
     // e não logar o usuário no /admin por engano.
     try {
       sessionStorage.setItem("aura-oauth-target", "portal");
+      sessionStorage.setItem("aura-portal-destination", destination);
     } catch {}
     const result = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: window.location.origin + "/meu-espaco/auth/callback",
@@ -75,7 +79,7 @@ export default function PortalLogin() {
       email: normalized,
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: window.location.origin + "/meu-espaco",
+        emailRedirectTo: window.location.origin + destination,
       },
     });
     setSending(false);
@@ -102,7 +106,7 @@ export default function PortalLogin() {
       email: email.trim().toLowerCase(),
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: window.location.origin + "/meu-espaco",
+        emailRedirectTo: window.location.origin + destination,
       },
     });
     setSending(false);

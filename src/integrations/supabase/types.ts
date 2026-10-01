@@ -5207,6 +5207,10 @@ export type Database = {
         Args: { _visitor_key: string }
         Returns: boolean
       }
+      claim_movement_referral_internal: {
+        Args: { _user_id: string; _visitor_key: string }
+        Returns: boolean
+      }
       claim_pending_tasks: {
         Args: { max_tasks?: number }
         Returns: {
