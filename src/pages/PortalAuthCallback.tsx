@@ -15,6 +15,7 @@ export default function PortalAuthCallback() {
   const [timedOut, setTimedOut] = useState(false);
   const requestedDestination = searchParams.get("destino") || sessionStorage.getItem("aura-portal-destination");
   const destination = requestedDestination?.startsWith("/movimento/area") ? requestedDestination : "/meu-espaco";
+  const isMovementEntry = destination.startsWith("/movimento/area");
 
   useEffect(() => {
     if (loading || session) return;
@@ -67,8 +68,12 @@ export default function PortalAuthCallback() {
         ) : (
           <>
             <Loader2 className="h-7 w-7 animate-spin text-primary mx-auto mb-4" />
-            <h1 className="font-display text-2xl font-semibold text-foreground mb-2">Abrindo o Olá Aura</h1>
-            <p className="text-sm text-muted-foreground font-body">Confirmando sua entrada com segurança…</p>
+            <h1 className="font-display text-2xl font-semibold text-foreground mb-2">
+              {isMovementEntry ? "Abrindo o Movimento" : "Abrindo o Olá Aura"}
+            </h1>
+            <p className="text-sm text-muted-foreground font-body">
+              {isMovementEntry ? "Preparando sua participação gratuita…" : "Confirmando sua entrada com segurança…"}
+            </p>
           </>
         )}
       </div>
