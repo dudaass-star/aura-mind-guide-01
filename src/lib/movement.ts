@@ -46,11 +46,16 @@ export async function decideMovementRecognition(recognitionId: string, decision:
 }
 
 export const MOVEMENT_ACHIEVEMENTS = [
-  { id: "member", name: "Eu Faço Parte", description: "Aderiu ao Movimento.", threshold: 0, metric: "member" },
   { id: "first", name: "Primeiro Encontro", description: "Ajudou alguém a iniciar uma conversa.", threshold: 1, metric: "started" },
   { id: "circle", name: "Círculo de Cuidado", description: "Cinco pessoas iniciaram uma conversa.", threshold: 5, metric: "started" },
   { id: "growing", name: "Impacto que Cresce", description: "Dez pessoas iniciaram uma conversa.", threshold: 10, metric: "started" },
   { id: "continues", name: "Caminho que Continua", description: "Alguém decidiu continuar o acompanhamento.", threshold: 1, metric: "continued" },
   { id: "multiplies", name: "Presença que Multiplica", description: "Cinco pessoas decidiram continuar.", threshold: 5, metric: "continued" },
   { id: "voice", name: "Voz do Movimento", description: "Reconhecimento por compartilhar com verdade e constância.", threshold: 1, metric: "voice" },
+] as const;
+
+export const PARTICIPANT_ACHIEVEMENTS = [
+  { id: "member", name: "Eu Faço Parte", description: "Escolheu fazer parte do Movimento." },
+  { id: "cause", name: "Uma Causa em Comum", description: "Escolheu uma mensagem que representa seu apoio." },
+  { id: "connected", name: "Presença que Acompanha", description: "Escolheu acompanhar as novidades do Movimento." },
 ] as const;
