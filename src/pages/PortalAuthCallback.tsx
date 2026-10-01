@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { migrateDefaultSessionToPortal } from "@/contexts/portalSessionBridge";
@@ -16,6 +16,16 @@ export default function PortalAuthCallback() {
   const requestedDestination = searchParams.get("destino") || sessionStorage.getItem("aura-portal-destination");
   const destination = requestedDestination?.startsWith("/movimento/area") ? requestedDestination : "/meu-espaco";
   const isMovementEntry = destination.startsWith("/movimento/area");
+  const movementReferral = destination.includes("?por=") ? destination.split("?por=")[1] || "" : "";
+  const loginDestination = isMovementEntry
+    ? `/meu-espaco/entrar?destino=movimento${movementReferral ? `&por=${encodeURIComponent(movementReferral)}` : ""}`
+    : "/meu-espaco/entrar";
+
+  const handleBack = () => {
+    sessionStorage.removeItem("aura-oauth-target");
+    sessionStorage.setItem("aura-portal-destination", destination);
+    navigate(loginDestination, { replace: true });
+  };
 
   useEffect(() => {
     if (loading || session) return;
@@ -46,11 +56,21 @@ export default function PortalAuthCallback() {
   }
 
   return (
-    <div className="portal-chat-theme min-h-dvh bg-background flex items-center justify-center px-5">
+    <div className="portal-chat-theme relative min-h-dvh bg-background flex items-center justify-center px-5">
       <Helmet>
         <title>Confirmando acesso | Olá Aura</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={handleBack}
+        aria-label="Voltar para a entrada"
+        className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] h-10 w-10 text-muted-foreground"
+      >
+        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+      </Button>
       <div className="w-full max-w-sm text-center">
         <img src={logoOlaAura} alt="Olá AURA" className="h-9 w-auto mx-auto mb-8" />
         <img src={avatarAura} alt="AURA" className="h-16 w-16 rounded-full object-cover ring-4 ring-secondary mx-auto mb-4" />
@@ -61,7 +81,7 @@ export default function PortalAuthCallback() {
             <p className="text-sm text-muted-foreground font-body mb-5">
               A confirmação do Google não terminou neste navegador.
             </p>
-            <Button onClick={() => navigate(`/meu-espaco/entrar${destination.startsWith("/movimento/area") ? `?destino=movimento${destination.includes("?por=") ? `&por=${encodeURIComponent(destination.split("?por=")[1] || "")}` : ""}` : ""}`, { replace: true })} className="w-full h-11 font-body">
+            <Button onClick={handleBack} className="w-full h-11 font-body">
               Voltar para entrar
             </Button>
           </>
