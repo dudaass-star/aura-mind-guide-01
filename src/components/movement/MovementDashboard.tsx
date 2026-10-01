@@ -16,11 +16,11 @@ const messages = {
   short: "Acho que você pode gostar de conhecer a Olá Aura. Estou te enviando sem compromisso:",
 };
 
-type Member = { id: string; public_name: string; display_mode: string; referral_code: string; show_achievements: boolean; receive_updates: boolean; created_at: string };
+type Member = { id: string; public_name: string; display_mode: string; referral_code: string; show_achievements: boolean; receive_updates: boolean; created_at: string; ambassador_since: string | null };
 type Recognition = { id: string; kind: string; title: string; body: string; status: string; consent_decision: string; created_at: string };
-type Props = { userId: string; suggestedName?: string; embedded?: boolean };
+type Props = { userId: string; suggestedName?: string; embedded?: boolean; initialAmbassadorIntent?: boolean };
 
-export function MovementDashboard({ userId, suggestedName = "", embedded = false }: Props) {
+export function MovementDashboard({ userId, suggestedName = "", embedded = false, initialAmbassadorIntent = false }: Props) {
   const [member, setMember] = useState<Member | null>(null);
   const [referrals, setReferrals] = useState<Array<{ reached_at: string; started_at: string | null; continued_at: string | null; is_valid: boolean }>>([]);
   const [recognitions, setRecognitions] = useState<Recognition[]>([]);
@@ -29,6 +29,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activatingAmbassador, setActivatingAmbassador] = useState(false);
   const [messageKind, setMessageKind] = useState<keyof typeof messages>("personal");
   const [shareMessage, setShareMessage] = useState(messages.personal);
 
@@ -101,7 +102,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
         <h2 className="mt-3 font-display text-3xl font-semibold sm:text-4xl">Faça parte de algo que pode chegar muito além de você.</h2>
         <p className="mt-4 leading-relaxed text-muted-foreground">Você não precisa ser cliente, ter seguidores ou vender nada. Basta acreditar que mais pessoas merecem acesso a compreensão e direção.</p>
         <div className="mt-7 hidden space-y-5 border-t border-border pt-7 lg:block">
-          {["Receba seu link pessoal", "Compartilhe somente com quem fizer sentido", "Acompanhe o impacto sem expor ninguém"].map((item) => <div key={item} className="flex items-center gap-3 text-sm font-semibold"><CheckCircle2 className="h-5 w-5 shrink-0 text-primary" /><span>{item}</span></div>)}
+          {["Faça parte gratuitamente", "Escolha como seu nome aparece", "Decida depois se quer ser Embaixador"].map((item) => <div key={item} className="flex items-center gap-3 text-sm font-semibold"><CheckCircle2 className="h-5 w-5 shrink-0 text-primary" /><span>{item}</span></div>)}
         </div>
       </section>
       <section className="border-t border-border pt-7 lg:border-l lg:border-t-0 lg:pl-12 lg:pt-1">
@@ -110,10 +111,37 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
         <div className="mt-6 space-y-5">
           <label className="block"><span className="mb-2 block text-sm font-semibold">Como devemos chamar você?</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" /></label>
           <label className="block"><span className="mb-2 block text-sm font-semibold">Como aparecer no Mural?</span><select value={displayMode} onChange={(e) => setDisplayMode(e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="first_name">Primeiro nome</option><option value="full_name">Nome completo</option><option value="initials">Iniciais</option><option value="private">Participação privada</option></select></label>
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-4"><Checkbox checked={accepted} onCheckedChange={(value) => setAccepted(value === true)} className="mt-0.5" /><span className="text-sm leading-relaxed">Quero ajudar essa ideia a chegar a mais pessoas de forma respeitosa, verdadeira e sem pressão.</span></label>
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-4"><Checkbox checked={accepted} onCheckedChange={(value) => setAccepted(value === true)} className="mt-0.5" /><span className="text-sm leading-relaxed">Quero fazer parte do Movimento Olá Aura. Sei que participar não me obriga a divulgar.</span></label>
         </div>
         <Button className="mt-6 w-full sm:w-auto" size="lg" disabled={!accepted || !name.trim() || saving} onClick={createMember}><HeartHandshake /> {saving ? "Entrando…" : "Quero fazer parte"}</Button>
       </section>
+    </div>
+  );
+
+  const becomeAmbassador = async () => {
+    setActivatingAmbassador(true);
+    const ambassadorSince = new Date().toISOString();
+    const { error } = await supabasePortal.from("movement_members").update({ ambassador_since: ambassadorSince }).eq("id", member.id);
+    setActivatingAmbassador(false);
+    if (error) return toast({ title: "Não conseguimos concluir agora", description: "Tente novamente em instantes.", variant: "destructive" });
+    setMember({ ...member, ambassador_since: ambassadorSince });
+    recordEvent("ambassador_joined");
+    toast({ title: "Agora você é Embaixador", description: "Seu link pessoal e as ferramentas de impacto estão liberados." });
+  };
+
+  if (!member.ambassador_since) return (
+    <div className={embedded ? "space-y-8" : "mx-auto max-w-4xl space-y-10 px-5 py-10"}>
+      <section className="border-b border-border pb-7">
+        <p className="text-xs font-bold uppercase text-primary">Você faz parte</p>
+        <h2 className="mt-2 font-display text-3xl font-semibold">Seu lugar no Movimento já está confirmado.</h2>
+        <p className="mt-3 max-w-2xl leading-relaxed text-muted-foreground">Você pode acompanhar as novidades e apoiar essa causa sem divulgar nada. Ser Embaixador é uma escolha separada.</p>
+      </section>
+      <section className="grid gap-6 border-y border-border py-7 md:grid-cols-[1fr_auto] md:items-center">
+        <div><p className="text-xs font-bold uppercase text-primary">{initialAmbassadorIntent ? "Seu próximo passo" : "Uma escolha voluntária"}</p><h3 className="mt-2 font-display text-2xl font-semibold">Quer ser Embaixador?</h3><p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Embaixadores escolhem apresentar a Olá Aura a outras pessoas, recebem um link pessoal e acompanham o impacto sem ver a identidade de ninguém. Não há meta, comissão ou obrigação de compartilhar.</p></div>
+        <Button size="lg" onClick={becomeAmbassador} disabled={activatingAmbassador}><HeartHandshake /> {activatingAmbassador ? "Confirmando…" : "Quero ser Embaixador"}</Button>
+      </section>
+      <section><div className="flex items-center gap-3"><Award className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Sua conquista</h3></div><div className="mt-5 flex gap-3 rounded-lg border border-primary/35 bg-secondary/50 p-4"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background"><Award className="h-5 w-5 text-primary" /></span><div><p className="font-semibold">Eu Faço Parte</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Aderiu ao Movimento.</p></div></div></section>
+      <section className="border-t border-border pt-7"><h3 className="font-display text-xl font-semibold">Sua privacidade</h3><div className="mt-4 space-y-4"><label className="flex items-center justify-between gap-4"><span><b className="block text-sm">Mostrar sua participação no Mural</b><span className="text-xs text-muted-foreground">Seu modo de exibição continua sendo respeitado.</span></span><Switch checked={member.show_achievements} onCheckedChange={(v) => updatePreference("show_achievements", v)} /></label><label className="flex items-center justify-between gap-4"><span><b className="block text-sm">Receber novidades do Movimento</b><span className="text-xs text-muted-foreground">Somente atualizações relevantes.</span></span><Switch checked={member.receive_updates} onCheckedChange={(v) => updatePreference("receive_updates", v)} /></label></div></section>
     </div>
   );
 
