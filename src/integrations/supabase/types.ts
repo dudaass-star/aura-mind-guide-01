@@ -2150,6 +2150,139 @@ export type Database = {
         }
         Relationships: []
       }
+      movement_members: {
+        Row: {
+          commitment_accepted_at: string
+          created_at: string
+          display_mode: string
+          id: string
+          public_name: string
+          receive_updates: boolean
+          referral_code: string
+          show_achievements: boolean
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          commitment_accepted_at?: string
+          created_at?: string
+          display_mode?: string
+          id?: string
+          public_name: string
+          receive_updates?: boolean
+          referral_code?: string
+          show_achievements?: boolean
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          commitment_accepted_at?: string
+          created_at?: string
+          display_mode?: string
+          id?: string
+          public_name?: string
+          receive_updates?: boolean
+          referral_code?: string
+          show_achievements?: boolean
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      movement_recognitions: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          member_id: string
+          published_at: string | null
+          status: string
+          title: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          member_id: string
+          published_at?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          member_id?: string
+          published_at?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movement_recognitions_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "movement_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      movement_referrals: {
+        Row: {
+          continued_at: string | null
+          id: string
+          invalid_reason: string | null
+          is_valid: boolean
+          member_id: string
+          reached_at: string
+          referred_user_id: string | null
+          source: string
+          started_at: string | null
+          visitor_hash: string
+        }
+        Insert: {
+          continued_at?: string | null
+          id?: string
+          invalid_reason?: string | null
+          is_valid?: boolean
+          member_id: string
+          reached_at?: string
+          referred_user_id?: string | null
+          source?: string
+          started_at?: string | null
+          visitor_hash: string
+        }
+        Update: {
+          continued_at?: string | null
+          id?: string
+          invalid_reason?: string | null
+          is_valid?: boolean
+          member_id?: string
+          reached_at?: string
+          referred_user_id?: string | null
+          source?: string
+          started_at?: string | null
+          visitor_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movement_referrals_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "movement_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_deliveries: {
         Row: {
           category: string
@@ -5070,6 +5203,10 @@ export type Database = {
     }
     Functions: {
       allocate_whatsapp_instance: { Args: never; Returns: string }
+      claim_movement_referral: {
+        Args: { _visitor_key: string }
+        Returns: boolean
+      }
       claim_pending_tasks: {
         Args: { max_tasks?: number }
         Returns: {
@@ -5185,6 +5322,11 @@ export type Database = {
         }
         Returns: number
       }
+      movement_public_snapshot: { Args: never; Returns: Json }
+      movement_safe_name: {
+        Args: { _mode: string; _name: string }
+        Returns: string
+      }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
@@ -5205,6 +5347,10 @@ export type Database = {
           _ticket_id: string
         }
         Returns: string
+      }
+      record_movement_reach: {
+        Args: { _referral_code: string; _visitor_key: string }
+        Returns: Json
       }
       record_portal_session_experience: {
         Args: {
