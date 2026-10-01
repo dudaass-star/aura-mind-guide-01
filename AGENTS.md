@@ -12,3 +12,4 @@
 - AURA evita confirmação ritual e perguntas seguidas; revelação nova mantém Presença e impede fechamento por tempo.
 - O fio entre encontros fica separado de compromissos e é retomado sem tarefa artificial.
 - PIX: sonda só diagnostica; o checkout bloqueia apenas com `pix_gateway=off` e reconcilia pela mesma identidade.- O Movimento Olá Aura separa alcance, primeira conversa e continuidade; participação pública é opcional e reconhecimento não usa ranking comercial.
+- A atribuição do Movimento é reivindicada na autenticação global do App e o Mural exige consentimento individual; isso preserva impacto e privacidade sem depender de visitar a área do Movimento.

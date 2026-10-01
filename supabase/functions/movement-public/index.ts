@@ -6,6 +6,7 @@ const BodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("snapshot") }),
   z.object({ action: z.literal("reach"), referralCode: z.string().trim().min(4).max(40), visitorKey: z.string().min(12).max(100) }),
   z.object({ action: z.literal("claim"), visitorKey: z.string().min(12).max(100) }),
+  z.object({ action: z.literal("recognition-consent"), recognitionId: z.string().uuid(), decision: z.enum(["accepted", "declined"]) }),
 ]);
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -46,6 +47,16 @@ Deno.serve(async (req) => {
     const { data: claimsData, error: claimsError } = await auth.auth.getClaims(authorization.slice(7));
     const userId = typeof claimsData?.claims?.sub === "string" ? claimsData.claims.sub : null;
     if (claimsError || !userId) return json({ error: "invalid_session" }, 401);
+    if (parsed.data.action === "recognition-consent") {
+      const { data, error } = await admin.rpc("movement_recognition_consent_internal", {
+        _recognition_id: parsed.data.recognitionId,
+        _user_id: userId,
+        _decision: parsed.data.decision,
+      });
+      if (error) throw error;
+      return json({ result: data });
+    }
+
     const { data, error } = await admin.rpc("claim_movement_referral_internal", { _visitor_key: parsed.data.visitorKey, _user_id: userId });
     if (error) throw error;
     return json({ result: Boolean(data) });

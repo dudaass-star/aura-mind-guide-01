@@ -5,6 +5,8 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+- [x] Concluir a revisão final do Movimento: atribuição global, Voz do Movimento, mensagens editáveis, autorização individual do Mural, segurança, engajamento e validação administrativa.
+
 - [x] Corrigir a confirmação de WhatsApp no acesso ao App: enviar o telefone mesmo com verificação automática concorrente, aceitar corpo sem content-length e manter a tela estável para mostrar o resultado.
 - [x] Simular a confirmação no navegador com uma conta autorizada: mostrar a solicitação, enviar telefone à função real, abrir a conta e manter o acesso após recarregar; a busca inicial foi controlada apenas para reproduzir a tela sem alterar cadastros.
 - [x] Consolidar o histórico da Isabella no acesso atual e confirmar entrada, recarga e leitura completa.

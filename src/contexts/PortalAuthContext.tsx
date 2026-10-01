@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { migrateDefaultSessionToPortal } from "./portalSessionBridge";
 import type { Session, User } from "@supabase/supabase-js";
+import { claimMovementReferral } from "@/lib/movement";
 
 const LINK_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -70,6 +71,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
         const linkedUserId = expectedUserId || session?.user?.id;
         if (next === "linked" && linkedUserId) {
           localStorage.setItem(`aura-portal-linked:${linkedUserId}`, String(Date.now()));
+          void claimMovementReferral();
         }
         return next;
       } catch (e) {
@@ -89,7 +91,10 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabasePortal.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       if (s?.user) {
-        if (linkedRecently(s.user.id)) setLinkStatus("linked");
+        if (linkedRecently(s.user.id)) {
+          setLinkStatus("linked");
+          void claimMovementReferral();
+        }
         else void runLink(undefined, s.user.id);
       } else {
         setLinkStatus("idle");
@@ -107,7 +112,10 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
       setLoading(false);
       if (data.session?.user) {
-        if (linkedRecently(data.session.user.id)) setLinkStatus("linked");
+        if (linkedRecently(data.session.user.id)) {
+          setLinkStatus("linked");
+          void claimMovementReferral();
+        }
         else void runLink(undefined, data.session.user.id);
       }
     })();
@@ -124,7 +132,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.warn("portal signOut failed", e);
     }
-    try { sessionStorage.removeItem("aura-oauth-target"); } catch {}
+    try { sessionStorage.removeItem("aura-oauth-target"); } catch (error) { console.warn("Falha ao limpar destino do acesso", error); }
     if (session?.user?.id) localStorage.removeItem(`aura-portal-linked:${session.user.id}`);
     setSession(null);
     setLinkStatus("idle");
