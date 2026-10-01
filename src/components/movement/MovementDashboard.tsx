@@ -72,7 +72,6 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   }), [referrals]);
 
   const unlocked = (achievement: typeof MOVEMENT_ACHIEVEMENTS[number]) => {
-    if (achievement.metric === "member") return Boolean(member);
     if (achievement.metric === "started") return counts.started >= achievement.threshold;
     if (achievement.metric === "continued") return counts.continued >= achievement.threshold;
     if (achievement.metric === "voice") return recognitions.some((recognition) => recognition.kind === "voice" && recognition.consent_decision === "accepted");
