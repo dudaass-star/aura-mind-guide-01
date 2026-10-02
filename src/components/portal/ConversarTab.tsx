@@ -390,10 +390,20 @@ export function ConversarTab({
   const recordingTimerRef = useRef<number | null>(null);
   const discardRecordingRef = useRef(false);
   const awaitingResponseRef = useRef<{ clientId: string; messageId: string; createdAt: number } | null>(null);
+  const responseTraceRef = useRef<{ clientId: string; messageId: string | null; sentAt: string; receivedAt: string | null; transport: string | null; recorded: boolean } | null>(null);
   const responseTimerRef = useRef<number | null>(null);
   const answeredMessageIdsRef = useRef(new Set<string>(cachedMessages.filter((message) => message.role === "assistant" && !isResponseFailure(message)).map(replyTargetId).filter((id): id is string => Boolean(id))));
   const appliedInitialDraftRef = useRef<string | null>(null);
   const outboxKey = `aura-chat-outbox:${userId}`;
+  const noteResponseArrival = (message: ChatMessage, transport: string) => {
+    const trace = responseTraceRef.current;
+    if (!trace || trace.recorded || trace.receivedAt || message.role !== "assistant" || isResponseFailure(message)) return;
+    const target = replyTargetId(message);
+    if (target && trace.messageId === target) {
+      trace.receivedAt = new Date().toISOString();
+      trace.transport = transport;
+    }
+  };
   const openReport = (report: ReportCardMetadata) => {
     const url = new URL(report.path || "/meu-espaco?tab=percurso", window.location.origin);
     if (report.report_id) url.searchParams.set("id", report.report_id);
@@ -795,6 +805,38 @@ export function ConversarTab({
       void supabasePortal.removeChannel(channel);
     };
   }, [entryContext, messageCacheKey, userId]);
+
+  useEffect(() => {
+    const trace = responseTraceRef.current;
+    if (!trace || trace.recorded || !trace.messageId) return;
+    const response = messages.find((message) => message.role === "assistant" && !isResponseFailure(message) && replyTargetId(message) === trace.messageId);
+    if (!response) return;
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const current = responseTraceRef.current;
+        if (!current || current !== trace || current.recorded) return;
+        const rendered = [...document.querySelectorAll("[data-chat-message]")].some((element) => element.getAttribute("data-message-id") === response.id);
+        if (!rendered) return;
+        current.recorded = true;
+        const visibleAt = new Date().toISOString();
+        const receivedAt = current.receivedAt || visibleAt;
+        recordConversationEvent(userId, "response_visible", {
+          client_message_id: current.clientId,
+          response_message_id: response.id,
+          sent_at: current.sentAt,
+          persisted_at: response.created_at,
+          received_at: receivedAt,
+          visible_at: visibleAt,
+          transport: current.transport || "rendered_after_reconcile",
+          tab_visible: document.visibilityState === "visible",
+          total_ms: Date.parse(visibleAt) - Date.parse(current.sentAt),
+          after_persist_ms: response.created_at ? Date.parse(visibleAt) - Date.parse(response.created_at) : null,
+        });
+      });
+    });
+    return () => { window.cancelAnimationFrame(firstFrame); window.cancelAnimationFrame(secondFrame); };
+  }, [messages, userId]);
 
   useEffect(() => {
     if (loading || messages.length === 0) return;
