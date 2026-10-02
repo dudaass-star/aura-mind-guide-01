@@ -157,8 +157,8 @@ async function transcribeAudio(audioUrl: string, onTiming?: (timing: { audio_tot
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 25_000);
   const audioStartedMs = performance.now();
-  let downloadStartedMs = audioStartedMs;
-  let downloadFinishedMs = audioStartedMs;
+  let downloadStartedMs = 0;
+  let downloadFinishedMs = 0;
   let transcriptionStartedMs = 0;
   let transcriptionFinishedMs = 0;
   let audioSuccess = false;
@@ -251,7 +251,7 @@ async function transcribeAudio(audioUrl: string, onTiming?: (timing: { audio_tot
     clearTimeout(timeoutId);
     if (onTiming) {
       const finishedMs = performance.now();
-      const downloadMs = Math.max(0, (downloadFinishedMs === audioStartedMs ? finishedMs : downloadFinishedMs) - downloadStartedMs);
+      const downloadMs = downloadStartedMs ? Math.max(0, (downloadFinishedMs || finishedMs) - downloadStartedMs) : 0;
       const transcriptionMs = transcriptionStartedMs ? Math.max(0, (transcriptionFinishedMs || finishedMs) - transcriptionStartedMs) : 0;
       onTiming({
         audio_total_ms: Math.round(finishedMs - audioStartedMs),
