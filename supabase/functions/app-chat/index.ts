@@ -373,6 +373,10 @@ Deno.serve(async (req) => {
       }, { onConflict: "user_id,client_message_id", ignoreDuplicates: true }),
     ]);
 
+    console.log("⏱️ [CHAT-DISPATCH]", JSON.stringify({
+      client_message_id: clientMessageId,
+      accepted_before_dispatch_ms: Date.now() - new Date(receivedAt).getTime(),
+    }));
     const workerPromise = fetch(`${supabaseUrl}/functions/v1/process-webhook-message`, {
       method: "POST",
       headers: {

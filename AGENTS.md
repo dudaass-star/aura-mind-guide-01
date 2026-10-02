@@ -18,3 +18,4 @@
 - A latência da conversa é medida por etapa em `chat_turn_metrics.performance_breakdown`, separando preparação, provedor de IA, tratamento e gravação; isso evita atribuir ao modelo atrasos do fluxo ao redor dele.
 - A conversa consulta respostas pendentes periodicamente enquanto a aba está visível e registra envio, recebimento e exibição correlacionados; isso recupera eventos ao vivo perdidos sem confundir gravação com entrega.
 - O tempo completo da conversa termina quando o último balão do turno foi renderizado após o processamento encerrar, separado do primeiro balão; isso distingue latência técnica do ritmo de entrega.
+- O processamento no App não consulta a instância legada de WhatsApp; ela só é usada no canal WhatsApp para evitar espera de rede desnecessária antes da resposta.
