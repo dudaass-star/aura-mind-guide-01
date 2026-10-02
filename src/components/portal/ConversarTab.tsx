@@ -241,7 +241,7 @@ const MessageTimeline = memo(function MessageTimeline({
         const reportCard = getReportCard(message.metadata);
         const episodeCard = getJourneyEpisodeCard(message.metadata);
         return (
-          <div key={message.id} data-chat-message className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
+          <div key={message.id} data-chat-message data-message-id={message.id} className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
               "min-w-0 max-w-[86%] text-[15px] leading-relaxed md:max-w-[76%]",
               message.is_audio && message.audio_url ? "px-2.5 py-2" : mine ? "px-3 py-1.5" : "px-2 py-1.5",
@@ -707,6 +707,7 @@ export function ConversarTab({
           const incoming = payload.new as ChatMessage;
           const [hydratedIncoming] = await hydrateAudioUrls([incoming]);
           if (hydratedIncoming) {
+            noteResponseArrival(hydratedIncoming, "realtime");
             if (hydratedIncoming.role === "assistant" && !isResponseFailure(hydratedIncoming)) {
               const target = replyTargetId(hydratedIncoming);
               if (target) answeredMessageIdsRef.current.add(target);
@@ -775,6 +776,7 @@ export function ConversarTab({
         .limit(PAGE_SIZE);
       if (data?.length) {
         const hydrated = await hydrateAudioUrls(data as ChatMessage[]);
+        hydrated.forEach((message) => noteResponseArrival(message, "reconcile"));
         hydrated.forEach((message) => {
           if (message.role === "assistant" && !isResponseFailure(message)) {
             const target = replyTargetId(message);
@@ -912,6 +914,7 @@ export function ConversarTab({
       },
     });
     if (error || !data?.accepted || !data?.message?.id) throw error || new Error(data?.error || "Falha no envio");
+    if (responseTraceRef.current?.clientId === pending.clientId) responseTraceRef.current.messageId = data.message.id;
     void reportPushConversion("/meu-espaco?tab=conversar", "first14_conversation");
     reportTodayDirectionProgress(userId, "completed", "conversation");
     if (pending.journeyEpisodeId) setActiveDiscussionEpisodeId(undefined);
@@ -986,6 +989,7 @@ export function ConversarTab({
     const clientId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const pending: PendingMessage = { clientId, text, journeyEpisodeId: activeDiscussionEpisodeId, createdAt };
+    responseTraceRef.current = { clientId, messageId: null, sentAt: createdAt, receivedAt: null, transport: null, recorded: false };
     const optimistic: ChatMessage = {
       id: `local:${clientId}`,
       user_id: userId,
@@ -1087,6 +1091,7 @@ export function ConversarTab({
           audioDurationMs: duration,
           createdAt,
         };
+        responseTraceRef.current = { clientId, messageId: null, sentAt: createdAt, receivedAt: null, transport: null, recorded: false };
         const localUrl = URL.createObjectURL(blob);
         setMessages((current) => [...current, {
           id: `local:${clientId}`, user_id: userId, role: "user", content: "Áudio enviado",
