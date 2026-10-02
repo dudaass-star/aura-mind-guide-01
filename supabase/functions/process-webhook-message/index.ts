@@ -418,6 +418,7 @@ async function handleSessionRating(
 // ============================================================================
 
 Deno.serve(async (req) => {
+  const workerEnteredAt = performance.now();
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -548,10 +549,13 @@ Deno.serve(async (req) => {
     }
     simulateTransientFailure = simulateTransientFailure && profile.status === 'demo';
 
-    // Get instance config for legacy reference
-    try {
-      await getInstanceConfigForUser(supabase, profile.user_id);
-    } catch {}
+    // A configuração legada da instância só é necessária no canal WhatsApp.
+    // Evita consultas remotas inúteis antes de iniciar a conversa no App.
+    if (!isInApp) {
+      try {
+        await getInstanceConfigForUser(supabase, profile.user_id);
+      } catch {}
+    }
 
     // Auto-correção de telefone
     if (!isInApp && profile.phone !== cleanPhone) {
@@ -1130,6 +1134,10 @@ Deno.serve(async (req) => {
     }
     if (isInApp && currentMessageId) {
       processingStartedMs = performance.now();
+      console.log('⏱️ [CHAT-START]', JSON.stringify({
+        client_message_id: currentMessageId,
+        worker_before_processing_ms: Math.round(processingStartedMs - workerEnteredAt),
+      }));
       await supabase.from('chat_turn_metrics').update({
         processing_started_at: new Date().toISOString(),
         status: 'processing',
