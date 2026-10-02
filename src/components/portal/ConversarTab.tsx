@@ -241,7 +241,7 @@ const MessageTimeline = memo(function MessageTimeline({
         const reportCard = getReportCard(message.metadata);
         const episodeCard = getJourneyEpisodeCard(message.metadata);
         return (
-          <div key={message.id} data-chat-message className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
+          <div key={message.id} data-chat-message data-message-id={message.id} className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
               "min-w-0 max-w-[86%] text-[15px] leading-relaxed md:max-w-[76%]",
               message.is_audio && message.audio_url ? "px-2.5 py-2" : mine ? "px-3 py-1.5" : "px-2 py-1.5",
@@ -390,10 +390,20 @@ export function ConversarTab({
   const recordingTimerRef = useRef<number | null>(null);
   const discardRecordingRef = useRef(false);
   const awaitingResponseRef = useRef<{ clientId: string; messageId: string; createdAt: number } | null>(null);
+  const responseTraceRef = useRef<{ clientId: string; messageId: string | null; sentAt: string; receivedAt: string | null; transport: string | null; recorded: boolean } | null>(null);
   const responseTimerRef = useRef<number | null>(null);
   const answeredMessageIdsRef = useRef(new Set<string>(cachedMessages.filter((message) => message.role === "assistant" && !isResponseFailure(message)).map(replyTargetId).filter((id): id is string => Boolean(id))));
   const appliedInitialDraftRef = useRef<string | null>(null);
   const outboxKey = `aura-chat-outbox:${userId}`;
+  const noteResponseArrival = (message: ChatMessage, transport: string) => {
+    const trace = responseTraceRef.current;
+    if (!trace || trace.recorded || trace.receivedAt || message.role !== "assistant" || isResponseFailure(message)) return;
+    const target = replyTargetId(message);
+    if (target && trace.messageId === target) {
+      trace.receivedAt = new Date().toISOString();
+      trace.transport = transport;
+    }
+  };
   const openReport = (report: ReportCardMetadata) => {
     const url = new URL(report.path || "/meu-espaco?tab=percurso", window.location.origin);
     if (report.report_id) url.searchParams.set("id", report.report_id);
@@ -697,6 +707,7 @@ export function ConversarTab({
           const incoming = payload.new as ChatMessage;
           const [hydratedIncoming] = await hydrateAudioUrls([incoming]);
           if (hydratedIncoming) {
+            noteResponseArrival(hydratedIncoming, "realtime");
             if (hydratedIncoming.role === "assistant" && !isResponseFailure(hydratedIncoming)) {
               const target = replyTargetId(hydratedIncoming);
               if (target) answeredMessageIdsRef.current.add(target);
@@ -765,6 +776,7 @@ export function ConversarTab({
         .limit(PAGE_SIZE);
       if (data?.length) {
         const hydrated = await hydrateAudioUrls(data as ChatMessage[]);
+        hydrated.forEach((message) => noteResponseArrival(message, "reconcile"));
         hydrated.forEach((message) => {
           if (message.role === "assistant" && !isResponseFailure(message)) {
             const target = replyTargetId(message);
@@ -780,6 +792,11 @@ export function ConversarTab({
         }
       }
     };
+    // Enquanto há resposta pendente, confirma também pelo histórico: o canal ao vivo pode perder um evento.
+    const pendingPoll = window.setInterval(() => {
+      const trace = responseTraceRef.current;
+      if (document.visibilityState === "visible" && trace && !trace.recorded && Date.now() - Date.parse(trace.sentAt) < 90_000) void reconcile();
+    }, 2000);
     const onFocus = () => void reconcile();
     const onVisibility = () => document.visibilityState === "visible" && void reconcile();
     const onOnline = () => void reconcile();
@@ -787,6 +804,7 @@ export function ConversarTab({
     window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      window.clearInterval(pendingPoll);
       if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       window.removeEventListener("focus", onFocus);
@@ -795,6 +813,38 @@ export function ConversarTab({
       void supabasePortal.removeChannel(channel);
     };
   }, [entryContext, messageCacheKey, userId]);
+
+  useEffect(() => {
+    const trace = responseTraceRef.current;
+    if (!trace || trace.recorded || !trace.messageId) return;
+    const response = messages.find((message) => message.role === "assistant" && !isResponseFailure(message) && replyTargetId(message) === trace.messageId);
+    if (!response) return;
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const current = responseTraceRef.current;
+        if (!current || current !== trace || current.recorded) return;
+        const rendered = [...document.querySelectorAll("[data-chat-message]")].some((element) => element.getAttribute("data-message-id") === response.id);
+        if (!rendered) return;
+        current.recorded = true;
+        const visibleAt = new Date().toISOString();
+        const receivedAt = current.receivedAt || visibleAt;
+        recordConversationEvent(userId, "response_visible", {
+          client_message_id: current.clientId,
+          response_message_id: response.id,
+          sent_at: current.sentAt,
+          persisted_at: response.created_at,
+          received_at: receivedAt,
+          visible_at: visibleAt,
+          transport: current.transport || "rendered_after_reconcile",
+          tab_visible: document.visibilityState === "visible",
+          total_ms: Date.parse(visibleAt) - Date.parse(current.sentAt),
+          after_persist_ms: response.created_at ? Date.parse(visibleAt) - Date.parse(response.created_at) : null,
+        });
+      });
+    });
+    return () => { window.cancelAnimationFrame(firstFrame); window.cancelAnimationFrame(secondFrame); };
+  }, [messages, userId]);
 
   useEffect(() => {
     if (loading || messages.length === 0) return;
@@ -870,6 +920,7 @@ export function ConversarTab({
       },
     });
     if (error || !data?.accepted || !data?.message?.id) throw error || new Error(data?.error || "Falha no envio");
+    if (responseTraceRef.current?.clientId === pending.clientId) responseTraceRef.current.messageId = data.message.id;
     void reportPushConversion("/meu-espaco?tab=conversar", "first14_conversation");
     reportTodayDirectionProgress(userId, "completed", "conversation");
     if (pending.journeyEpisodeId) setActiveDiscussionEpisodeId(undefined);
@@ -944,6 +995,7 @@ export function ConversarTab({
     const clientId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const pending: PendingMessage = { clientId, text, journeyEpisodeId: activeDiscussionEpisodeId, createdAt };
+    responseTraceRef.current = { clientId, messageId: null, sentAt: createdAt, receivedAt: null, transport: null, recorded: false };
     const optimistic: ChatMessage = {
       id: `local:${clientId}`,
       user_id: userId,
@@ -1045,6 +1097,7 @@ export function ConversarTab({
           audioDurationMs: duration,
           createdAt,
         };
+        responseTraceRef.current = { clientId, messageId: null, sentAt: createdAt, receivedAt: null, transport: null, recorded: false };
         const localUrl = URL.createObjectURL(blob);
         setMessages((current) => [...current, {
           id: `local:${clientId}`, user_id: userId, role: "user", content: "Áudio enviado",
