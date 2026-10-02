@@ -175,3 +175,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Direcionar os botões do topo para a escolha de participação e destacar Embaixador primeiro no celular, mantendo Participante como alternativa clara.
 - [x] Diferenciar a confirmação de entrada de Participante e Embaixador, concluindo a adesão como Embaixador em um único passo.
 - [x] Apresentar concretamente o aplicativo antes da escolha e personalizar a entrada de Participante e Embaixador com benefícios próprios.
+- [x] Instrumentar a latência da conversa por etapa, separando preparação, chamada ao modelo, tratamento e gravação da primeira resposta.

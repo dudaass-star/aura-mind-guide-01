@@ -314,6 +314,7 @@ async function callAI(
   cacheableSystemPrompt?: string
 ): Promise<{
   choices: Array<{ message: { role?: string; content: string }; finish_reason?: string }>;
+  performance?: { cache_ms: number; provider_ms: number; parse_ms: number };
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -340,6 +341,7 @@ async function callAI(
 
   // Google models → Gemini API nativa (generateContent + x-goog-api-key)
   if (actualModel.startsWith('google/')) {
+    const cacheStartedAt = performance.now();
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY not configured');
@@ -402,6 +404,7 @@ async function callAI(
         console.warn('⚠️ Cache creation failed, falling back to inline system_instruction:', cacheErr);
       }
     }
+    const cacheMs = performance.now() - cacheStartedAt;
 
     const geminiBody: any = {
       contents: geminiContents,
@@ -431,6 +434,7 @@ async function callAI(
 
     // 5. Chamar endpoint nativo
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`;
+    const providerStartedAt = performance.now();
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -439,6 +443,7 @@ async function callAI(
       },
       body: JSON.stringify(geminiBody),
     });
+    const providerMs = performance.now() - providerStartedAt;
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -466,11 +471,13 @@ async function callAI(
           }
         }
         
+        const retryProviderStartedAt = performance.now();
         const retryResponse = await fetch(url, {
           method: 'POST',
           headers: { 'x-goog-api-key': GEMINI_API_KEY, 'Content-Type': 'application/json' },
           body: JSON.stringify(geminiBody),
         });
+        const retryProviderMs = performance.now() - retryProviderStartedAt;
         
         if (!retryResponse.ok) {
           const retryErr = await retryResponse.text();
@@ -478,7 +485,9 @@ async function callAI(
         }
         
         // Use retry response going forward
+        const retryParseStartedAt = performance.now();
         const retryResult = await retryResponse.json();
+        const retryParseMs = performance.now() - retryParseStartedAt;
         const retryCandidate = retryResult.candidates?.[0];
         const retryText = retryCandidate?.content?.parts?.map((p: any) => p.text).join('') ?? '';
         const retryUsage = retryResult.usageMetadata || {};
@@ -486,6 +495,7 @@ async function callAI(
         
         return {
           choices: [{ message: { role: 'assistant', content: retryText }, finish_reason: retryCandidate?.finishReason === 'STOP' ? 'stop' : (retryCandidate?.finishReason || 'stop') }],
+          performance: { cache_ms: cacheMs, provider_ms: providerMs + retryProviderMs, parse_ms: retryParseMs },
           usage: {
             prompt_tokens: retryUsage.promptTokenCount || 0,
             completion_tokens: retryUsage.candidatesTokenCount || 0,
@@ -498,7 +508,9 @@ async function callAI(
       throw Object.assign(new Error(`Gemini API error: ${response.status}`), { status: response.status, body: errorText });
     }
 
+    const parseStartedAt = performance.now();
     const result = await response.json();
+    const parseMs = performance.now() - parseStartedAt;
 
     // 5. Converter resposta para formato interno (OpenAI-compatible)
     const candidate = result.candidates?.[0];
@@ -526,6 +538,7 @@ async function callAI(
 
     return {
       choices: [{ message: { role: 'assistant', content: text }, finish_reason: candidate?.finishReason === 'STOP' ? 'stop' : (candidate?.finishReason || 'stop') }],
+      performance: { cache_ms: cacheMs, provider_ms: providerMs, parse_ms: parseMs },
       usage: {
         prompt_tokens: usage.promptTokenCount || 0,
         completion_tokens: totalCompletionTokens,
@@ -4992,6 +5005,7 @@ function selectClosureRoute(params: {
 }
 
 serve(async (req) => {
+  const requestStartedAt = performance.now();
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -7139,6 +7153,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
     console.log("Calling AI (model: " + configuredModel + ") with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0).phase : 'none');
 
     let data: any;
+    const modelCallStartedAt = performance.now();
     try {
       // Dynamic temperature: higher for short messages to reduce echo tendency
       const temperature = userWordCount <= 5 ? 0.9 : 0.8;
@@ -7164,6 +7179,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       }
       throw e;
     }
+    const modelCallFinishedAt = performance.now();
 
     await logTokenUsage(supabase, user_id || null, 'main_chat', configuredModel, data.usage);
     const finishReason = data.choices?.[0]?.finish_reason;
@@ -8955,6 +8971,21 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
       }
     }
 
+    const responseReadyAt = performance.now();
+    const performanceBreakdown = {
+      context_prepare_ms: Math.round(modelCallStartedAt - requestStartedAt),
+      model_wrapper_ms: Math.round(modelCallFinishedAt - modelCallStartedAt),
+      cache_ms: Math.round(data?.performance?.cache_ms || 0),
+      provider_ms: Math.round(data?.performance?.provider_ms || 0),
+      provider_parse_ms: Math.round(data?.performance?.parse_ms || 0),
+      postprocess_ms: Math.round(responseReadyAt - modelCallFinishedAt),
+      agent_total_ms: Math.round(responseReadyAt - requestStartedAt),
+      prompt_tokens: data?.usage?.prompt_tokens || 0,
+      completion_tokens: data?.usage?.completion_tokens || 0,
+      cached_tokens: data?.usage?.prompt_tokens_details?.cached_tokens || 0,
+    };
+    console.log('⏱️ [AURA-PERFORMANCE]', JSON.stringify({ client_message_id, model: configuredModel, ...performanceBreakdown }));
+
     return new Response(JSON.stringify({ 
       messages: messageChunks,
       user_name: profile?.name,
@@ -8967,7 +8998,9 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
       conversation_status: isConversationComplete ? 'complete' : (isAwaitingResponse ? 'awaiting' : 'neutral'),
       session_active: sessionActive && !aiWantsToEndSession,
       session_started: shouldStartSession,
-      session_ended: shouldEndSession || aiWantsToEndSession
+      session_ended: shouldEndSession || aiWantsToEndSession,
+      performance: performanceBreakdown,
+      model: configuredModel,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
