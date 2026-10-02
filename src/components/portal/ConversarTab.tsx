@@ -390,14 +390,14 @@ export function ConversarTab({
   const recordingTimerRef = useRef<number | null>(null);
   const discardRecordingRef = useRef(false);
   const awaitingResponseRef = useRef<{ clientId: string; messageId: string; createdAt: number } | null>(null);
-  const responseTraceRef = useRef<{ clientId: string; messageId: string | null; sentAt: string; receivedAt: string | null; transport: string | null; recorded: boolean } | null>(null);
+  const responseTraceRef = useRef<{ clientId: string; messageId: string | null; sentAt: string; receivedAt: string | null; transport: string | null; recorded: boolean; firstVisibleAt?: string; firstResponseId?: string; completed?: boolean; completedAt?: string; interrupted?: boolean } | null>(null);
   const responseTimerRef = useRef<number | null>(null);
   const answeredMessageIdsRef = useRef(new Set<string>(cachedMessages.filter((message) => message.role === "assistant" && !isResponseFailure(message)).map(replyTargetId).filter((id): id is string => Boolean(id))));
   const appliedInitialDraftRef = useRef<string | null>(null);
   const outboxKey = `aura-chat-outbox:${userId}`;
   const noteResponseArrival = (message: ChatMessage, transport: string) => {
     const trace = responseTraceRef.current;
-    if (!trace || trace.recorded || trace.receivedAt || message.role !== "assistant" || isResponseFailure(message)) return;
+    if (!trace || trace.receivedAt || message.role !== "assistant" || isResponseFailure(message)) return;
     const target = replyTargetId(message);
     if (target && trace.messageId === target) {
       trace.receivedAt = new Date().toISOString();
@@ -793,9 +793,30 @@ export function ConversarTab({
       }
     };
     // Enquanto há resposta pendente, confirma também pelo histórico: o canal ao vivo pode perder um evento.
+    let checkingCompletion = false;
     const pendingPoll = window.setInterval(() => {
       const trace = responseTraceRef.current;
-      if (document.visibilityState === "visible" && trace && !trace.recorded && Date.now() - Date.parse(trace.sentAt) < 90_000) void reconcile();
+      if (document.visibilityState !== "visible" || !trace || trace.completed || Date.now() - Date.parse(trace.sentAt) >= 90_000 || checkingCompletion) return;
+      checkingCompletion = true;
+      void (async () => {
+        try {
+          // O primeiro balão não encerra o turno: aguarda o marcador de término do processamento.
+          if (!trace.messageId) return;
+          const { data: state } = await supabasePortal.from("aura_response_state")
+            .select("is_responding,processed_user_message_id,last_user_message_id")
+            .eq("user_id", userId).maybeSingle();
+          await reconcile();
+          if (responseTraceRef.current !== trace || !state || state.is_responding) return;
+          if (state.processed_user_message_id === trace.clientId || state.processed_user_message_id === trace.messageId) {
+            trace.completedAt = new Date().toISOString();
+            trace.interrupted = state.last_user_message_id !== trace.clientId && state.last_user_message_id !== trace.messageId;
+            // A reconciliação atualizou a lista; a medição ocorre após os balões renderizarem.
+            setMessages((current) => [...current]);
+          }
+        } finally {
+          checkingCompletion = false;
+        }
+      })();
     }, 2000);
     const onFocus = () => void reconcile();
     const onVisibility = () => document.visibilityState === "visible" && void reconcile();
@@ -816,30 +837,56 @@ export function ConversarTab({
 
   useEffect(() => {
     const trace = responseTraceRef.current;
-    if (!trace || trace.recorded || !trace.messageId) return;
-    const response = messages.find((message) => message.role === "assistant" && !isResponseFailure(message) && replyTargetId(message) === trace.messageId);
-    if (!response) return;
+    if (!trace || trace.completed || !trace.messageId) return;
+    const responses = messages.filter((message) => message.role === "assistant" && !isResponseFailure(message) && replyTargetId(message) === trace.messageId);
+    if (!responses.length) return;
+    const response = responses[0];
     let secondFrame = 0;
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         const current = responseTraceRef.current;
-        if (!current || current !== trace || current.recorded) return;
-        const rendered = [...document.querySelectorAll("[data-chat-message]")].some((element) => element.getAttribute("data-message-id") === response.id);
-        if (!rendered) return;
-        current.recorded = true;
+        if (!current || current !== trace || current.completed) return;
+        const renderedIds = new Set([...document.querySelectorAll("[data-chat-message]")].map((element) => element.getAttribute("data-message-id")));
+        if (!renderedIds.has(response.id)) return;
         const visibleAt = new Date().toISOString();
-        const receivedAt = current.receivedAt || visibleAt;
-        recordConversationEvent(userId, "response_visible", {
+        if (!current.recorded) {
+          current.recorded = true;
+          current.firstVisibleAt = visibleAt;
+          current.firstResponseId = response.id;
+          recordConversationEvent(userId, "response_visible", {
+            client_message_id: current.clientId,
+            response_message_id: response.id,
+            sent_at: current.sentAt,
+            persisted_at: response.created_at,
+            received_at: current.receivedAt || visibleAt,
+            visible_at: visibleAt,
+            transport: current.transport || "rendered_after_reconcile",
+            tab_visible: document.visibilityState === "visible",
+            total_ms: Date.parse(visibleAt) - Date.parse(current.sentAt),
+            after_persist_ms: response.created_at ? Date.parse(visibleAt) - Date.parse(response.created_at) : null,
+          });
+        }
+        if (!current.completedAt || document.visibilityState !== "visible") return;
+        const last = responses[responses.length - 1];
+        if (!renderedIds.has(last.id)) return;
+        current.completed = true;
+        const lastVisibleAt = new Date().toISOString();
+        recordConversationEvent(userId, "response_complete_visible", {
           client_message_id: current.clientId,
-          response_message_id: response.id,
+          first_response_message_id: current.firstResponseId,
+          last_response_message_id: last.id,
+          bubble_count: responses.length,
+          interrupted: Boolean(current.interrupted),
           sent_at: current.sentAt,
-          persisted_at: response.created_at,
-          received_at: receivedAt,
-          visible_at: visibleAt,
-          transport: current.transport || "rendered_after_reconcile",
-          tab_visible: document.visibilityState === "visible",
-          total_ms: Date.parse(visibleAt) - Date.parse(current.sentAt),
-          after_persist_ms: response.created_at ? Date.parse(visibleAt) - Date.parse(response.created_at) : null,
+          first_visible_at: current.firstVisibleAt,
+          last_persisted_at: last.created_at,
+          last_visible_at: lastVisibleAt,
+          processing_completed_at: current.completedAt,
+          tab_visible: true,
+          total_ms: Date.parse(lastVisibleAt) - Date.parse(current.sentAt),
+          first_bubble_ms: current.firstVisibleAt ? Date.parse(current.firstVisibleAt) - Date.parse(current.sentAt) : null,
+          delivery_cadence_ms: current.firstVisibleAt ? Date.parse(lastVisibleAt) - Date.parse(current.firstVisibleAt) : null,
+          after_last_persist_ms: last.created_at ? Date.parse(lastVisibleAt) - Date.parse(last.created_at) : null,
         });
       });
     });
