@@ -390,7 +390,7 @@ export function ConversarTab({
   const recordingTimerRef = useRef<number | null>(null);
   const discardRecordingRef = useRef(false);
   const awaitingResponseRef = useRef<{ clientId: string; messageId: string; createdAt: number } | null>(null);
-  const responseTraceRef = useRef<{ clientId: string; messageId: string | null; sentAt: string; receivedAt: string | null; transport: string | null; recorded: boolean; firstVisibleAt?: string; firstResponseId?: string; completed?: boolean; completedAt?: string; interrupted?: boolean } | null>(null);
+  const responseTraceRef = useRef<{ clientId: string; messageId: string | null; sentAt: string; receivedAt: string | null; transport: string | null; recorded: boolean; firstVisibleAt?: string; firstResponseId?: string; visibleBubbles?: Record<string, string>; completed?: boolean; completedAt?: string; interrupted?: boolean } | null>(null);
   const responseTimerRef = useRef<number | null>(null);
   const answeredMessageIdsRef = useRef(new Set<string>(cachedMessages.filter((message) => message.role === "assistant" && !isResponseFailure(message)).map(replyTargetId).filter((id): id is string => Boolean(id))));
   const appliedInitialDraftRef = useRef<string | null>(null);
@@ -845,10 +845,14 @@ export function ConversarTab({
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         const current = responseTraceRef.current;
-        if (!current || current !== trace || current.completed) return;
+        if (!current || current !== trace || current.completed || document.visibilityState !== "visible") return;
         const renderedIds = new Set([...document.querySelectorAll("[data-chat-message]")].map((element) => element.getAttribute("data-message-id")));
         if (!renderedIds.has(response.id)) return;
         const visibleAt = new Date().toISOString();
+        current.visibleBubbles ||= {};
+        for (const bubble of responses) {
+          if (renderedIds.has(bubble.id) && !current.visibleBubbles[bubble.id]) current.visibleBubbles[bubble.id] = visibleAt;
+        }
         if (!current.recorded) {
           current.recorded = true;
           current.firstVisibleAt = visibleAt;
@@ -866,11 +870,11 @@ export function ConversarTab({
             after_persist_ms: response.created_at ? Date.parse(visibleAt) - Date.parse(response.created_at) : null,
           });
         }
-        if (!current.completedAt || document.visibilityState !== "visible") return;
+        if (!current.completedAt) return;
         const last = responses[responses.length - 1];
         if (!renderedIds.has(last.id)) return;
         current.completed = true;
-        const lastVisibleAt = new Date().toISOString();
+        const lastVisibleAt = current.visibleBubbles[last.id] || visibleAt;
         recordConversationEvent(userId, "response_complete_visible", {
           client_message_id: current.clientId,
           first_response_message_id: current.firstResponseId,
