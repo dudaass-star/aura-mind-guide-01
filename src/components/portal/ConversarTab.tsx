@@ -792,6 +792,11 @@ export function ConversarTab({
         }
       }
     };
+    // Enquanto há resposta pendente, confirma também pelo histórico: o canal ao vivo pode perder um evento.
+    const pendingPoll = window.setInterval(() => {
+      const trace = responseTraceRef.current;
+      if (document.visibilityState === "visible" && trace && !trace.recorded && Date.now() - Date.parse(trace.sentAt) < 90_000) void reconcile();
+    }, 2000);
     const onFocus = () => void reconcile();
     const onVisibility = () => document.visibilityState === "visible" && void reconcile();
     const onOnline = () => void reconcile();
@@ -799,6 +804,7 @@ export function ConversarTab({
     window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      window.clearInterval(pendingPoll);
       if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       window.removeEventListener("focus", onFocus);
@@ -943,6 +949,18 @@ export function ConversarTab({
       }
       return;
     }
+    // A resposta pode ser salva antes de o envio retornar ao navegador.
+    void supabasePortal.from("messages")
+      .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url,metadata")
+      .eq("user_id", userId).eq("role", "assistant")
+      .gte("created_at", pending.createdAt).order("created_at", { ascending: false }).limit(10)
+      .then(async ({ data: recent }) => {
+        const replies = (recent || []).filter((message) => replyTargetId(message as ChatMessage) === data.message.id);
+        if (!replies.length) return;
+        const hydrated = await hydrateAudioUrls(replies as ChatMessage[]);
+        hydrated.forEach((message) => noteResponseArrival(message, "reconcile_after_send"));
+        setMessages((current) => hydrated.reduce<ChatMessage[]>((acc, message) => mergeMessage(acc, message), current));
+      });
     awaitingResponseRef.current = { clientId: pending.clientId, messageId: data.message.id, createdAt: Date.now() };
     setResponding(true);
     if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
