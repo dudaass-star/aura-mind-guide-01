@@ -488,6 +488,8 @@ export type Database = {
           error_code: string | null
           first_response_at: string | null
           id: string
+          model: string | null
+          performance_breakdown: Json
           processing_started_at: string | null
           server_received_at: string
           status: string
@@ -503,6 +505,8 @@ export type Database = {
           error_code?: string | null
           first_response_at?: string | null
           id?: string
+          model?: string | null
+          performance_breakdown?: Json
           processing_started_at?: string | null
           server_received_at?: string
           status?: string
@@ -518,6 +522,8 @@ export type Database = {
           error_code?: string | null
           first_response_at?: string | null
           id?: string
+          model?: string | null
+          performance_breakdown?: Json
           processing_started_at?: string | null
           server_received_at?: string
           status?: string
