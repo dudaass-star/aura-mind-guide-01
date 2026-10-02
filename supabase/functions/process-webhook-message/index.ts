@@ -153,9 +153,15 @@ async function createShortLink(url: string, phone: string): Promise<string | nul
   } catch { return null; }
 }
 
-async function transcribeAudio(audioUrl: string): Promise<string | null> {
+async function transcribeAudio(audioUrl: string, onTiming?: (timing: { audio_total_ms: number; audio_download_ms: number; audio_transcription_ms: number; audio_other_ms: number; audio_success: boolean }) => void): Promise<string | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 25_000);
+  const audioStartedMs = performance.now();
+  let downloadStartedMs = audioStartedMs;
+  let downloadFinishedMs = audioStartedMs;
+  let transcriptionStartedMs = 0;
+  let transcriptionFinishedMs = 0;
+  let audioSuccess = false;
   try {
     console.log('🎙️ Downloading audio from:', audioUrl);
     let audioBlob: Blob | null = null;
@@ -163,6 +169,7 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
     // Branch Meta Cloud API: prefixo "meta-media:<media_id>" enviado pelo webhook-meta
     const metaMatch = audioUrl.match(/^meta-media:(.+)$/);
     if (metaMatch) {
+      downloadStartedMs = performance.now();
       const mediaId = metaMatch[1];
       console.log(`🔐 Using Meta Graph API for media download (media_id=${mediaId})`);
       const { downloadMetaMedia } = await import("../_shared/meta-whatsapp-client.ts");
@@ -171,6 +178,7 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
         console.error('❌ Meta media download failed');
         return null;
       }
+      downloadFinishedMs = performance.now();
       console.log('📦 Audio downloaded via Meta, size:', audioBlob.size, 'bytes');
     } else {
       // Branch Twilio (legado): URLs api.twilio.com via gateway autenticado
@@ -194,12 +202,14 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
         console.warn('⚠️ Twilio media URL detected but credentials missing');
       }
     }
+    downloadStartedMs = performance.now();
     const audioResponse = await fetch(fetchUrl, { headers: fetchHeaders, redirect: 'follow', signal: controller.signal });
     if (!audioResponse.ok) {
       console.error('❌ Failed to download audio:', audioResponse.status);
       return null;
     }
       audioBlob = await audioResponse.blob();
+    downloadFinishedMs = performance.now();
     console.log('📦 Audio downloaded, size:', audioBlob.size, 'bytes');
     }
 
@@ -215,6 +225,7 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
     }
 
     console.log('🔄 Sending to Whisper API...');
+    transcriptionStartedMs = performance.now();
     const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` },
@@ -229,6 +240,8 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
     }
 
     const result = await whisperResponse.json();
+    transcriptionFinishedMs = performance.now();
+    audioSuccess = typeof result.text === 'string' && result.text.length > 0;
     console.log('✅ Transcription result:', result.text);
     return result.text;
   } catch (error) {
@@ -236,6 +249,18 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
     return null;
   } finally {
     clearTimeout(timeoutId);
+    if (onTiming) {
+      const finishedMs = performance.now();
+      const downloadMs = Math.max(0, (downloadFinishedMs === audioStartedMs ? finishedMs : downloadFinishedMs) - downloadStartedMs);
+      const transcriptionMs = transcriptionStartedMs ? Math.max(0, (transcriptionFinishedMs || finishedMs) - transcriptionStartedMs) : 0;
+      onTiming({
+        audio_total_ms: Math.round(finishedMs - audioStartedMs),
+        audio_download_ms: Math.round(downloadMs),
+        audio_transcription_ms: Math.round(transcriptionMs),
+        audio_other_ms: Math.round(Math.max(0, finishedMs - audioStartedMs - downloadMs - transcriptionMs)),
+        audio_success: audioSuccess,
+      });
+    }
   }
 }
 
@@ -458,6 +483,7 @@ Deno.serve(async (req) => {
   let processingStartedMs = 0;
   let agentInvokeStartedMs = 0;
   let agentReturnedMs = 0;
+  let audioTiming: { audio_total_ms: number; audio_download_ms: number; audio_transcription_ms: number; audio_other_ms: number; audio_success: boolean } | null = null;
 
   try {
     const workerPayload = await req.json();
@@ -493,7 +519,10 @@ Deno.serve(async (req) => {
 
     if (hasAudio && !messageText) {
       console.log('🎤 Audio message detected, transcribing...');
-      const transcription = await transcribeAudio(audioUrl);
+      const transcription = await transcribeAudio(audioUrl, (timing) => {
+        audioTiming = timing;
+        console.log('⏱️ [CHAT-AUDIO]', JSON.stringify({ client_message_id: messageId, channel, ...timing }));
+      });
       if (transcription) {
         messageText = transcription;
         isAudioMessage = true;
@@ -1938,6 +1967,8 @@ Deno.serve(async (req) => {
           firstResponseRecorded = true;
           const firstPersistedMs = performance.now();
           const performanceBreakdown = {
+            worker_before_processing_ms: Math.round(processingStartedMs - workerEnteredAt),
+            ...(audioTiming || {}),
             worker_before_agent_ms: Math.round(agentInvokeStartedMs - processingStartedMs),
             agent_http_ms: Math.round(agentReturnedMs - agentInvokeStartedMs),
             worker_after_agent_ms: Math.round(firstPersistedMs - agentReturnedMs),

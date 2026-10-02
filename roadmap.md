@@ -178,4 +178,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Instrumentar a latência da conversa por etapa, separando preparação, chamada ao modelo, tratamento e gravação da primeira resposta.
 - [x] Comparar tempos gravados no App e WhatsApp e medir a exibição real no App; reconciliar respostas pendentes quando eventos ao vivo não chegam.
 - [x] Medir primeiro e último balão visível no mesmo turno, separando geração da cadência de entrega, e validar com conversa real.
-- [ ] Confirmar após a publicação da função o ganho de retirar a consulta legada de WhatsApp no App; medição de referência: espera média 3,22 s (36 turnos), teste isolado 0,77 s de espera e 4,54 s até o primeiro balão salvo, sem atribuir causalidade antes da nova versão entrar em execução.
+- [ ] Comparar mais turnos de texto e áudio após retirar a consulta legada; a amostra inicial (texto: 34 antes, 4 depois; áudio: 4 antes, 1 depois) não permite atribuir a redução à mudança.
+- [ ] Medir download e transcrição separadamente no App e conferir a primeira resposta e o último balão visível após a publicação da instrumentação, sem mudar o fluxo da conversa.
