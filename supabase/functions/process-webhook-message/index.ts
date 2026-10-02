@@ -454,6 +454,9 @@ Deno.serve(async (req) => {
   let lockHeartbeatId: number | null = null;
   let automaticRecoveryAttempt = 0;
   let simulateTransientFailure = false;
+  let processingStartedMs = 0;
+  let agentInvokeStartedMs = 0;
+  let agentReturnedMs = 0;
 
   try {
     const workerPayload = await req.json();
@@ -1126,6 +1129,7 @@ Deno.serve(async (req) => {
       });
     }
     if (isInApp && currentMessageId) {
+      processingStartedMs = performance.now();
       await supabase.from('chat_turn_metrics').update({
         processing_started_at: new Date().toISOString(),
         status: 'processing',
@@ -1624,6 +1628,7 @@ Deno.serve(async (req) => {
       throw new Error('Teste interno: falha transitória 503 antes da chamada ao agente (Agent HTTP 503)');
     }
     let lastError: any = null;
+    agentInvokeStartedMs = performance.now();
     console.log(`🚀 [INVOKE] aura-agent for user=${profile.user_id} phone=${cleanPhone?.substring(0, 4) ?? 'in_app'}*** msgLen=${messageText.length} pending_insight=${profile.pending_insight ? 'YES' : 'no'}`);
     const maxAttempts = isInApp ? 2 : 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -1631,6 +1636,7 @@ Deno.serve(async (req) => {
         const useMinimal = attempt === maxAttempts;
         console.log(`🔄 aura-agent attempt ${attempt}/${maxAttempts}${useMinimal ? ' (minimal_context)' : ''}...`);
         agentData = await callAuraAgent(useMinimal);
+        agentReturnedMs = performance.now();
         lastError = null;
         break;
       } catch (err: any) {
@@ -1922,7 +1928,19 @@ Deno.serve(async (req) => {
         sentAnyResponse = true;
         if (!firstResponseRecorded && currentMessageId) {
           firstResponseRecorded = true;
-          await supabase.from('chat_turn_metrics').update({ first_response_at: new Date().toISOString() })
+          const firstPersistedMs = performance.now();
+          const performanceBreakdown = {
+            worker_before_agent_ms: Math.round(agentInvokeStartedMs - processingStartedMs),
+            agent_http_ms: Math.round(agentReturnedMs - agentInvokeStartedMs),
+            worker_after_agent_ms: Math.round(firstPersistedMs - agentReturnedMs),
+            ...(agentData?.performance || {}),
+          };
+          console.log('⏱️ [CHAT-PERFORMANCE]', JSON.stringify({ client_message_id: currentMessageId, model: agentData?.model || null, ...performanceBreakdown }));
+          await supabase.from('chat_turn_metrics').update({
+            first_response_at: new Date().toISOString(),
+            model: agentData?.model || null,
+            performance_breakdown: performanceBreakdown,
+          })
             .eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
         }
       }
