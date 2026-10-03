@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { encontrarCobrancaUnicaPorE2E, localizarEndToEndId } from "./matcher.ts";
+import { encontrarCobrancaUnicaPorE2E, localizarEndToEndId } from "../_shared/woovi-dispute-matcher.ts";
 
 Deno.test("localiza o End-to-End ID dentro do payload real de parcela", () => {
   const e2e = "E54811417202609271500ZdTdNS96kU6";

@@ -15,7 +15,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { WOOVI_API_BASE, wooviFetch } from "../_shared/woovi.ts";
 import { buildPdf, type PdfLine } from "./pdf.ts";
-import { encontrarCobrancaUnicaPorE2E } from "./matcher.ts";
+import { encontrarCobrancaUnicaPorE2E } from "../_shared/woovi-dispute-matcher.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

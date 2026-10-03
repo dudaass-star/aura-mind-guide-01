@@ -1151,7 +1151,13 @@ Deno.serve(async (req) => {
       const key = `dispute:${disputeId}:${disputeStatus || "new"}`;
       if (await claimEvent(supabase, key, "dispute", body)) {
         try {
-          const endToEndId = dispute.endToEndId || dispute.endToEndID || charge.endToEndId || null;
+          // A Woovi varia o envelope do identificador Bacen entre eventos. A
+          // defesa também faz a busca profunda na cobrança, mas persistir aqui
+          // permite disparo imediato no primeiro webhook.
+          const endToEndId = dispute.endToEndId || dispute.endToEndID
+            || charge.endToEndId || charge.endToEndID
+            || installment?.cobr?.endToEndId || installment?.endToEndId
+            || null;
           const valueCents = Number(dispute.value ?? dispute.amount ?? charge.value ?? 0) || null;
 
           const { data: existing } = await supabase.from("woovi_disputes")
