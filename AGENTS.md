@@ -15,7 +15,7 @@
 - O Movimento Olá Aura separa alcance, primeira conversa e continuidade; participação pública é opcional e reconhecimento não usa ranking comercial.
 - A atribuição do Movimento é reivindicada na autenticação global do App e o Mural exige consentimento individual; isso preserva impacto e privacidade sem depender de visitar a área do Movimento.
 - Participante e Embaixador são papéis distintos; link, divulgação, impacto e conquistas de indicação exigem adesão voluntária registrada em `movement_members.ambassador_since`.
-- A latência da conversa é medida por etapa em `chat_turn_metrics.performance_breakdown`, separando preparação, download/transcrição do áudio, provedor de IA, tratamento e gravação; isso evita atribuir ao modelo atrasos do fluxo ao redor dele.
+- A latência da conversa é medida em `chat_turn_metrics.performance_breakdown`, com `preparation_stages_ms` subdividindo a preparação em perfil, cota, agenda, sessão e contexto, além de download/transcrição do áudio, provedor, tratamento e gravação; isso permite localizar gargalos sem atribuir atrasos ao modelo.
 - A conversa consulta respostas pendentes periodicamente enquanto a aba está visível e registra envio, recebimento e exibição correlacionados; isso recupera eventos ao vivo perdidos sem confundir gravação com entrega.
 - O tempo completo da conversa termina quando o último balão do turno foi renderizado após o processamento encerrar, separado do primeiro balão; isso distingue latência técnica do ritmo de entrega.
 - O processamento no App não consulta a instância legada de WhatsApp; ela só é usada no canal WhatsApp para evitar espera de rede desnecessária antes da resposta.

@@ -5006,6 +5006,7 @@ function selectClosureRoute(params: {
 
 serve(async (req) => {
   const requestStartedAt = performance.now();
+  const preparationTimings: Record<string, number> = {};
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -5041,6 +5042,7 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
     // Read configured AI model from system_config
+    const configStartedAt = performance.now();
     let configuredModel = 'google/gemini-2.5-pro';
     try {
       const { data: configData } = await supabase
@@ -5056,6 +5058,7 @@ serve(async (req) => {
     } catch (e) {
       console.warn('Failed to read AI model config, using default:', e);
     }
+    preparationTimings.model_config_ms = Math.round(performance.now() - configStartedAt);
 
     const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message, proactive_context, inbound_message_created_at, is_audio_message, journey_episode_id, client_message_id } = await req.json();
     const inboundMessageDate = inbound_message_created_at ? new Date(inbound_message_created_at) : null;
@@ -5071,12 +5074,14 @@ serve(async (req) => {
     // ========================================================================
     let message = rawMessage;
     if (journey_episode_id && user_id) {
+      const episodeStartedAt = performance.now();
       const { data: episodeProgress } = await supabase
         .from('journey_episode_progress')
         .select('episode_number,reflection_text,journey_episodes(title,stage_title,essay_content,content_prompt)')
         .eq('user_id', user_id)
         .eq('episode_id', journey_episode_id)
         .maybeSingle();
+      preparationTimings.episode_lookup_ms = Math.round(performance.now() - episodeStartedAt);
       const episodeData = Array.isArray(episodeProgress?.journey_episodes)
         ? episodeProgress.journey_episodes[0]
         : episodeProgress?.journey_episodes;
@@ -5116,6 +5121,7 @@ serve(async (req) => {
     console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), hasPendingContent: !!pending_content, minimal_context: !!minimal_context });
 
     // Buscar perfil do usuário
+    const profileStartedAt = performance.now();
     let profile: any = null;
     if (user_id) {
       const { data } = await supabase
@@ -5132,6 +5138,7 @@ serve(async (req) => {
         .maybeSingle();
       profile = data;
     }
+    preparationTimings.profile_lookup_ms = Math.round(performance.now() - profileStartedAt);
 
     const rawPlan = profile?.plan || 'essencial';
     const userPlan = normalizePlan(rawPlan);
@@ -5241,10 +5248,12 @@ serve(async (req) => {
         console.log('🔔 Auto-clearing do_not_disturb - user sent a message');
       }
 
+      const profileUpdateStartedAt = performance.now();
       await supabase
         .from('profiles')
         .update(updateFields)
         .eq('id', profile.id);
+      preparationTimings.profile_update_ms = Math.round(performance.now() - profileUpdateStartedAt);
     }
 
     // ========================================================================
@@ -5424,6 +5433,7 @@ serve(async (req) => {
     nextMonthStart.setUTCMonth(nextMonthStart.getUTCMonth() + 1);
     let monthlySessionsUsed = 0;
     if (profile?.user_id) {
+      const monthlyQuotaStartedAt = performance.now();
       const { count, error: monthlyUsageError } = await supabase
         .from('sessions')
         .select('id', { count: 'exact', head: true })
@@ -5433,6 +5443,7 @@ serve(async (req) => {
         .lt('scheduled_at', nextMonthStart.toISOString());
       if (monthlyUsageError) throw monthlyUsageError;
       monthlySessionsUsed = count || 0;
+      preparationTimings.monthly_quota_ms = Math.round(performance.now() - monthlyQuotaStartedAt);
     }
 
     // Calcular sessões disponíveis
@@ -5509,6 +5520,7 @@ serve(async (req) => {
     let pendingScheduledSession = null;
     let recentMissedSession: any = null;
     if (profile?.user_id) {
+      const scheduledLookupStartedAt = performance.now();
       const now = new Date();
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
       const oneHourAhead = new Date(now.getTime() + 60 * 60 * 1000);
@@ -5530,6 +5542,7 @@ serve(async (req) => {
 
       // Se não encontrou sessão scheduled, buscar sessão perdida (cancelled/no_show)
       if (!pendingScheduledSession) {
+        const missedLookupStartedAt = performance.now();
         // Piso temporal: só considera "sessão perdida" recente (últimos 7 dias).
         // Evita reativar fantasmas de meses atrás quando o usuário volta após sumir.
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -5549,7 +5562,9 @@ serve(async (req) => {
           recentMissedSession = missedSessions[0];
           console.log('🔍 Found recent missed session:', recentMissedSession.id, 'status:', recentMissedSession.status, 'scheduled_at:', recentMissedSession.scheduled_at);
         }
+        preparationTimings.missed_session_lookup_ms = Math.round(performance.now() - missedLookupStartedAt);
       }
+      preparationTimings.scheduled_session_lookup_ms = Math.round(performance.now() - scheduledLookupStartedAt);
     }
 
     // ========================================================================
@@ -5557,6 +5572,7 @@ serve(async (req) => {
     // ========================================================================
     let upcomingSessions: any[] = [];
     if (profile?.user_id) {
+      const upcomingStartedAt = performance.now();
       const { data: upcoming } = await supabase
         .from('sessions')
         .select('id, scheduled_at, session_type, focus_topic')
@@ -5570,6 +5586,7 @@ serve(async (req) => {
         upcomingSessions = upcoming;
         console.log(`📅 Found ${upcoming.length} upcoming sessions for user`);
       }
+      preparationTimings.upcoming_sessions_ms = Math.round(performance.now() - upcomingStartedAt);
     }
 
     // Verificar se está em sessão ativa e buscar dados completos
@@ -5582,6 +5599,7 @@ serve(async (req) => {
     let lastMessageTimestamp: string | null = null;
 
     // LOG DETALHADO: Estado inicial de detecção de sessão
+    const sessionDetectionStartedAt = performance.now();
     console.log('🔍 Session detection start:', {
       profile_id: profile?.id,
       current_session_id: profile?.current_session_id,
@@ -5725,6 +5743,7 @@ serve(async (req) => {
       shouldEndSession,
       audio_sent_count: currentSession?.audio_sent_count
     });
+    preparationTimings.session_detection_ms = Math.round(performance.now() - sessionDetectionStartedAt);
 
     // Verificar se usuário quer iniciar sessão agendada
     // CORREÇÃO: Não auto-iniciar se usuário pediu "me chame na hora"
@@ -5829,6 +5848,7 @@ serve(async (req) => {
     }
 
     if (shouldStartSession && pendingScheduledSession && profile) {
+      const sessionStartStartedAt = performance.now();
       const now = new Date().toISOString();
       
       const { error: startSessionError } = await supabase.rpc('manage_portal_session_internal', {
@@ -5846,9 +5866,11 @@ serve(async (req) => {
         sessionTimeContext = calculateSessionTimeContext(currentSession, null, 0).timeContext;
         console.log('✅ Session started:', pendingScheduledSession.id);
       }
+      preparationTimings.session_start_ms = Math.round(performance.now() - sessionStartStartedAt);
     }
 
     // Reativar sessão perdida quando usuário confirma que quer fazer agora
+    const sessionTransitionsStartedAt = performance.now();
     if (!shouldStartSession && !sessionActive && recentMissedSession && !pendingScheduledSession && profile) {
       const userWantsToStartMissedSession = wantsToStartSession(message);
 
@@ -5872,10 +5894,12 @@ serve(async (req) => {
         }
       }
     }
+    preparationTimings.session_transitions_ms = Math.round(performance.now() - sessionTransitionsStartedAt);
 
     // ========================================================================
     // CARREGAR TODO O CONTEXTO EM PARALELO (Promise.allSettled)
     // ========================================================================
+    let contextAssemblyStartedAt: number | null = null;
     let messageHistory: { role: string; content: string }[] = [];
     let messageCount = 0;
     let temporalGapHours = 0;
@@ -5902,6 +5926,7 @@ serve(async (req) => {
     const meditationCatalog = new Map<string, { titles: string[], triggers: string[], best_for: string[] }>();
 
     if (profile?.user_id) {
+      const contextQueriesStartedAt = performance.now();
       const userId = profile.user_id;
 
       // Disparar TODAS as queries independentes em paralelo
@@ -6037,6 +6062,8 @@ serve(async (req) => {
       ]);
 
       console.log('⚡ All context queries completed in parallel');
+      preparationTimings.context_queries_ms = Math.round(performance.now() - contextQueriesStartedAt);
+      contextAssemblyStartedAt = performance.now();
 
       // ---- Extrair resultados com fallbacks seguros ----
 
@@ -6534,6 +6561,7 @@ REGRA: ${behaviorInstruction}`;
       // Verificar se já existe reminder pendente (anti-empilhamento)
       let pendingReminderExists = false;
       if (profile?.user_id) {
+        const reminderLookupStartedAt = performance.now();
         const { count } = await supabase
           .from('scheduled_tasks')
           .select('id', { count: 'exact', head: true })
@@ -6542,6 +6570,7 @@ REGRA: ${behaviorInstruction}`;
           .eq('status', 'pending')
           .gt('execute_at', new Date().toISOString());
         pendingReminderExists = (count || 0) > 0;
+        preparationTimings.reminder_lookup_ms = Math.round(performance.now() - reminderLookupStartedAt);
       }
 
       const closure = selectClosureRoute({
@@ -7154,6 +7183,9 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
 
     let data: any;
     const modelCallStartedAt = performance.now();
+    if (contextAssemblyStartedAt !== null) {
+      preparationTimings.context_assembly_ms = Math.round(modelCallStartedAt - contextAssemblyStartedAt);
+    }
     try {
       // Dynamic temperature: higher for short messages to reduce echo tendency
       const temperature = userWordCount <= 5 ? 0.9 : 0.8;
@@ -8974,6 +9006,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     const responseReadyAt = performance.now();
     const performanceBreakdown = {
       context_prepare_ms: Math.round(modelCallStartedAt - requestStartedAt),
+      preparation_stages_ms: preparationTimings,
       model_wrapper_ms: Math.round(modelCallFinishedAt - modelCallStartedAt),
       cache_ms: Math.round(data?.performance?.cache_ms || 0),
       provider_ms: Math.round(data?.performance?.provider_ms || 0),
