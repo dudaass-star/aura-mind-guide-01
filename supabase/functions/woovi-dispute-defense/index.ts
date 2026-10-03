@@ -15,6 +15,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { WOOVI_API_BASE, wooviFetch } from "../_shared/woovi.ts";
 import { buildPdf, type PdfLine } from "./pdf.ts";
+import { encontrarCobrancaUnicaPorE2E } from "../_shared/woovi-dispute-matcher.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,14 +65,38 @@ interface Dossier {
 
 async function buildDossier(supabase: any, dispute: any): Promise<Dossier> {
   const e2e = dispute.end_to_end_id as string | null;
+  let matchMethod = "none";
+  let matchCandidates = 0;
 
-  // 1) A cobrança contestada. O endToEndId do Bacen é o installment_id que já
-  //    gravamos quando o débito do ciclo liquidou.
+  // 1) A cobrança contestada. installment_id guarda a correlação da parcela em
+  // parte dos eventos; o End-to-End ID Bacen pode vir apenas no raw_payload.
   let charge: any = null;
   if (e2e) {
     const { data } = await supabase.from("woovi_charges").select("*")
       .eq("installment_id", e2e).maybeSingle();
     charge = data || null;
+    if (charge) matchMethod = "installment_id";
+  }
+  if (!charge && e2e) {
+    const openedAt = dispute.raw_payload?.createdAt || dispute.created_at || new Date().toISOString();
+    const center = new Date(openedAt).getTime();
+    const validCenter = Number.isFinite(center) ? center : Date.now();
+    let query = supabase.from("woovi_charges").select("*")
+      .gte("created_at", new Date(validCenter - 10 * 24 * 60 * 60 * 1000).toISOString())
+      .lte("created_at", new Date(validCenter + 2 * 24 * 60 * 60 * 1000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (dispute.value_cents) query = query.eq("value_cents", dispute.value_cents);
+    const { data, error } = await query;
+    if (error) throw new Error(`falha ao procurar cobrança pelo payload: ${error.message}`);
+    const matched = encontrarCobrancaUnicaPorE2E(data || [], e2e);
+    charge = matched.cobranca;
+    matchCandidates = matched.quantidade;
+    if (charge) matchMethod = "raw_payload_end_to_end_id";
+    if (matched.ambiguo) {
+      matchMethod = "ambiguous_raw_payload_end_to_end_id";
+      log("vínculo ambíguo", { dispute_id: dispute.dispute_id, e2e, candidates: matched.quantidade });
+    }
   }
   let taster: any = null;
   if (!charge && e2e) {
@@ -250,6 +275,9 @@ async function buildDossier(supabase: any, dispute: any): Promise<Dossier> {
       access_delivered: accessDelivered,
       paid_charges: paidCharges.length,
       customer_name: taster?.name || mandate?.customer_name || profile?.name || null,
+      charge_id: charge?.id || null,
+      charge_match_method: matchMethod,
+      charge_match_candidates: matchCandidates,
       decision,
       reason,
     },
@@ -434,7 +462,7 @@ async function syncDisputes(supabase: any): Promise<{ found: number; created: nu
 
 async function alertOpenWithoutEvidence(supabase: any): Promise<number> {
   const { data } = await supabase.from("woovi_disputes")
-    .select("dispute_id,status,value_cents,customer_name,evidence_error")
+    .select("dispute_id,status,value_cents,customer_name,evidence_error,evidence_attempts,created_at")
     .is("evidence_sent_at", null)
     .order("created_at", { ascending: true });
   const pending = (data || []).filter((row: any) => !CLOSED.has(String(row.status || "").toUpperCase()));
@@ -453,7 +481,7 @@ async function alertOpenWithoutEvidence(supabase: any): Promise<number> {
       templateData: {
         date,
         lines: pending.map((row: any) =>
-          `${row.customer_name || "Cliente não identificado"} · ${money(row.value_cents)} · ${row.status || "aberta"} · ${row.evidence_error || "sem evidência"}`
+          `URGENTE · disputa ${row.dispute_id} · aberta em ${brt(row.created_at)} · ${row.customer_name || "Cliente não identificado"} · ${money(row.value_cents)} · ${row.status || "aberta"} · ${row.evidence_attempts || 0} tentativa(s) · ${row.evidence_error || "sem evidência"}`
         ),
       },
     },
@@ -473,7 +501,13 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({} as Record<string, any>));
-    const only = body.disputeId ? String(body.disputeId) : null;
+    const only = body.disputeId ? String(body.disputeId).trim() : null;
+    if (only && (only.length > 200 || !/^[\w:=+-]+$/.test(only))) {
+      return new Response(JSON.stringify({ error: "disputeId inválido" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const force = body.force === true;
     const dryRun = body.dryRun === true;
 
@@ -494,8 +528,15 @@ Deno.serve(async (req) => {
     // Dossiê sob demanda (para conferência ou anexo manual enquanto a chave
     // Woovi não tem escopo): devolve o PDF em base64, sem enviar nada.
     if (body.endToEndId && body.previewOnly === true) {
+      const previewE2E = String(body.endToEndId).trim();
+      if (!/^E[A-Za-z0-9]{10,100}$/.test(previewE2E)) {
+        return new Response(JSON.stringify({ error: "endToEndId inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const dossier = await buildDossier(supabase, {
-        end_to_end_id: String(body.endToEndId),
+        end_to_end_id: previewE2E,
         value_cents: body.valueCents ?? null,
         dispute_id: "preview",
       });
