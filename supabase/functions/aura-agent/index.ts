@@ -5074,12 +5074,14 @@ serve(async (req) => {
     // ========================================================================
     let message = rawMessage;
     if (journey_episode_id && user_id) {
+      const episodeStartedAt = performance.now();
       const { data: episodeProgress } = await supabase
         .from('journey_episode_progress')
         .select('episode_number,reflection_text,journey_episodes(title,stage_title,essay_content,content_prompt)')
         .eq('user_id', user_id)
         .eq('episode_id', journey_episode_id)
         .maybeSingle();
+      preparationTimings.episode_lookup_ms = Math.round(performance.now() - episodeStartedAt);
       const episodeData = Array.isArray(episodeProgress?.journey_episodes)
         ? episodeProgress.journey_episodes[0]
         : episodeProgress?.journey_episodes;
@@ -5868,6 +5870,7 @@ serve(async (req) => {
     }
 
     // Reativar sessão perdida quando usuário confirma que quer fazer agora
+    const sessionTransitionsStartedAt = performance.now();
     if (!shouldStartSession && !sessionActive && recentMissedSession && !pendingScheduledSession && profile) {
       const userWantsToStartMissedSession = wantsToStartSession(message);
 
@@ -5891,10 +5894,12 @@ serve(async (req) => {
         }
       }
     }
+    preparationTimings.session_transitions_ms = Math.round(performance.now() - sessionTransitionsStartedAt);
 
     // ========================================================================
     // CARREGAR TODO O CONTEXTO EM PARALELO (Promise.allSettled)
     // ========================================================================
+    let contextAssemblyStartedAt: number | null = null;
     let messageHistory: { role: string; content: string }[] = [];
     let messageCount = 0;
     let temporalGapHours = 0;
@@ -6058,7 +6063,7 @@ serve(async (req) => {
 
       console.log('⚡ All context queries completed in parallel');
       preparationTimings.context_queries_ms = Math.round(performance.now() - contextQueriesStartedAt);
-      preparationTimings.context_assembly_started_at = performance.now();
+      contextAssemblyStartedAt = performance.now();
 
       // ---- Extrair resultados com fallbacks seguros ----
 
@@ -6556,6 +6561,7 @@ REGRA: ${behaviorInstruction}`;
       // Verificar se já existe reminder pendente (anti-empilhamento)
       let pendingReminderExists = false;
       if (profile?.user_id) {
+        const reminderLookupStartedAt = performance.now();
         const { count } = await supabase
           .from('scheduled_tasks')
           .select('id', { count: 'exact', head: true })
@@ -6564,6 +6570,7 @@ REGRA: ${behaviorInstruction}`;
           .eq('status', 'pending')
           .gt('execute_at', new Date().toISOString());
         pendingReminderExists = (count || 0) > 0;
+        preparationTimings.reminder_lookup_ms = Math.round(performance.now() - reminderLookupStartedAt);
       }
 
       const closure = selectClosureRoute({
@@ -7176,9 +7183,8 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
 
     let data: any;
     const modelCallStartedAt = performance.now();
-    if (preparationTimings.context_assembly_started_at !== undefined) {
-      preparationTimings.context_assembly_ms = Math.round(modelCallStartedAt - preparationTimings.context_assembly_started_at);
-      delete preparationTimings.context_assembly_started_at;
+    if (contextAssemblyStartedAt !== null) {
+      preparationTimings.context_assembly_ms = Math.round(modelCallStartedAt - contextAssemblyStartedAt);
     }
     try {
       // Dynamic temperature: higher for short messages to reduce echo tendency
