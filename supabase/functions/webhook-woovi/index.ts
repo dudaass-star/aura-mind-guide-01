@@ -22,6 +22,7 @@ import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { isTasterCorrelationId, TASTER_WINDOW_HOURS, cancelTasterReminders } from "../_shared/taster.ts";
 import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
 import { markCheckoutAccessPaidByReference } from "../_shared/checkout-access.ts";
+import { localizarEndToEndId } from "../_shared/woovi-dispute-matcher.ts";
 import {
   wooviFetch, brtDate,
   WOOVI_APPROVED_STATUSES as APPROVED_STATUSES,
@@ -1156,7 +1157,7 @@ Deno.serve(async (req) => {
           // permite disparo imediato no primeiro webhook.
           const endToEndId = dispute.endToEndId || dispute.endToEndID
             || charge.endToEndId || charge.endToEndID
-            || installment?.cobr?.endToEndId || installment?.endToEndId
+            || localizarEndToEndId(body)
             || null;
           const valueCents = Number(dispute.value ?? dispute.amount ?? charge.value ?? 0) || null;
 
