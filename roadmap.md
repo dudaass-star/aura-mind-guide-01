@@ -43,6 +43,7 @@
 - [x] Reforçar a marca na abertura da Landing V4 e apresentar a experiência AURA antes do diferencial da sessão.
 - [x] Incluir a Landing V4 no Google Analytics e Clarity e preservar origem, plano e ciclo no retorno de cancelamento do checkout externo.
 - [x] Corrigir a defesa automática de disputas Woovi: sincronização recorrente, envio das elegíveis e alerta para disputa aberta sem evidência.
+- [x] Corrigir a identificação de disputas Woovi pelo End-to-End ID real dentro da cobrança, bloquear vínculos ambíguos e reforçar o alerta antes do prazo.
 
 - [x] Transformar Jornadas em continuidade ativa: cadência fixa, um episódio pendente, leitura confirmada, reflexão, escolha guiada e métricas.
 

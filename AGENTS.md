@@ -19,3 +19,4 @@
 - A conversa consulta respostas pendentes periodicamente enquanto a aba está visível e registra envio, recebimento e exibição correlacionados; isso recupera eventos ao vivo perdidos sem confundir gravação com entrega.
 - O tempo completo da conversa termina quando o último balão do turno foi renderizado após o processamento encerrar, separado do primeiro balão; isso distingue latência técnica do ritmo de entrega.
 - O processamento no App não consulta a instância legada de WhatsApp; ela só é usada no canal WhatsApp para evitar espera de rede desnecessária antes da resposta.
+- Disputas PIX vinculam a cobrança pelo End-to-End ID tanto em campos diretos quanto no payload original, recusando associação ambígua; isso preserva a defesa automática sem atribuir evidência ao cliente errado.
