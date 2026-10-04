@@ -56,17 +56,20 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
 
+  let auditClient: ReturnType<typeof createClient> | null = null;
+  let dryRun = false;
   try {
     const authorization = req.headers.get("authorization") || "";
     const adminSecret = req.headers.get("x-admin-secret") || "";
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const internalSecret = Deno.env.get("INTERNAL_WEBHOOK_SECRET") || "";
-    let authorized = authorization === `Bearer ${serviceRoleKey}` ||
+    const bearerToken = authorization.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : "";
+    let authorized = bearerToken.length > 0 && bearerToken === serviceRoleKey ||
       (internalSecret.length > 0 && adminSecret === internalSecret);
 
-    if (!authorized && authorization.toLowerCase().startsWith("bearer ") && supabaseUrl && serviceRoleKey) {
-      const accessToken = authorization.slice(7);
+    if (!authorized && bearerToken && supabaseUrl && serviceRoleKey) {
+      const accessToken = bearerToken;
       const supabase = createClient(supabaseUrl, serviceRoleKey);
       const { data: authData } = await supabase.auth.getUser(accessToken);
       const userId = authData.user?.id;
@@ -79,13 +82,14 @@ Deno.serve(async (req) => {
     if (!authorized) return json({ error: "Não autorizado" }, 401);
 
     const body = await req.json().catch(() => ({}));
-    const dryRun = body?.dryRun === true;
+    dryRun = body?.dryRun === true;
     const metaToken = Deno.env.get("META_ADS_ACCESS_TOKEN");
     if (!metaToken || !supabaseUrl || !serviceRoleKey) {
       throw new Error("Configuração obrigatória ausente");
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+    auditClient = supabase;
 
     const audienceResponse = await fetch(
       `https://graph.facebook.com/${META_API_VERSION}/${META_AUDIENCE_ID}?fields=id,name,subtype,operation_status&access_token=${encodeURIComponent(metaToken)}`,
@@ -164,6 +168,25 @@ Deno.serve(async (req) => {
       invalidEntries,
     });
 
+    await supabase.from("meta_capi_log").insert({
+      event_name: "CustomerAudienceSync",
+      event_id: `customer-audience-${Date.now()}`,
+      source: dryRun ? "dry_run" : "scheduled_sync",
+      email_present: hashedUsers.some(([email]) => Boolean(email)),
+      phone_present: hashedUsers.some(([, phone]) => Boolean(phone)),
+      fbp_present: false,
+      fbc_present: false,
+      meta_status: 200,
+      raw_response: {
+        audience_id: audience.id,
+        completed_purchases_found: buyers?.length || 0,
+        unique_buyers: uniqueBuyers.size,
+        received,
+        invalid_entries: invalidEntries,
+        dry_run: dryRun,
+      },
+    });
+
     return json({
       ok: true,
       dryRun,
@@ -177,6 +200,19 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("[sync-meta-customer-audience] erro", error);
+    if (auditClient) {
+      await auditClient.from("meta_capi_log").insert({
+        event_name: "CustomerAudienceSync",
+        event_id: `customer-audience-error-${Date.now()}`,
+        source: dryRun ? "dry_run" : "scheduled_sync",
+        email_present: false,
+        phone_present: false,
+        fbp_present: false,
+        fbc_present: false,
+        meta_status: 500,
+        meta_error: error instanceof Error ? error.message.slice(0, 1000) : "Erro inesperado",
+      });
+    }
     return json({ error: error instanceof Error ? error.message : "Erro inesperado" }, 500);
   }
 });

@@ -120,6 +120,7 @@ const PHONELESS_TASK_TYPES = new Set([
   // O push usa o aparelho já registrado; telefone só é necessário se houver
   // fallback para WhatsApp e já segue preservado no payload da entrega.
   'notification_delivery',
+  'meta_audience_sync',
   'first14_batch',
   'woovi_cycle_recycle',
   'woovi_next_cycle_cobr',
@@ -318,7 +319,7 @@ Deno.serve(async (req) => {
         const profile = (profileRow ?? { phone: '', name: null, whatsapp_instance_id: null }) as
           { phone: string; name: string | null; whatsapp_instance_id: string | null };
 
-        if (task.task_type !== 'first14_batch') {
+        if (!['first14_batch', 'meta_audience_sync'].includes(task.task_type)) {
           try {
             await getInstanceConfigForUser(supabase, task.user_id);
           } catch (e) {
@@ -332,6 +333,28 @@ Deno.serve(async (req) => {
         // TASK TYPE HANDLERS
         // ====================================================================
         switch (task.task_type) {
+          case 'meta_audience_sync': {
+            const syncResponse = await fetch(`${supabaseUrl}/functions/v1/sync-meta-customer-audience`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({ dryRun: payload.dry_run === true }),
+              signal: AbortSignal.timeout(60_000),
+            });
+            const syncResult = await syncResponse.json().catch(() => ({}));
+            if (!syncResponse.ok) {
+              const syncError = new Error(syncResult?.error || `Meta audience sync HTTP ${syncResponse.status}`);
+              (syncError as Error & { name: string }).name = syncResponse.status === 429 || syncResponse.status >= 500
+                ? 'MetaAudienceUnavailable'
+                : 'MetaAudienceSyncError';
+              throw syncError;
+            }
+            console.log('✅ Público de compradores da Meta sincronizado', syncResult);
+            break;
+          }
+
           case 'reminder': {
             const rawText = payload.text || 'Ei, aqui é a Aura! Você me pediu pra te lembrar disso 💜';
             const reminderText = await rewriteReminderForToday(rawText, task.created_at);
@@ -1434,6 +1457,18 @@ Deno.serve(async (req) => {
             failed++;
             continue;
           }
+        }
+        if (task.task_type === 'meta_audience_sync' && (error as { name?: string })?.name === 'MetaAudienceUnavailable') {
+          const attempt = Number(task.payload?.retry_attempt || 0);
+          const retryAt = new Date(Date.now() + 60 * 60_000).toISOString();
+          await supabase.from('scheduled_tasks').update({
+            status: 'pending',
+            execute_at: retryAt,
+            payload: { ...(task.payload || {}), retry_attempt: attempt + 1 },
+          }).eq('id', task.id).eq('status', 'executing');
+          console.warn(`⏳ atualização do público da Meta reagendada em 1h (tentativa ${attempt + 1})`);
+          failed++;
+          continue;
         }
         // Woovi indisponível (429/5xx) NÃO é falha da tarefa: é pergunta sem
         // resposta. Se marcássemos como 'failed', o débito do ciclo morreria
