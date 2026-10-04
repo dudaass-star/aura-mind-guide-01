@@ -182,3 +182,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [ ] Comparar mais turnos de texto e áudio após retirar a consulta legada; na janela 22h–00h UTC, texto com início de processamento registrado: 32 antes (média 2,05 s) e 10 depois (2,12 s); áudio: 4 antes (12,55 s) e 1 depois (12,06 s). Não há evidência de ganho consistente; falta amostra de áudio.
 - [ ] Medir download e transcrição separadamente no App e conferir a primeira resposta e o último balão visível após a publicação da instrumentação, sem mudar o fluxo da conversa.
 - [x] Confirmar em turnos reais os tempos detalhados da preparação da AURA (perfil, cota, agenda, sessão, contexto e lembrete) e identificar o maior gargalo antes de otimizar consultas.
+
+## Meta Ads
+- [ ] Atualizar o público “Ola Aura | Compradores | Histórico total | 2026-09-07” com compradores confirmados desde 08/09/2026, sem contas demo ou duplicidades.
+- [ ] Automatizar diariamente a sincronização incremental desse público e validar a atualização na conta Ola Aura 2.
