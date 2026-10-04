@@ -61,8 +61,19 @@ Deno.serve(async (req) => {
     const adminSecret = req.headers.get("x-admin-secret") || "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const internalSecret = Deno.env.get("INTERNAL_WEBHOOK_SECRET") || "";
-    const authorized = authorization === `Bearer ${serviceRoleKey}` ||
+    let authorized = authorization === `Bearer ${serviceRoleKey}` ||
       (internalSecret.length > 0 && adminSecret === internalSecret);
+
+    if (!authorized && authorization.toLowerCase().startsWith("bearer ") && supabaseUrl && serviceRoleKey) {
+      const accessToken = authorization.slice(7);
+      const supabase = createClient(supabaseUrl, serviceRoleKey);
+      const { data: authData } = await supabase.auth.getUser(accessToken);
+      const userId = authData.user?.id;
+      if (userId) {
+        const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
+        authorized = isAdmin === true;
+      }
+    }
 
     if (!authorized) return json({ error: "Não autorizado" }, 401);
 
