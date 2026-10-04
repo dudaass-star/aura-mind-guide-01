@@ -175,7 +175,6 @@ Deno.serve(async (req) => {
       phone_present: hashedUsers.some(([, phone]) => Boolean(phone)),
       fbp_present: false,
       fbc_present: false,
-      external_id_present: false,
       meta_status: 200,
       raw_response: {
         audience_id: audience.id,
@@ -209,7 +208,6 @@ Deno.serve(async (req) => {
         phone_present: false,
         fbp_present: false,
         fbc_present: false,
-        external_id_present: false,
         meta_status: 500,
         meta_error: error instanceof Error ? error.message.slice(0, 1000) : "Erro inesperado",
       });
