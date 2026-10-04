@@ -59,6 +59,7 @@ Deno.serve(async (req) => {
   try {
     const authorization = req.headers.get("authorization") || "";
     const adminSecret = req.headers.get("x-admin-secret") || "";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const internalSecret = Deno.env.get("INTERNAL_WEBHOOK_SECRET") || "";
     let authorized = authorization === `Bearer ${serviceRoleKey}` ||
@@ -80,7 +81,6 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const dryRun = body?.dryRun === true;
     const metaToken = Deno.env.get("META_ADS_ACCESS_TOKEN");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
     if (!metaToken || !supabaseUrl || !serviceRoleKey) {
       throw new Error("Configuração obrigatória ausente");
     }
