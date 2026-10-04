@@ -64,11 +64,12 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const internalSecret = Deno.env.get("INTERNAL_WEBHOOK_SECRET") || "";
-    let authorized = authorization === `Bearer ${serviceRoleKey}` ||
+    const bearerToken = authorization.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : "";
+    let authorized = bearerToken.length > 0 && bearerToken === serviceRoleKey ||
       (internalSecret.length > 0 && adminSecret === internalSecret);
 
-    if (!authorized && authorization.toLowerCase().startsWith("bearer ") && supabaseUrl && serviceRoleKey) {
-      const accessToken = authorization.slice(7);
+    if (!authorized && bearerToken && supabaseUrl && serviceRoleKey) {
+      const accessToken = bearerToken;
       const supabase = createClient(supabaseUrl, serviceRoleKey);
       const { data: authData } = await supabase.auth.getUser(accessToken);
       const userId = authData.user?.id;
