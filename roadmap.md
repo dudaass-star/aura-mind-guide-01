@@ -184,5 +184,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Confirmar em turnos reais os tempos detalhados da preparação da AURA (perfil, cota, agenda, sessão, contexto e lembrete) e identificar o maior gargalo antes de otimizar consultas.
 
 ## Meta Ads
-- [ ] Atualizar o público “Ola Aura | Compradores | Histórico total | 2026-09-07” com compradores confirmados desde 08/09/2026, sem contas demo ou duplicidades.
-- [ ] Automatizar diariamente a sincronização incremental desse público e validar a atualização na conta Ola Aura 2.
+- [x] Atualizar o público “Ola Aura | Compradores | Histórico total | 2026-09-07” com compradores confirmados desde 08/09/2026, sem contas demo ou duplicidades.
+- [x] Automatizar diariamente a sincronização incremental desse público e validar a atualização na conta Ola Aura 2.
