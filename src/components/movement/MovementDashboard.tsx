@@ -19,7 +19,7 @@ const messages = {
 type Member = { id: string; public_name: string; display_mode: string; referral_code: string; show_achievements: boolean; receive_updates: boolean; created_at: string; ambassador_since: string | null };
 type Recognition = { id: string; kind: string; title: string; body: string; status: string; consent_decision: string; created_at: string };
 type MovementSnapshot = { members: number; started: number; continued: number; mural: Array<{ id: string; title: string; body: string; member_name: string }> };
-type Props = { userId: string; suggestedName?: string; embedded?: boolean; initialAmbassadorIntent?: boolean };
+type Props = { userId: string; suggestedName?: string; embedded?: boolean; initialAmbassadorIntent?: boolean; onJoined?: () => void };
 
 const causeMessages = [
   "Ninguém deveria precisar enfrentar tudo sozinho.",
@@ -27,7 +27,7 @@ const causeMessages = [
   "Uma conversa com direção pode mudar o começo de uma história.",
 ] as const;
 
-export function MovementDashboard({ userId, suggestedName = "", embedded = false, initialAmbassadorIntent = false }: Props) {
+export function MovementDashboard({ userId, suggestedName = "", embedded = false, initialAmbassadorIntent = false, onJoined }: Props) {
   const [member, setMember] = useState<Member | null>(null);
   const [referrals, setReferrals] = useState<Array<{ reached_at: string; started_at: string | null; continued_at: string | null; is_valid: boolean }>>([]);
   const [recognitions, setRecognitions] = useState<Recognition[]>([]);
@@ -91,6 +91,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
     setSaving(false);
     if (error) return toast({ title: "Não conseguimos concluir agora", description: "Tente novamente em instantes.", variant: "destructive" });
     setMember(data);
+    onJoined?.();
     if (joiningAsAmbassador) {
       recordEvent("ambassador_joined");
       toast({ title: "Agora você é Embaixador", description: "Seu link pessoal e as ferramentas de impacto estão liberados." });

@@ -268,6 +268,21 @@ const UserPortal = () => {
     initialDataUpdatedAt: profileCache?.savedAt,
   });
 
+  const { data: movementMember, refetch: refetchMovementMember } = useQuery({
+    queryKey: ["portal-movement-member", userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data, error } = await supabasePortal
+        .from("movement_members")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId && linkStatus === "linked",
+  });
+
   // Volta do Billing Portal: o webhook cobra a fatura aberta na hora, então aqui
   // a gente só confirma o resultado em vez de deixar a tela igual.
   const billingReturn = searchParams.get("billing") === "return";
@@ -481,6 +496,7 @@ const UserPortal = () => {
               billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
               accountLoading={portalLoading}
               isDemo={isDemo}
+              hasJoinedMovement={Boolean(movementMember)}
               isActive={activeTab === "conversar"}
               initialChatOpen={shouldOpenConversation}
               initialDraft={conversationDraftRequest ?? discussionPrompt}
@@ -504,7 +520,7 @@ const UserPortal = () => {
           {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("meditacoes") && <div className={activeTab === "meditacoes" ? "block" : "hidden"} aria-hidden={activeTab !== "meditacoes"}><MeditacoesTab userId={userId} /></div>}
-          {visitedTabs.has("movimento") && <div className={activeTab === "movimento" ? "block" : "hidden"} aria-hidden={activeTab !== "movimento"}><MovementDashboard userId={userId} suggestedName={profile?.name || ""} embedded /></div>}
+          {visitedTabs.has("movimento") && <div className={activeTab === "movimento" ? "block" : "hidden"} aria-hidden={activeTab !== "movimento"}><MovementDashboard userId={userId} suggestedName={profile?.name || ""} embedded onJoined={() => void refetchMovementMember()} /></div>}
           </Suspense>
         </div>
 
