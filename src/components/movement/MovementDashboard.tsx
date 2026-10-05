@@ -115,6 +115,12 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
     toast({ title: "Essa mensagem agora representa seu apoio", description: "Você pode mudar sua escolha quando quiser." });
   };
 
+  const chooseRole = (role: "participant" | "ambassador") => {
+    setSelectedRole(role);
+    recordEvent("role_selected", { role });
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  };
+
   const decideRecognition = async (recognition: Recognition, decision: "accepted" | "declined") => {
     const result = await decideMovementRecognition(recognition.id, decision);
     if (!result.ok) return toast({ title: "Não conseguimos salvar sua decisão", description: "Tente novamente em instantes.", variant: "destructive" });
@@ -147,14 +153,14 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
             <p className="mt-4 text-xs font-bold uppercase text-primary">Participante</p>
             <h4 className="mt-1 font-display text-xl font-semibold">Eu faço parte</h4>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Acompanhe o Movimento, o Mural e suas conquistas de pertencimento. Não precisa divulgar.</p>
-            <Button type="button" variant="outline" className="mt-5 w-full" onClick={() => { setSelectedRole("participant"); recordEvent("role_selected", { role: "participant" }); }}>Escolher Participante <ArrowRight /></Button>
+            <Button type="button" variant="outline" className="mt-5 w-full" onClick={() => chooseRole("participant")}>Escolher Participante <ArrowRight /></Button>
           </div>
           <div className="rounded-lg border-2 border-primary bg-secondary/45 p-5">
             <MessageCircle className="h-6 w-6 text-primary" />
             <p className="mt-4 text-xs font-bold uppercase text-primary">Embaixador</p>
             <h4 className="mt-1 font-display text-xl font-semibold">Eu quero multiplicar</h4>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Tenha tudo de Participante, um link pessoal, materiais para compartilhar e acompanhamento do impacto.</p>
-            <Button type="button" className="mt-5 w-full" onClick={() => { setSelectedRole("ambassador"); recordEvent("role_selected", { role: "ambassador" }); }}>Escolher Embaixador <ArrowRight /></Button>
+            <Button type="button" className="mt-5 w-full" onClick={() => chooseRole("ambassador")}>Escolher Embaixador <ArrowRight /></Button>
           </div>
         </div>
         <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">Participar é gratuito. Não há comissão, meta ou obrigação de compartilhar.</p>
