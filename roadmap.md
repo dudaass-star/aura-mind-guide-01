@@ -186,3 +186,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 ## Meta Ads
 - [x] Atualizar o público “Ola Aura | Compradores | Histórico total | 2026-09-07” com compradores confirmados desde 08/09/2026, sem contas demo ou duplicidades.
 - [x] Automatizar diariamente a sincronização incremental desse público e validar a atualização na conta Ola Aura 2.
+
+## Reconciliação Woovi
+- [x] Corrigir a paginação crescente do extrato para alcançar pagamentos recentes e publicar a auditoria.
+- [x] Reprocessar com segurança as mensalidades órfãs de 01 a 04/10 e confirmar cliente, cobrança e acesso.

@@ -278,11 +278,15 @@ Deno.serve(async (req) => {
   // assinatura não inclui `installments`; por isso a parcela é a prova primária.
   const onlyExtrato = body.only === "extrato" || body.only === "extrato_debug";
   const debugExtrato = body.only === "extrato_debug";
+  // Modo cirúrgico para reconciliar SOMENTE o extrato. Diferente de `extrato`,
+  // que executa a conferência rápida das parcelas vencidas e retorna antes da
+  // varredura bancária, este modo pula as demais rotinas e chega à etapa 6.
+  const onlyExtratoReconcile = body.only === "extrato_reconcile";
   // Modo rápido (`{ only: "mandatos" }`): roda SÓ a varredura 4 (status real do
   // mandato na Woovi), restrita a quem está "vivo" aqui sem aprovação real.
   // É o reparo dos mandatos que pagaram a entrada mas nunca autorizaram.
   const onlyMandatos = body.only === "mandatos";
-  const skipVarreduras = onlyExtrato || onlyMandatos;
+  const skipVarreduras = onlyExtrato || onlyMandatos || onlyExtratoReconcile;
 
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
@@ -1019,7 +1023,7 @@ Deno.serve(async (req) => {
       reconciliationQueue = dueQueue.slice(slot * 4, slot * 4 + 4);
     }
 
-    for (const sub of (onlyMandatos ? [] : reconciliationQueue) || []) {
+    for (const sub of ((onlyMandatos || onlyExtratoReconcile) ? [] : reconciliationQueue) || []) {
       let remoteCharges: Record<string, any>[];
       try {
         remoteCharges = await listInstallments(String(sub.subscription_id));
@@ -1323,10 +1327,13 @@ Deno.serve(async (req) => {
     const extratoSince = new Date(now.getTime() - extratoDays * 86400000).toISOString();
     const onlyDigits = (v: unknown) => String(v || "").replace(/\D/g, "");
     // A Woovi devolve no máximo 100 lançamentos por página (ela ignora limites
-    // maiores) e pagina por `skip`. Sem paginar, uma janela de 30 dias parava no
-    // 100º lançamento e pagamentos mais antigos ficavam invisíveis.
+    // maiores) e pagina por `skip`, DO MAIS ANTIGO PARA O MAIS RECENTE. Portanto,
+    // uma primeira página anterior à janela NÃO permite interromper a busca: é
+    // necessário avançar até o fim para alcançar os pagamentos atuais.
     const TX_PAGE = 100;
-    const TX_MAX_PAGES = 6;
+    // Teto defensivo amplo: cobre até 5.000 lançamentos sem permitir loop
+    // infinito caso a Woovi devolva pageInfo inconsistente.
+    const TX_MAX_PAGES = 50;
     const transactions: Record<string, any>[] = [];
     for (let page = 0; page < TX_MAX_PAGES; page++) {
       const tx = await wooviFetch<Record<string, any>>(
@@ -1337,11 +1344,6 @@ Deno.serve(async (req) => {
         : [];
       transactions.push(...list);
       if (list.length < TX_PAGE) break;
-      const oldest = list
-        .map((t) => String(t?.time || t?.createdAt || ""))
-        .filter(Boolean)
-        .sort()[0];
-      if (oldest && oldest < extratoSince) break;
       if ((tx.data as any)?.pageInfo?.hasNextPage === false) break;
     }
 
@@ -1420,12 +1422,8 @@ Deno.serve(async (req) => {
     // Parcelas da Woovi consultadas nesta rodada (mandato → lista), com teto de
     // chamadas: a prova é caríssima em API e não pode derrubar a auditoria.
     const installmentCache = new Map<string, Record<string, any>[]>();
-    let proofCalls = 0;
-    const PROOF_CALL_BUDGET = 4; // a Woovi limita a taxa (429 com espera de 60s)
     const installmentsOf = async (subId: string): Promise<Record<string, any>[]> => {
       if (installmentCache.has(subId)) return installmentCache.get(subId)!;
-      if (proofCalls >= PROOF_CALL_BUDGET) throw new Error("orçamento de prova esgotado");
-      proofCalls++;
       const list = await listInstallments(subId);
       installmentCache.set(subId, list);
       return list;
@@ -1486,14 +1484,12 @@ Deno.serve(async (req) => {
       let lastMatchDiag: Record<string, unknown> | null = null;
       if (!sub) {
         const payDay = when.slice(0, 10);
-        // Janela estreita: o débito do mandato cai no dia previsto (± poucos dias).
-        // Janela larga só encobria o candidato certo, porque o limite de linhas
-        // cortava justamente quem vencia no dia do pagamento.
-        const from = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) - 7 * 86400000));
-        const to = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) + 3 * 86400000));
+        // `next_charge_date` pode estar alguns dias deslocado em mandatos antigos.
+        // A janela apenas reúne candidatos; somente o E2E exato da parcela decide.
+        const from = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) - 10 * 86400000));
+        const to = brtDate(new Date(Date.parse(`${payDay}T12:00:00-03:00`) + 10 * 86400000));
         const { data: candidates } = await supabase.from("woovi_subscriptions")
           .select("*")
-          .in("status", MANDATE_ACTIVE_STATUSES)
           .is("replaced_by_subscription_id", null)
           .not("subscription_id", "is", null)
           .eq("value_cents", value)
@@ -1503,22 +1499,51 @@ Deno.serve(async (req) => {
           .limit(20);
         let pool = Array.isArray(candidates) ? candidates : [];
 
+        // Quem pagou uma cobrança anterior da mesma cliente é o primeiro
+        // candidato a provar. Isso cobre marido/familiar sem atribuir por nome.
+        const relatedSubscriptions = new Set<string>();
+        if (cpf) {
+          const { data: priorDirect } = await supabase.from("woovi_charges")
+            .select("subscription_id")
+            .filter("raw_payload->charge->payer->taxID->>taxID", "eq", cpf)
+            .limit(20);
+          const { data: priorPix } = await supabase.from("woovi_charges")
+            .select("subscription_id")
+            .filter("raw_payload->pix->charge->payer->taxID->>taxID", "eq", cpf)
+            .limit(20);
+          for (const row of [...(priorDirect || []), ...(priorPix || [])]) {
+            if (row.subscription_id) relatedSubscriptions.add(String(row.subscription_id));
+          }
+          if (relatedSubscriptions.size > 0) {
+            const { data: relatedRows } = await supabase.from("woovi_subscriptions")
+              .select("*")
+              .in("subscription_id", [...relatedSubscriptions])
+              .is("replaced_by_subscription_id", null)
+              .eq("value_cents", value);
+            const byId = new Map(pool.map((row) => [String(row.subscription_id), row]));
+            for (const row of relatedRows || []) byId.set(String(row.subscription_id), row);
+            pool = [...byId.values()];
+          }
+        }
+
         // PROVA na Woovi (fim das heurísticas): a parcela do mandato guarda o
         // endToEndId/identifierId do débito. Quando ele é IGUAL ao do extrato, o
         // dono do pagamento está provado — mesmo com CPF, e-mail e telefone
         // diferentes (quem pagou foi marido/familiar, o extrato só mostra ele).
-        // A Woovi limita a taxa, então checamos primeiro os mandatos mais
-        // suspeitos: os que estão anotados como "sem cobrança" e os de
-        // vencimento mais perto do pagamento.
+        // A Woovi limita a taxa, então checamos no máximo quatro mandatos por
+        // pagamento, priorizando vínculo anterior do pagador e vencimento perto.
         const txId = String(t?.transactionID || "");
         const e2eNow = String(t?.endToEndId || "");
         const payMs = Date.parse(`${payDay}T12:00:00-03:00`);
         const suspects = [...pool].sort((a, b) => {
-          const flag = (x: Record<string, any>) => /sem cobran|sem parcela/i.test(String(x.last_error || "")) ? 0 : 1;
-          if (flag(a) !== flag(b)) return flag(a) - flag(b);
+          const related = (x: Record<string, any>) =>
+            relatedSubscriptions.has(String(x.subscription_id)) ? 0 : 1;
+          if (related(a) !== related(b)) return related(a) - related(b);
           const d = (x: Record<string, any>) =>
             Math.abs(Date.parse(`${x.next_charge_date}T12:00:00-03:00`) - payMs);
-          return d(a) - d(b);
+          if (d(a) !== d(b)) return d(a) - d(b);
+          const flag = (x: Record<string, any>) => /sem cobran|sem parcela/i.test(String(x.last_error || "")) ? 0 : 1;
+          return flag(a) - flag(b);
         }).slice(0, 4);
         let provenFound = false;
         let proofBlocked = false;
@@ -1535,13 +1560,13 @@ Deno.serve(async (req) => {
             if (hit) { pool = [c]; provenFound = true; break; }
           } catch (_e) { proofBlocked = true; /* indisponibilidade não decide nada */ }
         }
-        // Sem prova e com mais de um candidato: não adivinhamos dono de dinheiro.
+        // Sem prova exata, nenhum fallback pode atribuir dinheiro a um cliente.
         lastMatchDiag = {
           e2e: e2eNow, candidatos: pool.length, provado: provenFound,
           woovi_indisponivel: proofBlocked,
           checados: suspects.map((c) => c.customer_name),
         };
-        if (!provenFound && !proofBlocked && pool.length > 1) pool = [];
+        if (!provenFound) pool = [];
 
         // Mandato que já teve este ciclo pago não disputa o pagamento.
         if (pool.length > 1) {
