@@ -1198,8 +1198,10 @@ export function ConversarTab({
   ] as const;
   const navigateFromConversation = (tab: typeof appAreas[number]["tab"]) => {
     recordConversationEvent(userId, "area_opened_from_conversation", { destination: tab });
+    if (tab === "movimento") localStorage.setItem(`aura-movement-discovered:${userId}`, "true");
     onNavigate?.(tab);
   };
+  const movementDiscovered = localStorage.getItem(`aura-movement-discovered:${userId}`) === "true";
 
   const conversationList = (
     <aside className={cn(
@@ -1296,6 +1298,7 @@ export function ConversarTab({
       </div>
 
       <div className="flex-1 overflow-y-auto border-t border-border/50 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5">
+        {!movementDiscovered && <div className="mb-5 rounded-lg border border-primary/30 bg-secondary/55 p-4"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl portal-area-movement"><HeartHandshake className="h-5 w-5" /></span><div className="min-w-0"><p className="text-[10px] font-bold uppercase text-primary">Novo no App</p><h2 className="mt-1 font-display text-lg font-semibold">Conheça o Movimento Olá Aura</h2><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Faça parte de algo que pode levar compreensão e direção a mais pessoas.</p><Button type="button" size="sm" className="mt-3" onClick={() => navigateFromConversation("movimento")}>Conhecer o Movimento <ArrowRight /></Button></div></div></div>}
         <div className="mb-3 flex items-center justify-between px-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">No app Olá Aura</p>
           <p className="text-[11px] text-muted-foreground">Tudo em um só lugar</p>
@@ -1316,7 +1319,7 @@ export function ConversarTab({
                 <Icon className="h-5 w-5" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-foreground">{label}</span>
+                <span className="flex items-center gap-2 text-sm font-bold text-foreground">{label}{tab === "movimento" && !movementDiscovered && <span className="rounded-full bg-primary px-2 py-0.5 text-[9px] uppercase text-primary-foreground">Novo</span>}</span>
                 <span className="block truncate text-xs font-normal text-muted-foreground">{detail}</span>
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5" />

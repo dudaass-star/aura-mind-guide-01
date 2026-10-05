@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Award, Check, CheckCircle2, Copy, HeartHandshake, History, LockKeyhole, MessageCircle, Quote, Share2, Sparkles, Sprout, Users } from "lucide-react";
+import { ArrowRight, Award, Check, CheckCircle2, Copy, HeartHandshake, History, LockKeyhole, MessageCircle, Quote, Share2, Sparkles, Sprout, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,6 +41,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const [activatingAmbassador, setActivatingAmbassador] = useState(false);
   const [messageKind, setMessageKind] = useState<keyof typeof messages>("personal");
   const [shareMessage, setShareMessage] = useState(messages.personal);
+  const [selectedRole, setSelectedRole] = useState<"participant" | "ambassador" | null>(initialAmbassadorIntent ? "ambassador" : null);
 
   const load = async () => {
     const [{ data }, { data: snapshotData }, { data: causeEvents }] = await Promise.all([
@@ -84,12 +85,13 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const createMember = async () => {
     if (!name.trim() || !accepted) return;
     setSaving(true);
-    const ambassadorSince = initialAmbassadorIntent ? new Date().toISOString() : null;
+    const joiningAsAmbassador = initialAmbassadorIntent || selectedRole === "ambassador";
+    const ambassadorSince = joiningAsAmbassador ? new Date().toISOString() : null;
     const { data, error } = await supabasePortal.from("movement_members").insert({ user_id: userId, public_name: name.trim(), display_mode: displayMode, receive_updates: false, ambassador_since: ambassadorSince }).select("*").single();
     setSaving(false);
     if (error) return toast({ title: "Não conseguimos concluir agora", description: "Tente novamente em instantes.", variant: "destructive" });
     setMember(data);
-    if (initialAmbassadorIntent) {
+    if (joiningAsAmbassador) {
       recordEvent("ambassador_joined");
       toast({ title: "Agora você é Embaixador", description: "Seu link pessoal e as ferramentas de impacto estão liberados." });
       return;
@@ -122,25 +124,62 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
 
   if (loading) return <div className="py-20 text-center text-sm text-muted-foreground">Abrindo o Movimento…</div>;
 
+  if (!member && embedded && !selectedRole) return (
+    <div className="space-y-10 pb-6">
+      <section className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="bg-foreground px-5 py-8 text-primary-foreground sm:px-8 sm:py-10">
+          <p className="text-xs font-bold uppercase text-accent">Movimento Olá Aura</p>
+          <h2 className="mt-3 max-w-xl font-display text-3xl font-semibold leading-tight sm:text-4xl">Compreender a si mesmo não deveria ser privilégio de poucos.</h2>
+          <p className="mt-4 max-w-xl leading-relaxed text-primary-foreground/75">O Movimento reúne pessoas que acreditam que apoio, compreensão e direção precisam chegar a mais gente — com respeito, verdade e sem pressão.</p>
+        </div>
+        <div className="grid gap-px bg-border sm:grid-cols-3">
+          {[{ icon: HeartHandshake, title: "Pertencer", text: "Faça parte gratuitamente e acompanhe o impacto coletivo." }, { icon: Quote, title: "Reconhecer", text: "Conheça histórias reais, publicadas somente com autorização." }, { icon: Share2, title: "Multiplicar", text: "Se quiser, compartilhe a Olá Aura com seu link pessoal." }].map(({ icon: Icon, title, text }) => <div key={title} className="bg-background p-5"><Icon className="h-5 w-5 text-primary" /><h3 className="mt-4 font-display text-xl font-semibold">{title}</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p></div>)}
+        </div>
+      </section>
+
+      <section>
+        <p className="text-xs font-bold uppercase text-primary">Escolha como participar</p>
+        <h3 className="mt-2 font-display text-2xl font-semibold">Você decide o seu lugar no Movimento.</h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Os dois caminhos fazem parte da mesma causa. Você pode mudar de ideia depois.</p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-border bg-card p-5">
+            <HeartHandshake className="h-6 w-6 text-primary" />
+            <p className="mt-4 text-xs font-bold uppercase text-primary">Participante</p>
+            <h4 className="mt-1 font-display text-xl font-semibold">Eu faço parte</h4>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Acompanhe o Movimento, o Mural e suas conquistas de pertencimento. Não precisa divulgar.</p>
+            <Button type="button" variant="outline" className="mt-5 w-full" onClick={() => { setSelectedRole("participant"); recordEvent("role_selected", { role: "participant" }); }}>Escolher Participante <ArrowRight /></Button>
+          </div>
+          <div className="rounded-lg border-2 border-primary bg-secondary/45 p-5">
+            <MessageCircle className="h-6 w-6 text-primary" />
+            <p className="mt-4 text-xs font-bold uppercase text-primary">Embaixador</p>
+            <h4 className="mt-1 font-display text-xl font-semibold">Eu quero multiplicar</h4>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Tenha tudo de Participante, um link pessoal, materiais para compartilhar e acompanhamento do impacto.</p>
+            <Button type="button" className="mt-5 w-full" onClick={() => { setSelectedRole("ambassador"); recordEvent("role_selected", { role: "ambassador" }); }}>Escolher Embaixador <ArrowRight /></Button>
+          </div>
+        </div>
+        <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">Participar é gratuito. Não há comissão, meta ou obrigação de compartilhar.</p>
+      </section>
+    </div>
+  );
+
   if (!member) return (
     <div className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 sm:py-14 lg:grid-cols-[.85fr_1.15fr] lg:gap-20 lg:py-20">
       <section className="lg:pt-3">
-        <p className="text-xs font-bold uppercase text-primary">{initialAmbassadorIntent ? "Seu primeiro gesto" : "Seu primeiro passo"}</p>
-        <h2 className="mt-3 font-display text-3xl font-semibold sm:text-4xl">{initialAmbassadorIntent ? "Entre para o Movimento como Embaixador." : "Faça parte de algo que pode chegar muito além de você."}</h2>
-        <p className="mt-4 leading-relaxed text-muted-foreground">{initialAmbassadorIntent ? "Além de fazer parte, você poderá apresentar a Olá Aura a outras pessoas com seu link pessoal e acompanhar o impacto sem expor ninguém." : "Você não precisa ser cliente, ter seguidores ou vender nada. Basta acreditar que mais pessoas merecem acesso a compreensão e direção."}</p>
+        <p className="text-xs font-bold uppercase text-primary">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Seu primeiro gesto" : "Seu primeiro passo"}</p>
+        <h2 className="mt-3 font-display text-3xl font-semibold sm:text-4xl">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Entre para o Movimento como Embaixador." : "Faça parte de algo que pode chegar muito além de você."}</h2>
+        <p className="mt-4 leading-relaxed text-muted-foreground">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Além de fazer parte, você poderá apresentar a Olá Aura a outras pessoas com seu link pessoal e acompanhar o impacto sem expor ninguém." : "Você não precisa ser cliente, ter seguidores ou vender nada. Basta acreditar que mais pessoas merecem acesso a compreensão e direção."}</p>
         <div className="mt-7 hidden space-y-5 border-t border-border pt-7 lg:block">
-          {(initialAmbassadorIntent ? ["Faça parte gratuitamente", "Receba seu link pessoal", "Compartilhe sem meta ou obrigação"] : ["Faça parte gratuitamente", "Escolha como seu nome aparece", "Decida depois se quer ser Embaixador"]).map((item) => <div key={item} className="flex items-center gap-3 text-sm font-semibold"><CheckCircle2 className="h-5 w-5 shrink-0 text-primary" /><span>{item}</span></div>)}
+          {(initialAmbassadorIntent || selectedRole === "ambassador" ? ["Faça parte gratuitamente", "Receba seu link pessoal", "Compartilhe sem meta ou obrigação"] : ["Faça parte gratuitamente", "Escolha como seu nome aparece", "Decida depois se quer ser Embaixador"]).map((item) => <div key={item} className="flex items-center gap-3 text-sm font-semibold"><CheckCircle2 className="h-5 w-5 shrink-0 text-primary" /><span>{item}</span></div>)}
         </div>
       </section>
       <section className="border-t border-border pt-7 lg:border-l lg:border-t-0 lg:pl-12 lg:pt-1">
-        <p className="font-display text-xl font-semibold">{initialAmbassadorIntent ? "Confirme sua entrada como Embaixador" : "Como você quer participar?"}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{initialAmbassadorIntent ? "Ser Embaixador também confirma seu lugar como Participante do Movimento." : "Você controla como seu nome aparece e pode mudar isso depois."}</p>
+         <div className="flex items-start justify-between gap-4"><div><p className="font-display text-xl font-semibold">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Confirme sua entrada como Embaixador" : "Confirme sua participação"}</p><p className="mt-1 text-sm text-muted-foreground">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Ser Embaixador também confirma seu lugar como Participante do Movimento." : "Você controla como seu nome aparece e pode mudar isso depois."}</p></div>{embedded && <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedRole(null); setAccepted(false); }}>Voltar</Button>}</div>
         <div className="mt-6 space-y-5">
           <label className="block"><span className="mb-2 block text-sm font-semibold">Como devemos chamar você?</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" /></label>
           <label className="block"><span className="mb-2 block text-sm font-semibold">Como aparecer no Mural?</span><select value={displayMode} onChange={(e) => setDisplayMode(e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="first_name">Primeiro nome</option><option value="full_name">Nome completo</option><option value="initials">Iniciais</option><option value="private">Participação privada</option></select></label>
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-4"><Checkbox checked={accepted} onCheckedChange={(value) => setAccepted(value === true)} className="mt-0.5" /><span className="text-sm leading-relaxed">{initialAmbassadorIntent ? "Quero fazer parte e ser Embaixador do Movimento Olá Aura. Sei que não há meta, comissão ou obrigação de divulgar." : "Quero fazer parte do Movimento Olá Aura. Sei que participar não me obriga a divulgar."}</span></label>
+           <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-4"><Checkbox checked={accepted} onCheckedChange={(value) => setAccepted(value === true)} className="mt-0.5" /><span className="text-sm leading-relaxed">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Quero fazer parte e ser Embaixador do Movimento Olá Aura. Sei que não há meta, comissão ou obrigação de divulgar." : "Quero fazer parte do Movimento Olá Aura. Sei que participar não me obriga a divulgar."}</span></label>
         </div>
-        <Button className="mt-6 w-full sm:w-auto" size="lg" disabled={!accepted || !name.trim() || saving} onClick={createMember}><HeartHandshake /> {saving ? "Entrando…" : initialAmbassadorIntent ? "Fazer parte como Embaixador" : "Quero fazer parte"}</Button>
+         <Button className="mt-6 w-full sm:w-auto" size="lg" disabled={!accepted || !name.trim() || saving} onClick={createMember}><HeartHandshake /> {saving ? "Entrando…" : initialAmbassadorIntent || selectedRole === "ambassador" ? "Fazer parte como Embaixador" : "Quero fazer parte"}</Button>
       </section>
     </div>
   );
@@ -210,10 +249,13 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
       {pendingRecognitions.length > 0 && <section className="space-y-3"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Você foi reconhecido</h3></div>{pendingRecognitions.map((recognition) => <article key={recognition.id} className="rounded-lg border border-primary/30 bg-secondary/50 p-5"><p className="text-xs font-bold uppercase text-primary">Voz do Movimento</p><h4 className="mt-2 font-display text-xl font-semibold">{recognition.title}</h4><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{recognition.body}</p><p className="mt-4 text-xs text-muted-foreground">Você decide se este reconhecimento pode aparecer no Mural público.</p><div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => decideRecognition(recognition, "accepted")}><CheckCircle2 /> Autorizar publicação</Button><Button variant="outline" onClick={() => decideRecognition(recognition, "declined")}>Manter privado</Button></div></article>)}</section>}
       {decidedRecognitions.length > 0 && <section><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Seus reconhecimentos</h3></div><div className="mt-4 space-y-3">{decidedRecognitions.map((recognition) => <article key={recognition.id} className="border-l-2 border-primary bg-secondary/30 p-5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-primary">{recognition.kind === "voice" ? "Voz do Movimento" : "Reconhecimento"}</p><p className="text-xs text-muted-foreground">{recognition.consent_decision === "accepted" ? "Autorizado para o Mural" : "Visível somente para você"}</p></div><h4 className="mt-2 font-display text-xl font-semibold">{recognition.title}</h4><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{recognition.body}</p></article>)}</div></section>}
       <section>
-        <div className="flex items-center gap-3"><Share2 className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Compartilhe do seu jeito</h3></div>
+        <div className="flex items-center gap-3"><Share2 className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Kit do Embaixador</h3></div>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Escolha um convite, ajuste com suas palavras e envie com seu link pessoal. Você não precisa baixar nada para indicar alguém.</p>
+        <p className="mt-5 text-xs font-bold uppercase text-primary">Mensagens com link pessoal</p>
         <div className="mt-4 grid gap-2 sm:grid-cols-3">{Object.entries({ personal: "Convite pessoal", movement: "Sobre o Movimento", short: "Mensagem curta" }).map(([key, label]) => <Button key={key} variant={messageKind === key ? "default" : "outline"} onClick={() => selectMessage(key as keyof typeof messages)}>{messageKind === key && <Check />} {label}</Button>)}</div>
         <label className="mt-4 block"><span className="mb-2 block text-sm font-semibold">Sua mensagem</span><Textarea value={shareMessage} onChange={(event) => setShareMessage(event.target.value)} maxLength={500} rows={5} /><span className="mt-2 block break-all text-xs text-primary">{shareUrl}</span></label>
         <div className="mt-3 flex gap-2"><Button onClick={share} disabled={!shareMessage.trim()}><Share2 /> Compartilhar</Button><Button variant="outline" size="icon" aria-label="Copiar convite" title="Copiar convite" onClick={copy} disabled={!shareMessage.trim()}><Copy /></Button><Button variant="outline" size="icon" aria-label="Enviar no WhatsApp" title="Enviar no WhatsApp" asChild><a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" onClick={() => recordEvent("whatsapp_share_started", { message_kind: messageKind })}><MessageCircle /></a></Button></div>
+        <div className="mt-6 border-y border-border py-5"><p className="text-xs font-bold uppercase text-muted-foreground">Peças visuais</p><p className="mt-2 font-semibold">Status, Stories e posts serão liberados aqui.</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Esses materiais ainda estão em preparação. Quando estiverem prontos, você poderá compartilhar ou baixar cada peça nesta área.</p></div>
       </section>
       <section><div className="flex items-center gap-3"><History className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Impacto recente</h3></div>{recentImpact.length === 0 ? <div className="mt-4 border-y border-border py-6"><p className="font-semibold">Seu primeiro gesto pode começar agora.</p><p className="mt-1 text-sm text-muted-foreground">Pense em alguém para quem conhecer a Olá Aura poderia fazer sentido e envie do seu jeito.</p></div> : <div className="mt-4 divide-y divide-border border-y border-border">{recentImpact.map((item, index) => <div key={`${item.reached_at}-${index}`} className="flex items-center justify-between gap-4 py-4"><div><p className="text-sm font-semibold">{item.continued_at ? "Uma pessoa decidiu continuar" : item.started_at ? "Uma pessoa começou uma conversa" : "Seu convite foi conhecido"}</p><p className="mt-1 text-xs text-muted-foreground">Sem expor a identidade de quem recebeu.</p></div><CheckCircle2 className="h-5 w-5 shrink-0 text-primary" /></div>)}</div>}</section>
       <section>
