@@ -165,7 +165,8 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Criar uma prévia privada preenchida e vazia do Mural para avaliação administrativa, sem publicar histórias demonstrativas.
 - [x] Organizar textos, link pessoal, compartilhamento e WhatsApp como Kit do Embaixador, sinalizando com honestidade as peças visuais ainda em preparação.
 - [x] Manter o card de lançamento do Movimento até a adesão e o selo Novo por 30 dias, sem considerar uma simples visita como descoberta concluída.
-- [ ] Produzir e aprovar as peças visuais do Kit do Embaixador para Status, Stories e posts.
+- [x] Criar uma prévia administrativa privada do Kit do Embaixador com Status/Stories, post e convite por WhatsApp, sem liberar as peças aos clientes.
+- [ ] Aprovar a direção visual e produzir os arquivos finais do Kit do Embaixador para liberação.
 - [ ] Ativar a cadência de lançamento por push somente após revisão visual e piloto fundador.
 - [x] Criar presença pública permanente, manifesto e entrada no site
 - [x] Criar adesão aberta, perfil de Embaixador e acesso de não clientes
