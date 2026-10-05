@@ -164,7 +164,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Apresentar o Movimento dentro do App antes da adesão, com escolha explícita entre Participante e Embaixador e sem novo login.
 - [x] Criar uma prévia privada preenchida e vazia do Mural para avaliação administrativa, sem publicar histórias demonstrativas.
 - [x] Organizar textos, link pessoal, compartilhamento e WhatsApp como Kit do Embaixador, sinalizando com honestidade as peças visuais ainda em preparação.
-- [x] Destacar temporariamente o Movimento na tela principal do App e manter seu acesso permanente.
+- [x] Manter o card de lançamento do Movimento até a adesão e o selo Novo por 30 dias, sem considerar uma simples visita como descoberta concluída.
 - [ ] Produzir e aprovar as peças visuais do Kit do Embaixador para Status, Stories e posts.
 - [ ] Ativar a cadência de lançamento por push somente após revisão visual e piloto fundador.
 - [x] Criar presença pública permanente, manifesto e entrada no site
