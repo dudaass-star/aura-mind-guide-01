@@ -2,7 +2,7 @@
 
 - Contas de demonstração usam `profiles.status = 'demo'`, com direito de acesso apenas ao App e sem telefone/cobrança; isso permite separar personagens fictícios de clientes ativos em rotinas e indicadores.
 - O acesso compartilhado à personagem usa convites individuais com token protegido e validade de 7 dias, que geram uma sessão apenas no clique; isso evita ampliar globalmente a validade dos links normais.
-- Falhas da conversa usam descritor comum e só retomam as transitórias; isso evita reenvios terminais.
+- Chat failures share descriptors; only transient failures retry to avoid terminal resends.
 - A conversa móvel herda a altura do contêiner ajustado pelo visualViewport, em vez de fixar 100dvh nas telas internas; isso mantém a caixa vazia visível quando o teclado reduz a área útil.
 - A abertura pelo ícone da tela inicial é registrada em portal_value_events somente após autenticação e detecção de modo standalone; o painel consulta a última abertura por usuário sem inferir instalação a partir do navegador.
 - O PortalAuthProvider isola a sessão admin e serializa o vínculo; consolidação transacional só ocorre se a identidade antiga já não existe.
@@ -26,4 +26,4 @@
 - A reconciliação do extrato Woovi percorre a paginação crescente até o fim e só atribui pagador diferente mediante E2E exato na parcela do mandato, priorizando relações anteriores do pagador; isso alcança mensalidades recentes sem criar vínculos por heurística.
 - A conversa principal usa raciocínio do Gemini 3 em nível baixo e médio apenas no reenquadre e no fechamento da sessão; isso derruba a espera sem tirar reflexão dos momentos de aterrissagem.
 - A preparação da conversa busca em paralelo, após o perfil, cota e sessões, sem bloquear em configuração ou contador; isso reduz a espera sem mudar o contexto.
-- Admin previews reuse App UI without reads or writes to preserve membership.
+- Movement UI shares consented murals; admin previews have no reads/writes to preserve membership.
