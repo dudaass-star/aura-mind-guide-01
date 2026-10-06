@@ -5047,23 +5047,27 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
     // Read configured AI model from system_config
+    // PARALELISMO: a leitura do modelo roda em segundo plano e só é aguardada
+    // antes da chamada à IA, sem bloquear perfil, cota e agenda.
     const configStartedAt = performance.now();
     let configuredModel = 'google/gemini-2.5-pro';
-    try {
-      const { data: configData } = await supabase
-        .from('system_config')
-        .select('value')
-        .eq('key', 'ai_model')
-        .single();
-      if (configData?.value) {
-        const val = typeof configData.value === 'string' ? configData.value : JSON.stringify(configData.value);
-        configuredModel = val.replace(/^"|"$/g, '');
+    const configuredModelPromise = (async () => {
+      try {
+        const { data: configData } = await supabase
+          .from('system_config')
+          .select('value')
+          .eq('key', 'ai_model')
+          .single();
+        if (configData?.value) {
+          const val = typeof configData.value === 'string' ? configData.value : JSON.stringify(configData.value);
+          configuredModel = val.replace(/^"|"$/g, '');
+        }
+        console.log('🤖 AI model from config:', configuredModel);
+      } catch (e) {
+        console.warn('Failed to read AI model config, using default:', e);
       }
-      console.log('🤖 AI model from config:', configuredModel);
-    } catch (e) {
-      console.warn('Failed to read AI model config, using default:', e);
-    }
-    preparationTimings.model_config_ms = Math.round(performance.now() - configStartedAt);
+      preparationTimings.model_config_ms = Math.round(performance.now() - configStartedAt);
+    })();
 
     const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message, proactive_context, inbound_message_created_at, is_audio_message, journey_episode_id, client_message_id } = await req.json();
     const inboundMessageDate = inbound_message_created_at ? new Date(inbound_message_created_at) : null;
@@ -5144,6 +5148,62 @@ serve(async (req) => {
       profile = data;
     }
     preparationTimings.profile_lookup_ms = Math.round(performance.now() - profileStartedAt);
+
+    // ========================================================================
+    // PARALELISMO DE PREPARAÇÃO — dispara já as consultas que só dependem do
+    // usuário (cota mensal, sessão agendada, sessão perdida e próximas sessões).
+    // Os resultados são consumidos depois com exatamente os mesmos critérios.
+    // ========================================================================
+    let profileUpdatePromise: Promise<void> = Promise.resolve();
+    let monthlyQuotaPromise: PromiseLike<any> | null = null;
+    let sessionLookupsPromise: Promise<any[]> | null = null;
+    if (profile?.user_id) {
+      const prefetchNow = new Date();
+      const monthParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit',
+      }).formatToParts(prefetchNow);
+      const pfYear = monthParts.find((p) => p.type === 'year')?.value || '';
+      const pfMonth = monthParts.find((p) => p.type === 'month')?.value || '';
+      const pfMonthStart = new Date(`${pfYear}-${pfMonth}-01T00:00:00-03:00`);
+      const pfNextMonthStart = new Date(pfMonthStart);
+      pfNextMonthStart.setUTCMonth(pfNextMonthStart.getUTCMonth() + 1);
+      monthlyQuotaPromise = supabase
+        .from('sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', profile.user_id)
+        .in('status', ['scheduled', 'in_progress', 'completed', 'no_show'])
+        .gte('scheduled_at', pfMonthStart.toISOString())
+        .lt('scheduled_at', pfNextMonthStart.toISOString());
+
+      const oneHourAgo = new Date(prefetchNow.getTime() - 60 * 60 * 1000);
+      const oneHourAhead = new Date(prefetchNow.getTime() + 60 * 60 * 1000);
+      const sevenDaysAgo = new Date(prefetchNow.getTime() - 7 * 24 * 60 * 60 * 1000);
+      sessionLookupsPromise = Promise.all([
+        supabase.from('sessions').select('*')
+          .eq('user_id', profile.user_id)
+          .eq('status', 'scheduled')
+          .gte('scheduled_at', oneHourAgo.toISOString())
+          .lte('scheduled_at', oneHourAhead.toISOString())
+          .order('scheduled_at', { ascending: true })
+          .limit(1),
+        // Piso temporal de 7 dias: evita reativar sessões perdidas antigas.
+        supabase.from('sessions').select('*')
+          .eq('user_id', profile.user_id)
+          .in('status', ['cancelled', 'no_show'])
+          .is('started_at', null)
+          .gte('scheduled_at', sevenDaysAgo.toISOString())
+          .lt('scheduled_at', prefetchNow.toISOString())
+          .or('session_summary.is.null,session_summary.neq.reactivation_declined')
+          .order('scheduled_at', { ascending: false })
+          .limit(1),
+        supabase.from('sessions').select('id, scheduled_at, session_type, focus_topic')
+          .eq('user_id', profile.user_id)
+          .eq('status', 'scheduled')
+          .gt('scheduled_at', prefetchNow.toISOString())
+          .order('scheduled_at', { ascending: true })
+          .limit(5),
+      ]);
+    }
 
     const rawPlan = profile?.plan || 'essencial';
     const userPlan = normalizePlan(rawPlan);
@@ -5253,12 +5313,16 @@ serve(async (req) => {
         console.log('🔔 Auto-clearing do_not_disturb - user sent a message');
       }
 
+      // Atualização em segundo plano; aguardada antes da chamada à IA.
       const profileUpdateStartedAt = performance.now();
-      await supabase
-        .from('profiles')
-        .update(updateFields)
-        .eq('id', profile.id);
-      preparationTimings.profile_update_ms = Math.round(performance.now() - profileUpdateStartedAt);
+      profileUpdatePromise = (async () => {
+        const { error } = await supabase
+          .from('profiles')
+          .update(updateFields)
+          .eq('id', profile.id);
+        if (error) console.warn('⚠️ Falha ao atualizar contador diário do perfil:', error.message);
+        preparationTimings.profile_update_ms = Math.round(performance.now() - profileUpdateStartedAt);
+      })();
     }
 
     // ========================================================================
@@ -5437,15 +5501,9 @@ serve(async (req) => {
     const nextMonthStart = new Date(monthStart);
     nextMonthStart.setUTCMonth(nextMonthStart.getUTCMonth() + 1);
     let monthlySessionsUsed = 0;
-    if (profile?.user_id) {
+    if (profile?.user_id && monthlyQuotaPromise) {
       const monthlyQuotaStartedAt = performance.now();
-      const { count, error: monthlyUsageError } = await supabase
-        .from('sessions')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', profile.user_id)
-        .in('status', ['scheduled', 'in_progress', 'completed', 'no_show'])
-        .gte('scheduled_at', monthStart.toISOString())
-        .lt('scheduled_at', nextMonthStart.toISOString());
+      const { count, error: monthlyUsageError } = await monthlyQuotaPromise;
       if (monthlyUsageError) throw monthlyUsageError;
       monthlySessionsUsed = count || 0;
       preparationTimings.monthly_quota_ms = Math.round(performance.now() - monthlyQuotaStartedAt);
@@ -5521,77 +5579,36 @@ serve(async (req) => {
       }
     }
 
-    // Verificar sessões agendadas pendentes (dentro de +/- 1 hora)
+    // Verificar sessões agendadas pendentes (+/- 1h), sessão perdida recente e
+    // próximas sessões. As três consultas foram disparadas em paralelo logo após
+    // o perfil; aqui apenas aplicamos os mesmos critérios de antes.
     let pendingScheduledSession = null;
     let recentMissedSession: any = null;
-    if (profile?.user_id) {
+    let upcomingSessions: any[] = [];
+    if (profile?.user_id && sessionLookupsPromise) {
       const scheduledLookupStartedAt = performance.now();
-      const now = new Date();
-      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-      const oneHourAhead = new Date(now.getTime() + 60 * 60 * 1000);
-
-      const { data: scheduledSessions } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('user_id', profile.user_id)
-        .eq('status', 'scheduled')
-        .gte('scheduled_at', oneHourAgo.toISOString())
-        .lte('scheduled_at', oneHourAhead.toISOString())
-        .order('scheduled_at', { ascending: true })
-        .limit(1);
-
+      const [scheduledRes, missedRes, upcomingRes] = await sessionLookupsPromise;
+      const scheduledSessions = scheduledRes.data;
       if (scheduledSessions && scheduledSessions.length > 0) {
         pendingScheduledSession = scheduledSessions[0];
         console.log('📅 Found pending scheduled session:', pendingScheduledSession.id);
       }
 
-      // Se não encontrou sessão scheduled, buscar sessão perdida (cancelled/no_show)
+      // Só considera sessão perdida (últimos 7 dias) se não houver sessão agendada.
       if (!pendingScheduledSession) {
-        const missedLookupStartedAt = performance.now();
-        // Piso temporal: só considera "sessão perdida" recente (últimos 7 dias).
-        // Evita reativar fantasmas de meses atrás quando o usuário volta após sumir.
-        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const { data: missedSessions } = await supabase
-          .from('sessions')
-          .select('*')
-          .eq('user_id', profile.user_id)
-          .in('status', ['cancelled', 'no_show'])
-          .is('started_at', null)
-          .gte('scheduled_at', sevenDaysAgo.toISOString())
-          .lt('scheduled_at', now.toISOString())
-          .or('session_summary.is.null,session_summary.neq.reactivation_declined')
-          .order('scheduled_at', { ascending: false })
-          .limit(1);
-
+        const missedSessions = missedRes.data;
         if (missedSessions && missedSessions.length > 0) {
           recentMissedSession = missedSessions[0];
           console.log('🔍 Found recent missed session:', recentMissedSession.id, 'status:', recentMissedSession.status, 'scheduled_at:', recentMissedSession.scheduled_at);
         }
-        preparationTimings.missed_session_lookup_ms = Math.round(performance.now() - missedLookupStartedAt);
       }
-      preparationTimings.scheduled_session_lookup_ms = Math.round(performance.now() - scheduledLookupStartedAt);
-    }
 
-    // ========================================================================
-    // BUSCAR PRÓXIMAS SESSÕES AGENDADAS (para consciência de agenda)
-    // ========================================================================
-    let upcomingSessions: any[] = [];
-    if (profile?.user_id) {
-      const upcomingStartedAt = performance.now();
-      const { data: upcoming } = await supabase
-        .from('sessions')
-        .select('id, scheduled_at, session_type, focus_topic')
-        .eq('user_id', profile.user_id)
-        .eq('status', 'scheduled')
-        .gt('scheduled_at', new Date().toISOString())
-        .order('scheduled_at', { ascending: true })
-        .limit(5);
-
+      const upcoming = upcomingRes.data;
       if (upcoming && upcoming.length > 0) {
         upcomingSessions = upcoming;
         console.log(`📅 Found ${upcoming.length} upcoming sessions for user`);
       }
-      preparationTimings.upcoming_sessions_ms = Math.round(performance.now() - upcomingStartedAt);
+      preparationTimings.scheduled_session_lookup_ms = Math.round(performance.now() - scheduledLookupStartedAt);
     }
 
     // Verificar se está em sessão ativa e buscar dados completos
@@ -7184,6 +7201,8 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       { role: "user", content: message }
     ];
 
+    // Aguarda tarefas iniciadas em paralelo (modelo configurado e contador diário do perfil).
+    await Promise.all([configuredModelPromise, profileUpdatePromise]);
     console.log("Calling AI (model: " + configuredModel + ") with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0).phase : 'none');
 
     let data: any;
