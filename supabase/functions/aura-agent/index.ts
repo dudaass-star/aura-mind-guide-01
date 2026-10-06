@@ -7188,6 +7188,8 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       { role: "user", content: message }
     ];
 
+    // Aguarda tarefas iniciadas em paralelo (modelo configurado e contador diário do perfil).
+    await Promise.all([configuredModelPromise, profileUpdatePromise]);
     console.log("Calling AI (model: " + configuredModel + ") with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0).phase : 'none');
 
     let data: any;
