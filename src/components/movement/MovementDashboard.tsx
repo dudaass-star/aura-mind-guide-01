@@ -21,7 +21,7 @@ const messages = {
 type Member = { id: string; public_name: string; display_mode: string; referral_code: string; show_achievements: boolean; receive_updates: boolean; created_at: string; ambassador_since: string | null };
 type Recognition = { id: string; kind: string; title: string; body: string; status: string; consent_decision: string; created_at: string };
 type MovementSnapshot = { members: number; started: number; continued: number; mural: Array<{ id: string; title: string; body: string; member_name: string }> };
-type Props = { userId: string; suggestedName?: string; embedded?: boolean; initialAmbassadorIntent?: boolean; onJoined?: () => void };
+type Props = { userId: string; suggestedName?: string; embedded?: boolean; initialAmbassadorIntent?: boolean; onJoined?: () => void; previewIntroduction?: boolean };
 
 const causeMessages = [
   "Ninguém deveria precisar enfrentar tudo sozinho.",
@@ -29,7 +29,7 @@ const causeMessages = [
   "Uma conversa com direção pode mudar o começo de uma história.",
 ] as const;
 
-export function MovementDashboard({ userId, suggestedName = "", embedded = false, initialAmbassadorIntent = false, onJoined }: Props) {
+export function MovementDashboard({ userId, suggestedName = "", embedded = false, initialAmbassadorIntent = false, onJoined, previewIntroduction = false }: Props) {
   const [member, setMember] = useState<Member | null>(null);
   const [referrals, setReferrals] = useState<Array<{ reached_at: string; started_at: string | null; continued_at: string | null; is_valid: boolean }>>([]);
   const [recognitions, setRecognitions] = useState<Recognition[]>([]);
@@ -38,7 +38,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const [name, setName] = useState(suggestedName);
   const [displayMode, setDisplayMode] = useState("first_name");
   const [accepted, setAccepted] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!previewIntroduction);
   const [saving, setSaving] = useState(false);
   const [activatingAmbassador, setActivatingAmbassador] = useState(false);
   const [messageKind, setMessageKind] = useState<keyof typeof messages>("personal");
@@ -66,7 +66,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
     setLoading(false);
   };
 
-  useEffect(() => { void claimMovementReferral().finally(load); }, [userId]);
+  useEffect(() => { if (!previewIntroduction) void claimMovementReferral().finally(load); }, [userId, previewIntroduction]);
 
   const counts = useMemo(() => ({
     reached: referrals.filter((r) => r.is_valid).length,
@@ -85,7 +85,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const nextCurrent = nextAchievement?.metric === "continued" ? counts.continued : nextAchievement?.metric === "started" ? counts.started : 0;
   const nextProgress = nextAchievement ? Math.min(100, Math.round((nextCurrent / nextAchievement.threshold) * 100)) : 100;
   const createMember = async () => {
-    if (!name.trim() || !accepted) return;
+    if (previewIntroduction || !name.trim() || !accepted) return;
     setSaving(true);
     const joiningAsAmbassador = initialAmbassadorIntent || selectedRole === "ambassador";
     const ambassadorSince = joiningAsAmbassador ? new Date().toISOString() : null;
@@ -109,6 +109,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   };
 
   const recordEvent = (eventType: string, metadata: Record<string, string> = {}) => {
+    if (previewIntroduction) return;
     void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "movement", event_type: eventType, source: "app", metadata });
   };
 
@@ -210,7 +211,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
           <label className="block"><span className="mb-2 block text-sm font-semibold">Como aparecer no Mural?</span><select value={displayMode} onChange={(e) => setDisplayMode(e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="first_name">Primeiro nome</option><option value="full_name">Nome completo</option><option value="initials">Iniciais</option><option value="private">Participação privada</option></select></label>
            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-4"><Checkbox checked={accepted} onCheckedChange={(value) => setAccepted(value === true)} className="mt-0.5" /><span className="text-sm leading-relaxed">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Quero fazer parte e ser Embaixador do Movimento Olá Aura. Sei que não há meta, comissão ou obrigação de divulgar." : "Quero fazer parte do Movimento Olá Aura. Sei que participar não me obriga a divulgar."}</span></label>
         </div>
-         <Button className="mt-6 w-full sm:w-auto" size="lg" disabled={!accepted || !name.trim() || saving} onClick={createMember}><HeartHandshake /> {saving ? "Entrando…" : initialAmbassadorIntent || selectedRole === "ambassador" ? "Fazer parte como Embaixador" : "Quero fazer parte"}</Button>
+         <Button className="mt-6 w-full sm:w-auto" size="lg" disabled={previewIntroduction || !accepted || !name.trim() || saving} onClick={createMember}><HeartHandshake /> {saving ? "Entrando…" : initialAmbassadorIntent || selectedRole === "ambassador" ? "Fazer parte como Embaixador" : "Quero fazer parte"}</Button>
       </section>
     </div>
   );

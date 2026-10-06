@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 import movementGroupImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
+import { MovementDashboard } from "@/components/movement/MovementDashboard";
 
 type Member = { id: string; public_name: string; display_mode: string; referral_code: string; status: string; created_at: string; show_achievements: boolean };
 type Referral = { member_id: string; started_at: string | null; continued_at: string | null; is_valid: boolean };
@@ -88,6 +89,14 @@ export default function AdminMovement() {
 
   return <div className="mx-auto max-w-7xl space-y-8 p-5 sm:p-8">
     <header><p className="text-xs font-bold uppercase text-primary">Movimento Olá Aura</p><h1 className="mt-2 text-3xl font-semibold">Impacto e reconhecimento</h1><p className="mt-2 text-sm text-muted-foreground">Acompanhe marcos reais, modere o Mural e reconheça contribuições sem criar competição.</p></header>
+    <section id="previa-apresentacao" className="scroll-mt-6">
+      <p className="text-xs font-bold uppercase text-primary">Prévia privada · sem alterar sua participação</p>
+      <h2 className="mt-2 font-display text-2xl font-semibold">Apresentação do Movimento no App</h2>
+      <p className="mt-2 text-sm text-muted-foreground">A mesma tela de quem ainda não participa. A confirmação de adesão fica desativada nesta prévia.</p>
+      <div className="portal-chat-theme mx-auto mt-6 max-w-3xl bg-background p-4 text-foreground sm:p-6">
+        <MovementDashboard userId="" embedded previewIntroduction />
+      </div>
+    </section>
     <section className="grid gap-3 sm:grid-cols-4">{[{label:"Participantes",value:members.filter((m)=>m.status==="active").length,icon:Users},{label:"Alcançadas",value:totals.reached,icon:HeartHandshake},{label:"Começaram",value:totals.started,icon:Award},{label:"Continuaram",value:totals.continued,icon:ShieldCheck}].map(({label,value,icon:Icon})=><div key={label} className="rounded-lg border bg-card p-5"><Icon className="h-5 w-5 text-primary"/><p className="mt-4 text-3xl font-semibold">{value}</p><p className="text-sm text-muted-foreground">{label}</p></div>)}</section>
     <section className="overflow-hidden rounded-lg border border-primary/30 bg-card">
       <div className="flex flex-col gap-4 border-b border-border bg-secondary/45 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase text-primary">Prévia privada · não publicada</p><h2 className="mt-1 font-display text-2xl font-semibold">Mural do Movimento</h2><p className="mt-1 text-sm text-muted-foreground">Visualize como o Mural ficará antes de usar histórias reais.</p></div><div className="flex gap-2"><Button type="button" size="sm" variant={muralPreviewMode === "filled" ? "default" : "outline"} onClick={() => setMuralPreviewMode("filled")}>Preenchido</Button><Button type="button" size="sm" variant={muralPreviewMode === "empty" ? "default" : "outline"} onClick={() => setMuralPreviewMode("empty")}>Vazio</Button></div></div>
