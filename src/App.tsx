@@ -9,6 +9,7 @@ import { PortalAuthProvider } from "./contexts/PortalAuthContext";
 import GA4RouteTracker from "./components/GA4RouteTracker";
 import MetaRouteTracker from "./components/MetaRouteTracker";
 import ScrollToTop from "./components/ScrollToTop";
+import PortalLogin from "./pages/PortalLogin";
 
 const IndexV2 = lazy(() => import("./pages/IndexV2"));
 const IndexV3 = lazy(() => import("./pages/IndexV3"));
@@ -47,7 +48,6 @@ const userPortalModule = window.location.pathname.startsWith("/meu-espaco")
   ? import("./pages/UserPortal")
   : null;
 const UserPortal = lazy(() => userPortalModule ?? import("./pages/UserPortal"));
-const PortalLogin = lazy(() => import("./pages/PortalLogin"));
 const PortalWhatsAppAccess = lazy(() => import("./pages/PortalWhatsAppAccess"));
 const PortalAuthCallback = lazy(() => import("./pages/PortalAuthCallback"));
 const DemoInviteAccess = lazy(() => import("./pages/DemoInviteAccess"));
