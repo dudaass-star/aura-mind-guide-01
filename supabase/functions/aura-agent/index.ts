@@ -7207,7 +7207,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
       const mainModel = thinkingLevel && configuredModel.startsWith('google/gemini-3')
         ? `${configuredModel}:${thinkingLevel}`
         : configuredModel;
-      performanceBreakdownThinking = mainModel.includes(':') ? mainModel.split(':')[1] : 'default';
+      console.log('🧠 thinking level:', thinkingLevel ?? 'config', 'phase:', thinkingPhase);
       data = await callAI(mainModel, apiMessages, 4096, temperature, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
     } catch (e: any) {
       if (e.status === 429) {
