@@ -5149,6 +5149,62 @@ serve(async (req) => {
     }
     preparationTimings.profile_lookup_ms = Math.round(performance.now() - profileStartedAt);
 
+    // ========================================================================
+    // PARALELISMO DE PREPARAÇÃO — dispara já as consultas que só dependem do
+    // usuário (cota mensal, sessão agendada, sessão perdida e próximas sessões).
+    // Os resultados são consumidos depois com exatamente os mesmos critérios.
+    // ========================================================================
+    let profileUpdatePromise: Promise<void> = Promise.resolve();
+    let monthlyQuotaPromise: PromiseLike<any> | null = null;
+    let sessionLookupsPromise: Promise<any[]> | null = null;
+    if (profile?.user_id) {
+      const prefetchNow = new Date();
+      const monthParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit',
+      }).formatToParts(prefetchNow);
+      const pfYear = monthParts.find((p) => p.type === 'year')?.value || '';
+      const pfMonth = monthParts.find((p) => p.type === 'month')?.value || '';
+      const pfMonthStart = new Date(`${pfYear}-${pfMonth}-01T00:00:00-03:00`);
+      const pfNextMonthStart = new Date(pfMonthStart);
+      pfNextMonthStart.setUTCMonth(pfNextMonthStart.getUTCMonth() + 1);
+      monthlyQuotaPromise = supabase
+        .from('sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', profile.user_id)
+        .in('status', ['scheduled', 'in_progress', 'completed', 'no_show'])
+        .gte('scheduled_at', pfMonthStart.toISOString())
+        .lt('scheduled_at', pfNextMonthStart.toISOString());
+
+      const oneHourAgo = new Date(prefetchNow.getTime() - 60 * 60 * 1000);
+      const oneHourAhead = new Date(prefetchNow.getTime() + 60 * 60 * 1000);
+      const sevenDaysAgo = new Date(prefetchNow.getTime() - 7 * 24 * 60 * 60 * 1000);
+      sessionLookupsPromise = Promise.all([
+        supabase.from('sessions').select('*')
+          .eq('user_id', profile.user_id)
+          .eq('status', 'scheduled')
+          .gte('scheduled_at', oneHourAgo.toISOString())
+          .lte('scheduled_at', oneHourAhead.toISOString())
+          .order('scheduled_at', { ascending: true })
+          .limit(1),
+        // Piso temporal de 7 dias: evita reativar sessões perdidas antigas.
+        supabase.from('sessions').select('*')
+          .eq('user_id', profile.user_id)
+          .in('status', ['cancelled', 'no_show'])
+          .is('started_at', null)
+          .gte('scheduled_at', sevenDaysAgo.toISOString())
+          .lt('scheduled_at', prefetchNow.toISOString())
+          .or('session_summary.is.null,session_summary.neq.reactivation_declined')
+          .order('scheduled_at', { ascending: false })
+          .limit(1),
+        supabase.from('sessions').select('id, scheduled_at, session_type, focus_topic')
+          .eq('user_id', profile.user_id)
+          .eq('status', 'scheduled')
+          .gt('scheduled_at', prefetchNow.toISOString())
+          .order('scheduled_at', { ascending: true })
+          .limit(5),
+      ]);
+    }
+
     const rawPlan = profile?.plan || 'essencial';
     const userPlan = normalizePlan(rawPlan);
     let planConfig = PLAN_CONFIGS[userPlan] || PLAN_CONFIGS.essencial;
@@ -5257,12 +5313,16 @@ serve(async (req) => {
         console.log('🔔 Auto-clearing do_not_disturb - user sent a message');
       }
 
+      // Atualização em segundo plano; aguardada antes da chamada à IA.
       const profileUpdateStartedAt = performance.now();
-      await supabase
-        .from('profiles')
-        .update(updateFields)
-        .eq('id', profile.id);
-      preparationTimings.profile_update_ms = Math.round(performance.now() - profileUpdateStartedAt);
+      profileUpdatePromise = (async () => {
+        const { error } = await supabase
+          .from('profiles')
+          .update(updateFields)
+          .eq('id', profile.id);
+        if (error) console.warn('⚠️ Falha ao atualizar contador diário do perfil:', error.message);
+        preparationTimings.profile_update_ms = Math.round(performance.now() - profileUpdateStartedAt);
+      })();
     }
 
     // ========================================================================
@@ -5441,15 +5501,9 @@ serve(async (req) => {
     const nextMonthStart = new Date(monthStart);
     nextMonthStart.setUTCMonth(nextMonthStart.getUTCMonth() + 1);
     let monthlySessionsUsed = 0;
-    if (profile?.user_id) {
+    if (profile?.user_id && monthlyQuotaPromise) {
       const monthlyQuotaStartedAt = performance.now();
-      const { count, error: monthlyUsageError } = await supabase
-        .from('sessions')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', profile.user_id)
-        .in('status', ['scheduled', 'in_progress', 'completed', 'no_show'])
-        .gte('scheduled_at', monthStart.toISOString())
-        .lt('scheduled_at', nextMonthStart.toISOString());
+      const { count, error: monthlyUsageError } = await monthlyQuotaPromise;
       if (monthlyUsageError) throw monthlyUsageError;
       monthlySessionsUsed = count || 0;
       preparationTimings.monthly_quota_ms = Math.round(performance.now() - monthlyQuotaStartedAt);
