@@ -5047,23 +5047,27 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
     // Read configured AI model from system_config
+    // PARALELISMO: a leitura do modelo roda em segundo plano e só é aguardada
+    // antes da chamada à IA, sem bloquear perfil, cota e agenda.
     const configStartedAt = performance.now();
     let configuredModel = 'google/gemini-2.5-pro';
-    try {
-      const { data: configData } = await supabase
-        .from('system_config')
-        .select('value')
-        .eq('key', 'ai_model')
-        .single();
-      if (configData?.value) {
-        const val = typeof configData.value === 'string' ? configData.value : JSON.stringify(configData.value);
-        configuredModel = val.replace(/^"|"$/g, '');
+    const configuredModelPromise = (async () => {
+      try {
+        const { data: configData } = await supabase
+          .from('system_config')
+          .select('value')
+          .eq('key', 'ai_model')
+          .single();
+        if (configData?.value) {
+          const val = typeof configData.value === 'string' ? configData.value : JSON.stringify(configData.value);
+          configuredModel = val.replace(/^"|"$/g, '');
+        }
+        console.log('🤖 AI model from config:', configuredModel);
+      } catch (e) {
+        console.warn('Failed to read AI model config, using default:', e);
       }
-      console.log('🤖 AI model from config:', configuredModel);
-    } catch (e) {
-      console.warn('Failed to read AI model config, using default:', e);
-    }
-    preparationTimings.model_config_ms = Math.round(performance.now() - configStartedAt);
+      preparationTimings.model_config_ms = Math.round(performance.now() - configStartedAt);
+    })();
 
     const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message, proactive_context, inbound_message_created_at, is_audio_message, journey_episode_id, client_message_id } = await req.json();
     const inboundMessageDate = inbound_message_created_at ? new Date(inbound_message_created_at) : null;
