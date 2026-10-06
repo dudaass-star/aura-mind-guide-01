@@ -797,13 +797,20 @@ export function ConversarTab({
     // Enquanto há resposta pendente, confirma também pelo histórico: o canal ao vivo pode perder um evento.
     let checkingCompletion = false;
     const pendingPoll = window.setInterval(() => {
+      if (document.visibilityState !== "visible" || checkingCompletion) return;
       const trace = responseTraceRef.current;
-      if (document.visibilityState !== "visible" || !trace || trace.completed || Date.now() - Date.parse(trace.sentAt) >= 90_000 || checkingCompletion) return;
+      const traceActive = Boolean(trace && !trace.completed && Date.now() - Date.parse(trace.sentAt) < 180_000);
+      const awaiting = awaitingResponseRef.current;
+      const awaitingActive = Boolean(awaiting && Date.now() - awaiting.createdAt < 180_000);
+      if (!traceActive && !awaitingActive) return;
       checkingCompletion = true;
       void (async () => {
         try {
-          // O primeiro balão não encerra o turno: aguarda o marcador de término do processamento.
-          if (!trace.messageId) return;
+          // Sem rastreio do turno (ex.: após reabrir o App), basta buscar respostas novas pelo histórico.
+          if (!trace || !traceActive || !trace.messageId) {
+            await reconcile();
+            return;
+          }
           const { data: state } = await supabasePortal.from("aura_response_state")
             .select("is_responding,processed_user_message_id,last_user_message_id")
             .eq("user_id", userId).maybeSingle();
