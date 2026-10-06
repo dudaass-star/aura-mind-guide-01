@@ -387,7 +387,12 @@ async function callAI(
 
     // 3. Montar body nativo
     const generationConfig: any = { maxOutputTokens: maxTokens };
-    if (reasoningLevel) {
+    if (reasoningLevel && geminiModel.startsWith('gemini-3')) {
+      // Gemini 3 ignora thinkingBudget=0; o controle efetivo é thinkingLevel.
+      // Mantém temperatura para preservar o tom da conversa.
+      generationConfig.thinkingConfig = { thinkingLevel: reasoningLevel };
+      generationConfig.temperature = temperature;
+    } else if (reasoningLevel) {
       const budgetMap: Record<string, number> = { low: 1024, medium: 8192, high: 24576 };
       generationConfig.thinkingConfig = { thinkingBudget: budgetMap[reasoningLevel] ?? 8192 };
     } else {
@@ -7189,7 +7194,21 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
     try {
       // Dynamic temperature: higher for short messages to reduce echo tendency
       const temperature = userWordCount <= 5 ? 0.9 : 0.8;
-      data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
+      // Raciocínio calibrado: conversa e exploração em "low"; reenquadre e
+      // fechamento de sessão em "medium". Evita monólogo interno longo sem
+      // tirar reflexão dos momentos que constroem a aterrissagem.
+      const thinkingPhase = currentSession
+        ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0).phase
+        : 'none';
+      const deepPhases = ['reframe', 'development', 'transition', 'soft_closing', 'final_closing'];
+      const thinkingLevel = configuredModel.includes(':')
+        ? null
+        : (deepPhases.includes(thinkingPhase) || shouldEndSession ? 'medium' : 'low');
+      const mainModel = thinkingLevel && configuredModel.startsWith('google/gemini-3')
+        ? `${configuredModel}:${thinkingLevel}`
+        : configuredModel;
+      performanceBreakdownThinking = mainModel.includes(':') ? mainModel.split(':')[1] : 'default';
+      data = await callAI(mainModel, apiMessages, 4096, temperature, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
     } catch (e: any) {
       if (e.status === 429) {
         return new Response(JSON.stringify({ 
