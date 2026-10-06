@@ -5525,77 +5525,36 @@ serve(async (req) => {
       }
     }
 
-    // Verificar sessões agendadas pendentes (dentro de +/- 1 hora)
+    // Verificar sessões agendadas pendentes (+/- 1h), sessão perdida recente e
+    // próximas sessões. As três consultas foram disparadas em paralelo logo após
+    // o perfil; aqui apenas aplicamos os mesmos critérios de antes.
     let pendingScheduledSession = null;
     let recentMissedSession: any = null;
-    if (profile?.user_id) {
+    let upcomingSessions: any[] = [];
+    if (profile?.user_id && sessionLookupsPromise) {
       const scheduledLookupStartedAt = performance.now();
-      const now = new Date();
-      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-      const oneHourAhead = new Date(now.getTime() + 60 * 60 * 1000);
-
-      const { data: scheduledSessions } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('user_id', profile.user_id)
-        .eq('status', 'scheduled')
-        .gte('scheduled_at', oneHourAgo.toISOString())
-        .lte('scheduled_at', oneHourAhead.toISOString())
-        .order('scheduled_at', { ascending: true })
-        .limit(1);
-
+      const [scheduledRes, missedRes, upcomingRes] = await sessionLookupsPromise;
+      const scheduledSessions = scheduledRes.data;
       if (scheduledSessions && scheduledSessions.length > 0) {
         pendingScheduledSession = scheduledSessions[0];
         console.log('📅 Found pending scheduled session:', pendingScheduledSession.id);
       }
 
-      // Se não encontrou sessão scheduled, buscar sessão perdida (cancelled/no_show)
+      // Só considera sessão perdida (últimos 7 dias) se não houver sessão agendada.
       if (!pendingScheduledSession) {
-        const missedLookupStartedAt = performance.now();
-        // Piso temporal: só considera "sessão perdida" recente (últimos 7 dias).
-        // Evita reativar fantasmas de meses atrás quando o usuário volta após sumir.
-        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const { data: missedSessions } = await supabase
-          .from('sessions')
-          .select('*')
-          .eq('user_id', profile.user_id)
-          .in('status', ['cancelled', 'no_show'])
-          .is('started_at', null)
-          .gte('scheduled_at', sevenDaysAgo.toISOString())
-          .lt('scheduled_at', now.toISOString())
-          .or('session_summary.is.null,session_summary.neq.reactivation_declined')
-          .order('scheduled_at', { ascending: false })
-          .limit(1);
-
+        const missedSessions = missedRes.data;
         if (missedSessions && missedSessions.length > 0) {
           recentMissedSession = missedSessions[0];
           console.log('🔍 Found recent missed session:', recentMissedSession.id, 'status:', recentMissedSession.status, 'scheduled_at:', recentMissedSession.scheduled_at);
         }
-        preparationTimings.missed_session_lookup_ms = Math.round(performance.now() - missedLookupStartedAt);
       }
-      preparationTimings.scheduled_session_lookup_ms = Math.round(performance.now() - scheduledLookupStartedAt);
-    }
 
-    // ========================================================================
-    // BUSCAR PRÓXIMAS SESSÕES AGENDADAS (para consciência de agenda)
-    // ========================================================================
-    let upcomingSessions: any[] = [];
-    if (profile?.user_id) {
-      const upcomingStartedAt = performance.now();
-      const { data: upcoming } = await supabase
-        .from('sessions')
-        .select('id, scheduled_at, session_type, focus_topic')
-        .eq('user_id', profile.user_id)
-        .eq('status', 'scheduled')
-        .gt('scheduled_at', new Date().toISOString())
-        .order('scheduled_at', { ascending: true })
-        .limit(5);
-
+      const upcoming = upcomingRes.data;
       if (upcoming && upcoming.length > 0) {
         upcomingSessions = upcoming;
         console.log(`📅 Found ${upcoming.length} upcoming sessions for user`);
       }
-      preparationTimings.upcoming_sessions_ms = Math.round(performance.now() - upcomingStartedAt);
+      preparationTimings.scheduled_session_lookup_ms = Math.round(performance.now() - scheduledLookupStartedAt);
     }
 
     // Verificar se está em sessão ativa e buscar dados completos
