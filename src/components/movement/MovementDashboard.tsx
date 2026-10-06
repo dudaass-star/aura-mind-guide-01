@@ -230,8 +230,11 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
 
   if (!member.ambassador_since) return (
     <div className={embedded ? "space-y-8" : "mx-auto max-w-4xl space-y-10 px-5 py-10"}>
-      <MovementMemberOpening ambassador={false} />
-      <MovementCommunityMural stories={snapshot?.mural || []} />
+      <section className="rounded-2xl bg-primary px-5 py-6 text-primary-foreground shadow-xl sm:px-8">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground px-3 py-1 text-[11px] font-bold uppercase text-primary"><Sparkles className="h-3.5 w-3.5" /> Seu espaço · Participante</span>
+        <h2 className="mt-4 font-display text-3xl font-semibold leading-tight">{member.public_name}, você faz parte.</h2>
+        <p className="mt-2 text-sm text-primary-foreground/85">Aqui fica o que você já construiu no Movimento.</p>
+      </section>
       <section>
         <div className="flex items-center gap-3"><Users className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">O Movimento em conjunto</h3></div>
         {snapshot && snapshot.members >= 10 ? <><div className="mt-5 grid grid-cols-3 divide-x divide-border border-y border-border py-5 text-center"><div><p className="font-display text-2xl font-semibold sm:text-3xl">{snapshot.members}</p><p className="mt-1 text-xs text-muted-foreground">Participantes</p></div><div><p className="font-display text-2xl font-semibold sm:text-3xl">{snapshot.started}</p><p className="mt-1 text-xs text-muted-foreground">Começaram</p></div><div><p className="font-display text-2xl font-semibold sm:text-3xl">{snapshot.continued}</p><p className="mt-1 text-xs text-muted-foreground">Continuaram</p></div></div><p className="mt-3 text-xs text-muted-foreground">Números coletivos, sem expor a identidade de ninguém.</p></> : <div className="mt-5 border-y border-border py-6"><Sprout className="h-6 w-6 text-primary" /><p className="mt-3 font-display text-xl font-semibold">Você está entre as primeiras pessoas desta história.</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Os números coletivos aparecem quando houver participantes suficientes para preservar a privacidade de todos.</p></div>}
@@ -261,25 +264,32 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
 
   return (
     <div className={embedded ? "space-y-8" : "mx-auto max-w-5xl space-y-10 px-5 py-10"}>
-      <MovementMemberOpening ambassador />
-      <MovementCommunityMural stories={snapshot?.mural || []} />
+      <section className="overflow-hidden rounded-2xl bg-primary text-primary-foreground shadow-xl">
+        <div className="px-5 pt-6 sm:px-8 sm:pt-8">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground px-3 py-1 text-[11px] font-bold uppercase text-primary"><Sparkles className="h-3.5 w-3.5" /> Seu espaço · Embaixador</span>
+          <h2 className="mt-4 font-display text-3xl font-semibold leading-tight">{member.public_name}, este é o seu impacto.</h2>
+          <p className="mt-2 text-sm text-primary-foreground/85">Tudo aqui foi movido por você. Cada número é alguém que conheceu a Olá Aura pelo seu gesto.</p>
+        </div>
+        <div className="mt-6 grid grid-cols-3 gap-2 px-4 sm:gap-3 sm:px-8">
+          {[{ v: counts.reached, l: "Alcançadas", icon: Share2 }, { v: counts.started, l: "Começaram", icon: MessageCircle }, { v: counts.continued, l: "Continuaram", icon: Sprout }].map(({ v, l, icon: Icon }) => <div key={l} className="rounded-xl bg-card p-3 text-center text-card-foreground shadow-md sm:p-4"><Icon className="mx-auto h-5 w-5 text-primary" /><p className="mt-2 font-display text-3xl font-semibold text-primary sm:text-4xl">{v}</p><p className="mt-1 text-[11px] font-semibold leading-tight text-muted-foreground sm:text-xs">{l}</p></div>)}
+        </div>
+        <div className="px-5 pb-6 pt-5 sm:px-8 sm:pb-8">
+          <p className="text-sm font-semibold">{counts.reached === 0 ? "Seu primeiro gesto começa aqui: envie seu convite para alguém que veio à sua mente." : `${counts.reached} ${counts.reached === 1 ? "pessoa conheceu" : "pessoas conheceram"} a Olá Aura por você.`}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button variant="secondary" asChild><a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" onClick={() => recordEvent("whatsapp_share_started", { message_kind: messageKind })}><MessageCircle /> Enviar no WhatsApp</a></Button>
+            <Button variant="secondary" onClick={copy}><Copy /> Copiar convite</Button>
+          </div>
+          <p className="mt-3 text-[11px] text-primary-foreground/75">Ninguém que recebeu é identificado. Alcançadas abriram o convite; Começaram conversaram; Continuaram seguiram com o acompanhamento.</p>
+        </div>
+      </section>
+      {nextAchievement && <section className="rounded-xl border border-primary/30 bg-card p-5"><div className="flex items-start gap-4"><MovementAchievementSymbol id={nextAchievement.id} index={0} /><div className="w-full"><p className="text-xs font-bold uppercase text-primary">Seu próximo marco</p><div className="mt-1 flex flex-wrap items-baseline justify-between gap-2"><h3 className="font-display text-xl font-semibold">{nextAchievement.name}</h3><p className="text-sm font-semibold">{nextCurrent} de {nextAchievement.threshold}</p></div><Progress value={nextProgress} className="mt-3 h-2" /><p className="mt-3 text-sm text-muted-foreground">{nextAchievement.description}</p></div></div></section>}
+      <section className="pt-4"><p className="text-xs font-bold uppercase text-primary">O que estamos construindo juntos</p><div className="mt-3 space-y-8"><MovementMemberOpening ambassador /><MovementCommunityMural stories={snapshot?.mural || []} /></div></section>
       <section className="bg-primary px-5 py-7 text-primary-foreground sm:px-8">
         <p className="text-xs font-bold uppercase">Leve essa possibilidade adiante</p>
         <h3 className="mt-3 font-display text-2xl font-semibold sm:text-3xl">Quem veio à sua mente?</h3>
         <p className="mt-3 text-sm text-primary-foreground/90">Seu convite, com suas palavras. Sem metas.</p>
         <Button variant="secondary" className="mt-5 h-auto min-h-11 whitespace-normal text-left" onClick={() => document.getElementById("movement-ambassador-kit")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Abrir meu Kit do Embaixador <ArrowRight className="shrink-0" /></Button>
       </section>
-      <section className="border-b border-border pb-7">
-        <p className="text-xs font-bold uppercase text-primary">Seu impacto</p>
-        <h2 className="mt-2 font-display text-3xl font-semibold">Uma possibilidade compartilhada pode ser um começo.</h2>
-        <div className="mt-6 grid grid-cols-3 divide-x divide-border border-y border-border py-5 text-center">
-          <div><p className="font-display text-3xl font-semibold">{counts.reached}</p><p className="mt-1 text-xs text-muted-foreground">Alcançadas</p></div>
-          <div><p className="font-display text-3xl font-semibold">{counts.started}</p><p className="mt-1 text-xs text-muted-foreground">Começaram</p></div>
-          <div><p className="font-display text-3xl font-semibold">{counts.continued}</p><p className="mt-1 text-xs text-muted-foreground">Continuaram</p></div>
-        </div>
-        <p className="mt-3 text-xs text-muted-foreground">Alcançadas abriram seu convite. Começaram iniciaram uma conversa. Continuaram decidiram seguir com o acompanhamento.</p>
-      </section>
-      {nextAchievement && <section className="border-l-2 border-primary pl-5"><div className="flex items-start gap-4"><Sprout className="mt-1 h-6 w-6 shrink-0 text-primary" /><div className="w-full"><p className="text-xs font-bold uppercase text-primary">Seu próximo marco</p><div className="mt-1 flex flex-wrap items-baseline justify-between gap-2"><h3 className="font-display text-xl font-semibold">{nextAchievement.name}</h3><p className="text-sm font-semibold">{nextCurrent} de {nextAchievement.threshold}</p></div><Progress value={nextProgress} className="mt-3 h-2" /><p className="mt-3 text-sm text-muted-foreground">{nextAchievement.description}</p></div></div></section>}
       {pendingRecognitions.length > 0 && <section className="space-y-3"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Você foi reconhecido</h3></div>{pendingRecognitions.map((recognition) => <article key={recognition.id} className="rounded-lg border border-primary/30 bg-secondary/50 p-5"><p className="text-xs font-bold uppercase text-primary">Voz do Movimento</p><h4 className="mt-2 font-display text-xl font-semibold">{recognition.title}</h4><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{recognition.body}</p><p className="mt-4 text-xs text-muted-foreground">Você decide se este reconhecimento pode aparecer no Mural público.</p><div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => decideRecognition(recognition, "accepted")}><CheckCircle2 /> Autorizar publicação</Button><Button variant="outline" onClick={() => decideRecognition(recognition, "declined")}>Manter privado</Button></div></article>)}</section>}
       {decidedRecognitions.length > 0 && <section><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Seus reconhecimentos</h3></div><div className="mt-4 space-y-3">{decidedRecognitions.map((recognition) => <article key={recognition.id} className="border-l-2 border-primary bg-secondary/30 p-5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-primary">{recognition.kind === "voice" ? "Voz do Movimento" : "Reconhecimento"}</p><p className="text-xs text-muted-foreground">{recognition.consent_decision === "accepted" ? "Autorizado para o Mural" : "Visível somente para você"}</p></div><h4 className="mt-2 font-display text-xl font-semibold">{recognition.title}</h4><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{recognition.body}</p></article>)}</div></section>}
       <section id="movement-ambassador-kit" className="scroll-mt-5">
