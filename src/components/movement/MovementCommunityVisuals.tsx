@@ -21,15 +21,15 @@ export function MovementCommunityMural({ stories }: { stories: MuralStory[] }) {
     {stories.length > 0 ? <div className="mt-5 grid gap-4 sm:grid-cols-2">{stories.slice(0, 4).map((story, index) => <article key={story.id} className={`rounded-lg border border-border border-l-4 border-l-primary bg-card p-5 ${index === 0 ? "sm:col-span-2 sm:p-7" : ""}`}>
       <p className="text-xs font-bold uppercase text-primary">{story.member_name}</p>
       <Quote className="mt-4 h-6 w-6 text-primary" aria-hidden="true" />
-      <h4 className="mt-2 font-display text-xl font-semibold sm:text-2xl">{story.title}</h4>
+      <h4 className="mt-2 font-[Outfit] text-xl font-semibold sm:text-2xl">{story.title}</h4>
       <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{story.body}</p>
     </article>)}</div> : <div className="mt-5 flex gap-4 border-l-4 border-primary bg-card px-5 py-6">
       <Sprout className="mt-1 h-7 w-7 shrink-0 text-primary" />
-      <div><p className="font-display text-xl font-semibold">As primeiras histórias ainda estão sendo construídas.</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Este espaço cresce com as vozes de quem faz parte.</p></div>
+      <div><p className="font-[Outfit] text-xl font-semibold">As primeiras histórias ainda estão sendo construídas.</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Este espaço cresce com as vozes de quem faz parte.</p></div>
     </div>}
     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <div className="bg-[hsl(var(--portal-journey))] p-5"><p className="text-xs font-bold uppercase text-[hsl(var(--portal-journey-foreground))]">Pertencimento</p><p className="mt-2 font-display text-xl font-semibold">Um lugar para ser ouvido.</p></div>
-      <div className="bg-[hsl(var(--portal-sessions))] p-5"><p className="text-xs font-bold uppercase text-[hsl(var(--portal-sessions-foreground))]">Um novo começo</p><p className="mt-2 font-display text-xl font-semibold">Um convite pode fazer diferença.</p></div>
+      <div className="bg-[hsl(var(--portal-journey))] p-5"><p className="text-xs font-bold uppercase text-[hsl(var(--portal-journey-foreground))]">Pertencimento</p><p className="mt-2 font-[Outfit] text-xl font-semibold">Um lugar para ser ouvido.</p></div>
+      <div className="bg-[hsl(var(--portal-sessions))] p-5"><p className="text-xs font-bold uppercase text-[hsl(var(--portal-sessions-foreground))]">Um novo começo</p><p className="mt-2 font-[Outfit] text-xl font-semibold">Um convite pode fazer diferença.</p></div>
     </div>
     <p className="mt-3 text-xs text-muted-foreground">No Mural, só histórias autorizadas por quem foi reconhecido.</p>
   </section>;
