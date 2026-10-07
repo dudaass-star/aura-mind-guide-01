@@ -161,7 +161,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Diferenciar visualmente a conversa durante uma sessão, com estado no topo, tempo decorrido, progresso discreto e fechamento apenas no cabeçalho; validado em celular e desktop sem repetir uma sessão completa.
 
 ## Movimento Olá Aura
-- [ ] Aplicar a prévia v3 aprovada: coletivo e histórias antes da contribuição pessoal, com pertencimento igual entre papéis; verificar a área autenticada sem alterar adesões.
+- [x] Aplicar a prévia v3 aprovada: coletivo e histórias antes da contribuição pessoal, com pertencimento igual entre papéis; área autenticada de Eduardo, ordem das seções, foto e acesso ao Kit verificados sem alterar adesões, sem erros ou transbordamento móvel.
 - [x] Entregar imagem da proposta de Mural coletivo para avaliação, sem alterar a experiência dos usuários.
 - [x] Aplicar e verificar os visuais aprovados, mantendo dados reais e consentimento; área de Embaixador autenticada, botão do Kit e tela pequena conferidos.
 - [x] Disponibilizar na administração a prévia da apresentação do Movimento no App, mesmo para Embaixadores, sem alterar adesão ou registrar eventos.
