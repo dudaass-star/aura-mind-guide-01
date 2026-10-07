@@ -4,14 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import movementGroupImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
+import { MOVEMENT_INVITE_MESSAGES } from "@/lib/movement-invite";
 
 const motivations = ["Acredito que ninguém deveria enfrentar tudo sozinho", "Quero que mais pessoas encontrem escuta e direção", "Essa causa faz parte da minha história"];
-const inviteMessages = {
-  user: "Oi! Olha só o que eu descobri: a Olá Aura! Estou usando e está me fazendo muito bem. Acho que você vai adorar também.",
-  supporter: "Oi! Olha só o que eu descobri: a Olá Aura! Conheci a proposta e achei fantástica. Acho que vale conhecer também!",
-};
-const inviteBody = "É um app pra conversar sobre o que você está vivendo e encontrar compreensão, apoio e direção — inclusive quando é difícil explicar o que está acontecendo.\n\nE tem uma coisa que me fez gostar ainda mais: o Movimento Olá Aura, pra que mais pessoas encontrem apoio e não precisem enfrentar tudo sozinhas. Estou fazendo parte e lembrei de você. 💚\n\nDá pra experimentar pelo valor de um cafezinho. ☕\n\nVem conhecer também! Depois me conta o que achou 👇";
-const messageFor = (experience: keyof typeof inviteMessages) => `${inviteMessages[experience]}\n\n${inviteBody}`;
+const inviteMessages = MOVEMENT_INVITE_MESSAGES;
+const messageFor = (experience: keyof typeof inviteMessages) => inviteMessages[experience];
 
 export function MovementEngagementPreview() {
   const [step, setStep] = useState<"motivation" | "invite" | "consent" | "composer" | "return">("motivation");
