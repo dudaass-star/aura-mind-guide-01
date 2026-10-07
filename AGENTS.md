@@ -27,3 +27,5 @@
 - A conversa principal usa raciocínio do Gemini 3 em nível baixo e médio apenas no reenquadre e no fechamento da sessão; isso derruba a espera sem tirar reflexão dos momentos de aterrissagem.
 - A preparação da conversa busca em paralelo, após o perfil, cota e sessões, sem bloquear em configuração ou contador; isso reduz a espera sem mudar o contexto.
 - Movement shares collective-first UI; admin previews never mutate membership.
+
+- Movement engagement previews are admin-only and keep motivation, role consent and sharing simulations in local component state; this prevents previews from changing membership, recording impact or sending real invitations.
