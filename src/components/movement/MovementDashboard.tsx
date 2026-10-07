@@ -12,12 +12,9 @@ import { toast } from "@/hooks/use-toast";
 import movementGroupImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
 import movementImage from "@/assets/movimento-ola-aura.jpg";
 import { MovementAchievementSymbol, MovementCollectiveProgress, MovementCommunityMural, MovementMemberOpening } from "./MovementCommunityVisuals";
+import { MOVEMENT_INVITE_MESSAGES } from "@/lib/movement-invite";
 
-const messages = {
-  personal: "Conheci a Olá Aura e pensei que talvez fizesse sentido para você. É um app para conversar sobre o que está vivendo, compreender padrões e encontrar direção.",
-  movement: "Estou participando do Movimento Olá Aura, uma iniciativa para tornar apoio, compreensão e direção mais acessíveis.",
-  short: "Acho que você pode gostar de conhecer a Olá Aura. Estou te enviando sem compromisso:",
-};
+const messages = MOVEMENT_INVITE_MESSAGES;
 
 type Member = { id: string; public_name: string; display_mode: string; referral_code: string; show_achievements: boolean; receive_updates: boolean; created_at: string; ambassador_since: string | null };
 type Recognition = { id: string; kind: string; title: string; body: string; status: string; consent_decision: string; created_at: string };
@@ -42,8 +39,8 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const [loading, setLoading] = useState(!previewIntroduction);
   const [saving, setSaving] = useState(false);
   const [activatingAmbassador, setActivatingAmbassador] = useState(false);
-  const [messageKind, setMessageKind] = useState<keyof typeof messages>("personal");
-  const [shareMessage, setShareMessage] = useState(messages.personal);
+  const [messageKind, setMessageKind] = useState<keyof typeof messages>("supporter");
+  const [shareMessage, setShareMessage] = useState(messages.supporter);
   const [selectedRole, setSelectedRole] = useState<"participant" | "ambassador" | null>(initialAmbassadorIntent ? "ambassador" : null);
 
   const load = async () => {
@@ -253,7 +250,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   );
 
   const shareUrl = `${window.location.origin}/movimento?por=${member.referral_code}`;
-  const shareText = `${shareMessage.trim()} ${shareUrl}`;
+  const shareText = `${shareMessage.trim()}\n${shareUrl}`;
   const selectMessage = (kind: keyof typeof messages) => { setMessageKind(kind); setShareMessage(messages[kind]); };
   const copy = async () => { await navigator.clipboard.writeText(shareText); recordEvent("invite_copied", { message_kind: messageKind }); toast({ title: "Convite copiado", description: "Agora é só enviar para quem veio à sua mente." }); };
   const share = async () => { recordEvent("share_started", { message_kind: messageKind }); if (navigator.share) await navigator.share({ title: "Movimento Olá Aura", text: shareMessage.trim(), url: shareUrl }); else await copy(); };
@@ -297,8 +294,8 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
         <div className="flex items-center gap-3"><Share2 className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Kit do Embaixador</h3></div>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Escolha um convite, ajuste com suas palavras e envie com seu link pessoal. Você não precisa baixar nada para indicar alguém.</p>
         <p className="mt-5 text-xs font-bold uppercase text-primary">Mensagens com link pessoal</p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">{Object.entries({ personal: "Convite pessoal", movement: "Sobre o Movimento", short: "Mensagem curta" }).map(([key, label]) => <Button key={key} variant={messageKind === key ? "default" : "outline"} onClick={() => selectMessage(key as keyof typeof messages)}>{messageKind === key && <Check />} {label}</Button>)}</div>
-        <label className="mt-4 block"><span className="mb-2 block text-sm font-semibold">Sua mensagem</span><Textarea value={shareMessage} onChange={(event) => setShareMessage(event.target.value)} maxLength={500} rows={5} /><span className="mt-2 block break-all text-xs text-primary">{shareUrl}</span></label>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2" role="group" aria-label="Sua experiência com a Aura">{Object.entries({ user: "Já uso a Aura", supporter: "Ainda não experimentei" }).map(([key, label]) => <Button key={key} variant={messageKind === key ? "default" : "outline"} aria-pressed={messageKind === key} onClick={() => selectMessage(key as keyof typeof messages)}>{messageKind === key && <Check />} {label}</Button>)}</div>
+        <label className="mt-4 block"><span className="mb-2 block text-sm font-semibold">Sua mensagem</span><Textarea value={shareMessage} onChange={(event) => setShareMessage(event.target.value)} maxLength={1200} rows={14} /><span className="mt-2 block break-all text-xs text-primary">{shareUrl}</span></label>
         <div className="mt-3 flex gap-2"><Button onClick={share} disabled={!shareMessage.trim()}><Share2 /> Compartilhar</Button><Button variant="outline" size="icon" aria-label="Copiar convite" title="Copiar convite" onClick={copy} disabled={!shareMessage.trim()}><Copy /></Button><Button variant="outline" size="icon" aria-label="Enviar no WhatsApp" title="Enviar no WhatsApp" asChild><a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" onClick={() => recordEvent("whatsapp_share_started", { message_kind: messageKind })}><MessageCircle /></a></Button></div>
         <div className="mt-6 border-y border-border py-5"><p className="text-xs font-bold uppercase text-muted-foreground">Peças visuais</p><p className="mt-2 font-semibold">Status, Stories e posts serão liberados aqui.</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Esses materiais ainda estão em preparação. Quando estiverem prontos, você poderá compartilhar ou baixar cada peça nesta área.</p></div>
       </section>
