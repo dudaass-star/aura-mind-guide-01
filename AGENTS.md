@@ -16,7 +16,7 @@
 - O Movimento Olá Aura separa alcance, primeira conversa e continuidade; participação pública é opcional e reconhecimento não usa ranking comercial.
 - A atribuição do Movimento é reivindicada na autenticação global do App e o Mural exige consentimento individual; isso preserva impacto e privacidade sem depender de visitar a área do Movimento.
 - Participante e Embaixador são papéis distintos; link, divulgação, impacto e conquistas de indicação exigem adesão voluntária registrada em `movement_members.ambassador_since`.
-- No App, quem ainda não participa conhece o Movimento e escolhe o papel antes de ver o formulário; o destaque de lançamento permanece até a adesão, e as prévias demonstrativas do Mural e do Kit do Embaixador existem apenas na administração e nunca alimentam a experiência pública.
+- Movement onboarding presents the cause and role choice before the form; launch highlights remain until joining, and demo Mural/Kit content stays admin-only to protect public data.
 - A latência da conversa é medida em `chat_turn_metrics.performance_breakdown`, com `preparation_stages_ms` subdividindo a preparação em perfil, cota, agenda, sessão e contexto, além de download/transcrição do áudio, provedor, tratamento e gravação; isso permite localizar gargalos sem atribuir atrasos ao modelo.
 - A conversa consulta respostas pendentes periodicamente enquanto a aba está visível e registra envio, recebimento e exibição correlacionados; isso recupera eventos ao vivo perdidos sem confundir gravação com entrega.
 - O tempo completo da conversa termina quando o último balão do turno foi renderizado após o processamento encerrar, separado do primeiro balão; isso distingue latência técnica do ritmo de entrega.
@@ -26,6 +26,4 @@
 - A reconciliação do extrato Woovi percorre a paginação crescente até o fim e só atribui pagador diferente mediante E2E exato na parcela do mandato, priorizando relações anteriores do pagador; isso alcança mensalidades recentes sem criar vínculos por heurística.
 - A conversa principal usa raciocínio do Gemini 3 em nível baixo e médio apenas no reenquadre e no fechamento da sessão; isso derruba a espera sem tirar reflexão dos momentos de aterrissagem.
 - A preparação da conversa busca em paralelo, após o perfil, cota e sessões, sem bloquear em configuração ou contador; isso reduz a espera sem mudar o contexto.
-- Movement shares collective-first UI; admin previews never mutate membership.
-
-- Movement engagement previews are admin-only and keep motivation, role consent and sharing simulations in local component state; this prevents previews from changing membership, recording impact or sending real invitations.
+- Movement UI is collective-first; admin previews use local state only, never changing membership, recording impact or sending invitations.
