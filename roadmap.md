@@ -161,6 +161,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Diferenciar visualmente a conversa durante uma sessão, com estado no topo, tempo decorrido, progresso discreto e fechamento apenas no cabeçalho; validado em celular e desktop sem repetir uma sessão completa.
 
 ## Movimento Olá Aura
+- [ ] Atualizar e conferir o convite aprovado na prévia privada, com versões para usuários e apoiadores, mantendo mensagem editável e sem envios reais.
 - [x] Criar e conferir prévia administrativa interativa do primeiro gesto, convite imediato, adesão voluntária como Embaixador e retorno; percurso autenticado e recusa conferidos, sem gravações nem compartilhamentos reais.
 - [x] Aplicar a prévia v3 aprovada: coletivo e histórias antes da contribuição pessoal, com pertencimento igual entre papéis; área autenticada de Eduardo, ordem das seções, foto e acesso ao Kit verificados sem alterar adesões, sem erros ou transbordamento móvel.
 - [x] Entregar imagem da proposta de Mural coletivo para avaliação, sem alterar a experiência dos usuários.

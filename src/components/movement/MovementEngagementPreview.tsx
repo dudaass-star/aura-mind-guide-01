@@ -6,19 +6,25 @@ import { Checkbox } from "@/components/ui/checkbox";
 import movementGroupImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
 
 const motivations = ["Acredito que ninguém deveria enfrentar tudo sozinho", "Quero que mais pessoas encontrem escuta e direção", "Essa causa faz parte da minha história"];
-const initialMessage = "Conheci a Olá Aura e lembrei de você. É um espaço para conversar sobre o que está vivendo, compreender padrões e encontrar direção. Estou participando do Movimento e queria te convidar a conhecer.";
+const inviteMessages = {
+  user: "Oi! Olha só o que eu descobri: a Olá Aura! Estou usando e está me fazendo muito bem. Acho que você vai adorar também.",
+  supporter: "Oi! Olha só o que eu descobri: a Olá Aura! Conheci a proposta e achei fantástica. Ainda não experimentei o app, mas estou fazendo parte do Movimento e lembrei de você. Acho que vale conhecer também!",
+};
+const inviteBody = "É um app pra conversar sobre o que você está vivendo e encontrar compreensão, apoio e direção — inclusive quando é difícil explicar o que está acontecendo.\n\nE tem uma coisa que me fez gostar ainda mais: o Movimento Olá Aura, pra que mais pessoas encontrem apoio e não precisem enfrentar tudo sozinhas. Estou fazendo parte e lembrei de você. 💚\n\nDá pra experimentar pelo valor de um cafezinho. ☕\n\nVem conhecer também! Depois me conta o que achou 👇";
+const messageFor = (experience: keyof typeof inviteMessages) => `${inviteMessages[experience]}\n\n${inviteBody}`;
 
 export function MovementEngagementPreview() {
   const [step, setStep] = useState<"motivation" | "invite" | "consent" | "composer" | "return">("motivation");
   const [role, setRole] = useState<"participant" | "ambassador">("participant");
   const [motivation, setMotivation] = useState("");
-  const [message, setMessage] = useState(initialMessage);
+  const [experience, setExperience] = useState<keyof typeof inviteMessages>("supporter");
+  const [message, setMessage] = useState(() => messageFor("supporter"));
   const [consent, setConsent] = useState(false);
   const [notice, setNotice] = useState("");
   const [pendingAction, setPendingAction] = useState<"whatsapp" | "copy">("whatsapp");
 
   const reset = (nextRole: typeof role) => {
-    setRole(nextRole); setStep("motivation"); setMotivation(""); setConsent(false); setMessage(initialMessage); setNotice("");
+    setRole(nextRole); setStep("motivation"); setMotivation(""); setConsent(false); setExperience("supporter"); setMessage(messageFor("supporter")); setNotice("");
   };
   const invite = (action: typeof pendingAction) => {
     setNotice(""); setPendingAction(action);
@@ -79,8 +85,14 @@ export function MovementEngagementPreview() {
         {step === "composer" && <>
           <MessageCircle className="h-7 w-7 text-primary" />
           <h3 className="mt-3 font-display text-2xl font-semibold">Um convite com a sua voz</h3>
+          <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Sua experiência com a Aura">
+            <Button size="sm" variant={experience === "user" ? "default" : "outline"} aria-pressed={experience === "user"} onClick={() => { setExperience("user"); setMessage(messageFor("user")); }}>Já uso a Aura</Button>
+            <Button size="sm" variant={experience === "supporter" ? "default" : "outline"} aria-pressed={experience === "supporter"} onClick={() => { setExperience("supporter"); setMessage(messageFor("supporter")); }}>Ainda não experimentei</Button>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">Escolha a versão que corresponde à sua experiência. Trocar de versão substitui o texto abaixo.</p>
           <label htmlFor="preview-invite-message" className="mt-4 block text-sm font-medium">Mensagem para quem você lembrou</label>
-          <Textarea id="preview-invite-message" className="mt-2 min-h-36" value={message} onChange={(e) => setMessage(e.target.value)} maxLength={700} />
+          <Textarea id="preview-invite-message" className="mt-2 min-h-80" value={message} onChange={(e) => setMessage(e.target.value)} maxLength={1200} />
+          <p className="mt-3 text-xs text-muted-foreground">“Está me fazendo muito bem” deve refletir sua experiência real. O cafezinho se refere à oferta de entrada, não à mensalidade; conferir a oferta do link antes de liberar aos clientes.</p>
           <p className="mt-3 break-all text-xs font-semibold text-primary">Link demonstrativo: olaaura.com.br/movimento?por=seu-link</p>
           <Button className="mt-5 w-full" disabled={!message.trim()} onClick={() => { setStep("return"); setNotice("Abertura do WhatsApp simulada. Nenhuma mensagem foi enviada e nenhum impacto foi registrado."); }}><MessageCircle className="h-4 w-4" />Simular abertura do WhatsApp</Button>
           <Button variant="ghost" className="mt-2 w-full" onClick={() => setStep("invite")}><ArrowLeft className="h-4 w-4" />Voltar ao convite</Button>
