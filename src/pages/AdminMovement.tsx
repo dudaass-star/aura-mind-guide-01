@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 import movementGroupImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
 import { MovementDashboard } from "@/components/movement/MovementDashboard";
+import { MovementEngagementPreview } from "@/components/movement/MovementEngagementPreview";
 
 type Member = { id: string; public_name: string; display_mode: string; referral_code: string; status: string; created_at: string; show_achievements: boolean };
 type Referral = { member_id: string; started_at: string | null; continued_at: string | null; is_valid: boolean };
@@ -89,6 +90,7 @@ export default function AdminMovement() {
 
   return <div className="mx-auto max-w-7xl space-y-8 p-5 sm:p-8">
     <header><p className="text-xs font-bold uppercase text-primary">Movimento Olá Aura</p><h1 className="mt-2 text-3xl font-semibold">Impacto e reconhecimento</h1><p className="mt-2 text-sm text-muted-foreground">Acompanhe marcos reais, modere o Mural e reconheça contribuições sem criar competição.</p></header>
+    <MovementEngagementPreview />
     <section id="previa-apresentacao" className="scroll-mt-6">
       <p className="text-xs font-bold uppercase text-primary">Prévia privada · sem alterar sua participação</p>
       <h2 className="mt-2 font-display text-2xl font-semibold">Apresentação do Movimento no App</h2>
