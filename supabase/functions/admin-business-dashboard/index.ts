@@ -45,14 +45,15 @@ Deno.serve(async (req) => {
       }
       return rows;
     }
-    const [profiles, subs, charges, asaas, inter, messages, sessions] = await Promise.all([
+    const [profiles, subs, charges, asaas, inter, messages, sessions, interSubs] = await Promise.all([
       all('profiles', 'user_id,email,name,status,canceled_at'),
       all('woovi_subscriptions', 'subscription_id,user_id,customer_name,customer_email,plan,billing_period,value_cents,next_charge_date,entry_paid_at,replaced_by_subscription_id,status,is_trial,trial_value_cents,start_date,created_at'),
-      all('woovi_charges', 'id,subscription_id,installment_id,user_id,kind,cycle_index,due_date,paid_at,value_cents,status'),
+      all('woovi_charges', 'id,subscription_id,installment_id,user_id,kind,cycle_index,due_date,paid_at,value_cents,status,raw_payload'),
       all('asaas_payments', 'id,asaas_payment_id,user_id,customer_name,customer_email,plan,billing_period,amount_cents,status,paid_at,asaas_subscription_id,raw_payload,is_trial'),
-      all('inter_pix_charges', 'id,user_id,cycle_index,due_date,paid_at,value_cents,status'),
+      all('inter_pix_charges', 'id,id_rec,user_id,cycle_index,due_date,paid_at,value_cents,status'),
       all('messages', 'id,user_id,created_at,channel', q => q.eq('role', 'user').eq('channel', 'in_app').gte('created_at', start).lt('created_at', end)),
       all('sessions', 'id,user_id,scheduled_at,status', q => q.gte('scheduled_at', start).lt('scheduled_at', end)),
+      all('inter_pix_recurrences', 'id,id_rec,user_id,billing_period,is_trial,customer_name,customer_email,plan'),
     ]);
     const demoIds = new Set(profiles.filter(p => p.status === 'demo').map(p => p.user_id));
     const demoEmails = new Set(profiles.filter(p => p.status === 'demo').map(p => p.email?.toLowerCase()).filter(Boolean));
@@ -82,12 +83,17 @@ Deno.serve(async (req) => {
       if (!e.due && !e.paid) return;
       mergeBilling(entries, e);
     }
+    function exactInstallment(c: any, i: any): boolean {
+      const cobr = i?.cobr || {};
+      const ids = [i?.globalID, i?.id, cobr?.endToEndId, cobr?.identifierId, ...(Array.isArray(cobr.tries) ? cobr.tries.map((t: any) => t.endToEndId) : [])].filter(Boolean).map(String);
+      return [c.installment_id, c.raw_payload?.pix?.endToEndId, c.raw_payload?.charge?.endToEndId].filter(Boolean).some(id => ids.includes(String(id)));
+    }
     const subMap = new Map(subs.map(s => [s.subscription_id, s]));
     for (const c of charges) {
       const s = subMap.get(c.subscription_id);
       if (s?.billing_period !== 'monthly' || (c.kind === 'entry' && s.is_trial)) continue;
-      const inst = (official.get(c.subscription_id) || []).find(i => String(i.globalID || i.id) === c.installment_id);
-      const due = c.due_date || (c.kind === 'entry' ? s.start_date : null) || String(inst?.dueDate || inst?.dateGenerateCharge || inst?.cobr?.dueDate || '').slice(0, 10) || null;
+      const inst = (official.get(c.subscription_id) || []).find(i => exactInstallment(c, i));
+      const due = String(inst?.dueDate || inst?.dateGenerateCharge || inst?.cobr?.dueDate || '').slice(0, 10) || c.due_date || (c.kind === 'entry' ? s.start_date : null) || null;
       add({ id: `woovi:${c.subscription_id}:${due || c.installment_id || c.id}`, userId: c.user_id || s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due, source: 'cobrança registrada', paid: c.status === 'COMPLETED' && c.paid_at ? day(c.paid_at) : null, cents: c.value_cents || s.value_cents });
     }
     // Parcelas oficiais preservam vencimentos históricos mesmo após cancelamento.
@@ -97,7 +103,7 @@ Deno.serve(async (req) => {
         const cents = Number(i.value ?? i.cobr?.value ?? s.value_cents);
         if (!validDate(due) || (s.is_trial && cents === s.trial_value_cents)) continue;
         if (['CANCELED', 'CANCELLED', 'DELETED'].includes(String(i.status).toUpperCase())) continue;
-        const charge = charges.find(c => c.subscription_id === s.subscription_id && (c.installment_id === String(i.globalID || i.id) || c.due_date === due) && c.paid_at);
+        const charge = charges.find(c => c.subscription_id === s.subscription_id && (exactInstallment(c, i) || (c.due_date === due && !String(c.installment_id).startsWith('E'))) && c.paid_at);
         add({ id: `woovi:${s.subscription_id}:${due}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due, paid: charge?.status === 'COMPLETED' ? day(charge.paid_at) : null, cents, source: 'parcela oficial Woovi' });
         if (['PAID', 'COMPLETED', 'CONFIRMED', 'CONCLUDED'].includes(String(i.status).toUpperCase()) && !charge) issues.push({ provider: 'woovi', reason: 'Parcela oficial paga sem pagamento conciliado', count: 1, cents });
       }
@@ -115,8 +121,13 @@ Deno.serve(async (req) => {
       }
       add({ id: `asaas:${p.asaas_subscription_id}:${due || p.id}`, userId: p.user_id, email: p.customer_email, name: p.customer_name, plan: p.plan, provider: 'asaas', due, paid: ['RECEIVED', 'CONFIRMED'].includes(p.status) && p.paid_at ? day(p.paid_at) : null, cents: p.amount_cents });
     }
-    // O Inter sem identificação do ciclo mensal não é misturado às mensalidades.
-    if (inter.length) { warnings.push('Inter não incluído: o histórico local não identifica o intervalo mensal com segurança.'); issues.push({ provider: 'inter', reason: 'Ciclo das cobranças Inter não comprovado', count: inter.length, cents: 0 }); }
+    const interMap = new Map(interSubs.map(s => [s.id_rec, s]));
+    for (const c of inter) {
+      const s = interMap.get(c.id_rec);
+      if (!s || !s.billing_period) { issues.push({ provider: 'inter', reason: 'Cobrança Inter sem ciclo comprovado', count: 1, cents: c.value_cents }); continue; }
+      if (s.billing_period !== 'monthly' || (s.is_trial && c.cycle_index === 0)) continue;
+      add({ id: `inter:${c.id_rec}:${c.due_date || c.id}`, userId: c.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'inter', due: c.due_date, paid: ['CONCLUIDA', 'COMPLETED', 'PAID'].includes(c.status) && c.paid_at ? day(c.paid_at) : null, cents: c.value_cents, source: 'cobrança Inter' });
+    }
     const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
     if (!stripeKey) throw new Error('Cartão indisponível: configuração ausente');
     const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });

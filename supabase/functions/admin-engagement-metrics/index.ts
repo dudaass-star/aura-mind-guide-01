@@ -1516,7 +1516,7 @@ Deno.serve(async (req) => {
     let wooviMrrCents = 0;
     const wooviActiveUsers = new Set<string>();
     for (const sub of wooviSubs) {
-      if (!['ATIVA', 'APROVADA'].includes(String(sub.status)) || sub.replaced_by_subscription_id || !sub.entry_paid_at || demoUserIds.has(sub.user_id as string)) continue;
+      if (!['ATIVA', 'APROVADA'].includes(String(sub.status)) || sub.pix_status !== 'APPROVED' || sub.replaced_by_subscription_id || !sub.entry_paid_at || demoUserIds.has(sub.user_id as string)) continue;
       const months = ({ monthly: 1, quarterly: 3, semiannual: 6, yearly: 12 } as Record<string, number>)[String(sub.billing_period)];
       if (!months) { metricWarnings.push('Ciclo Woovi não reconhecido; MRR parcial'); continue; }
       wooviMrrCents += Math.round(Number(sub.value_cents) / months);
