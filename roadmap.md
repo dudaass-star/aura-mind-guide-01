@@ -5,6 +5,9 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Orações
+- [ ] Integrar a oração aprovada com player ampliado, frases sincronizadas ao áudio final e modo só ouvir; verificar reprodução, avanço, pausa e telas pequena/grande.
+
 - [x] Concluir a revisão final do Movimento: atribuição global, Voz do Movimento, mensagens editáveis, autorização individual do Mural, segurança, engajamento e validação administrativa.
 - [x] Refinar a página do Movimento: enquadramento móvel da foto, primeira tela mais objetiva e adesão com mais contexto e presença visual.
 
