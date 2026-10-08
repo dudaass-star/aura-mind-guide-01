@@ -5,6 +5,9 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Orações
+- [x] Integrar a oração aprovada com player ampliado, 25 frases alinhadas ao áudio final e modo só ouvir; reprodução, pausa, avanço, início/fim e telas pequena/grande conferidos na conta de Eduardo. Áudio CDN confirmado; conferência local usa a mesma gravação com suporte a intervalos. Aguarda publicação do App.
+
 - [x] Concluir a revisão final do Movimento: atribuição global, Voz do Movimento, mensagens editáveis, autorização individual do Mural, segurança, engajamento e validação administrativa.
 - [x] Refinar a página do Movimento: enquadramento móvel da foto, primeira tela mais objetiva e adesão com mais contexto e presença visual.
 

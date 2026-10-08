@@ -796,3 +796,44 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground));
 }
+/* Reprodução contemplativa das orações, isolada das meditações. */
+.prayer-theme {
+  --background: 160 22% 9%;
+  --foreground: 105 20% 95%;
+  --primary: 147 35% 74%;
+  --primary-foreground: 160 22% 9%;
+  --secondary: 160 13% 20%;
+  --secondary-foreground: 105 20% 95%;
+  --muted-foreground: 150 9% 62%;
+  --accent: 160 15% 17%;
+  --accent-foreground: 105 20% 95%;
+  --border: 160 13% 26%;
+  --ring: 147 35% 74%;
+  --destructive: 0 75% 78%;
+  font-family: "Figtree", sans-serif;
+}
+.prayer-player { height: 100dvh; letter-spacing: 0; }
+.prayer-player .font-display { font-family: "Outfit", sans-serif; }
+.prayer-body { grid-template-rows: auto minmax(0, 1fr); }
+.prayer-cover { aspect-ratio: 3 / 2; max-height: 22vh; }
+.prayer-title { max-width: 30rem; }
+.prayer-lyrics { scrollbar-width: none; mask-image: linear-gradient(transparent, currentColor 14%, currentColor 82%, transparent); }
+.prayer-lyrics::-webkit-scrollbar { display: none; }
+.prayer-lines { padding: 9rem 0; }
+.prayer-line { transition: color 350ms ease; letter-spacing: 0; }
+.prayer-line[aria-current="true"] { color: hsl(var(--foreground)); }
+.prayer-listen-only { grid-template-rows: minmax(0, 1fr); max-width: 38rem; }
+.prayer-listen-only .prayer-cover { max-height: 45vh; }
+@media (min-width: 768px) {
+  .prayer-body { grid-template-rows: minmax(0, 1fr); padding-top: 2rem; padding-bottom: 1rem; }
+  .prayer-cover { max-height: 55vh; aspect-ratio: 1; }
+  .prayer-title { font-size: 2rem; }
+  .prayer-lines { padding: 35vh 0; }
+}
+@media (max-height: 700px) and (max-width: 767px) {
+  .prayer-cover { max-height: 14vh; }
+  .prayer-title { font-size: 1.125rem; }
+  .prayer-artwork > div { margin-top: 0.5rem; }
+  .prayer-player footer { padding-top: 0.75rem; }
+}
+@media (prefers-reduced-motion: reduce) { .prayer-line { transition: none; } }
