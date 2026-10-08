@@ -27,5 +27,5 @@
 - A conversa principal usa raciocínio do Gemini 3 em nível baixo e médio apenas no reenquadre e no fechamento da sessão; isso derruba a espera sem tirar reflexão dos momentos de aterrissagem.
 - A preparação da conversa busca em paralelo, após o perfil, cota e sessões, sem bloquear em configuração ou contador; isso reduz a espera sem mudar o contexto.
 - Movement is collective-first; local previews share live invite copy.
-- Prayers are separate; cues match final audio.
-- Home callbacks preserve tracking; meditation dialogs close on tab exit to stop audio.
+- Prayers share one catalog/player to keep art, audio and cues matched.
+- Home keeps tracking; practice dialogs stop audio on exit.
