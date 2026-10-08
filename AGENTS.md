@@ -28,4 +28,4 @@
 - A preparação da conversa busca em paralelo, após o perfil, cota e sessões, sem bloquear em configuração ou contador; isso reduz a espera sem mudar o contexto.
 - Movement is collective-first; local previews share live invite copy.
 - Prayers are separate; cues match final audio.
-- Home areas reuse navigation callbacks to preserve access and tracking.
+- Home callbacks preserve tracking; meditation dialogs close on tab exit to stop audio.

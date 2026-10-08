@@ -1,23 +1,21 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
-import { Headphones, Clock, Search, CheckCircle2, Sparkles } from "lucide-react";
+import { Headphones, Search, CheckCircle2, Moon, Wind, Focus, Play, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState, PortalLoadingInline } from "./shared";
-import AudioPlayer from "./AudioPlayer";
+import { MeditationPlayer, type MeditationTrack } from "./MeditationPlayer";
+import restImage from "@/assets/meditation-rest.jpg";
+import presenceImage from "@/assets/meditation-presence.jpg";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 
 interface MeditacoesTabProps {
   userId?: string;
+  isActive?: boolean;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -29,10 +27,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   geral: "Geral",
 };
 
-export function MeditacoesTab({ userId }: MeditacoesTabProps) {
+export function MeditacoesTab({ userId, isActive = true }: MeditacoesTabProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
   const [duration, setDuration] = useState<string>("all");
+  const [selected, setSelected] = useState<MeditationTrack | null>(null);
+  useEffect(() => { if (!isActive) setSelected(null); }, [isActive]);
   const trackedAudios = useRef(new Set<string>());
 
   const recordAudioStarted = (meditationId: string) => {
@@ -43,7 +43,7 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
     reportTodayDirectionProgress(userId, "completed", "practice");
   };
 
-  const { data: meditations, isLoading } = useQuery({
+  const { data: meditations, isLoading, isError, refetch } = useQuery({
     queryKey: ["portal-all-meditations"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -57,7 +57,7 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
     },
   });
 
-  const { data: audios } = useQuery({
+  const { data: audios, isLoading: audioLoading, isError: audioError, refetch: refetchAudios } = useQuery({
     queryKey: ["portal-meditation-audios"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -122,7 +122,8 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
     return merged.slice(0, 3);
   }, [withAudio, heardSet, userId]);
 
-  if (isLoading) return <PortalLoadingInline />;
+  if (isLoading || audioLoading) return <PortalLoadingInline />;
+  if (isError || audioError) return <div className="space-y-3 py-8 text-center"><p className="text-sm text-muted-foreground">Não foi possível carregar as meditações.</p><Button variant="outline" onClick={() => { void refetch(); void refetchAudios(); }}>Tentar novamente</Button></div>;
 
   if (withAudio.length === 0) {
     return (
@@ -149,146 +150,39 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
     return true;
   });
 
-  const grouped = filtered.reduce((acc: Record<string, any[]>, m: any) => {
-    const cat = m.category || "Geral";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(m);
-    return acc;
-  }, {});
+  const featured = suggested.find((m) => (m.category || "").toLowerCase() === "sono")
+    || withAudio.find((m) => (m.category || "").toLowerCase() === "sono") || suggested[0] || withAudio[0];
+  const imageFor = (m: MeditationTrack) => (m.category || "").toLowerCase() === "sono" ? restImage : presenceImage;
+  const moments = [
+    { category: "sono", label: "Quero descansar", icon: Moon },
+    { category: "ansiedade", label: "Acalmar a mente", icon: Wind },
+    { category: "foco", label: "Encontrar foco", icon: Focus },
+  ].filter((moment) => allCategories.includes(moment.category));
+  const card = (m: MeditationTrack) => <Button key={m.id} variant="ghost" className="h-auto w-full justify-start gap-3 whitespace-normal rounded-lg border border-border bg-card p-3 text-left" onClick={() => setSelected(m)} aria-label={`Ouvir ${m.title}`}>
+    <img src={imageFor(m)} alt="" loading="lazy" width={1536} height={1024} className="h-16 w-16 shrink-0 rounded-md object-cover" />
+    <span className="min-w-0 flex-1 space-y-1"><span className="block text-sm font-semibold leading-snug text-foreground">{m.title}</span><span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">{CATEGORY_LABELS[(m.category || "geral").toLowerCase()] || m.category} · {Math.round((m.duration_seconds || 0) / 60)} min{heardSet.has(m.id) && <span className="inline-flex items-center gap-1 text-primary"><CheckCircle2 className="h-3 w-3" /> já ouvi</span>}</span></span>
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-primary"><Play className="h-4 w-4" fill="currentColor" /></span>
+  </Button>;
 
-  return (
-    <div className="portal-area-page space-y-6">
-      {suggested.length > 0 && (
-        <div className="space-y-3 animate-fade-in">
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-[#87A878]" />
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[#1B2A4E] font-bold font-['Nunito']">
-              Sugeridas pra você
-            </p>
-          </div>
-          {suggested.map((m: any, idx: number) => (
-            <MeditationCard
-              key={`s-${m.id}`}
-              meditation={m}
-              audioUrl={audioMap.get(m.id)}
-              heard={heardSet.has(m.id)}
-              idx={idx}
-              onPlay={() => recordAudioStarted(m.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      <div className="space-y-2 animate-fade-in">
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#1B2A4E]/50" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar meditação..."
-            className="pl-9 h-10 font-['Nunito'] text-sm bg-white/60 border-[#87A878]/20 text-[#1B2A4E]"
-          />
-        </div>
-        <div className="flex gap-2">
-          <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="h-9 text-xs font-['Nunito'] flex-1 bg-white/60 border-[#87A878]/20 text-[#1B2A4E]">
-              <SelectValue placeholder="Categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas categorias</SelectItem>
-              {allCategories.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {CATEGORY_LABELS[c] || c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={duration} onValueChange={setDuration}>
-            <SelectTrigger className="h-9 text-xs font-['Nunito'] flex-1 bg-white/60 border-[#87A878]/20 text-[#1B2A4E]">
-              <SelectValue placeholder="Duração" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Qualquer duração</SelectItem>
-              <SelectItem value="short">Até 5 min</SelectItem>
-              <SelectItem value="medium">5–12 min</SelectItem>
-              <SelectItem value="long">Mais de 12 min</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+  return <section className="meditations-theme space-y-7">
+    <div className="space-y-2"><p className="flex items-center gap-2 text-xs font-semibold text-primary"><Headphones className="h-4 w-4" /> Um momento para você</p><h2 className="font-display text-3xl leading-tight text-foreground">Respire. O resto pode esperar.</h2><p className="text-sm text-muted-foreground">Encontre uma pausa que combine com o seu momento.</p></div>
+    {featured && <div className="meditation-feature relative isolate flex min-h-80 flex-col justify-end overflow-hidden rounded-lg p-5 sm:min-h-96 sm:p-7">
+      <img src={imageFor(featured)} width={1536} height={1024} alt="Quarto tranquilo com jardim ao anoitecer" className="absolute inset-0 -z-20 h-full w-full object-cover" />
+      <div className="meditation-feature-shade absolute inset-0 -z-10" />
+      <div className="meditation-feature-copy max-w-lg space-y-2"><p className="text-xs font-semibold">Sua pausa de hoje · {Math.round((featured.duration_seconds || 0) / 60)} min</p><h3 className="font-display text-2xl leading-tight sm:text-3xl">{featured.title}</h3>{featured.description && <p className="text-sm leading-relaxed">{featured.description}</p>}</div>
+      <Button className="mt-4 w-fit max-w-full whitespace-normal" size="lg" onClick={() => setSelected(featured)}><Play fill="currentColor" /> Começar minha pausa</Button>
+    </div>}
+    <section aria-label="Escolha pelo momento" className="space-y-3"><h3 className="text-base font-semibold text-foreground">Como você quer se sentir?</h3><div className="flex flex-wrap gap-2">{moments.map((moment) => <Button key={moment.category} size="sm" variant={category === moment.category ? "default" : "outline"} aria-pressed={category === moment.category} onClick={() => { setCategory(category === moment.category ? "all" : moment.category); setQuery(""); setDuration("all"); }}><moment.icon />{moment.label}</Button>)}</div></section>
+    {suggested.length > 0 && category === "all" && !query && duration === "all" && <section className="space-y-3" aria-label="Sugeridas pra você"><h3 className="flex items-center gap-2 text-base font-semibold text-foreground"><Sparkles className="h-4 w-4 text-primary" /> Sugeridas pra você</h3><div className="grid gap-2 sm:grid-cols-2">{suggested.filter((m) => m.id !== featured?.id).map(card)}</div></section>}
+    <section className="space-y-4" aria-label="Biblioteca de meditações">
+      <div className="flex items-center justify-between gap-3"><h3 className="text-lg font-semibold text-foreground">Sua biblioteca</h3><span className="text-xs text-muted-foreground">{filtered.length} práticas</span></div>
+      <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Buscar meditação" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar meditação..." className="bg-card pl-9" /></div>
+      <div className="grid grid-cols-2 gap-2">
+        <Select value={category} onValueChange={setCategory}><SelectTrigger aria-label="Categoria" className="min-w-0 bg-card text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todas categorias</SelectItem>{allCategories.map((c) => <SelectItem key={c} value={c}>{CATEGORY_LABELS[c] || c}</SelectItem>)}</SelectContent></Select>
+        <Select value={duration} onValueChange={setDuration}><SelectTrigger aria-label="Duração" className="min-w-0 bg-card text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Qualquer duração</SelectItem><SelectItem value="short">Até 5 min</SelectItem><SelectItem value="medium">5–12 min</SelectItem><SelectItem value="long">Mais de 12 min</SelectItem></SelectContent></Select>
       </div>
-
-      {filtered.length === 0 && (
-        <p className="text-sm text-[#2A2A2A]/60 font-['Nunito'] text-center py-6">
-          Nenhuma meditação corresponde aos filtros.
-        </p>
-      )}
-
-      {Object.entries(grouped).map(([cat, items]) => (
-        <div key={cat} className="space-y-3">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-[#87A878] font-bold font-['Nunito']">
-            {CATEGORY_LABELS[cat.toLowerCase()] || cat}
-          </p>
-          {(items as any[]).map((meditation: any, idx: number) => (
-            <MeditationCard
-              key={meditation.id}
-              meditation={meditation}
-              audioUrl={audioMap.get(meditation.id)}
-              heard={heardSet.has(meditation.id)}
-              idx={idx}
-              onPlay={() => recordAudioStarted(meditation.id)}
-            />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MeditationCard({
-  meditation,
-  audioUrl,
-  heard,
-  idx,
-  onPlay,
-}: {
-  meditation: any;
-  audioUrl?: string;
-  heard: boolean;
-  idx: number;
-  onPlay: () => void;
-}) {
-  return (
-    <div
-      className="rounded-2xl border border-[#87A878]/15 bg-white/60 p-4 space-y-3 shadow-sm hover:shadow-md hover:border-[#87A878]/30 transition-all animate-fade-up"
-      style={{ animationDelay: `${idx * 80}ms` }}
-    >
-      <div className="flex items-start gap-3">
-        <div className="bg-[#B8A5D9]/25 rounded-full p-2.5 mt-0.5 shrink-0">
-          <Headphones size={16} className="text-[#1B2A4E]" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-['Fraunces'] text-lg font-semibold text-[#1B2A4E] leading-tight">
-              {meditation.title}
-            </p>
-            {heard && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-['Nunito'] font-bold text-[#87A878] bg-[#87A878]/12 rounded-full px-2 py-0.5">
-                <CheckCircle2 size={10} /> já ouvi
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <Clock size={12} className="text-[#87A878]" />
-            <p className="text-xs text-[#2A2A2A]/60 font-['Nunito'] font-semibold">
-              {Math.round(meditation.duration_seconds / 60)} min
-            </p>
-          </div>
-        </div>
-      </div>
-      {meditation.description && (
-        <p className="text-sm text-[#2A2A2A]/80 font-['Nunito'] leading-relaxed">{meditation.description}</p>
-      )}
-      {audioUrl && <AudioPlayer src={audioUrl} onPlay={onPlay} />}
-    </div>
-  );
+      {filtered.length ? <div className="grid gap-2 sm:grid-cols-2">{filtered.map(card)}</div> : <p className="py-6 text-center text-sm text-muted-foreground">Nenhuma meditação corresponde aos filtros.</p>}
+    </section>
+    {selected && isActive && audioMap.get(selected.id) && <MeditationPlayer key={selected.id} track={selected} src={audioMap.get(selected.id)} image={imageFor(selected)} onClose={() => setSelected(null)} onPlay={() => recordAudioStarted(selected.id)} />}
+  </section>;
 }

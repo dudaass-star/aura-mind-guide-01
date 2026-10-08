@@ -524,7 +524,7 @@ const UserPortal = () => {
           {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("oracoes") && <div className={activeTab === "oracoes" ? "block" : "hidden"} aria-hidden={activeTab !== "oracoes"}><OracoesTab isActive={activeTab === "oracoes"} /></div>}
-          {visitedTabs.has("meditacoes") && <div className={activeTab === "meditacoes" ? "block" : "hidden"} aria-hidden={activeTab !== "meditacoes"}><MeditacoesTab userId={userId} /></div>}
+          {visitedTabs.has("meditacoes") && <div className={activeTab === "meditacoes" ? "block" : "hidden"} aria-hidden={activeTab !== "meditacoes"}><MeditacoesTab userId={userId} isActive={activeTab === "meditacoes"} /></div>}
           {visitedTabs.has("movimento") && <div className={activeTab === "movimento" ? "block" : "hidden"} aria-hidden={activeTab !== "movimento"}><MovementDashboard userId={userId} suggestedName={profile?.name || ""} embedded onJoined={() => void refetchMovementMember()} /></div>}
           </Suspense>
         </div>
