@@ -6,6 +6,8 @@
 # Roadmap
 
 ## Panorama do negócio
+- [x] Implementar conciliação de receita por pagamento do ciclo, vínculo perfil/autenticação, ciclos semestrais e todos os meios; separar experimentação, risco e valores sem comprovação. Sete testes passaram, fontes PIX completas conferidas (517 contratos Woovi, 573 cobranças), layout sem erros.
+- [ ] Validar receita total autenticada após disponibilização automática da nova função e atualização da cópia de cartão; última resposta válida era versão 4, cópia contém somente preços/faturas, sem assinaturas, e tentativa seguinte falhou por limite de consultas Stripe no cálculo legado. Três contratos PIX têm pagamento sem vencimento comprovado e ficam explicitamente a conferir; não certificar total enquanto houver essas lacunas.
 - [x] Implementar gráfico de conversão semanal para primeira mensalidade com coortes, cancelados e exclusão de semanas futuras; 7 testes passaram e fórmula PIX conferida com 225 semanas reais.
 - [ ] Validar dados completos no gráfico autenticado após atualização das funções e cópia de cartão; a chamada hospedada ainda retorna a versão anterior e aguarda disponibilização automática. Layout autenticado e ausência de atualização financeira na abertura conferidos.
 - [x] Ajustar somente a atualização financeira para cada 6 horas (00h, 06h, 12h e 18h BRT); agendamento ativo e autenticação protegida conferidos, sem chamada financeira na rotina administrativa de 5 minutos.

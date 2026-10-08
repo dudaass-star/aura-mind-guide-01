@@ -31,6 +31,15 @@ interface CostBreakdown {
 }
 
 interface Metrics {
+  revenueReconciliation?: {
+    complete: boolean; providerUpdatedAt: string | null; activeProfiles: number;
+    activeBreakdown: Record<string, number>;
+    trial: { contracts: number; brl: number };
+    risk: { contracts: number; brl: number };
+    unverified: { contracts: number; brl: number };
+  };
+  interActiveUsersCount?: number;
+  interMrrBRL?: number;
   metricWarnings?: string[];
   mrrGrandTotalBRL?: number;
   activeSubscriptionsTotalCount?: number;
@@ -969,11 +978,11 @@ export default function AdminEngagement() {
               <>
                 {!!metrics.metricWarnings?.length && <div className="border-l-2 border-border pl-4 text-xs text-muted-foreground space-y-1">{metrics.metricWarnings.map(w => <p key={w}>{w}</p>)}</div>}
                 {/* Hero MRR Card */}
-                <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-accent/5">
+                {!metrics.revenueReconciliation ? <div className="border-l-2 border-primary pl-4 py-3 text-sm text-muted-foreground">Receita mensal em atualização. A conciliação completa ainda não está disponível; o valor anterior não será apresentado como confirmado.</div> : <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-accent/5">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <DollarSign className="h-4 w-4" />
-                      Receita recorrente mensalizada · cartão e PIX
+                      Receita mensal projetada · recorrência confirmada
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -981,43 +990,37 @@ export default function AdminEngagement() {
                     <div className="text-[11px] text-muted-foreground mt-1">
                       {metrics.activeSubscriptionsTotalCount ?? metrics.activeSubscriptionsCount} assinaturas recorrentes
                       {(metrics.monthlyActiveSubscriptionsCount !== undefined || metrics.weeklyActiveSubscriptionsCount !== undefined) && (
-                        <> ({metrics.monthlyActiveSubscriptionsCount ?? 0} no cartão + {metrics.asaasActiveUsersCount ?? 0} no Asaas + {metrics.wooviActiveUsersCount ?? 0} na Woovi; sem experimentações)</>
+                        <> ({metrics.monthlyActiveSubscriptionsCount ?? 0} no cartão + {metrics.asaasActiveUsersCount ?? 0} no Asaas + {metrics.wooviActiveUsersCount ?? 0} na Woovi + {metrics.interActiveUsersCount ?? 0} no Inter; sem experimentações)</>
                       )}
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3 text-xs">
                       <div>
                         <span className="text-muted-foreground">Cartão recorrente: </span>
                         <div className="font-semibold text-foreground">R$ {metrics.mrrCommittedBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-muted-foreground">{metrics.monthlyActiveSubscriptionsCount ?? metrics.activeSubscriptionsCount} assinaturas mensais/anuais</div>
+                        <div className="text-[10px] text-muted-foreground">{metrics.monthlyActiveSubscriptionsCount ?? metrics.activeSubscriptionsCount} contratos mensalizados pelo ciclo</div>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Semanal anualizado: </span>
-                        <div className="font-semibold text-foreground">R$ {metrics.mrrWeeklyEquivBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-muted-foreground">{metrics.weeklyActiveSubscriptionsCount ?? 0} semanais × 4.33 (Stripe trialing = semanal pago)</div>
+                        <span className="text-muted-foreground">Em experimentação: </span>
+                        <div className="font-semibold text-foreground">{metrics.revenueReconciliation?.trial.contracts ?? 0} clientes</div>
+                        <div className="text-[10px] text-muted-foreground">R$ {(metrics.revenueReconciliation?.trial.brl ?? 0).toFixed(2)} mensais potenciais · fora do total</div>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">⚠️ Em risco (past_due no Stripe): </span>
-                        <div className={`font-semibold ${metrics.mrrAtRiskBRL > 0 ? 'text-destructive' : 'text-foreground'}`}>R$ {metrics.mrrAtRiskBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-muted-foreground">
-                          {metrics.pastDueSubscriptionsCount} cobranças (Stripe tenta recuperar por ~30d)
-                          {(metrics.mrrAtRiskMonthlyBRL !== undefined && metrics.mrrAtRiskWeeklyBRL !== undefined && (metrics.mrrAtRiskMonthlyBRL > 0 || metrics.mrrAtRiskWeeklyBRL > 0)) && (
-                            <> · R$ {metrics.mrrAtRiskMonthlyBRL.toFixed(0)} mensais + R$ {metrics.mrrAtRiskWeeklyBRL.toFixed(0)} semanais</>
-                          )}
-                          {((metrics.pastDueRecentCount ?? 0) > 0 || (metrics.pastDueCriticalCount ?? 0) > 0) && (
-                            <div className="mt-1">
-                              🟡 ≤7d: {metrics.pastDueRecentCount ?? 0} (R$ {(metrics.mrrAtRiskRecentBRL ?? 0).toFixed(0)})
-                              {' · '}
-                              🟠 &gt;7d: {metrics.pastDueCriticalCount ?? 0} (R$ {(metrics.mrrAtRiskCriticalBRL ?? 0).toFixed(0)})
-                            </div>
-                          )}
-                        </div>
+                        <span className="text-muted-foreground">Cobranças em risco: </span>
+                        <div className="font-semibold text-destructive">R$ {(metrics.revenueReconciliation?.risk.brl ?? metrics.mrrAtRiskBRL).toFixed(2)}</div>
+                        <div className="text-[10px] text-muted-foreground">{metrics.revenueReconciliation?.risk.contracts ?? 0} contratos · cartão e PIX · fora do total</div>
                       </div>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-3">
-                      Cartão e autorizações PIX vigentes, normalizados pelo ciclo contratado. Experimentação de 7 dias e cobranças em risco não compõem o total recorrente. PIX: R$ {(metrics.mrrPixBRL ?? 0).toFixed(2)} · Woovi: R$ {(metrics.wooviMrrBRL ?? 0).toFixed(2)}.
+                      Contratos vigentes com pagamento do ciclo comprovado, normalizados por mês. Experimentações, atrasos e vínculos não conciliados ficam fora do total. PIX: R$ {(metrics.mrrPixBRL ?? 0).toFixed(2)} · Woovi: R$ {(metrics.wooviMrrBRL ?? 0).toFixed(2)}.
                     </p>
+                    {metrics.revenueReconciliation && <div className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground space-y-1">
+                      <p>{metrics.revenueReconciliation.activeProfiles} clientes ativos no App: {metrics.revenueReconciliation.activeBreakdown.recurring} recorrentes · {metrics.revenueReconciliation.activeBreakdown.trial} em experimentação · {metrics.revenueReconciliation.activeBreakdown.risk} em risco · {metrics.revenueReconciliation.activeBreakdown.unverified} a conferir · {metrics.revenueReconciliation.activeBreakdown.unlinked} sem contrato vigente conciliado.</p>
+                      <p>{metrics.revenueReconciliation.unverified.contracts} contratos a conferir, fora do total: R$ {metrics.revenueReconciliation.unverified.brl.toFixed(2)}/mês.</p>
+                      {!metrics.revenueReconciliation.complete && <p className="text-destructive">Total parcial: aguardando atualização completa das assinaturas do cartão.</p>}
+                      {metrics.revenueReconciliation.providerUpdatedAt && <p>Última conferência do cartão: {new Date(metrics.revenueReconciliation.providerUpdatedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p>}
+                    </div>}
                   </CardContent>
-                </Card>
+                </Card>}
 
                 {/* 🚀 Fase 2: Mini-cards de derivadas (ARR / ARPU / MRR Growth / Margem) */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
