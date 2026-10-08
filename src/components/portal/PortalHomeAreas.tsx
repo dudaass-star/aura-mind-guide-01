@@ -48,7 +48,7 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
           {practices.map(({ label, detail, action, tab, image, alt, icon: Icon, tone }) => (
             <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className={cn("group block h-auto min-w-0 overflow-hidden rounded-lg p-0 text-left whitespace-normal hover:opacity-90", tone)}>
               <img src={image} alt={alt} className="aspect-[1.85/1] w-full object-cover" loading="lazy" />
-              <span className="block p-3"><span className="flex min-h-6 items-center gap-1.5"><Icon className="h-4 w-4 shrink-0" /><span className="font-display text-base font-medium">{label}</span></span><span className="mt-2 block min-h-9 text-xs font-normal leading-[18px]">{detail}</span><span className="mt-3 flex min-h-5 items-center justify-between gap-1 text-[11px] font-semibold"><span>{action}</span><ArrowRight className="h-4 w-4 shrink-0" /></span></span>
+              <span className="block p-3"><span className="flex min-h-6 items-center gap-1.5"><Icon className="h-4 w-4 shrink-0" /><span className="text-base font-semibold">{label}</span></span><span className="mt-2 block min-h-9 text-xs font-normal leading-[18px]">{detail}</span><span className="mt-3 flex min-h-5 items-center justify-between gap-1 text-[11px] font-semibold"><span>{action}</span><ArrowRight className="h-4 w-4 shrink-0" /></span></span>
             </Button>
           ))}
         </div>
