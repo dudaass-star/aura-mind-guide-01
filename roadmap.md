@@ -6,9 +6,9 @@
 # Roadmap
 
 ## Panorama do negócio
-- [ ] Corrigir mensalidades com fontes rastreáveis, recuperação de vencimentos oficiais, recebimentos independentes e lacunas explícitas.
-- [ ] Corrigir taxas legadas, normalização de receita por ciclo e critérios de sessões; impedir totais incompletos silenciosos.
-- [ ] Validar fórmulas em cenários de regressão e conferir painel autenticado com cobranças reais.
+- [x] Corrigir mensalidades com fontes rastreáveis, recuperação em lotes de parcelas oficiais, recebimentos independentes e lacunas explícitas.
+- [x] Corrigir retorno, cobrança por fatura única, cancelamento da base inicial, normalização de receita por ciclo e sessões; recortes de cartão e estimativas identificados.
+- [x] Validar 13 asserções financeiras e painel autenticado com dados reais: 01–04/10 e 30 dias, sem lacunas nas parcelas consultadas, sem erros de execução. A conferência cobre fontes registradas e parcelas oficiais; não certifica auditoria contábil integral de extratos.
 - [x] Criar visão geral com gráfico diário de mensalidades previstas versus recebidas, quantidade/R$, 30 dias e filtros.
 - [x] Separar uso, sessões e detalhes de custos para limpar a área de Engajamento.
 - [x] Validar consulta financeira real, filtros, detalhes por dia e gráficos na conta de Eduardo; previsão PIX limitada aos registros existentes e mandatos ativos/aprovados, sem inventar histórico ausente.

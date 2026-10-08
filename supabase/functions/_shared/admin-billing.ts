@@ -25,7 +25,7 @@ export function mergeBilling(entries: Map<string, BillingEntry>, entry: BillingE
   const old = entries.get(entry.id);
   if (!old) { entries.set(entry.id, entry); return; }
   // Uma previsão ou retentativa nunca apaga um pagamento comprovado.
-  if (old.paid && !entry.paid) return;
+  if (old.paid && !entry.paid) { entries.set(entry.id, { ...old, due: old.due || entry.due }); return; }
   entries.set(entry.id, { ...old, ...entry, due: entry.due || old.due, paid: entry.paid || old.paid });
 }
 

@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
     console.log(`📊 Period: ${periodStart} → ${periodEnd} (BRT-aligned)`);
 
     // ⚡ Cache check
-    const cacheKey = `v3:${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
+    const cacheKey = `v4:${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
     if (!forceRefresh) {
       const cached = getCached(cacheKey);
       if (cached) {
@@ -227,7 +227,7 @@ Deno.serve(async (req) => {
         .select('payload, computed_at')
         .eq('window_key', windowKey)
         .maybeSingle();
-      if (snap?.payload && (snap.payload as Record<string, unknown>)._metricsVersion === 3) {
+      if (snap?.payload && (snap.payload as Record<string, unknown>)._metricsVersion === 4) {
         const ageMs = Date.now() - new Date(snap.computed_at as string).getTime();
         if (ageMs < 15 * 60 * 1000) {
           console.log(`📸 Snapshot HIT window=${windowKey} age=${Math.round(ageMs / 1000)}s`);
@@ -672,89 +672,28 @@ Deno.serve(async (req) => {
     //   created < periodStart AND (status active/trialing/past_due OU canceled_at >= periodStart)
     // Isso elimina o viés do denominador inflado (incluir quem já estava cancelado antes).
 
+    // Numerador e denominador pertencem às mesmas assinaturas existentes no início.
     let activeAtPeriodStart = 0;
-    let churnDenominatorSource: 'stripe' | 'db_fallback' = 'db_fallback';
-    if (stripeKey) {
-      try {
-        const stripeChurnDenom = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
-        const periodStartTs = Math.floor(new Date(periodStart).getTime() / 1000);
-        // Buscar subs ativas/trialing/past_due criadas antes do período (todas vivas hoje)
-        for (const status of ['active', 'trialing', 'past_due'] as const) {
-          let hasMore = true;
-          let startingAfter: string | undefined;
-          while (hasMore) {
-            const params: Stripe.SubscriptionListParams = {
-              status,
-              limit: 100,
-              created: { lt: periodStartTs },
-            };
-            if (startingAfter) params.starting_after = startingAfter;
-            const result = await stripeChurnDenom.subscriptions.list(params);
-            activeAtPeriodStart += result.data.length;
-            hasMore = result.has_more;
-            if (result.data.length > 0) startingAfter = result.data[result.data.length - 1].id;
-          }
-        }
-        // + canceladas que ainda estavam vivas em periodStart (canceled_at >= periodStart)
-        // OTIMIZAÇÃO: limitamos a busca a subs criadas até 180 dias antes de periodStart
-        // (subs mais antigas que 6 meses raramente são relevantes para o denominador
-        //  e custavam centenas de chamadas Stripe).
-        let hasMore = true;
-        let startingAfter: string | undefined;
-        let stop = false;
-        const cancelLookbackTs = periodStartTs - 180 * 24 * 60 * 60;
-        while (hasMore && !stop) {
-          const params: Stripe.SubscriptionListParams = {
-            status: 'canceled',
-            limit: 100,
-            created: { lt: periodStartTs, gte: cancelLookbackTs },
-          };
-          if (startingAfter) params.starting_after = startingAfter;
-          const result = await stripeChurnDenom.subscriptions.list(params);
-          for (const sub of result.data) {
-            const canceledAt = sub.canceled_at || 0;
-            if (canceledAt >= periodStartTs) {
-              activeAtPeriodStart++;
-            } else {
-              // Stripe lista cancelled em ordem desc por created — paramos quando passa
-              // do janela útil (otimização leve; mantemos correto pois filter já é por created)
-              stop = true;
-              break;
-            }
-          }
-          hasMore = result.has_more && !stop;
-          if (result.data.length > 0) startingAfter = result.data[result.data.length - 1].id;
-        }
-        churnDenominatorSource = 'stripe';
-      } catch (err) {
-        console.warn('⚠️ Stripe churn denominator failed, falling back to DB:', err);
-        const { count } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .lt('created_at', periodStart)
-          .in('status', ['active', 'canceling', 'canceled', 'paused', 'trial_expired', 'inactive']);
-        activeAtPeriodStart = count || 0;
+    let cohortCanceled = 0;
+    let cohortVoluntary = 0;
+    let cohortInvoluntary = 0;
+    const churnDenominatorSource = 'stripe';
+    const periodStartTs = Date.parse(periodStart) / 1000;
+    const periodEndTs = Date.parse(periodEnd) / 1000;
+    for await (const sub of billingStripe.subscriptions.list({ status: 'all', limit: 100, created: { lt: periodStartTs } })) {
+      if (demoEmails.has(String(sub.metadata?.email || '').trim().toLowerCase()) || ['incomplete', 'incomplete_expired'].includes(sub.status)) continue;
+      const ended = sub.ended_at || (sub.status === 'canceled' ? sub.canceled_at : null);
+      if (ended && ended < periodStartTs) continue;
+      activeAtPeriodStart++;
+      if (ended && ended >= periodStartTs && ended < periodEndTs) {
+        cohortCanceled++;
+        if (sub.cancellation_details?.reason === 'payment_failed') cohortInvoluntary++;
+        else cohortVoluntary++;
       }
-    } else {
-      const { count } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .lt('created_at', periodStart)
-        .in('status', ['active', 'canceling', 'canceled', 'paused', 'trial_expired', 'inactive']);
-      activeAtPeriodStart = count || 0;
     }
-
-    const churnRate = activeAtPeriodStart && activeAtPeriodStart > 0
-      ? Math.round(canceledInPeriod / activeAtPeriodStart * 1000) / 10
-      : 0;
-
-    const voluntaryChurnRate = activeAtPeriodStart && activeAtPeriodStart > 0
-      ? Math.round(voluntaryChurnInPeriod / activeAtPeriodStart * 1000) / 10
-      : 0;
-
-    const involuntaryChurnRate = activeAtPeriodStart && activeAtPeriodStart > 0
-      ? Math.round(involuntaryChurnInPeriod / activeAtPeriodStart * 1000) / 10
-      : 0;
+    const churnRate = activeAtPeriodStart ? Math.round(cohortCanceled / activeAtPeriodStart * 1000) / 10 : 0;
+    const voluntaryChurnRate = activeAtPeriodStart ? Math.round(cohortVoluntary / activeAtPeriodStart * 1000) / 10 : 0;
+    const involuntaryChurnRate = activeAtPeriodStart ? Math.round(cohortInvoluntary / activeAtPeriodStart * 1000) / 10 : 0;
 
     // Legacy churn (for comparison): cancelled / total base
     const churnRateLegacy = activeUsersBase && activeUsersBase > 0
@@ -1127,7 +1066,7 @@ Deno.serve(async (req) => {
     if (stripeKey) {
       try {
         const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
-        const thirtyDaysAgoTs = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+        const thirtyDaysAgoTs = periodStartTs;
         let hasMore = true;
         let startingAfter: string | undefined;
         let stop = false;
@@ -1140,12 +1079,12 @@ Deno.serve(async (req) => {
           const result = await stripe.subscriptions.list(params);
           for (const sub of result.data) {
             const canceledAt = sub.canceled_at || 0;
-            if (canceledAt < thirtyDaysAgoTs) continue;
+            if (canceledAt < thirtyDaysAgoTs || canceledAt >= periodEndTs || demoEmails.has(String(sub.metadata?.email || '').trim().toLowerCase())) continue;
             const reason = sub.cancellation_details?.reason || 'unknown';
             stripeChurnReasons[reason] = (stripeChurnReasons[reason] || 0) + 1;
             if (reason === 'payment_failed') {
               involuntaryChurnFromStripeCount++;
-            } else if (VOLUNTARY_REASONS.has(reason)) {
+            } else {
               voluntaryChurnFromStripeCount++;
             }
           }
@@ -1153,7 +1092,7 @@ Deno.serve(async (req) => {
           if (result.data.length > 0) startingAfter = result.data[result.data.length - 1].id;
           // Safety: se a página mais antiga já passou de 30d, parar paginação
           const oldest = result.data[result.data.length - 1];
-          if (oldest && (oldest.canceled_at || 0) < thirtyDaysAgoTs) stop = true;
+          // A ordenação é por criação, não cancelamento: nunca interromper por canceled_at.
         }
         console.log(`🔴 Stripe Churn (30d): voluntary=${voluntaryChurnFromStripeCount}, involuntary=${involuntaryChurnFromStripeCount}, reasons=${JSON.stringify(stripeChurnReasons)}`);
       } catch (e) {
@@ -1198,7 +1137,7 @@ Deno.serve(async (req) => {
       try {
         const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
         const DAY = 24 * 60 * 60;
-        const nowTs = Math.floor(Date.now() / 1000);
+        const nowTs = Math.min(Math.floor(Date.now() / 1000), periodEndTs);
         // Janela: últimos 180 dias para garantir dados de 90d+
         const windowStartTs = nowTs - 180 * DAY;
         const thirtyDaysAgoTs = nowTs - 30 * DAY;
@@ -1232,9 +1171,11 @@ Deno.serve(async (req) => {
           const result = await stripe.subscriptions.list(params);
 
           for (const sub of result.data) {
+            if (demoEmails.has(String(sub.metadata?.email || '').trim().toLowerCase()) || sub.created >= nowTs) continue;
             const createdTs = sub.created;
             const ageDays = (nowTs - createdTs) / DAY;
-            const canceledTs = sub.canceled_at || 0;
+            const rawCanceledTs = sub.ended_at || sub.canceled_at || 0;
+            const canceledTs = rawCanceledTs && rawCanceledTs < nowTs ? rawCanceledTs : 0;
             const lifetimeDays = canceledTs > 0 ? (canceledTs - createdTs) / DAY : null;
 
             // ---- Cohort Retention ----
@@ -1958,7 +1899,7 @@ Deno.serve(async (req) => {
     }
 
     const responsePayload = JSON.stringify({
-      _metricsVersion: 3,
+      _metricsVersion: 4,
       metricWarnings: [...new Set(metricWarnings)],
       wooviMrrBRL: wooviMrrCents / 100,
       wooviActiveUsersCount: wooviActiveUsers.size,
@@ -2037,9 +1978,9 @@ Deno.serve(async (req) => {
       trialsToPaidSuccess: weeklyPlansToPaidSuccess,
       trialToPaidRate,
       // Cancellation (voluntary + involuntary)
-      canceledInPeriod,
-      voluntaryChurnInPeriod,
-      involuntaryChurnInPeriod,
+      canceledInPeriod: cohortCanceled,
+      voluntaryChurnInPeriod: cohortVoluntary,
+      involuntaryChurnInPeriod: cohortInvoluntary,
       pausedInPeriod: pausedInPeriodCount || 0,
       churnRate,
       voluntaryChurnRate,
@@ -2069,6 +2010,7 @@ Deno.serve(async (req) => {
       mrrPixBRL,
       mrrGrandTotalBRL,
       asaasActiveUsersCount,
+      wooviActiveUsersCount: wooviActiveUsers.size,
       activeSubscriptionsTotalCount: totalRecurringSubscribers,
       asaasChurnCount,
       mrrAtRiskBRL,

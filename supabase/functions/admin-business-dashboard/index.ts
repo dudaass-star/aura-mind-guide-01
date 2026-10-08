@@ -62,21 +62,38 @@ Deno.serve(async (req) => {
     const warnings: string[] = [];
     const issues: { provider: string; reason: string; count: number; cents: number }[] = [];
     const official = new Map<string, any[]>();
-    const candidates = subs.filter(s => s.billing_period === 'monthly' && (s.entry_paid_at || charges.some(c => c.subscription_id === s.subscription_id && c.paid_at)) && !demoIds.has(s.user_id) && ((s.next_charge_date && s.next_charge_date >= dateFrom && s.next_charge_date <= dateTo) || charges.some(c => c.subscription_id === s.subscription_id && ((c.due_date && c.due_date >= dateFrom && c.due_date <= dateTo) || (c.paid_at && day(c.paid_at) >= dateFrom && day(c.paid_at) <= dateTo)))));
-    const deadline = Date.now() + 18000;
+    // Varre inclusive mandatos antigos: próximo vencimento não descreve histórico.
+    const candidates = subs.filter(s => s.billing_period === 'monthly' && !demoIds.has(s.user_id) && !demoEmails.has(s.customer_email?.toLowerCase()) && (s.entry_paid_at || charges.some(c => c.subscription_id === s.subscription_id && c.paid_at)) && day(s.created_at) <= dateTo);
+    const snapshots = await all('admin_billing_provider_snapshots', 'id,installments,fetched_at', q => q.eq('provider', 'woovi'));
+    const snapshotMap = new Map(snapshots.map(s => [s.id, s]));
+    const pending = candidates.filter(s => {
+      const snap = snapshotMap.get(s.subscription_id);
+      return !snap || Date.now() - Date.parse(snap.fetched_at) > 300e3;
+    });
     async function bounded<T>(promise: Promise<T>): Promise<T> {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      try { return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Tempo de consulta esgotado')), 6000); })]); }
+      try { return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Tempo de consulta esgotado')), 15000); })]); }
       finally { if (timer) clearTimeout(timer); }
     }
-    let cursor = 0;
-    await Promise.all(Array.from({ length: Math.min(6, candidates.length) }, async () => {
-      while (cursor < candidates.length) {
-        const s = candidates[cursor++];
-        try { if (Date.now() > deadline) throw new Error('Limite de consulta'); official.set(s.subscription_id, await bounded(listInstallments(s.subscription_id))); }
-        catch { issues.push({ provider: 'woovi', reason: 'Histórico oficial de parcelas indisponível', count: 1, cents: 0 }); }
-      }
-    }));
+    // A fila do provedor é serial: pequenos lotes evitam timeout e preservam o limite de taxa.
+    const batch = pending.slice(0, 8);
+    let failed = 0;
+    for (const s of batch) {
+      try {
+        const installments = await bounded(listInstallments(s.subscription_id));
+        const fetched_at = new Date().toISOString();
+        const { error } = await db.from('admin_billing_provider_snapshots').upsert({ id: s.subscription_id, provider: 'woovi', installments, fetched_at });
+        if (error) throw error;
+        snapshotMap.set(s.subscription_id, { id: s.subscription_id, installments, fetched_at });
+      } catch { failed++; issues.push({ provider: 'woovi', reason: 'Histórico oficial de parcelas indisponível', count: 1, cents: 0 }); }
+    }
+    const remaining = pending.length - batch.length;
+    if (remaining && !failed) return reply({ reconciling: true, remaining, total: candidates.length });
+    for (const s of candidates) {
+      const snap = snapshotMap.get(s.subscription_id);
+      if (snap) official.set(s.subscription_id, snap.installments);
+      else if (!batch.some(b => b.subscription_id === s.subscription_id)) issues.push({ provider: 'woovi', reason: 'Histórico oficial de parcelas não consultado', count: 1, cents: 0 });
+    }
     function add(e: any) {
       if (demoIds.has(e.userId) || demoEmails.has(e.email?.trim().toLowerCase())) return;
       e.due = validDate(e.due) ? e.due : null;
@@ -85,7 +102,7 @@ Deno.serve(async (req) => {
     }
     function exactInstallment(c: any, i: any): boolean {
       const cobr = i?.cobr || {};
-      const ids = [i?.globalID, i?.id, cobr?.endToEndId, cobr?.identifierId, ...(Array.isArray(cobr.tries) ? cobr.tries.map((t: any) => t.endToEndId) : [])].filter(Boolean).map(String);
+      const ids = [i?.globalID, i?.id, i?.correlationID, cobr?.installmentId, cobr?.endToEndId, cobr?.identifierId, ...(Array.isArray(cobr.tries) ? cobr.tries.map((t: any) => t.endToEndId) : [])].filter(Boolean).map(String);
       return [c.installment_id, c.raw_payload?.pix?.endToEndId, c.raw_payload?.charge?.endToEndId].filter(Boolean).some(id => ids.includes(String(id)));
     }
     const subMap = new Map(subs.map(s => [s.subscription_id, s]));
@@ -104,8 +121,8 @@ Deno.serve(async (req) => {
         if (!validDate(due) || (s.is_trial && cents === s.trial_value_cents)) continue;
         if (['CANCELED', 'CANCELLED', 'DELETED'].includes(String(i.status).toUpperCase())) continue;
         const charge = charges.find(c => c.subscription_id === s.subscription_id && (exactInstallment(c, i) || (c.due_date === due && !String(c.installment_id).startsWith('E'))) && c.paid_at);
-        add({ id: `woovi:${s.subscription_id}:${due}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due, paid: charge?.status === 'COMPLETED' ? day(charge.paid_at) : null, cents, source: 'parcela oficial Woovi' });
-        if (['PAID', 'COMPLETED', 'CONFIRMED', 'CONCLUDED'].includes(String(i.status).toUpperCase()) && !charge) issues.push({ provider: 'woovi', reason: 'Parcela oficial paga sem pagamento conciliado', count: 1, cents });
+        add({ id: `woovi:${s.subscription_id}:${due}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due, paid: ['PAID', 'COMPLETED', 'CONFIRMED', 'CONCLUDED'].includes(String(i.status).toUpperCase()) && i.cobr?.paymentDate ? day(i.cobr.paymentDate) : charge?.status === 'COMPLETED' ? day(charge.paid_at) : null, cents, source: 'parcela oficial Woovi' });
+        if (due >= dateFrom && due <= dateTo && ['PAID', 'COMPLETED', 'CONFIRMED', 'CONCLUDED'].includes(String(i.status).toUpperCase()) && !charge && !i.cobr?.paymentDate) issues.push({ provider: 'woovi', reason: 'Parcela oficial paga sem pagamento conciliado', count: 1, cents });
       }
     }
     for (const s of subs.filter(s => s.billing_period === 'monthly' && s.entry_paid_at && !s.replaced_by_subscription_id && ['ATIVA', 'APROVADA'].includes(s.status))) {

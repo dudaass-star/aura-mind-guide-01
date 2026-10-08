@@ -49,21 +49,26 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
   const [validation, setValidation] = useState('');
   const [definitions, setDefinitions] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  async function loadDashboard(forceRefresh = false): Promise<DashboardData> {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const { data, error } = await supabase.functions.invoke('admin-business-dashboard', { body: { dateFrom: range.from, dateTo: range.to, forceRefresh: forceRefresh || attempt > 0 } });
+      if (error || data?.error) { setRemaining(null); throw new Error(data?.error || 'Não foi possível carregar os gráficos.'); }
+      if (!data.reconciling) { setRemaining(null); return data as DashboardData; }
+      setRemaining(data.remaining);
+    }
+    throw new Error('Conciliação ainda pendente. Atualize para continuar.');
+  }
   const query = useQuery({
     queryKey: ['admin-business-dashboard', range.from, range.to],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('admin-business-dashboard', { body: { dateFrom: range.from, dateTo: range.to } });
-      if (error || data?.error) throw new Error(data?.error || 'Não foi possível carregar os gráficos.');
-      return data as DashboardData;
-    },
+    queryFn: () => loadDashboard(),
     staleTime: 300_000,
   });
   const refresh = async () => {
     setRefreshing(true);
-    const { data, error } = await supabase.functions.invoke('admin-business-dashboard', { body: { dateFrom: range.from, dateTo: range.to, forceRefresh: true } });
-    setRefreshing(false);
-    if (error || data?.error) { setValidation('Não foi possível atualizar. Os dados anteriores foram mantidos.'); return; }
-    setValidation(''); await query.refetch();
+    try { await loadDashboard(true); setValidation(''); await query.refetch(); }
+    catch { setValidation('Não foi possível atualizar. Os dados anteriores foram mantidos.'); }
+    finally { setRefreshing(false); }
   };
   function apply(nextFrom = from, nextTo = to) {
     if (!nextFrom || !nextTo || nextFrom > nextTo || (Date.parse(nextTo) - Date.parse(nextFrom)) / 864e5 > 365) { setValidation('Escolha um período válido de até 366 dias.'); return; }
@@ -96,7 +101,7 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
       </div>}
     </div>
     {validation && <p role="alert" className="text-sm text-destructive">{validation}</p>}
-    {query.isPending ? <div className="h-[420px] bg-muted/40 animate-pulse flex items-center justify-center text-muted-foreground" role="status">Carregando gráficos…</div> : query.isError ? <div role="alert" className="py-12 text-center space-y-3"><AlertCircle className="mx-auto h-6 w-6 text-destructive" /><p>Não foi possível carregar o panorama.</p><Button variant="outline" onClick={() => query.refetch()}>Tentar novamente</Button></div> : <>
+    {query.isPending ? <div className="h-[420px] bg-muted/40 animate-pulse flex items-center justify-center text-muted-foreground" role="status">{remaining === null ? 'Carregando gráficos…' : `Conferindo parcelas oficiais… ${remaining} cadastros restantes`}</div> : query.isError ? <div role="alert" className="py-12 text-center space-y-3"><AlertCircle className="mx-auto h-6 w-6 text-destructive" /><p>Não foi possível carregar o panorama.</p><Button variant="outline" onClick={() => query.refetch()}>Tentar novamente</Button></div> : <>
       {!onlyUsage && <>
         {!!query.data?.issues?.length && <div role="alert" className="border-l-2 border-destructive pl-4 text-sm space-y-1"><p className="font-semibold text-destructive">Conciliação incompleta — não usar como fechamento financeiro</p>{query.data.issues.map((issue, index) => <p key={index} className="text-muted-foreground">{issue.reason}: {issue.count}{issue.cents > 0 ? ` · ${currency(issue.cents / 100)}` : ''}</p>)}</div>}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">{totals.map(t => <div key={t.label} className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">{t.label}</p><p className="text-3xl font-semibold mt-2">{t.value}</p><p className="text-xs text-muted-foreground mt-1">{t.detail}</p></div>)}</div>

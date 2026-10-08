@@ -30,4 +30,4 @@
 - Prayers share one catalog/player to keep art, audio and cues matched.
 - Home keeps tracking; practice dialogs stop audio on exit.
 
-- Admin billing uses shared pure normalization and deduplication rules; provider gaps stay explicit and confirmed receipts never depend on a known due date.
+- Admin billing uses shared pure normalization, exact installment matching and admin-only provider snapshots fetched in serial batches; this avoids rate-limit timeouts while keeping provider gaps explicit and receipts independent of due dates.
