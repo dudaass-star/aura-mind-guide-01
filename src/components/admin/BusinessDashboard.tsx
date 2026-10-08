@@ -12,13 +12,15 @@ import { format, subDays } from 'date-fns';
 
 interface BillingEntry { id: string; name?: string; email?: string; plan: string; provider: string; due: string | null; paid: string | null; cents: number; receivedCents?: number }
 interface DailyUsage { date: string; active: number; messages: number; completed: number; missed: number }
-interface DashboardData { billing: BillingEntry[]; days: DailyUsage[]; warnings: string[]; updatedAt: string; providerUpdatedAt?: string | null; issues?: { provider: string; reason: string; count: number; cents: number }[]; completeness?: string }
+interface DashboardData { billing: BillingEntry[]; days: DailyUsage[]; conversion?: { cohorts: { id: string; provider: string; due: string; paid: string | null }[]; expected: number; converted: number; rate: number | null; warnings: string[] }; warnings: string[]; updatedAt: string; providerUpdatedAt?: string | null; issues?: { provider: string; reason: string; count: number; cents: number }[]; completeness?: string }
 const brtNow = () => new Date(`${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)}T12:00:00`);
 const shortDate = (date: string | null) => date ? date.slice(5).split('-').reverse().join('/') : 'Não comprovado';
 const currency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const config = {
   expected: { label: 'Previstas', color: 'hsl(var(--primary))' },
   received: { label: 'Recebidas', color: 'hsl(var(--chart-2))' },
+  firstExpected: { label: 'Primeiras mensalidades previstas', color: 'hsl(var(--primary))' },
+  firstPaid: { label: 'Primeiras mensalidades pagas', color: 'hsl(var(--chart-2))' },
   active: { label: 'Pessoas que conversaram', color: 'hsl(var(--primary))' },
   completed: { label: 'Realizadas', color: 'hsl(var(--chart-2))' },
   missed: { label: 'Faltas', color: 'hsl(var(--destructive))' },
@@ -44,6 +46,7 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
   const range = dateRange || localRange;
   const [unit, setUnit] = useState('count');
   const [provider, setProvider] = useState('all');
+  const [conversionProvider, setConversionProvider] = useState('all');
   const [preset, setPreset] = useState('30');
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [validation, setValidation] = useState('');
@@ -79,6 +82,10 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
   const dueRows = rows.filter(b => b.due && b.due >= range.from && b.due <= range.to);
   const paidRows = rows.filter(b => b.paid && b.paid >= range.from && b.paid <= range.to);
   const pending = dueRows.filter(b => !b.paid && b.due && b.due < format(brtNow(), 'yyyy-MM-dd'));
+  const conversion = query.data?.conversion;
+  const conversionRows = (conversion?.cohorts || []).filter(c => conversionProvider === 'all' || c.provider === conversionProvider);
+  const converted = conversionRows.filter(c => c.paid).length;
+  const conversionDays = days.map(d => ({ date: d.date, firstExpected: conversionRows.filter(c => c.due === d.date).length, firstPaid: conversionRows.filter(c => c.due === d.date && c.paid).length }));
   const totals = [
     { label: 'Mensalidades previstas', value: money ? currency(dueRows.reduce((s, b) => s + b.cents, 0) / 100) : dueRows.length, detail: 'Vencimentos no período' },
     { label: 'Mensalidades recebidas', value: money ? currency(paidRows.reduce((s, b) => s + (b.receivedCents ?? b.cents), 0) / 100) : paidRows.length, detail: 'Entradas no dia do pagamento' },
@@ -108,6 +115,19 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
           <div className="flex flex-wrap justify-between items-center gap-3"><Button variant="ghost" size="sm" onClick={() => setDefinitions(!definitions)} aria-expanded={definitions}><ChevronDown className="mr-2 h-4 w-4" />Fontes e critérios</Button><Select value={selectedDay || ''} onValueChange={setSelectedDay}><SelectTrigger className="w-[180px]" aria-label="Consultar dia"><SelectValue placeholder="Consultar um dia" /></SelectTrigger><SelectContent>{days.map(d => <SelectItem key={d.date} value={d.date}>{shortDate(d.date)}</SelectItem>)}</SelectContent></Select></div>
           {definitions && <div className="text-xs text-muted-foreground space-y-2 border-t pt-4"><p>Cartão: faturas mensais do Stripe. PIX: cobranças e pagamentos conciliados; entradas semanais e tentativas repetidas não contam como mensalidades.</p>{query.data?.warnings.map(w => <p key={w}>{w}</p>)}<p>Previstas e recebidas são séries independentes. O total recebido não é uma taxa de pagamento dos vencimentos do período.</p><p>Atualizado em {new Date(query.data?.updatedAt || '').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.</p></div>}
           {selectedDay && <div className="overflow-x-auto border-t pt-4"><h4 className="font-semibold mb-3">Mensalidades de {shortDate(selectedDay)}</h4><table className="w-full text-sm"><thead><tr className="text-left text-muted-foreground"><th className="py-2">Cliente</th><th>Meio</th><th>Vencimento</th><th>Pagamento</th><th className="text-right">Valor</th></tr></thead><tbody>{rows.filter(r => r.due === selectedDay || r.paid === selectedDay).map(r => <tr key={r.id} className="border-t border-border"><td className="py-3 pr-4">{r.name || r.email || 'Cliente sem nome'}</td><td className="pr-4">{r.provider === 'stripe' ? 'Cartão' : 'PIX'}</td><td className="pr-4">{shortDate(r.due)}</td><td className="pr-4">{r.paid ? shortDate(r.paid) : 'Não registrado'}</td><td className="text-right whitespace-nowrap">{currency(r.cents / 100)}</td></tr>)}</tbody></table>{!rows.some(r => r.due === selectedDay || r.paid === selectedDay) && <p className="text-muted-foreground py-4">Nenhuma mensalidade neste dia.</p>}</div>}
+        </section>
+        <section className="space-y-5 border-b border-border pb-8" aria-label="Conversão da semana para primeira mensalidade">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-lg">Semana paga → primeira mensalidade</h3><p className="text-xs text-muted-foreground mt-1">Conversões pela data prevista da primeira mensalidade, inclusive pagamentos posteriores.</p></div><Select value={conversionProvider} onValueChange={setConversionProvider}><SelectTrigger className="w-[160px]" aria-label="Meio da primeira mensalidade"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Cartão e PIX</SelectItem><SelectItem value="stripe">Cartão</SelectItem><SelectItem value="woovi">PIX · Woovi</SelectItem></SelectContent></Select></div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">Primeiras mensalidades previstas</p><p className="text-3xl font-semibold mt-2">{conversionRows.length}</p></div>
+            <div className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">Clientes convertidos</p><p className="text-3xl font-semibold mt-2">{converted}</p></div>
+            <div className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">Taxa de conversão</p><p className="text-3xl font-semibold mt-2">{conversionRows.length ? `${(converted / conversionRows.length * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</p></div>
+          </div>
+          <DailyChart data={conversionDays} series={['firstExpected', 'firstPaid']} />
+          {!conversionRows.length && <p className="text-sm text-muted-foreground">Nenhuma semana paga com primeira mensalidade prevista neste período e meio de pagamento.</p>}
+          {!conversion && <p role="status" className="text-sm text-muted-foreground">Dados de conversão aguardando atualização.</p>}
+          {!!conversion?.warnings.length && <div role="alert" className="border-l-2 border-destructive pl-4 text-sm"><p className="font-semibold text-destructive">Conversão parcial</p>{conversion.warnings.map(w => <p key={w} className="text-muted-foreground">{w}</p>)}</div>}
+          <p className="text-xs text-muted-foreground">Cancelamentos após a semana permanecem na base. Semanas cuja primeira mensalidade ainda não venceu ficam fora. Conversão = clientes com a primeira mensalidade paga ÷ clientes previstos; pagamentos conferidos até a última atualização.</p>
         </section>
       </>}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">

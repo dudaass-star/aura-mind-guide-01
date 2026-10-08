@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { brtDay, validDay, mergeBilling } from '../_shared/admin-billing.ts';
+import { conversionCohort, pixFirstDue, stripeFirstMonths, type FirstMonthCohort } from '../_shared/first-month-conversion.ts';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const cache = new Map<string, { at: number; data: unknown }>();
@@ -174,7 +175,23 @@ Deno.serve(async (req) => {
       days.push({ date, active: sent?.users.size || 0, messages: sent?.count || 0, completed: ss?.completed || 0, missed: ss?.missed || 0 });
     }
     const groupedIssues = [...issues.reduce((map, issue) => { const key = `${issue.provider}:${issue.reason}`; const old = map.get(key); map.set(key, { ...issue, count: (old?.count || 0) + issue.count, cents: (old?.cents || 0) + issue.cents }); return map; }, new Map<string, typeof issues[number]>()).values()];
-    const result = { billing, days, warnings, providerUpdatedAt: providerTimes.length ? providerTimes.sort()[0] : null, issues: groupedIssues, completeness: issues.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString() };
+    const conversionWarnings: string[] = [];
+    const firstMonths: FirstMonthCohort[] = [];
+    if (Array.isArray(stripeData?.subscriptions) && Array.isArray(stripeData?.weeklyPayments)) {
+      const stripeConversion = stripeFirstMonths(stripeData.subscriptions, stripeData.weeklyPayments, stripeData.invoices || [], demoEmails);
+      firstMonths.push(...stripeConversion.cohorts);
+      conversionWarnings.push(...stripeConversion.warnings);
+    } else conversionWarnings.push('Conversão no cartão aguardando a próxima atualização automática.');
+    for (const s of candidates.filter(s => s.is_trial && s.entry_paid_at)) {
+      const installments = official.get(s.subscription_id) || [];
+      const raw = s.raw_payload?.subscription || s.raw_payload?.data?.subscription || s.raw_payload;
+      const due = pixFirstDue(s.start_date, installments, s.trial_value_cents, raw?.dayGenerateCharge);
+      if (!due) { conversionWarnings.push('PIX: há semanas pagas sem data inicial comprovada; não entram na taxa.'); continue; }
+      const paidEntry = entries.get(`woovi:${s.subscription_id}:${due}`);
+      firstMonths.push({ id: s.subscription_id, identity: s.customer_email?.trim().toLowerCase() || `perfil:${s.user_id || s.subscription_id}`, provider: 'woovi', due, paid: paidEntry?.paid || null });
+    }
+    const conversion = { ...conversionCohort(firstMonths, dateFrom, dateTo, day(new Date().toISOString())), warnings: [...new Set(conversionWarnings)] };
+    const result = { billing, days, conversion, warnings, providerUpdatedAt: providerTimes.length ? providerTimes.sort()[0] : null, issues: groupedIssues, completeness: issues.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString() };
     if (cache.size > 20) cache.clear();
     cache.set(cacheKey, { at: Date.now(), data: result });
     return reply(result);

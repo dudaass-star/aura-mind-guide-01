@@ -35,11 +35,15 @@ Deno.serve(async req => {
   try {
    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY'); if (!stripeKey) throw new Error('Cartão indisponível');
    const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
-   const prices: unknown[] = [], invoices: unknown[] = [];
+   const prices: unknown[] = [], invoices: unknown[] = [], subscriptions: unknown[] = [], weeklyPayments: unknown[] = [];
    for await (const p of stripe.prices.list({ limit: 100 })) prices.push(p);
    for await (const i of stripe.invoices.list({ limit: 100 })) invoices.push(i);
+   for await (const s of stripe.subscriptions.list({ limit: 100, status: 'all' })) subscriptions.push(s);
+   for await (const p of stripe.paymentIntents.list({ limit: 100 })) {
+    if (p.status === 'succeeded' && p.metadata?.trial === 'true') weeklyPayments.push({ id: p.id, customer: p.customer, status: p.status, amount_received: p.amount_received, created: p.created, metadata: { trial: p.metadata.trial } });
+   }
    // Só substitui depois de percorrer todas as páginas com sucesso.
-   await store('stripe:billing', 'stripe', [{ prices, invoices }]);
+   await store('stripe:billing', 'stripe', [{ prices, invoices, subscriptions, weeklyPayments }]);
   } catch { errors.push('Cartão: última cópia preservada'); }
   const [subs, snapshots, payments] = await Promise.all([all('woovi_subscriptions', 'id,subscription_id,billing_period'), all('admin_billing_provider_snapshots', 'id,fetched_at,provider'), all('asaas_payments', 'id,asaas_payment_id,billing_period,raw_payload,paid_at')]);
   const known = new Map(snapshots.map(s => [s.id, s]));
