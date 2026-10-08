@@ -1,0 +1,132 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import Stripe from 'https://esm.sh/stripe@18.5.0';
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+
+const cache = new Map<string, { at: number; data: unknown }>();
+const day = (value: string | number) => new Date(new Date(typeof value === 'number' ? value * 1000 : value).getTime() - 3 * 3600e3).toISOString().slice(0, 10);
+const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return reply({});
+  try {
+    const url = Deno.env.get('SUPABASE_URL');
+    const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const anon = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!url || !key || !anon) throw new Error('Configuração indisponível');
+    const authorization = req.headers.get('Authorization') || '';
+    const client = createClient(url, anon, { global: { headers: { Authorization: authorization } } });
+    const { data: claims, error: authError } = await client.auth.getClaims(authorization.replace(/^Bearer /, ''));
+    if (authError || !claims?.claims?.sub) return reply({ error: 'Não autenticado' }, 401);
+    const db = createClient(url, key);
+    const { data: admin, error: roleError } = await db.rpc('has_role', { _user_id: claims.claims.sub, _role: 'admin' });
+    if (roleError || !admin) return reply({ error: 'Acesso restrito' }, 403);
+    const body = await req.json();
+    const { dateFrom, dateTo } = body;
+    const validDate = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
+    if (!validDate(dateFrom) || !validDate(dateTo) || dateFrom > dateTo || (Date.parse(dateTo) - Date.parse(dateFrom)) / 864e5 > 365) return reply({ error: 'Escolha um período válido de até 366 dias.' }, 400);
+    const cacheKey = `${dateFrom}:${dateTo}`;
+    const hit = cache.get(cacheKey);
+    if (!body.forceRefresh && hit && Date.now() - hit.at < 300e3) return reply(hit.data);
+    const start = `${dateFrom}T03:00:00Z`;
+    const endDay = new Date(`${dateTo}T12:00:00Z`); endDay.setUTCDate(endDay.getUTCDate() + 1);
+    const end = `${endDay.toISOString().slice(0, 10)}T03:00:00Z`;
+    async function all(table: string, columns: string, configure?: (q: any) => any) {
+      const rows: any[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        let q = db.from(table).select(columns).order('id');
+        if (configure) q = configure(q);
+        const { data, error } = await q.range(offset, offset + 999);
+        if (error) throw new Error(`Falha ao consultar ${table}`);
+        rows.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      return rows;
+    }
+    const [profiles, subs, charges, asaas, inter, messages, sessions] = await Promise.all([
+      all('profiles', 'user_id,email,name,status,canceled_at'),
+      all('woovi_subscriptions', 'subscription_id,user_id,customer_name,customer_email,plan,billing_period,value_cents,next_charge_date,entry_paid_at,replaced_by_subscription_id,status'),
+      all('woovi_charges', 'id,subscription_id,user_id,kind,cycle_index,due_date,paid_at,value_cents,status'),
+      all('asaas_payments', 'id,user_id,customer_name,customer_email,plan,billing_period,amount_cents,status,paid_at,asaas_subscription_id,raw_payload'),
+      all('inter_pix_charges', 'id,user_id,cycle_index,due_date,paid_at,value_cents,status'),
+      all('messages', 'id,user_id,created_at,channel', q => q.eq('role', 'user').eq('channel', 'in_app').gte('created_at', start).lt('created_at', end)),
+      all('sessions', 'id,user_id,scheduled_at,status', q => q.gte('scheduled_at', start).lt('scheduled_at', end)),
+    ]);
+    const demoIds = new Set(profiles.filter(p => p.status === 'demo').map(p => p.user_id));
+    const demoEmails = new Set(profiles.filter(p => p.status === 'demo').map(p => p.email?.toLowerCase()).filter(Boolean));
+    const profileMap = new Map(profiles.map(p => [p.user_id, p]));
+    const entries = new Map<string, any>();
+    const warnings = ['PIX: vencimentos registrados, mais o próximo vencimento de mandatos ativos/aprovados. Histórico não salvo não é reconstruído; cancelados/rejeitados sem cobrança registrada não são projetados.'];
+    function add(e: any) {
+      if (demoIds.has(e.userId) || demoEmails.has(e.email?.toLowerCase()) || !e.due || !validDate(e.due)) return;
+      const old = entries.get(e.id);
+      if (!old || (e.paid && !old.paid)) entries.set(e.id, e);
+    }
+    const subMap = new Map(subs.map(s => [s.subscription_id, s]));
+    for (const c of charges.filter(c => c.kind !== 'entry' && c.cycle_index > 0)) {
+      const s = subMap.get(c.subscription_id);
+      if (s?.billing_period !== 'monthly' || !s?.entry_paid_at) continue;
+      add({ id: `woovi:${c.subscription_id}:${c.due_date}`, userId: c.user_id || s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due: c.due_date, paid: c.status === 'COMPLETED' && c.paid_at ? day(c.paid_at) : null, cents: c.value_cents || s.value_cents });
+    }
+    for (const s of subs.filter(s => s.billing_period === 'monthly' && s.entry_paid_at && !s.replaced_by_subscription_id && ['ATIVA', 'APROVADA'].includes(s.status))) {
+      const p = profileMap.get(s.user_id);
+      if (p?.canceled_at && s.next_charge_date > day(p.canceled_at)) continue;
+      add({ id: `woovi:${s.subscription_id}:${s.next_charge_date}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due: s.next_charge_date, paid: null, cents: s.value_cents });
+    }
+    for (const p of asaas.filter(p => p.billing_period === 'monthly' && p.asaas_subscription_id && p.status !== 'DELETED')) {
+      const due = p.raw_payload?.dueDate;
+      add({ id: `asaas:${p.asaas_subscription_id}:${due}`, userId: p.user_id, email: p.customer_email, name: p.customer_name, plan: p.plan, provider: 'asaas', due, paid: ['RECEIVED', 'CONFIRMED'].includes(p.status) && p.paid_at ? day(p.paid_at) : null, cents: p.amount_cents });
+    }
+    // O Inter sem identificação do ciclo mensal não é misturado às mensalidades.
+    if (inter.length) warnings.push('Inter não incluído: o histórico local não identifica o intervalo mensal com segurança.');
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+    if (!stripeKey) throw new Error('Cartão indisponível: configuração ausente');
+    const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+    const priceMap = new Map<string, any>();
+    for await (const price of stripe.prices.list({ limit: 100 })) priceMap.set(price.id, price);
+    // Percorre o histórico completo: uma fatura antiga pode ser paga no período selecionado.
+    for await (const inv of stripe.invoices.list({ limit: 100 })) {
+      if (!['subscription_cycle', 'subscription_create'].includes(inv.billing_reason || '') || inv.status === 'draft' || inv.status === 'void' || inv.amount_due <= 0) continue;
+      const monthlyLine = inv.lines.data.find((l: any) => {
+        const id = l.pricing?.price_details?.price || l.price?.id;
+        const p = priceMap.get(id);
+        return p?.recurring?.interval === 'month' && p.recurring.interval_count === 1;
+      });
+      if (!monthlyLine) continue;
+      const due = day(inv.due_date || monthlyLine.period.start || inv.created);
+      const paid = inv.status === 'paid' && inv.status_transitions?.paid_at ? day(inv.status_transitions.paid_at) : null;
+      if (!(due >= dateFrom && due <= dateTo) && !(paid && paid >= dateFrom && paid <= dateTo)) continue;
+      add({ id: inv.id, email: inv.customer_email, name: inv.customer_name, provider: 'stripe', plan: inv.metadata?.plan || 'mensal', due, paid, cents: inv.amount_due, receivedCents: inv.amount_paid });
+    }
+    const billing = [...entries.values()].filter(e => (e.due >= dateFrom && e.due <= dateTo) || (e.paid && e.paid >= dateFrom && e.paid <= dateTo));
+    const messageDays = new Map<string, { users: Set<string>; count: number }>();
+    for (const m of messages) {
+      if (demoIds.has(m.user_id)) continue;
+      const date = day(m.created_at);
+      const group = messageDays.get(date) || { users: new Set<string>(), count: 0 };
+      group.users.add(m.user_id); group.count++; messageDays.set(date, group);
+    }
+    const sessionDays = new Map<string, { completed: number; missed: number }>();
+    for (const s of sessions) {
+      if (demoIds.has(s.user_id)) continue;
+      const date = day(s.scheduled_at);
+      const group = sessionDays.get(date) || { completed: 0, missed: 0 };
+      if (s.status === 'completed') group.completed++;
+      if (s.status === 'no_show') group.missed++;
+      sessionDays.set(date, group);
+    }
+    const days: any[] = [];
+    for (let d = new Date(`${dateFrom}T12:00:00Z`); d.toISOString().slice(0, 10) <= dateTo; d.setUTCDate(d.getUTCDate() + 1)) {
+      const date = d.toISOString().slice(0, 10);
+      const sent = messageDays.get(date);
+      const ss = sessionDays.get(date);
+      days.push({ date, active: sent?.users.size || 0, messages: sent?.count || 0, completed: ss?.completed || 0, missed: ss?.missed || 0 });
+    }
+    const result = { billing, days, warnings, updatedAt: new Date().toISOString() };
+    if (cache.size > 20) cache.clear();
+    cache.set(cacheKey, { at: Date.now(), data: result });
+    return reply(result);
+  } catch (error) {
+    console.error('Falha no panorama administrativo', error instanceof Error ? error.message : 'Erro desconhecido');
+    return reply({ error: 'Não foi possível carregar o panorama. Tente atualizar novamente.' }, 500);
+  }
+});

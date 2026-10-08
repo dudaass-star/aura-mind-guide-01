@@ -38,6 +38,7 @@
     --border: 30 15% 85%;
     --input: 30 15% 85%;
     --ring: 155 30% 45%;
+    --chart-2: 205 70% 45%;
 
     --radius: 1rem;
 
@@ -92,6 +93,7 @@
     --popover: 220 18% 16%;
     --popover-foreground: 30 25% 95%;
     --primary: 155 35% 55%;
+    --chart-2: 205 75% 65%;
     --primary-foreground: 220 20% 10%;
     --secondary: 220 15% 20%;
     --secondary-foreground: 30 20% 85%;

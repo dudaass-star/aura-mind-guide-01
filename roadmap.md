@@ -5,6 +5,11 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Panorama do negócio
+- [x] Criar visão geral com gráfico diário de mensalidades previstas versus recebidas, quantidade/R$, 30 dias e filtros.
+- [x] Separar uso, sessões e detalhes de custos para limpar a área de Engajamento.
+- [x] Validar consulta financeira real, filtros, detalhes por dia e gráficos na conta de Eduardo; previsão PIX limitada aos registros existentes e mandatos ativos/aprovados, sem inventar histórico ausente.
+
 ## Tela inicial
 - [x] Criar capas individuais para as seis meditações; imagens distintas carregadas na biblioteca e capa correspondente na reprodução conferidas na conta de Eduardo. Aguarda publicação do App.
 - [x] Meditações renovada com imagens próprias, biblioteca compacta e reprodução dedicada; áudio real, pausa, avanço, busca, filtros e telas pequena/grande conferidos na conta de Eduardo sem erros. Aguarda publicação do App.
