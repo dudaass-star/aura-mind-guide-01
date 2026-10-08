@@ -12,6 +12,7 @@
 - [x] Aplicar a prévia aprovada com áreas agrupadas, práticas visuais e Movimento próprio; navegação autenticada de Eduardo, Orações, Meditações, Movimento, conversa e telas pequena/grande conferidos sem erros. Aguarda publicação do App.
 
 ## Orações
+- [ ] Incluir “Quando não sei qual caminho seguir” com áudio enviado, capa própria, frases alinhadas e reprodução autenticada conferida.
 - [x] Integrar a oração aprovada com player ampliado, 25 frases alinhadas ao áudio final e modo só ouvir; reprodução, pausa, avanço, início/fim e telas pequena/grande conferidos na conta de Eduardo. Áudio CDN confirmado; conferência local usa a mesma gravação com suporte a intervalos. Aguarda publicação do App.
 
 - [x] Concluir a revisão final do Movimento: atribuição global, Voz do Movimento, mensagens editáveis, autorização individual do Mural, segurança, engajamento e validação administrativa.
