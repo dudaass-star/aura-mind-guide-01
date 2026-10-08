@@ -61,12 +61,18 @@ Deno.serve(async (req) => {
     const warnings: string[] = [];
     const issues: { provider: string; reason: string; count: number; cents: number }[] = [];
     const official = new Map<string, any[]>();
-    const candidates = subs.filter(s => s.billing_period === 'monthly' && (s.entry_paid_at || charges.some(c => c.subscription_id === s.subscription_id && c.paid_at)) && !demoIds.has(s.user_id));
+    const candidates = subs.filter(s => s.billing_period === 'monthly' && (s.entry_paid_at || charges.some(c => c.subscription_id === s.subscription_id && c.paid_at)) && !demoIds.has(s.user_id) && ((s.next_charge_date && s.next_charge_date >= dateFrom && s.next_charge_date <= dateTo) || charges.some(c => c.subscription_id === s.subscription_id && ((c.due_date && c.due_date >= dateFrom && c.due_date <= dateTo) || (c.paid_at && day(c.paid_at) >= dateFrom && day(c.paid_at) <= dateTo)))));
+    const deadline = Date.now() + 18000;
+    async function bounded<T>(promise: Promise<T>): Promise<T> {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try { return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Tempo de consulta esgotado')), 6000); })]); }
+      finally { if (timer) clearTimeout(timer); }
+    }
     let cursor = 0;
     await Promise.all(Array.from({ length: Math.min(6, candidates.length) }, async () => {
       while (cursor < candidates.length) {
         const s = candidates[cursor++];
-        try { official.set(s.subscription_id, await listInstallments(s.subscription_id)); }
+        try { if (Date.now() > deadline) throw new Error('Limite de consulta'); official.set(s.subscription_id, await bounded(listInstallments(s.subscription_id))); }
         catch { issues.push({ provider: 'woovi', reason: 'Histórico oficial de parcelas indisponível', count: 1, cents: 0 }); }
       }
     }));
@@ -104,7 +110,7 @@ Deno.serve(async (req) => {
     for (const p of asaas.filter(p => p.billing_period === 'monthly' && p.asaas_subscription_id && p.status !== 'DELETED' && !p.is_trial)) {
       let due = p.raw_payload?.dueDate || p.raw_payload?.payment?.dueDate || null;
       if (!due && p.paid_at && day(p.paid_at) >= dateFrom && day(p.paid_at) <= dateTo) {
-        const officialPayment = await asaasGetJson(`/payments/${encodeURIComponent(p.asaas_payment_id)}`);
+        const officialPayment = await bounded(asaasGetJson(`/payments/${encodeURIComponent(p.asaas_payment_id)}`)).catch(() => null);
         due = officialPayment?.dueDate || null;
       }
       add({ id: `asaas:${p.asaas_subscription_id}:${due || p.id}`, userId: p.user_id, email: p.customer_email, name: p.customer_name, plan: p.plan, provider: 'asaas', due, paid: ['RECEIVED', 'CONFIRMED'].includes(p.status) && p.paid_at ? day(p.paid_at) : null, cents: p.amount_cents });
@@ -160,7 +166,8 @@ Deno.serve(async (req) => {
       const ss = sessionDays.get(date);
       days.push({ date, active: sent?.users.size || 0, messages: sent?.count || 0, completed: ss?.completed || 0, missed: ss?.missed || 0 });
     }
-    const result = { billing, days, warnings, issues, completeness: issues.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString() };
+    const groupedIssues = [...issues.reduce((map, issue) => { const key = `${issue.provider}:${issue.reason}`; const old = map.get(key); map.set(key, { ...issue, count: (old?.count || 0) + issue.count, cents: (old?.cents || 0) + issue.cents }); return map; }, new Map<string, typeof issues[number]>()).values()];
+    const result = { billing, days, warnings, issues: groupedIssues, completeness: issues.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString() };
     if (cache.size > 20) cache.clear();
     cache.set(cacheKey, { at: Date.now(), data: result });
     return reply(result);
