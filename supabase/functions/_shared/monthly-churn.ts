@@ -63,7 +63,8 @@ export function churnSources(profiles: Row[], stripe: Row | null, pix: { provide
     const email = String(emailValue || '').trim().toLowerCase();
     if (demos.has(userId) || demos.has(email) || /^e2e\+.*@olaaura\.com\.br$/i.test(email)) return null;
     const match = emails.get(email);
-    const found = identities.get(userId) || (match?.size === 1 ? [...match][0] : null);
+    // Cadastros removidos continuam no histórico pela identidade de cobrança exata.
+    const found = identities.get(userId) || (match?.size === 1 ? [...match][0] : !match && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `email:${email}` : null);
     if (!found) missingIdentity++;
     return found || null;
   }

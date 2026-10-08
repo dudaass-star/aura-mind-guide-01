@@ -22,11 +22,17 @@ Deno.serve(async req => {
     if (hit && Date.now() - hit.at < 300e3) return reply(hit.data);
     async function all(table: string, columns: string) {
       const rows: Record<string, any>[] = [];
-      for (let offset = 0; ; offset += 1000) {
-        const { data, error } = await db.from(table).select(columns).order('id').range(offset, offset + 999);
+      let lastId: string | null = null;
+      for (;;) {
+        let query = db.from(table).select(columns).order('id').limit(1000);
+        if (lastId) query = query.gt('id', lastId);
+        const { data, error } = await query;
         if (error) throw new Error(`Falha no histórico ${table}`);
         rows.push(...(data || []));
         if (!data || data.length < 1000) return rows;
+        const nextId = data.at(-1)?.id;
+        if (!nextId || nextId === lastId) throw new Error('Paginação sem avanço');
+        lastId = nextId;
       }
     }
     const [profiles, woovi, wooviCharges, asaas, asaasCharges, inter, interCharges, events, snap] = await Promise.all([
@@ -41,7 +47,12 @@ Deno.serve(async req => {
       db.from('admin_billing_provider_snapshots').select('installments,fetched_at').eq('id', 'stripe:billing').eq('provider', 'stripe').maybeSingle(),
     ]);
     if (snap.error) throw snap.error;
-    const source = churnSources(profiles, snap.data?.installments?.[0] || null, [
+    const segments = Array.isArray(snap.data?.installments) ? snap.data.installments : [];
+    const stripe = segments.length ? {
+      subscriptions: [...new Map(segments.flatMap((s: Record<string, any>) => s.subscriptions || []).map((s: Record<string, any>) => [s.id, s])).values()],
+      invoices: [...new Map(segments.flatMap((s: Record<string, any>) => s.invoices || []).map((i: Record<string, any>) => [i.id, i])).values()],
+    } : null;
+    const source = churnSources(profiles, stripe, [
       { provider: 'woovi', subscriptions: woovi, charges: wooviCharges },
       { provider: 'asaas', subscriptions: asaas, charges: asaasCharges },
       { provider: 'inter', subscriptions: inter, charges: interCharges },

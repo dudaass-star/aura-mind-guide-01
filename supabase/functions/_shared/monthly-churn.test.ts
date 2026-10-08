@@ -36,3 +36,8 @@ test('PIX usa cancelamento comprovado e fim pago, nunca updated_at', () => {
   const result = churnSources(profiles, { subscriptions: [] }, [{ provider: 'woovi', subscriptions, charges }], [{ tier: 'cancel', action: 'applied', metadata: { subscription_id: 's' }, created_at: '2026-09-02T12:00:00Z' }]);
   expect(result.intervals[0]).toMatchObject({ start: '2026-08-15', end: '2026-09-15', cause: 'voluntary' });
 });
+test('cliente histórico removido mantém identidade exata de cobrança entre provedores', () => {
+  const source = churnSources([], { subscriptions: [] }, [{ provider: 'woovi', subscriptions: [{ subscription_id: 's', customer_email: 'Antiga@example.com', billing_period: 'monthly', status: 'ATIVA' }], charges: [{ subscription_id: 's', paid_at: '2026-08-01T12:00:00Z', status: 'COMPLETED' }] }], []);
+  expect(source.intervals[0]?.identity).toBe('email:antiga@example.com');
+  expect(source.excluded.missingIdentity).toBe(0);
+});
