@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Stripe from "https://esm.sh/stripe@18.5.0";
+import type Stripe from "https://esm.sh/stripe@18.5.0";
+import { billingSnapshotReader } from "../_shared/billing-snapshot-reader.ts";
 import { brtDay, validDay, monthlyCents } from "../_shared/admin-billing.ts";
 
 import { reconcileRevenue, pixContract, stripeContract } from "../_shared/recurring-revenue.ts";
@@ -25,7 +26,7 @@ const STANDARD_WINDOW_DAYS: Record<string, number> = {
   today: 0,
   '7d': 7,
   '14d': 14,
-  '30d': 30,
+  '30d': 29,
   '90d': 90,
 };
 
@@ -38,7 +39,7 @@ function matchStandardWindow(dateFrom: string, dateTo: string): string | null {
   const today = brtDay(new Date().toISOString());
   if (dateTo !== today) return null;
   for (const [key, days] of Object.entries(STANDARD_WINDOW_DAYS)) {
-    const expectedFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    const expectedFrom = new Date(Date.now() - 3 * 60 * 60 * 1000 - days * 24 * 60 * 60 * 1000)
       .toISOString().slice(0, 10);
     if (dateFrom === expectedFrom) return key;
   }
@@ -204,7 +205,7 @@ Deno.serve(async (req) => {
     console.log(`📊 Period: ${periodStart} → ${periodEnd} (BRT-aligned)`);
 
     // ⚡ Cache check
-    const cacheKey = `v5:${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
+    const cacheKey = `v8:${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
     if (!forceRefresh) {
       const cached = getCached(cacheKey);
       if (cached) {
@@ -220,18 +221,18 @@ Deno.serve(async (req) => {
 
     // 📸 Snapshot check — janelas padrão são pré-calculadas por cron a cada 5 min.
     // Se o filtro casar com hoje/7d/14d/30d/90d e forceRefresh não for pedido,
-    // devolvemos o snapshot direto (dashboard em <200ms). Consideramos stale
-    // após 15 min por segurança (caso o cron falhe).
+    // devolvemos a última cópia válida, sem conferir provedores na abertura.
+    // A data de atualização acompanha o resultado mesmo se o cron atrasar.
     const windowKey = matchStandardWindow(dateFrom || defaultFrom, dateTo || defaultTo);
-    if (windowKey && !forceRefresh) {
+    if (windowKey && !forceRefresh && !isInternalCall) {
       const { data: snap } = await supabase
         .from('admin_metrics_snapshots')
         .select('payload, computed_at')
         .eq('window_key', windowKey)
         .maybeSingle();
-      if (snap?.payload && (snap.payload as Record<string, unknown>)._metricsVersion === 5) {
+      if (snap?.payload && (snap.payload as Record<string, unknown>)._metricsVersion === 8) {
         const ageMs = Date.now() - new Date(snap.computed_at as string).getTime();
-        if (ageMs < 15 * 60 * 1000) {
+        if (snap.payload) {
           console.log(`📸 Snapshot HIT window=${windowKey} age=${Math.round(ageMs / 1000)}s`);
           const payload = { ...(snap.payload as Record<string, unknown>), _snapshot_computed_at: snap.computed_at, _snapshot_window: windowKey };
           return new Response(JSON.stringify(payload), {
@@ -582,9 +583,11 @@ Deno.serve(async (req) => {
     const funnelConverted = allTimeFunnel.filter(p => p.status === 'active' || p.converted_at).length;
 
     // Faturas únicas pelo provedor: uma retentativa não cria nova fatura.
-    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
-    if (!stripeKey) throw new Error('Configuração financeira do cartão indisponível');
-    const billingStripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+    const { data: revenueSnapshot, error: revenueSnapshotError } = await supabase.from('admin_billing_provider_snapshots').select('installments,fetched_at').eq('id', 'stripe:billing').maybeSingle();
+    if (revenueSnapshotError) throw revenueSnapshotError;
+    const revenueStripe = revenueSnapshot?.installments?.[0] || {};
+    const stripeKey = Array.isArray(revenueStripe.subscriptions);
+    const billingStripe = billingSnapshotReader(revenueStripe);
     const billingInvoices = new Map<string, boolean>();
     const demoEmails = new Set(demoProfiles.map(p => String(p.email || '').trim().toLowerCase()));
     for await (const invoice of billingStripe.invoices.list({ limit: 100 })) {
@@ -736,7 +739,7 @@ Deno.serve(async (req) => {
     let weeklyPlansInPeriod = 0;
 
     if (stripeKey) {
-      const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+      const stripe = billingStripe;
       const weeklyAmounts = [690, 990, 1990];
 
       // Use Stripe search to find charges with specific amounts
@@ -927,9 +930,6 @@ Deno.serve(async (req) => {
     let pastDueCriticalCount = 0;              // past_due >7d (Stripe ainda tentando)
 
     // Receita lê a cópia financeira preparada a cada seis horas.
-    const { data: revenueSnapshot, error: revenueSnapshotError } = await supabase.from('admin_billing_provider_snapshots').select('installments,fetched_at').eq('id', 'stripe:billing').maybeSingle();
-    if (revenueSnapshotError) throw revenueSnapshotError;
-    const revenueStripe = revenueSnapshot?.installments?.[0];
     const revenueContracts: Record<string, any>[] = [];
     if (!Array.isArray(revenueStripe?.subscriptions)) metricWarnings.push('Receita cartão aguardando cópia completa de assinaturas; total ainda parcial.');
     for (const sub of revenueStripe?.subscriptions || []) {
@@ -962,7 +962,7 @@ Deno.serve(async (req) => {
 
     if (stripeKey) {
       try {
-        const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+        const stripe = billingStripe;
         const thirtyDaysAgoTs = periodStartTs;
         let hasMore = true;
         let startingAfter: string | undefined;
@@ -1032,7 +1032,7 @@ Deno.serve(async (req) => {
 
     if (stripeKey) {
       try {
-        const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+        const stripe = billingStripe;
         const DAY = 24 * 60 * 60;
         const nowTs = Math.min(Math.floor(Date.now() / 1000), periodEndTs);
         // Janela: últimos 180 dias para garantir dados de 90d+
@@ -1368,6 +1368,24 @@ Deno.serve(async (req) => {
     mrrAtRiskCents = Math.round(revenueReconciliation.risk.brl * 100);
     pastDueSubscriptionsCount = revenueReconciliation.risk.contracts;
     paymentAtRiskCount = pastDueSubscriptionsCount;
+    // Detalhes de cartão usam a mesma cópia, sem valores zerados por variáveis legadas.
+    for (const sub of revenueStripe.subscriptions || []) {
+      const row = revenueReconciliation.rows.find(r => r.provider === 'stripe' && r.contractId === sub.id);
+      if (!row) continue;
+      if (row.state === 'recurring') {
+        const plan = sub.metadata?.plan || 'sem_plano';
+        const item = mrrByPlan[plan] || { committed: 0, weekly: 0, users: 0 };
+        item.committed += row.monthlyCents; item.users++;
+        mrrByPlan[plan] = item;
+      }
+      if (sub.status !== 'past_due') continue;
+      const open = (revenueStripe.invoices || []).filter((i: Record<string, any>) => (i.subscription || i.parent?.subscription_details?.subscription) === sub.id && i.status === 'open' && i.amount_remaining > 0).sort((a: Record<string, any>, b: Record<string, any>) => a.created - b.created)[0];
+      if (!open) continue;
+      const ageDays = (Date.now() / 1000 - (open.due_date || open.created)) / 86400;
+      if (ageDays > 7) { pastDueCriticalCount++; mrrAtRiskCriticalCents += row.monthlyCents; }
+      else { pastDueRecentCount++; mrrAtRiskRecentCents += row.monthlyCents; }
+      mrrAtRiskMonthlyCents += row.monthlyCents;
+    }
 
     // ---------- PIX Automático (Bacen): saúde da autorização recorrente ----------
     // A etapa que mais perdemos é o consentimento no app do banco. Aqui medimos
@@ -1803,7 +1821,7 @@ Deno.serve(async (req) => {
     }
 
     const responsePayload = JSON.stringify({
-      _metricsVersion: 5,
+      _metricsVersion: 8,
       revenueReconciliation,
       interActiveUsersCount: revenueReconciliation.providers.inter.contracts,
       interMrrBRL: interMrrCents / 100,

@@ -29,17 +29,17 @@ export function reconcileRevenue(profiles: Row[], contracts: Row[], today: strin
     if (!p) warnings.push('Contrato sem vínculo único com cliente; separado da receita confirmada.');
     else if (!c.monthlyCents || c.monthlyCents < 0) warnings.push('Contrato sem valor ou ciclo comprovado; separado da receita confirmada.');
     else if (c.missingCoverage) warnings.push('Pagamento sem vencimento comprovado; contrato separado até conciliação.');
-    else if (c.paidUntil && c.paidUntil > today) state = c.overdue ? 'risk' : 'recurring';
+    else if (c.paidBefore) state = c.overdue || (c.paidUntil && c.paidUntil <= today) ? 'risk' : 'recurring';
     else if (c.trialPaid && c.trialUntil > today) state = 'trial';
     else if (c.paidBefore || c.trialPaid || c.overdue) state = 'risk';
-    rows.push({ provider: c.provider, contractId: c.id, profileId: p?.id || null, profileStatus: p?.status || null, state, monthlyCents: c.monthlyCents || 0, paidUntil: c.paidUntil || null });
+    rows.push({ provider: c.provider, contractId: c.id, profileId: p?.id || null, profileStatus: p?.status || null, state, monthlyCents: c.monthlyCents || 0, paidUntil: c.paidUntil || null, duplicate: false });
   }
   // Contratos simultâneos do mesmo cliente não são somados silenciosamente.
   const grouped = new Map<string, Row[]>();
   for (const r of rows) if (r.profileId) grouped.set(r.profileId, [...(grouped.get(r.profileId) || []), r]);
   for (const group of grouped.values()) if (group.length > 1) {
     warnings.push('Cliente com mais de um contrato vigente; valores separados até conciliação da duplicidade.');
-    for (const r of group) r.state = 'unverified';
+    for (const r of group) { r.state = 'unverified'; r.duplicate = true; }
   }
   const bucket = (state: string) => {
     const selected = rows.filter(r => r.state === state);
@@ -54,7 +54,13 @@ export function reconcileRevenue(profiles: Row[], contracts: Row[], today: strin
     const linked = rows.filter(r => r.profileId === p.id);
     return state === 'unlinked' ? !linked.length : linked.some(r => r.state === state);
   }).length]));
-  return { recurring: bucket('recurring'), trial: bucket('trial'), risk: bucket('risk'), unverified: bucket('unverified'), providers, activeProfiles: active.length, activeBreakdown, rows, warnings: [...new Set(warnings)] };
+  const contractedRows = rows.filter(r => !r.duplicate && r.monthlyCents > 0);
+  const contractedProviders = Object.fromEntries(['stripe', 'woovi', 'asaas', 'inter'].map(provider => {
+    const selected = contractedRows.filter(r => r.provider === provider);
+    return [provider, { contracts: selected.length, brl: selected.reduce((n,r) => n+r.monthlyCents,0)/100 }];
+  }));
+  const contracted = { customers: new Set(contractedRows.map(r => r.profileId).filter(Boolean)).size, unlinkedContracts: contractedRows.filter(r => !r.profileId).length, contracts: contractedRows.length, brl: contractedRows.reduce((n,r) => n+r.monthlyCents,0)/100, providers: contractedProviders };
+  return { contracted, recurring: bucket('recurring'), trial: bucket('trial'), risk: bucket('risk'), unverified: bucket('unverified'), providers, activeProfiles: active.length, activeBreakdown, rows, warnings: [...new Set(warnings)] };
 }
 
 export function pixContract(provider: string, s: Row, charges: Row[], today: string): Row {
@@ -81,5 +87,5 @@ export function stripeContract(s: Row, invoices: Row[], weeklyPayments: Row[] = 
   const ends = paid.flatMap(i => (i.lines?.data || []).filter((l: Row) => !l.parent?.subscription_item_details?.proration).map((l: Row) => brtDay(l.period?.end || 0))).sort();
   const customer = typeof s.customer === 'string' ? s.customer : s.customer?.id;
   const trialPaid = weeklyPayments.some(p => p.customer === customer && p.status === 'succeeded' && p.amount_received > 0 && p.created <= s.trial_start && s.trial_start - p.created <= 86400);
-  return { id: s.id, provider: 'stripe', userId: s.metadata?.user_id, email: s.metadata?.email || latest?.customer_email, monthlyCents, paidUntil: ends.at(-1), paidBefore: paid.length > 0, trialPaid: s.status === 'trialing' && trialPaid, trialUntil: brtDay(s.trial_end || 0), overdue: s.status === 'past_due' };
+   return { id: s.id, provider: 'stripe', userId: s.metadata?.user_id, email: s.metadata?.email || s.customer?.email || latest?.customer_email, monthlyCents, paidUntil: ends.at(-1), paidBefore: paid.length > 0, trialPaid: s.status === 'trialing' && trialPaid, trialUntil: brtDay(s.trial_end || 0), overdue: s.status === 'past_due' };
 }

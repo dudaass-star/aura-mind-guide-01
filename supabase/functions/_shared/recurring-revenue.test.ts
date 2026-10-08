@@ -21,4 +21,14 @@ test('duplicidade não soma silenciosamente e demo excluído', () => {
   const result = reconcileRevenue([{ id: 'p', status: 'active' }, { id: 'd', status: 'demo' }], ['a', 'b'].map(id => ({ id, userId: 'p', monthlyCents: 2990, paidUntil: '2026-11-01' })).concat([{ id: 'demo', userId: 'd', monthlyCents: 2990, paidUntil: '2026-11-01' }]), '2026-10-08');
   expect(result.recurring.contracts).toBe(0);
   expect(result.unverified.contracts).toBe(2);
+  expect(result.contracted.brl).toBe(0);
+});
+test('potencial inclui semana e risco, sem confundir com pagamento', () => {
+  const result = reconcileRevenue([{ id: 'p', status: 'active' }], [{ id: 's', provider: 'stripe', userId: 'p', monthlyCents: 2990, trialPaid: true, trialUntil: '2026-10-10' }, { id: 't', provider: 'stripe', monthlyCents: 3990 }], '2026-10-08');
+  expect(result.contracted.brl).toBe(69.8);
+  expect(result.contracted.contracts).toBe(2);
+  expect(result.contracted.customers).toBe(1);
+  expect(result.contracted.unlinkedContracts).toBe(1);
+  expect(result.recurring.brl).toBe(0);
+  expect(result.trial.brl).toBe(29.9);
 });

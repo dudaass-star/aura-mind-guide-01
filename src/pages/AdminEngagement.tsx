@@ -32,6 +32,8 @@ interface CostBreakdown {
 
 interface Metrics {
   revenueReconciliation?: {
+    contracted: { customers: number; contracts: number; unlinkedContracts: number; brl: number; providers: Record<string, { contracts: number; brl: number }> };
+    recurring: { contracts: number; customers: number; brl: number };
     complete: boolean; providerUpdatedAt: string | null; activeProfiles: number;
     activeBreakdown: Record<string, number>;
     trial: { contracts: number; brl: number };
@@ -900,7 +902,7 @@ export default function AdminEngagement() {
               {[
                 { label: '7d', days: 7 },
                 { label: '14d', days: 14 },
-                { label: '30d', days: 30 },
+                { label: '30d', days: 29 },
                 { label: '90d', days: 90 },
               ].map(({ label, days }) => (
                 <Button
@@ -982,40 +984,39 @@ export default function AdminEngagement() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <DollarSign className="h-4 w-4" />
-                      Receita mensal projetada · recorrência confirmada
+                      Potencial mensal da base de assinaturas vigentes
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-4xl font-bold text-foreground">R$ {(metrics.mrrGrandTotalBRL ?? metrics.mrrTotalBRL).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                    <div className="text-4xl font-bold text-foreground">R$ {metrics.revenueReconciliation.contracted.brl.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                     <div className="text-[11px] text-muted-foreground mt-1">
-                      {metrics.activeSubscriptionsTotalCount ?? metrics.activeSubscriptionsCount} assinaturas recorrentes
-                      {(metrics.monthlyActiveSubscriptionsCount !== undefined || metrics.weeklyActiveSubscriptionsCount !== undefined) && (
-                        <> ({metrics.monthlyActiveSubscriptionsCount ?? 0} no cartão + {metrics.asaasActiveUsersCount ?? 0} no Asaas + {metrics.wooviActiveUsersCount ?? 0} na Woovi + {metrics.interActiveUsersCount ?? 0} no Inter; sem experimentações)</>
-                      )}
+                      {metrics.revenueReconciliation.contracted.contracts} contratos vigentes · {metrics.revenueReconciliation.contracted.customers} clientes vinculados
+                      {' '}({metrics.revenueReconciliation.contracted.providers.stripe.contracts} no cartão + {metrics.revenueReconciliation.contracted.providers.asaas.contracts} no Asaas + {metrics.revenueReconciliation.contracted.providers.woovi.contracts} na Woovi + {metrics.revenueReconciliation.contracted.providers.inter.contracts} no Inter)
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3 text-xs">
                       <div>
-                        <span className="text-muted-foreground">Cartão recorrente: </span>
-                        <div className="font-semibold text-foreground">R$ {metrics.mrrCommittedBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-muted-foreground">{metrics.monthlyActiveSubscriptionsCount ?? metrics.activeSubscriptionsCount} contratos mensalizados pelo ciclo</div>
+                        <span className="text-muted-foreground">Recorrência adimplente: </span>
+                        <div className="font-semibold text-foreground">R$ {metrics.revenueReconciliation.recurring.brl.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-muted-foreground">{metrics.revenueReconciliation.recurring.customers} clientes com mensalidade paga e cobertura vigente</div>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Em experimentação: </span>
                         <div className="font-semibold text-foreground">{metrics.revenueReconciliation?.trial.contracts ?? 0} clientes</div>
-                        <div className="text-[10px] text-muted-foreground">R$ {(metrics.revenueReconciliation?.trial.brl ?? 0).toFixed(2)} mensais potenciais · fora do total</div>
+                        <div className="text-[10px] text-muted-foreground">R$ {(metrics.revenueReconciliation?.trial.brl ?? 0).toFixed(2)} mensais potenciais · incluídos no potencial</div>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Cobranças em risco: </span>
                         <div className="font-semibold text-destructive">R$ {(metrics.revenueReconciliation?.risk.brl ?? metrics.mrrAtRiskBRL).toFixed(2)}</div>
-                        <div className="text-[10px] text-muted-foreground">{metrics.revenueReconciliation?.risk.contracts ?? 0} contratos · cartão e PIX · fora do total</div>
+                        <div className="text-[10px] text-muted-foreground">{metrics.revenueReconciliation?.risk.contracts ?? 0} contratos · incluídos no potencial, não na recorrência adimplente</div>
                       </div>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-3">
-                      Contratos vigentes com pagamento do ciclo comprovado, normalizados por mês. Experimentações, atrasos e vínculos não conciliados ficam fora do total. PIX: R$ {(metrics.mrrPixBRL ?? 0).toFixed(2)} · Woovi: R$ {(metrics.wooviMrrBRL ?? 0).toFixed(2)}.
+                      Valores dos contratos vigentes normalizados por mês, incluindo experimentação e risco; não representam dinheiro recebido nem receita garantida. Cartão: R$ {metrics.revenueReconciliation.contracted.providers.stripe.brl.toFixed(2)} · Woovi: R$ {metrics.revenueReconciliation.contracted.providers.woovi.brl.toFixed(2)} · Inter: R$ {metrics.revenueReconciliation.contracted.providers.inter.brl.toFixed(2)}.
                     </p>
                     {metrics.revenueReconciliation && <div className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground space-y-1">
                       <p>{metrics.revenueReconciliation.activeProfiles} clientes ativos no App: {metrics.revenueReconciliation.activeBreakdown.recurring} recorrentes · {metrics.revenueReconciliation.activeBreakdown.trial} em experimentação · {metrics.revenueReconciliation.activeBreakdown.risk} em risco · {metrics.revenueReconciliation.activeBreakdown.unverified} a conferir · {metrics.revenueReconciliation.activeBreakdown.unlinked} sem contrato vigente conciliado.</p>
-                      <p>{metrics.revenueReconciliation.unverified.contracts} contratos a conferir, fora do total: R$ {metrics.revenueReconciliation.unverified.brl.toFixed(2)}/mês.</p>
+                      <p>{metrics.revenueReconciliation.unverified.contracts} contratos a conferir: R$ {metrics.revenueReconciliation.unverified.brl.toFixed(2)}/mês; incluídos no potencial quando têm valor e não são duplicados, nunca como pagamento confirmado.</p>
+                      {!!metrics.revenueReconciliation.contracted.unlinkedContracts && <p>{metrics.revenueReconciliation.contracted.unlinkedContracts} contrato vigente sem perfil identificado; não contado como cliente vinculado.</p>}
                       {!metrics.revenueReconciliation.complete && <p className="text-destructive">Total parcial: aguardando atualização completa das assinaturas do cartão.</p>}
                       {metrics.revenueReconciliation.providerUpdatedAt && <p>Última conferência do cartão: {new Date(metrics.revenueReconciliation.providerUpdatedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p>}
                     </div>}
@@ -1033,7 +1034,7 @@ export default function AdminEngagement() {
                       <div className="text-xl font-bold text-foreground">
                         R$ {(metrics.arrBRL ?? metrics.mrrTotalBRL * 12).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
                       </div>
-                      <p className="text-[11px] text-muted-foreground">projeção anualizada (MRR × 12)</p>
+                      <p className="text-[11px] text-muted-foreground">recorrência adimplente × 12; sem semana e risco</p>
                     </CardContent>
                   </Card>
 
@@ -1077,7 +1078,7 @@ export default function AdminEngagement() {
                       <div className="text-xl font-bold text-foreground">
                         R$ {(metrics.arpuBRL ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </div>
-                      <p className="text-[11px] text-muted-foreground">receita média por assinante/mês</p>
+                      <p className="text-[11px] text-muted-foreground">recorrência adimplente / clientes adimplentes</p>
                     </CardContent>
                   </Card>
 
@@ -1113,7 +1114,7 @@ export default function AdminEngagement() {
                         className="text-[11px] text-muted-foreground cursor-help"
                         title={`Custo do período: R$ ${(metrics.totalCostBRL ?? 0).toFixed(2)} em ${metrics.periodDays ?? 0} dias → mensalizado: R$ ${(metrics.totalCostMonthlyBRL ?? 0).toFixed(2)}/mês`}
                       >
-                        Receita contratada − IA estimada; não é lucro
+                        Recorrência adimplente − IA estimada; não é lucro
                       </p>
                     </CardContent>
                   </Card>
@@ -1301,12 +1302,12 @@ export default function AdminEngagement() {
                         </div>
                       </div>
                       <div className="border rounded-md p-2.5 bg-yellow-500/10 border-yellow-500/30">
-                        <div className="text-muted-foreground mb-1">🟡 Em risco ≤7d (recuperável)</div>
+                        <div className="text-muted-foreground mb-1">🟡 Cartão em atraso ≤7d</div>
                         <div className="font-semibold text-yellow-700 dark:text-yellow-500">{metrics.pastDueRecentCount ?? 0}</div>
                         <div className="text-[10px] text-muted-foreground mt-1">R$ {(metrics.mrrAtRiskRecentBRL ?? 0).toFixed(2)} · dunning recente</div>
                       </div>
                       <div className="border rounded-md p-2.5 bg-orange-500/10 border-orange-500/30">
-                        <div className="text-muted-foreground mb-1">🟠 Em risco crítico &gt;7d</div>
+                        <div className="text-muted-foreground mb-1">🟠 Cartão em atraso &gt;7d</div>
                         <div className="font-semibold text-orange-700 dark:text-orange-500">{metrics.pastDueCriticalCount ?? 0}</div>
                         <div className="text-[10px] text-muted-foreground mt-1">R$ {(metrics.mrrAtRiskCriticalBRL ?? 0).toFixed(2)} · Stripe ainda tentando</div>
                       </div>
@@ -1630,7 +1631,7 @@ export default function AdminEngagement() {
                 {metrics.mrrBreakdown.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base font-semibold">MRR por Plano</CardTitle>
+                      <CardTitle className="text-base font-semibold">Recorrência adimplente por plano · cartão</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <Table>
@@ -1638,8 +1639,8 @@ export default function AdminEngagement() {
                           <TableRow>
                             <TableHead className="text-xs">Plano</TableHead>
                             <TableHead className="text-xs text-right">Assinaturas</TableHead>
-                            <TableHead className="text-xs text-right">Mensal/Anual (R$)</TableHead>
-                            <TableHead className="text-xs text-right">Semanal anualizado (R$)</TableHead>
+                            <TableHead className="text-xs text-right">Mensalizado (R$)</TableHead>
+                            <TableHead className="text-xs text-right">Semana (fora do MRR)</TableHead>
                             <TableHead className="text-xs text-right">Total (R$)</TableHead>
                           </TableRow>
                         </TableHeader>
