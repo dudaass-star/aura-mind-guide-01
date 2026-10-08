@@ -12,7 +12,7 @@ import { format, subDays } from 'date-fns';
 
 interface BillingEntry { id: string; name?: string; email?: string; plan: string; provider: string; due: string | null; paid: string | null; cents: number; receivedCents?: number }
 interface DailyUsage { date: string; active: number; messages: number; completed: number; missed: number }
-interface DashboardData { billing: BillingEntry[]; days: DailyUsage[]; warnings: string[]; updatedAt: string; issues?: { provider: string; reason: string; count: number; cents: number }[]; completeness?: string }
+interface DashboardData { billing: BillingEntry[]; days: DailyUsage[]; warnings: string[]; updatedAt: string; providerUpdatedAt?: string | null; issues?: { provider: string; reason: string; count: number; cents: number }[]; completeness?: string }
 const brtNow = () => new Date(`${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)}T12:00:00`);
 const shortDate = (date: string | null) => date ? date.slice(5).split('-').reverse().join('/') : 'Não comprovado';
 const currency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -49,15 +49,10 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
   const [validation, setValidation] = useState('');
   const [definitions, setDefinitions] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [remaining, setRemaining] = useState<number | null>(null);
-  async function loadDashboard(forceRefresh = false): Promise<DashboardData> {
-    for (let attempt = 0; attempt < 100; attempt++) {
-      const { data, error } = await supabase.functions.invoke('admin-business-dashboard', { body: { dateFrom: range.from, dateTo: range.to, forceRefresh: forceRefresh || attempt > 0 } });
-      if (error || data?.error) { setRemaining(null); throw new Error(data?.error || 'Não foi possível carregar os gráficos.'); }
-      if (!data.reconciling) { setRemaining(null); return data as DashboardData; }
-      setRemaining(data.remaining);
-    }
-    throw new Error('Conciliação ainda pendente. Atualize para continuar.');
+  async function loadDashboard(): Promise<DashboardData> {
+    const { data, error } = await supabase.functions.invoke('admin-business-dashboard', { body: { dateFrom: range.from, dateTo: range.to } });
+    if (error || data?.error) throw new Error(data?.error || 'Não foi possível carregar os gráficos.');
+    return data as DashboardData;
   }
   const query = useQuery({
     queryKey: ['admin-business-dashboard', range.from, range.to],
@@ -66,7 +61,7 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
   });
   const refresh = async () => {
     setRefreshing(true);
-    try { await loadDashboard(true); setValidation(''); await query.refetch(); }
+    try { const result = await query.refetch(); if (result.error) throw result.error; setValidation(''); }
     catch { setValidation('Não foi possível atualizar. Os dados anteriores foram mantidos.'); }
     finally { setRefreshing(false); }
   };
@@ -100,8 +95,9 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
         <Button variant="outline" onClick={() => apply()}>Aplicar</Button><Button variant="ghost" size="icon" aria-label="Atualizar gráficos" title="Atualizar gráficos" onClick={refresh} disabled={query.isFetching || refreshing}><RefreshCw className={`h-4 w-4 ${query.isFetching || refreshing ? 'animate-spin' : ''}`} /></Button>
       </div>}
     </div>
+    {query.data?.providerUpdatedAt && <p className="text-xs text-muted-foreground">Dados dos provedores conferidos em {new Date(query.data.providerUpdatedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} · atualização automática</p>}
     {validation && <p role="alert" className="text-sm text-destructive">{validation}</p>}
-    {query.isPending ? <div className="h-[420px] bg-muted/40 animate-pulse flex items-center justify-center text-muted-foreground" role="status">{remaining === null ? 'Carregando gráficos…' : `Conferindo parcelas oficiais… ${remaining} cadastros restantes`}</div> : query.isError ? <div role="alert" className="py-12 text-center space-y-3"><AlertCircle className="mx-auto h-6 w-6 text-destructive" /><p>Não foi possível carregar o panorama.</p><Button variant="outline" onClick={() => query.refetch()}>Tentar novamente</Button></div> : <>
+    {query.isPending ? <div className="h-[420px] bg-muted/40 animate-pulse flex items-center justify-center text-muted-foreground" role="status">Carregando gráficos…</div> : query.isError ? <div role="alert" className="py-12 text-center space-y-3"><AlertCircle className="mx-auto h-6 w-6 text-destructive" /><p>Não foi possível carregar o panorama.</p><Button variant="outline" onClick={() => query.refetch()}>Tentar novamente</Button></div> : <>
       {!onlyUsage && <>
         {!!query.data?.issues?.length && <div role="alert" className="border-l-2 border-destructive pl-4 text-sm space-y-1"><p className="font-semibold text-destructive">Conciliação incompleta — não usar como fechamento financeiro</p>{query.data.issues.map((issue, index) => <p key={index} className="text-muted-foreground">{issue.reason}: {issue.count}{issue.cents > 0 ? ` · ${currency(issue.cents / 100)}` : ''}</p>)}</div>}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">{totals.map(t => <div key={t.label} className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">{t.label}</p><p className="text-3xl font-semibold mt-2">{t.value}</p><p className="text-xs text-muted-foreground mt-1">{t.detail}</p></div>)}</div>
