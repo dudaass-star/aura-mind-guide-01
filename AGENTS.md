@@ -30,4 +30,4 @@
 - Prayers share one catalog/player to keep art, audio and cues matched.
 - Home keeps tracking; practice dialogs stop audio on exit.
 
-- Billing uses snapshots and paid-cycle evidence; profile/auth IDs are reconciled. Trials, risk and ambiguous contracts stay separate; conversion excludes renewals.
+- Revenue uses snapshots, paid cycles and matched IDs; trials/risk/ambiguity stay separate. Conversion excludes renewals.

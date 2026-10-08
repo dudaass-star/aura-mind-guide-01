@@ -978,7 +978,7 @@ export default function AdminEngagement() {
               <>
                 {!!metrics.metricWarnings?.length && <div className="border-l-2 border-border pl-4 text-xs text-muted-foreground space-y-1">{metrics.metricWarnings.map(w => <p key={w}>{w}</p>)}</div>}
                 {/* Hero MRR Card */}
-                <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-accent/5">
+                {!metrics.revenueReconciliation ? <div className="border-l-2 border-primary pl-4 py-3 text-sm text-muted-foreground">Receita mensal em atualização. A conciliação completa ainda não está disponível; o valor anterior não será apresentado como confirmado.</div> : <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-accent/5">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <DollarSign className="h-4 w-4" />
@@ -1020,7 +1020,7 @@ export default function AdminEngagement() {
                       {metrics.revenueReconciliation.providerUpdatedAt && <p>Última conferência do cartão: {new Date(metrics.revenueReconciliation.providerUpdatedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p>}
                     </div>}
                   </CardContent>
-                </Card>
+                </Card>}
 
                 {/* 🚀 Fase 2: Mini-cards de derivadas (ARR / ARPU / MRR Growth / Margem) */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
