@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     }
     const [profiles, subs, charges, asaas, inter, messages, sessions, interSubs] = await Promise.all([
       all('profiles', 'user_id,email,name,status,canceled_at'),
-      all('woovi_subscriptions', 'subscription_id,user_id,customer_name,customer_email,plan,billing_period,value_cents,next_charge_date,entry_paid_at,replaced_by_subscription_id,status,is_trial,trial_value_cents,start_date,created_at'),
+      all('woovi_subscriptions', 'subscription_id,user_id,customer_name,customer_email,plan,billing_period,value_cents,next_charge_date,entry_paid_at,replaced_by_subscription_id,status,is_trial,trial_value_cents,start_date,created_at,raw_payload'),
       all('woovi_charges', 'id,subscription_id,installment_id,user_id,kind,cycle_index,due_date,paid_at,value_cents,status,raw_payload'),
       all('asaas_payments', 'id,asaas_payment_id,user_id,customer_name,customer_email,plan,billing_period,amount_cents,status,paid_at,asaas_subscription_id,raw_payload,is_trial'),
       all('inter_pix_charges', 'id,id_rec,user_id,cycle_index,due_date,paid_at,value_cents,status'),
