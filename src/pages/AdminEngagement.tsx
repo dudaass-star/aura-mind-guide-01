@@ -10,6 +10,7 @@ import LandingEngagementPanel from '@/components/admin/LandingEngagementPanel';
 import PixAutomaticoDiaPanel from '@/components/admin/PixAutomaticoDiaPanel';
 import DisputasPixPanel from '@/components/admin/DisputasPixPanel';
 import PaymentDunningPanel from '@/components/admin/PaymentDunningPanel';
+import BusinessDashboard from '@/components/admin/BusinessDashboard';
 
 import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard, Mail, ChevronDown, MessageCircle, Heart, BookOpen } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -345,7 +346,9 @@ export default function AdminEngagement() {
   const [churnWindowDays, setChurnWindowDays] = useState<number>(60);
   const [blasting, setBlasting] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
-  const [dateFrom, setDateFrom] = useState<Date>(new Date());
+  const [dateFrom, setDateFrom] = useState<Date>(subDays(new Date(), 29));
+  const [activeTab, setActiveTab] = useState('overview');
+  const [costsOpen, setCostsOpen] = useState(false);
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
   const [recoveryStats, setRecoveryStats] = useState<{ emailsSent: number; emailPeople: number; emailSkipped: number; emailFailed: number }>({ emailsSent: 0, emailPeople: 0, emailSkipped: 0, emailFailed: 0 });
@@ -698,8 +701,8 @@ export default function AdminEngagement() {
   useEffect(() => {
     if (!isAdmin) return;
     (async () => {
-      const fromISO = new Date(dateFrom.setHours(0, 0, 0, 0)).toISOString();
-      const toISO = new Date(dateTo.setHours(23, 59, 59, 999)).toISOString();
+      const fromISO = new Date(new Date(dateFrom).setHours(0, 0, 0, 0)).toISOString();
+      const toISO = new Date(new Date(dateTo).setHours(23, 59, 59, 999)).toISOString();
       const { data, error } = await supabase
         .from('retention_events')
         .select('tier, action, gateway, created_at')
@@ -866,9 +869,9 @@ export default function AdminEngagement() {
             <Button variant="ghost" size="icon" onClick={() => navigate('/admin/configuracoes')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-2xl font-bold text-foreground">Métricas de Engajamento</h1>
+            <h1 className="text-2xl font-bold text-foreground">Indicadores do negócio</h1>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className={cn("flex items-center gap-2 flex-wrap", activeTab === "overview" && "hidden")}>
             <Button
               variant="outline"
               size="sm"
@@ -943,13 +946,16 @@ export default function AdminEngagement() {
           </div>
         </div>
 
-        <Tabs defaultValue="revenue" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="revenue">💰 Receita & Saúde</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="flex h-auto w-full justify-start flex-wrap gap-1">
+            <TabsTrigger value="overview">Visão geral</TabsTrigger>
+            <TabsTrigger value="revenue">Receita e cobranças</TabsTrigger>
             <TabsTrigger value="engagement">Engajamento</TabsTrigger>
             <TabsTrigger value="trial">Semanais & Conversão</TabsTrigger>
             <TabsTrigger value="cancellations">Cancelamentos</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="overview" className="mt-3">{isAdmin && <BusinessDashboard />}</TabsContent>
 
           <TabsContent value="revenue" className="mt-3 space-y-4">
             {loading && !metrics ? <SkeletonCards /> : metrics && (
@@ -1671,11 +1677,15 @@ export default function AdminEngagement() {
           <TabsContent value="engagement" className="mt-3 space-y-4">
             {loading && !metrics ? <SkeletonCards /> : (
               <>
+                {isAdmin && <BusinessDashboard onlyUsage />}
+                <h2 className="text-lg font-semibold border-t pt-6">Resumo do período</h2>
                 <MetricCards cards={engagementCards} />
 
                 {/* Cost Section */}
                 {metrics && metrics.totalCostUSD !== undefined && (
-                  <div className="space-y-3">
+                  <Collapsible open={costsOpen} onOpenChange={setCostsOpen} className="space-y-3 border-t pt-5">
+                    <CollapsibleTrigger asChild><Button variant="ghost" className="w-full justify-between"><span>Custo de IA no período</span><ChevronDown className="h-4 w-4" /></Button></CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-4">
                     <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                       <DollarSign className="h-4 w-4" />
                       Custo de IA no Período
@@ -1754,7 +1764,8 @@ export default function AdminEngagement() {
                         </Table>
                       </div>
                     )}
-                  </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
               </>
             )}
