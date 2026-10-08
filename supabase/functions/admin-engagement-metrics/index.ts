@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@18.5.0";
+import { brtDay, validDay, monthlyCents } from "../_shared/admin-billing.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,7 +33,7 @@ const STANDARD_WINDOW_DAYS: Record<string, number> = {
  * contrário retorna null (filtro customizado).
  */
 function matchStandardWindow(dateFrom: string, dateTo: string): string | null {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = brtDay(new Date().toISOString());
   if (dateTo !== today) return null;
   for (const [key, days] of Object.entries(STANDARD_WINDOW_DAYS)) {
     const expectedFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
@@ -109,7 +110,7 @@ function toBRTInterval(dateFrom: string, dateTo: string): { periodStart: string;
   const endDate = new Date(`${dateTo}T00:00:00Z`);
   endDate.setUTCDate(endDate.getUTCDate() + 1);
   const nextDay = endDate.toISOString().slice(0, 10);
-  const periodEnd = `${nextDay}T02:59:59.999Z`;
+  const periodEnd = `${nextDay}T03:00:00.000Z`;
   return { periodStart, periodEnd };
 }
 
@@ -126,7 +127,7 @@ async function fetchAllPaginated(
   const allRows: Record<string, unknown>[] = [];
   let page = 0;
   while (true) {
-    let query = supabase.from(table).select(select);
+    let query = supabase.from(table).select(select).order('id');
     for (const f of filters) {
       if (f.op === 'eq') query = query.eq(f.column, f.value);
       else if (f.op === 'gte') query = query.gte(f.column, f.value);
@@ -192,7 +193,8 @@ Deno.serve(async (req) => {
 
     const now = new Date();
     const defaultFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const defaultTo = now.toISOString().slice(0, 10);
+    const defaultTo = brtDay(now.toISOString());
+    if ((dateFrom && !validDay(dateFrom)) || (dateTo && !validDay(dateTo)) || (dateFrom || defaultFrom) > (dateTo || defaultTo)) return new Response(JSON.stringify({ error: 'Período inválido' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     // BRT-aligned period boundaries
     const { periodStart, periodEnd } = toBRTInterval(dateFrom || defaultFrom, dateTo || defaultTo);
@@ -200,7 +202,7 @@ Deno.serve(async (req) => {
     console.log(`📊 Period: ${periodStart} → ${periodEnd} (BRT-aligned)`);
 
     // ⚡ Cache check
-    const cacheKey = `v2:${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
+    const cacheKey = `v3:${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
     if (!forceRefresh) {
       const cached = getCached(cacheKey);
       if (cached) {
@@ -225,7 +227,7 @@ Deno.serve(async (req) => {
         .select('payload, computed_at')
         .eq('window_key', windowKey)
         .maybeSingle();
-      if (snap?.payload) {
+      if (snap?.payload && (snap.payload as Record<string, unknown>)._metricsVersion === 3) {
         const ageMs = Date.now() - new Date(snap.computed_at as string).getTime();
         if (ageMs < 15 * 60 * 1000) {
           console.log(`📸 Snapshot HIT window=${windowKey} age=${Math.round(ageMs / 1000)}s`);
@@ -246,13 +248,12 @@ Deno.serve(async (req) => {
 
     // ========== ENGAGEMENT METRICS ==========
 
-    const { count: activeUsersBase } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'active');
-
+    const activeProfiles = await fetchAllPaginated(supabase, 'profiles', 'user_id,email,status', [{ column: 'status', op: 'eq', value: 'active' }]);
+    const activeUsersBase = activeProfiles.length;
+    const currentActiveIds = new Set(activeProfiles.map(p => p.user_id));
+    const metricWarnings: string[] = ['Taxa de retorno: clientes ativos hoje que conversaram no período / clientes ativos hoje. Não representa retenção histórica de coorte.', 'Crescimento, churn, recuperação e coortes legados são recortes do cartão; não representam todo o negócio.', 'MRR é receita contratada mensalizada, não dinheiro recebido. Margem exibida desconta apenas IA estimada; não é lucro nem margem de contribuição completa.'];
     // Personagens fictícios nunca entram em indicadores de uso real.
-    const demoProfiles = await fetchAllPaginated(supabase, 'profiles', 'user_id', [
+    const demoProfiles = await fetchAllPaginated(supabase, 'profiles', 'user_id,email', [
       { column: 'status', op: 'eq', value: 'demo' },
     ]);
     const demoUserIds = new Set(demoProfiles.map((profile) => profile.user_id as string));
@@ -278,18 +279,15 @@ Deno.serve(async (req) => {
     ]);
     const totalMessagesInPeriod = allPeriodMessages.filter((message) => !demoUserIds.has(message.user_id as string)).length;
 
-    // Sessions completed in period — filter by ended_at, not created_at
-    const { data: allCompletedSessions } = await supabase
-      .from('sessions')
-      .select('started_at, ended_at, user_id')
-      .eq('status', 'completed')
-      .not('started_at', 'is', null)
-      .not('ended_at', 'is', null)
-      .gte('ended_at', periodStart)
-      .lt('ended_at', periodEnd);
-    const completedSessions = allCompletedSessions?.filter((session) => !demoUserIds.has(session.user_id));
-
-    const weeklySessionsCount = completedSessions?.length || 0;
+    // Mesmo critério do gráfico: sessões concluídas, por data agendada.
+    const allCompletedSessions = await fetchAllPaginated(supabase, 'sessions', 'id,started_at,ended_at,user_id', [
+      { column: 'status', op: 'eq', value: 'completed' },
+      { column: 'scheduled_at', op: 'gte', value: periodStart },
+      { column: 'scheduled_at', op: 'lt', value: periodEnd },
+    ]);
+    const realCompleted = allCompletedSessions.filter(s => !demoUserIds.has(s.user_id as string));
+    const completedSessions = realCompleted.filter(s => s.started_at && s.ended_at) as { user_id: string; started_at: string; ended_at: string }[];
+    const weeklySessionsCount = realCompleted.length;
 
     // Avg session duration (from sessions that ended in period)
     let avgSessionMinutes = 0;
@@ -375,7 +373,7 @@ Deno.serve(async (req) => {
 
     // Return rate
     const returnRate = activeUsersBase && activeUsersBase > 0
-      ? Math.round(activeUsersInPeriod / activeUsersBase * 100)
+      ? Math.round([...uniqueUsersInPeriod].filter(id => currentActiveIds.has(id)).length / activeUsersBase * 1000) / 10
       : 0;
 
     const periodMs = new Date(periodEnd).getTime() - new Date(periodStart).getTime();
@@ -581,29 +579,20 @@ Deno.serve(async (req) => {
     const funnelResponded = allTimeFunnel.filter(p => (p.trial_conversations_count || 0) >= 1).length;
     const funnelConverted = allTimeFunnel.filter(p => p.status === 'active' || p.converted_at).length;
 
-    // ========== BILLING METRICS ==========
-    // Only count real charges (amount > 0) — exclude $0 trial invoices
-    const { count: billingPaidInPeriod } = await supabase
-      .from('stripe_webhook_events')
-      .select('*', { count: 'exact', head: true })
-      .eq('event_type', 'invoice.paid')
-      .gte('processed_at', periodStart)
-      .lt('processed_at', periodEnd)
-      .gt('amount', 0);
-
-    const { count: billingFailedInPeriod } = await supabase
-      .from('stripe_webhook_events')
-      .select('*', { count: 'exact', head: true })
-      .eq('event_type', 'invoice.payment_failed')
-      .gte('processed_at', periodStart)
-      .lt('processed_at', periodEnd)
-      .gt('amount', 0);
-
-    const billingSuccessInPeriod = billingPaidInPeriod || 0;
-    const billingTotalInPeriod = (billingPaidInPeriod || 0) + (billingFailedInPeriod || 0);
-    const billingSuccessRate = billingTotalInPeriod > 0
-      ? Math.round(billingSuccessInPeriod / billingTotalInPeriod * 1000) / 10
-      : 0;
+    // Faturas únicas pelo provedor: uma retentativa não cria nova fatura.
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+    if (!stripeKey) throw new Error('Configuração financeira do cartão indisponível');
+    const billingStripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+    const billingInvoices = new Map<string, boolean>();
+    const demoEmails = new Set(demoProfiles.map(p => String(p.email || '').trim().toLowerCase()));
+    for await (const invoice of billingStripe.invoices.list({ limit: 100 })) {
+      const due = invoice.due_date ? brtDay(invoice.due_date) : brtDay(invoice.created);
+      if (due < (dateFrom || defaultFrom) || due > (dateTo || defaultTo) || invoice.amount_due <= 0 || ['draft', 'void'].includes(invoice.status || '') || demoEmails.has(String(invoice.customer_email || '').trim().toLowerCase())) continue;
+      billingInvoices.set(invoice.id, invoice.status === 'paid');
+    }
+    const billingSuccessInPeriod = [...billingInvoices.values()].filter(Boolean).length;
+    const billingTotalInPeriod = billingInvoices.size;
+    const billingSuccessRate = billingTotalInPeriod ? Math.round(billingSuccessInPeriod / billingTotalInPeriod * 1000) / 10 : 0;
 
     // Cancellation counts
     const { count: canceledUsers } = await supabase
@@ -682,7 +671,7 @@ Deno.serve(async (req) => {
     // Stripe = fonte da verdade. Conta subs que estavam ATIVAS no início do período:
     //   created < periodStart AND (status active/trialing/past_due OU canceled_at >= periodStart)
     // Isso elimina o viés do denominador inflado (incluir quem já estava cancelado antes).
-    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+
     let activeAtPeriodStart = 0;
     let churnDenominatorSource: 'stripe' | 'db_fallback' = 'db_fallback';
     if (stripeKey) {
@@ -1019,8 +1008,11 @@ Deno.serve(async (req) => {
       for (const sub of allSubs) {
         const priceId = sub.items.data[0]?.price?.id;
         if (!priceId) continue;
-        const mapping = priceToPlan[priceId];
-        if (!mapping) continue;
+        const price = sub.items.data[0]?.price;
+        const recurring = price?.recurring;
+        if (!recurring) { metricWarnings.push('Assinatura cartão sem intervalo recorrente comprovado'); continue; }
+        const mapping = priceToPlan[priceId] || { plan: sub.metadata?.plan || price?.metadata?.plan || 'outros', cycle: recurring.interval === 'week' ? 'weekly' : recurring.interval === 'year' ? 'yearly' : 'monthly' };
+        const normalizedAmount = monthlyCents(price?.unit_amount || 0, recurring.interval, recurring.interval_count || 1) * (sub.items.data[0]?.quantity || 1);
 
         const { plan, cycle } = mapping;
         if (!mrrByPlan[plan]) mrrByPlan[plan] = { committed: 0, weekly: 0, users: 0 };
@@ -1039,16 +1031,16 @@ Deno.serve(async (req) => {
             : 999;
 
           pastDueSubscriptionsCount++;
-          const realAmount = sub.items.data[0]?.price?.unit_amount || 0;
+          const realAmount = normalizedAmount;
           let monthlyContribution = 0;
           if (cycle === 'monthly') {
             monthlyContribution = realAmount;
             mrrAtRiskMonthlyCents += realAmount;
           } else if (cycle === 'yearly') {
-            monthlyContribution = Math.round(realAmount / 12);
+            monthlyContribution = realAmount;
             mrrAtRiskMonthlyCents += monthlyContribution;
           } else if (cycle === 'weekly') {
-            monthlyContribution = Math.round(realAmount * 4.33);
+            monthlyContribution = realAmount;
             mrrAtRiskWeeklyCents += monthlyContribution;
           }
           mrrAtRiskCents += monthlyContribution;
@@ -1084,14 +1076,13 @@ Deno.serve(async (req) => {
           monthlyActiveSubscriptionsCount++;
           // Usa preço REAL do Stripe (respeita cupons, preços legados, A/B).
           // Fallback para hardcoded só se Stripe não retornar amount.
-          const price = sub.items.data[0]?.price?.unit_amount || PLAN_PRICES_MONTHLY[plan] || 0;
-          mrrCommittedCents += price;
-          mrrByPlan[plan].committed += price;
+          mrrCommittedCents += normalizedAmount;
+          mrrByPlan[plan].committed += normalizedAmount;
         } else if (cycle === 'yearly') {
           activeSubscriptionsCount++;
           monthlyActiveSubscriptionsCount++;
           const yearlyAmount = sub.items.data[0]?.price?.unit_amount || 0;
-          const monthlyEquiv = Math.round(yearlyAmount / 12);
+          const monthlyEquiv = normalizedAmount;
           mrrCommittedCents += monthlyEquiv;
           mrrByPlan[plan].committed += monthlyEquiv;
         } else if (cycle === 'weekly') {
@@ -1221,19 +1212,9 @@ Deno.serve(async (req) => {
 
         // Helper: normaliza unit_amount para MRR mensal em cents conforme cycle
         const toMonthlyCents = (sub: Stripe.Subscription): number => {
-          const priceId = sub.items.data[0]?.price?.id;
-          const mapping = priceId ? priceToPlan[priceId] : undefined;
-          const realAmount = sub.items.data[0]?.price?.unit_amount || 0;
-          if (!mapping) return realAmount; // fallback: assume mensal
-          if (mapping.cycle === 'monthly') return realAmount;
-          if (mapping.cycle === 'yearly') return Math.round(realAmount / 12);
-          if (mapping.cycle === 'weekly') return Math.round(realAmount * 4.33);
-          // 'trialing' em preço mensal = semanal economicamente
-          if (sub.status === 'trialing') {
-            const weeklyPrice = WEEKLY_PRICES[mapping.plan] || 0;
-            return Math.round(weeklyPrice * 4.33);
-          }
-          return realAmount;
+          const price = sub.items.data[0]?.price;
+          if (!price?.recurring || sub.status === 'trialing') return 0;
+          return monthlyCents(price.unit_amount || 0, price.recurring.interval, price.recurring.interval_count || 1) * (sub.items.data[0]?.quantity || 1);
         };
 
         // Pagina TODAS as subscriptions criadas nos últimos 180 dias (status: all)
@@ -1343,45 +1324,16 @@ Deno.serve(async (req) => {
       const yearlyCutoff = new Date(nowMs - 380 * DAY_MS).toISOString();
       const churnCutoff = new Date(nowMs - 35 * DAY_MS).toISOString();
 
-      // 1) Pagamentos pagos para MRR + Active users
-      const { data: asaasPaidPayments } = await supabase
-        .from('asaas_payments')
-        .select('customer_email, plan, billing_period, amount_cents, paid_at, status')
-        .in('status', PAID_STATUSES)
-        .not('customer_email', 'ilike', E2E_EMAIL_PATTERN)
-        .order('paid_at', { ascending: false })
-        .limit(2000);
-
-      // Active users: 1 entry mais recente por email dentro do ciclo vigente
-      const lastPaidByEmail = new Map<string, { paid_at: string; billing_period: string; amount_cents: number }>();
-      for (const p of asaasPaidPayments || []) {
-        if (!p.customer_email || !p.paid_at) continue;
-        const existing = lastPaidByEmail.get(p.customer_email);
-        if (!existing || (p.paid_at as string) > existing.paid_at) {
-          lastPaidByEmail.set(p.customer_email, {
-            paid_at: p.paid_at as string,
-            billing_period: (p.billing_period as string) || 'monthly',
-            amount_cents: (p.amount_cents as number) || 0,
-          });
-        }
+      const authorizations = await fetchAllPaginated(supabase, 'asaas_pix_authorizations', 'id,user_id,status,billing_period,value_cents,replaced_by_authorization_id', []);
+      const activeAsaasUsers = new Set<string>();
+      for (const auth of authorizations) {
+        if (auth.status !== 'ACTIVE' || auth.replaced_by_authorization_id || demoUserIds.has(auth.user_id as string)) continue;
+        const months = ({ monthly: 1, quarterly: 3, semiannual: 6, yearly: 12 } as Record<string, number>)[String(auth.billing_period)];
+        if (!months) { metricWarnings.push('Ciclo Asaas não reconhecido; MRR parcial'); continue; }
+        asaasMrrCents += Math.round(Number(auth.value_cents) / months);
+        activeAsaasUsers.add(String(auth.user_id));
       }
-
-      for (const { paid_at, billing_period, amount_cents } of lastPaidByEmail.values()) {
-        const cutoff =
-          billing_period === 'yearly' ? yearlyCutoff :
-          billing_period === 'quarterly' ? quarterlyCutoff :
-          monthlyCutoff;
-        if (paid_at < cutoff) continue; // expirou — não conta como ativo
-
-        asaasActiveUsersCount++;
-        if (billing_period === 'yearly') {
-          asaasMrrCents += Math.round(amount_cents / 12);
-        } else if (billing_period === 'quarterly') {
-          asaasMrrCents += Math.round(amount_cents / 3);
-        } else {
-          asaasMrrCents += amount_cents;
-        }
-      }
+      asaasActiveUsersCount = activeAsaasUsers.size;
 
       // 2) Funil de checkout PIX no período
       // Criados: conta por created_at (intenção de pagar via PIX no período)
@@ -1569,10 +1521,20 @@ Deno.serve(async (req) => {
 
       console.log(`💠 Asaas/PIX: active=${asaasActiveUsersCount}, mrr=R$${(asaasMrrCents/100).toFixed(2)}, checkout(${asaasCheckoutCreatedInPeriod}→${asaasCheckoutConfirmedInPeriod}), churn=${asaasChurnCount}`);
     } catch (e) {
-      console.warn('⚠️ Falha ao computar métricas Asaas:', e);
+      throw new Error('Não foi possível calcular indicadores Asaas');
     }
 
-    const mrrPixBRL = Math.round(asaasMrrCents / 100 * 100) / 100;
+    const wooviSubs = await fetchAllPaginated(supabase, 'woovi_subscriptions', 'id,user_id,status,pix_status,billing_period,value_cents,replaced_by_subscription_id,entry_paid_at', []);
+    let wooviMrrCents = 0;
+    const wooviActiveUsers = new Set<string>();
+    for (const sub of wooviSubs) {
+      if (!['ATIVA', 'APROVADA'].includes(String(sub.status)) || sub.replaced_by_subscription_id || !sub.entry_paid_at || demoUserIds.has(sub.user_id as string)) continue;
+      const months = ({ monthly: 1, quarterly: 3, semiannual: 6, yearly: 12 } as Record<string, number>)[String(sub.billing_period)];
+      if (!months) { metricWarnings.push('Ciclo Woovi não reconhecido; MRR parcial'); continue; }
+      wooviMrrCents += Math.round(Number(sub.value_cents) / months);
+      wooviActiveUsers.add(String(sub.user_id));
+    }
+    const mrrPixBRL = (asaasMrrCents + wooviMrrCents) / 100;
 
     // ---------- PIX Automático (Bacen): saúde da autorização recorrente ----------
     // A etapa que mais perdemos é o consentimento no app do banco. Aqui medimos
@@ -1634,9 +1596,11 @@ Deno.serve(async (req) => {
     const mrrAtRiskWeeklyBRL = Math.round(mrrAtRiskWeeklyCents / 100 * 100) / 100;
 
     // 📊 Derivadas (Fase 2): ARR, ARPU, MRR Growth, Margem, Tempo até churn
-    const arrBRL = Math.round(mrrTotalBRL * 12 * 100) / 100;
-    const arpuBRL = activeSubscriptionsCount > 0
-      ? Math.round((mrrTotalBRL / activeSubscriptionsCount) * 100) / 100
+    const mrrGrandTotalBRL = (mrrCommittedCents + asaasMrrCents + wooviMrrCents) / 100;
+    const totalRecurringSubscribers = monthlyActiveSubscriptionsCount + asaasActiveUsersCount + wooviActiveUsers.size;
+    const arrBRL = Math.round(mrrGrandTotalBRL * 12 * 100) / 100;
+    const arpuBRL = totalRecurringSubscribers > 0
+      ? Math.round((mrrGrandTotalBRL / totalRecurringSubscribers) * 100) / 100
       : 0;
     const newMRRBRL = Math.round(newMRRCents / 100 * 100) / 100;
     const churnedMRRBRL = Math.round(churnedMRRCents / 100 * 100) / 100;
@@ -1650,9 +1614,9 @@ Deno.serve(async (req) => {
     const totalCostMonthlyBRL = periodDays > 0
       ? Math.round((totalCostBRL / periodDays) * 30 * 100) / 100
       : 0;
-    const grossMarginBRL = Math.round((mrrTotalBRL - totalCostMonthlyBRL) * 100) / 100;
-    const grossMarginPct = mrrTotalBRL > 0
-      ? Math.round((grossMarginBRL / mrrTotalBRL) * 1000) / 10
+    const grossMarginBRL = Math.round((mrrGrandTotalBRL - totalCostMonthlyBRL) * 100) / 100;
+    const grossMarginPct = mrrGrandTotalBRL > 0
+      ? Math.round((grossMarginBRL / mrrGrandTotalBRL) * 1000) / 10
       : 0;
     const avgDaysUntilChurn = churnedSubsCount90d > 0
       ? Math.round(churnedDaysSum90d / churnedSubsCount90d)
@@ -1978,8 +1942,8 @@ Deno.serve(async (req) => {
         const { data } = await supabase
           .from('sessions')
           .select('user_id, closure_mode')
-          .gte('ended_at', periodStart)
-          .lte('ended_at', periodEnd)
+          .gte('scheduled_at', periodStart)
+          .lt('scheduled_at', periodEnd)
           .not('closure_mode', 'is', null)
           .range(page * 1000, (page + 1) * 1000 - 1);
         if (!data || data.length === 0) break;
@@ -2006,6 +1970,10 @@ Deno.serve(async (req) => {
     }
 
     const responsePayload = JSON.stringify({
+      _metricsVersion: 3,
+      metricWarnings,
+      wooviMrrBRL: wooviMrrCents / 100,
+      wooviActiveUsersCount: wooviActiveUsers.size,
       // Engagement
       activeUsers: activeUsersInPeriod,
       activeUsersBase: activeUsersBase || 0,
@@ -2015,7 +1983,7 @@ Deno.serve(async (req) => {
       avgSessionMinutes,
       messagesPerSession,
       returnRate,
-      uniqueRecentUsers: activeUsersInPeriod,
+      uniqueRecentUsers: [...uniqueUsersInPeriod].filter(id => currentActiveIds.has(id)).length,
       avgDailyMessagesPerUser,
       // Cost
       totalCostUSD,
@@ -2111,9 +2079,9 @@ Deno.serve(async (req) => {
       mrrTotalBRL,
       // 💠 Asaas / PIX MRR (somado ao total Stripe via mrrGrandTotalBRL)
       mrrPixBRL,
-      mrrGrandTotalBRL: Math.round((mrrTotalBRL + mrrPixBRL) * 100) / 100,
+      mrrGrandTotalBRL,
       asaasActiveUsersCount,
-      activeSubscriptionsTotalCount: activeSubscriptionsCount + asaasActiveUsersCount,
+      activeSubscriptionsTotalCount: totalRecurringSubscribers,
       asaasChurnCount,
       mrrAtRiskBRL,
       mrrAtRiskRecentBRL,
