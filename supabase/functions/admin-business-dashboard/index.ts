@@ -1,7 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@18.5.0';
-import { asaasGetJson } from '../_shared/asaas-reconcile.ts';
-import { listInstallments } from '../_shared/woovi.ts';
 import { brtDay, validDay, mergeBilling } from '../_shared/admin-billing.ts';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
@@ -66,34 +63,13 @@ Deno.serve(async (req) => {
     const candidates = subs.filter(s => s.billing_period === 'monthly' && !demoIds.has(s.user_id) && !demoEmails.has(s.customer_email?.toLowerCase()) && (s.entry_paid_at || charges.some(c => c.subscription_id === s.subscription_id && c.paid_at)) && day(s.created_at) <= dateTo);
     const snapshots = await all('admin_billing_provider_snapshots', 'id,installments,fetched_at', q => q.eq('provider', 'woovi'));
     const snapshotMap = new Map(snapshots.map(s => [s.id, s]));
-    const pending = candidates.filter(s => {
-      const snap = snapshotMap.get(s.subscription_id);
-      return !snap || Date.now() - Date.parse(snap.fetched_at) > 300e3;
-    });
-    async function bounded<T>(promise: Promise<T>): Promise<T> {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try { return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Tempo de consulta esgotado')), 15000); })]); }
-      finally { if (timer) clearTimeout(timer); }
-    }
-    // A fila do provedor é serial: pequenos lotes evitam timeout e preservam o limite de taxa.
-    const batch = pending.slice(0, 8);
-    let failed = 0;
-    for (const s of batch) {
-      try {
-        const installments = await bounded(listInstallments(s.subscription_id));
-        const fetched_at = new Date().toISOString();
-        const { error } = await db.from('admin_billing_provider_snapshots').upsert({ id: s.subscription_id, provider: 'woovi', installments, fetched_at });
-        if (error) throw error;
-        snapshotMap.set(s.subscription_id, { id: s.subscription_id, installments, fetched_at });
-      } catch { failed++; issues.push({ provider: 'woovi', reason: 'Histórico oficial de parcelas indisponível', count: 1, cents: 0 }); }
-    }
-    const remaining = pending.length - batch.length;
-    if (remaining && !failed) return reply({ reconciling: true, remaining, total: candidates.length });
+    // A abertura apenas lê cópias persistidas; nunca consulta o provedor.
     for (const s of candidates) {
       const snap = snapshotMap.get(s.subscription_id);
       if (snap) official.set(s.subscription_id, snap.installments);
-      else if (!batch.some(b => b.subscription_id === s.subscription_id)) issues.push({ provider: 'woovi', reason: 'Histórico oficial de parcelas não consultado', count: 1, cents: 0 });
+      else issues.push({ provider: 'woovi', reason: 'Histórico aguardando atualização automática', count: 1, cents: 0 });
     }
+    const providerTimes = snapshots.map(s => s.fetched_at);
     function add(e: any) {
       if (demoIds.has(e.userId) || demoEmails.has(e.email?.trim().toLowerCase())) return;
       e.due = validDate(e.due) ? e.due : null;
@@ -130,11 +106,13 @@ Deno.serve(async (req) => {
       if (p?.canceled_at && s.next_charge_date > day(p.canceled_at)) continue;
       add({ id: `woovi:${s.subscription_id}:${s.next_charge_date}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due: s.next_charge_date, paid: null, cents: s.value_cents });
     }
+    const paymentSnapshots = await all('admin_billing_provider_snapshots', 'id,installments,fetched_at', q => q.eq('provider', 'asaas'));
+    const paymentMap = new Map(paymentSnapshots.map(s => [s.id, s]));
     for (const p of asaas.filter(p => p.billing_period === 'monthly' && p.asaas_subscription_id && p.status !== 'DELETED' && !p.is_trial)) {
       let due = p.raw_payload?.dueDate || p.raw_payload?.payment?.dueDate || null;
-      if (!due && p.paid_at && day(p.paid_at) >= dateFrom && day(p.paid_at) <= dateTo) {
-        const officialPayment = await bounded(asaasGetJson(`/payments/${encodeURIComponent(p.asaas_payment_id)}`)).catch(() => null);
-        due = officialPayment?.dueDate || null;
+      if (!due) {
+        const snap = paymentMap.get(p.asaas_payment_id);
+        due = snap?.installments?.[0]?.dueDate || null;
       }
       add({ id: `asaas:${p.asaas_subscription_id}:${due || p.id}`, userId: p.user_id, email: p.customer_email, name: p.customer_name, plan: p.plan, provider: 'asaas', due, paid: ['RECEIVED', 'CONFIRMED'].includes(p.status) && p.paid_at ? day(p.paid_at) : null, cents: p.amount_cents });
     }
@@ -145,13 +123,14 @@ Deno.serve(async (req) => {
       if (s.billing_period !== 'monthly' || (s.is_trial && c.cycle_index === 0)) continue;
       add({ id: `inter:${c.id_rec}:${c.due_date || c.id}`, userId: c.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'inter', due: c.due_date, paid: ['CONCLUIDA', 'COMPLETED', 'PAID'].includes(c.status) && c.paid_at ? day(c.paid_at) : null, cents: c.value_cents, source: 'cobrança Inter' });
     }
-    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
-    if (!stripeKey) throw new Error('Cartão indisponível: configuração ausente');
-    const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
-    const priceMap = new Map<string, any>();
-    for await (const price of stripe.prices.list({ limit: 100 })) priceMap.set(price.id, price);
-    // Percorre o histórico completo: uma fatura antiga pode ser paga no período selecionado.
-    for await (const inv of stripe.invoices.list({ limit: 100 })) {
+    const { data: stripeSnapshot, error: stripeError } = await db.from('admin_billing_provider_snapshots')
+      .select('installments,fetched_at').eq('id', 'stripe:billing').eq('provider', 'stripe').maybeSingle();
+    if (stripeError) throw stripeError;
+    if (!stripeSnapshot) issues.push({ provider: 'stripe', reason: 'Cartão aguardando atualização automática', count: 1, cents: 0 });
+    else providerTimes.push(stripeSnapshot.fetched_at);
+    const stripeData = stripeSnapshot?.installments?.[0];
+    const priceMap = new Map<string, any>((stripeData?.prices || []).map((p: any) => [p.id, p]));
+    for (const inv of stripeData?.invoices || []) {
       if (!['subscription_cycle', 'subscription_create'].includes(inv.billing_reason || '') || inv.status === 'draft' || inv.status === 'void' || inv.amount_due <= 0) continue;
       const monthlyLine = inv.lines.data.find((l: any) => {
         const id = l.pricing?.price_details?.price || l.price?.id;
@@ -195,7 +174,7 @@ Deno.serve(async (req) => {
       days.push({ date, active: sent?.users.size || 0, messages: sent?.count || 0, completed: ss?.completed || 0, missed: ss?.missed || 0 });
     }
     const groupedIssues = [...issues.reduce((map, issue) => { const key = `${issue.provider}:${issue.reason}`; const old = map.get(key); map.set(key, { ...issue, count: (old?.count || 0) + issue.count, cents: (old?.cents || 0) + issue.cents }); return map; }, new Map<string, typeof issues[number]>()).values()];
-    const result = { billing, days, warnings, issues: groupedIssues, completeness: issues.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString() };
+    const result = { billing, days, warnings, providerUpdatedAt: providerTimes.length ? providerTimes.sort()[0] : null, issues: groupedIssues, completeness: issues.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString() };
     if (cache.size > 20) cache.clear();
     cache.set(cacheKey, { at: Date.now(), data: result });
     return reply(result);
