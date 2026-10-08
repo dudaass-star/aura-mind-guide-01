@@ -37,7 +37,7 @@ Deno.serve(async req => {
     }
     const [profiles, woovi, wooviCharges, asaas, asaasCharges, inter, interCharges, events, snap] = await Promise.all([
       all('profiles', 'id,user_id,email,status'),
-      all('woovi_subscriptions', 'id,subscription_id,user_id,customer_email,billing_period,is_trial,trial_value_cents,status,raw_payload'),
+      all('woovi_subscriptions', 'id,subscription_id,user_id,customer_email,billing_period,is_trial,trial_value_cents,entry_paid_at,status,raw_payload'),
       all('woovi_charges', 'id,subscription_id,kind,cycle_index,value_cents,due_date,paid_at,status,raw_payload'),
       all('asaas_pix_authorizations', 'id,asaas_subscription_id,user_id,customer_email,billing_period,is_trial,trial_value_cents,status,cancelled_at,raw_payload'),
       all('asaas_payments', 'id,asaas_subscription_id,amount_cents,is_trial,status,paid_at,raw_payload'),
@@ -51,13 +51,14 @@ Deno.serve(async req => {
     const stripe = segments.length ? {
       subscriptions: [...new Map(segments.flatMap((s: Record<string, any>) => s.subscriptions || []).map((s: Record<string, any>) => [s.id, s])).values()],
       invoices: [...new Map(segments.flatMap((s: Record<string, any>) => s.invoices || []).map((i: Record<string, any>) => [i.id, i])).values()],
+      weeklyPayments: [...new Map(segments.flatMap((s: Record<string, any>) => s.weeklyPayments || []).map((p: Record<string, any>) => [p.id, p])).values()],
     } : null;
     const source = churnSources(profiles, stripe, [
       { provider: 'woovi', subscriptions: woovi, charges: wooviCharges },
       { provider: 'asaas', subscriptions: asaas, charges: asaasCharges },
       { provider: 'inter', subscriptions: inter, charges: interCharges },
     ], events);
-    const result = { months: monthlyChurn(source.intervals, today), warnings: source.warnings, excluded: source.excluded,
+    const result = { version: 2, months: monthlyChurn(source.intervals, today), warnings: source.warnings, excluded: source.excluded,
       completeness: source.warnings.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString(), providerUpdatedAt: snap.data?.fetched_at || null };
     cache.clear(); cache.set(today, { at: Date.now(), data: result });
     return reply(result);
