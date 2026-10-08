@@ -10,6 +10,11 @@ import { EmptyState, PortalLoadingInline } from "./shared";
 import { MeditationPlayer, type MeditationTrack } from "./MeditationPlayer";
 import restImage from "@/assets/meditation-rest.jpg";
 import presenceImage from "@/assets/meditation-presence.jpg";
+import stormImage from "@/assets/meditation-storm.jpg";
+import muscleImage from "@/assets/meditation-muscle.jpg";
+import clarityImage from "@/assets/meditation-clarity.jpg";
+import gratitudeImage from "@/assets/meditation-gratitude.jpg";
+import breathImage from "@/assets/meditation-breath.jpg";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 
@@ -25,6 +30,17 @@ const CATEGORY_LABELS: Record<string, string> = {
   estresse: "Estresse",
   autocompaixao: "Autocompaixão",
   geral: "Geral",
+  gratidao: "Gratidão",
+  respiracao: "Respiração",
+};
+
+const MEDITATION_COVERS: Record<string, string> = {
+  "med-ansiedade-tempestade": stormImage,
+  "med-estresse-muscular": muscleImage,
+  "med-foco-clareza": clarityImage,
+  "med-gratidao-olhar": gratitudeImage,
+  "med-respiracao-478": breathImage,
+  "med-sono-relaxamento": restImage,
 };
 
 export function MeditacoesTab({ userId, isActive = true }: MeditacoesTabProps) {
@@ -152,14 +168,14 @@ export function MeditacoesTab({ userId, isActive = true }: MeditacoesTabProps) {
 
   const featured = suggested.find((m) => (m.category || "").toLowerCase() === "sono")
     || withAudio.find((m) => (m.category || "").toLowerCase() === "sono") || suggested[0] || withAudio[0];
-  const imageFor = (m: MeditationTrack) => (m.category || "").toLowerCase() === "sono" ? restImage : presenceImage;
+  const imageFor = (m: MeditationTrack) => MEDITATION_COVERS[m.id] || presenceImage;
   const moments = [
     { category: "sono", label: "Quero descansar", icon: Moon },
     { category: "ansiedade", label: "Acalmar a mente", icon: Wind },
     { category: "foco", label: "Encontrar foco", icon: Focus },
   ].filter((moment) => allCategories.includes(moment.category));
   const card = (m: MeditationTrack) => <Button key={m.id} variant="ghost" className="h-auto w-full justify-start gap-3 whitespace-normal rounded-lg border border-border bg-card p-3 text-left" onClick={() => setSelected(m)} aria-label={`Ouvir ${m.title}`}>
-    <img src={imageFor(m)} alt="" loading="lazy" width={1536} height={1024} className="h-16 w-16 shrink-0 rounded-md object-cover" />
+    <img src={imageFor(m)} alt="" loading="lazy" width={1024} height={1024} className="h-16 w-16 shrink-0 rounded-md object-cover" />
     <span className="min-w-0 flex-1 space-y-1"><span className="block text-sm font-semibold leading-snug text-foreground">{m.title}</span><span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">{CATEGORY_LABELS[(m.category || "geral").toLowerCase()] || m.category} · {Math.round((m.duration_seconds || 0) / 60)} min{heardSet.has(m.id) && <span className="inline-flex items-center gap-1 text-primary"><CheckCircle2 className="h-3 w-3" /> já ouvi</span>}</span></span>
     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-primary"><Play className="h-4 w-4" fill="currentColor" /></span>
   </Button>;
@@ -167,7 +183,7 @@ export function MeditacoesTab({ userId, isActive = true }: MeditacoesTabProps) {
   return <section className="meditations-theme space-y-7">
     <div className="space-y-2"><p className="flex items-center gap-2 text-xs font-semibold text-primary"><Headphones className="h-4 w-4" /> Um momento para você</p><h2 className="font-display text-3xl leading-tight text-foreground">Respire. O resto pode esperar.</h2><p className="text-sm text-muted-foreground">Encontre uma pausa que combine com o seu momento.</p></div>
     {featured && <div className="meditation-feature relative isolate flex min-h-80 flex-col justify-end overflow-hidden rounded-lg p-5 sm:min-h-96 sm:p-7">
-      <img src={imageFor(featured)} width={1536} height={1024} alt="Quarto tranquilo com jardim ao anoitecer" className="absolute inset-0 -z-20 h-full w-full object-cover" />
+      <img src={imageFor(featured)} width={1536} height={1024} alt={`Capa de ${featured.title}`} className="absolute inset-0 -z-20 h-full w-full object-cover" />
       <div className="meditation-feature-shade absolute inset-0 -z-10" />
       <div className="meditation-feature-copy max-w-lg space-y-2"><p className="text-xs font-semibold">Sua pausa de hoje · {Math.round((featured.duration_seconds || 0) / 60)} min</p><h3 className="font-display text-2xl leading-tight sm:text-3xl">{featured.title}</h3>{featured.description && <p className="text-sm leading-relaxed">{featured.description}</p>}</div>
       <Button className="mt-4 w-fit max-w-full whitespace-normal" size="lg" onClick={() => setSelected(featured)}><Play fill="currentColor" /> Começar minha pausa</Button>

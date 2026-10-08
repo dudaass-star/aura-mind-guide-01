@@ -6,6 +6,7 @@
 # Roadmap
 
 ## Tela inicial
+- [x] Criar capas individuais para as seis meditações; imagens distintas carregadas na biblioteca e capa correspondente na reprodução conferidas na conta de Eduardo. Aguarda publicação do App.
 - [x] Meditações renovada com imagens próprias, biblioteca compacta e reprodução dedicada; áudio real, pausa, avanço, busca, filtros e telas pequena/grande conferidos na conta de Eduardo sem erros. Aguarda publicação do App.
 - [x] Preparar e conferir prévias privadas da página de Meditações e da reprodução; imagens carregadas, texto legível e sem transbordamento. Somente proposta visual, sem reprodução real ou alteração no App dos clientes.
 - [x] Aplicar a prévia aprovada com áreas agrupadas, práticas visuais e Movimento próprio; navegação autenticada de Eduardo, Orações, Meditações, Movimento, conversa e telas pequena/grande conferidos sem erros. Aguarda publicação do App.
