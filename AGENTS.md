@@ -30,4 +30,4 @@
 - Prayers share one catalog/player to keep art, audio and cues matched.
 - Home keeps tracking; practice dialogs stop audio on exit.
 
-- Revenue uses snapshots, separates potential/coverage and excludes renewal conversions; churn unions people with evidenced endings.
+- Revenue uses snapshots and separates potential/coverage; churn unions paid customers and withholds rates for uncertain endings.
