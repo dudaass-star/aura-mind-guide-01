@@ -6,7 +6,7 @@
 # Roadmap
 
 ## Panorama do negócio
-- [ ] Corrigir e testar paginação integral de parcelas/extrato Woovi, recuperação Asaas e identificadores locais; conferir fontes reais sem alterar cobranças.
+- [x] Corrigir paginação de parcelas/extrato Woovi, recuperação Asaas e identificadores locais; 11 testes passaram, extrato real percorreu 373 lançamentos e painel autenticado foi conferido sem alterar cobranças. A inspeção do extrato não equivale à conciliação contábil individual de todas as entradas.
 - [x] Corrigir mensalidades com fontes rastreáveis, recuperação em lotes de parcelas oficiais, recebimentos independentes e lacunas explícitas.
 - [x] Corrigir retorno, cobrança por fatura única, cancelamento da base inicial, normalização de receita por ciclo e sessões; recortes de cartão e estimativas identificados.
 - [x] Validar 13 asserções financeiras e painel autenticado com dados reais: 01–04/10 e 30 dias, sem lacunas nas parcelas consultadas, sem erros de execução. A conferência cobre fontes registradas e parcelas oficiais; não certifica auditoria contábil integral de extratos.
