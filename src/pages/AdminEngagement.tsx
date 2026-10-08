@@ -1677,8 +1677,8 @@ export default function AdminEngagement() {
           <TabsContent value="engagement" className="mt-3 space-y-4">
             {loading && !metrics ? <SkeletonCards /> : (
               <>
-                {isAdmin && <BusinessDashboard onlyUsage />}
-                <h2 className="text-lg font-semibold border-t pt-6">Resumo do período</h2>
+                {isAdmin && <BusinessDashboard onlyUsage dateRange={{ from: format(dateFrom, 'yyyy-MM-dd'), to: format(dateTo, 'yyyy-MM-dd') }} />}
+                <h2 className="text-lg font-semibold border-t pt-6">Detalhes do período · App e WhatsApp</h2>
                 <MetricCards cards={engagementCards} />
 
                 {/* Cost Section */}

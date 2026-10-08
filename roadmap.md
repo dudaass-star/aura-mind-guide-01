@@ -6,9 +6,9 @@
 # Roadmap
 
 ## Panorama do negócio
-- [ ] Criar visão geral com gráfico diário de mensalidades previstas versus recebidas, quantidade/R$, 30 dias e filtros.
-- [ ] Separar uso, sessões e detalhes de custos para limpar a área de Engajamento.
-- [ ] Validar dados financeiros, filtros, acesso administrativo e gráficos na conta de Eduardo.
+- [x] Criar visão geral com gráfico diário de mensalidades previstas versus recebidas, quantidade/R$, 30 dias e filtros.
+- [x] Separar uso, sessões e detalhes de custos para limpar a área de Engajamento.
+- [x] Validar consulta financeira real, filtros, detalhes por dia e gráficos na conta de Eduardo; previsão PIX limitada aos registros existentes e mandatos ativos/aprovados, sem inventar histórico ausente.
 
 ## Tela inicial
 - [x] Criar capas individuais para as seis meditações; imagens distintas carregadas na biblioteca e capa correspondente na reprodução conferidas na conta de Eduardo. Aguarda publicação do App.

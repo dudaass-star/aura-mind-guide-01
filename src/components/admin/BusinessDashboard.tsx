@@ -37,10 +37,11 @@ function DailyChart({ data, series, money = false }: { data: Record<string, unkn
   </ChartContainer>;
 }
 
-export default function BusinessDashboard({ onlyUsage = false }: { onlyUsage?: boolean }) {
+export default function BusinessDashboard({ onlyUsage = false, dateRange }: { onlyUsage?: boolean; dateRange?: { from: string; to: string } }) {
   const [from, setFrom] = useState(() => format(subDays(brtNow(), 29), 'yyyy-MM-dd'));
   const [to, setTo] = useState(() => format(brtNow(), 'yyyy-MM-dd'));
-  const [range, setRange] = useState({ from, to });
+  const [localRange, setRange] = useState({ from, to });
+  const range = dateRange || localRange;
   const [unit, setUnit] = useState('count');
   const [provider, setProvider] = useState('all');
   const [preset, setPreset] = useState('30');
@@ -87,12 +88,12 @@ export default function BusinessDashboard({ onlyUsage = false }: { onlyUsage?: b
   return <div className="space-y-8 py-4">
     <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
       <div><h2 className="text-xl font-semibold">{onlyUsage ? 'Uso e continuidade' : 'Panorama do negócio'}</h2><p className="text-sm text-muted-foreground mt-1">{shortDate(range.from)} a {shortDate(range.to)} · horário de Brasília</p></div>
-      <div className="flex flex-wrap items-end gap-2">
+      {!dateRange && <div className="flex flex-wrap items-end gap-2">
         <Select value={preset} onValueChange={v => { setPreset(v); const end = format(brtNow(), 'yyyy-MM-dd'); const start = format(subDays(brtNow(), Number(v) - 1), 'yyyy-MM-dd'); setFrom(start); setTo(end); apply(start, end); }}><SelectTrigger className="w-[145px]" aria-label="Período rápido"><CalendarDays className="mr-2 h-4 w-4" /><SelectValue placeholder="Personalizado" /></SelectTrigger><SelectContent>{[7, 30, 90].map(n => <SelectItem key={n} value={String(n)}>Últimos {n} dias</SelectItem>)}</SelectContent></Select>
         <label className="text-xs text-muted-foreground">De<Input aria-label="Data inicial do gráfico" type="date" value={from} onChange={e => { setPreset(''); setFrom(e.target.value); }} className="w-[145px] text-foreground" /></label>
         <label className="text-xs text-muted-foreground">Até<Input aria-label="Data final do gráfico" type="date" value={to} onChange={e => { setPreset(''); setTo(e.target.value); }} className="w-[145px] text-foreground" /></label>
         <Button variant="outline" onClick={() => apply()}>Aplicar</Button><Button variant="ghost" size="icon" aria-label="Atualizar gráficos" title="Atualizar gráficos" onClick={refresh} disabled={query.isFetching || refreshing}><RefreshCw className={`h-4 w-4 ${query.isFetching || refreshing ? 'animate-spin' : ''}`} /></Button>
-      </div>
+      </div>}
     </div>
     {validation && <p role="alert" className="text-sm text-destructive">{validation}</p>}
     {query.isPending ? <div className="h-[420px] bg-muted/40 animate-pulse flex items-center justify-center text-muted-foreground" role="status">Carregando gráficos…</div> : query.isError ? <div role="alert" className="py-12 text-center space-y-3"><AlertCircle className="mx-auto h-6 w-6 text-destructive" /><p>Não foi possível carregar o panorama.</p><Button variant="outline" onClick={() => query.refetch()}>Tentar novamente</Button></div> : <>
