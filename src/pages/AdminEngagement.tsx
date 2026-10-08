@@ -34,6 +34,8 @@ interface Metrics {
   metricWarnings?: string[];
   mrrGrandTotalBRL?: number;
   activeSubscriptionsTotalCount?: number;
+  asaasActiveUsersCount?: number;
+  wooviActiveUsersCount?: number;
   mrrPixBRL?: number;
   wooviMrrBRL?: number;
   _snapshot_computed_at?: string;
@@ -979,12 +981,12 @@ export default function AdminEngagement() {
                     <div className="text-[11px] text-muted-foreground mt-1">
                       {metrics.activeSubscriptionsTotalCount ?? metrics.activeSubscriptionsCount} assinaturas recorrentes
                       {(metrics.monthlyActiveSubscriptionsCount !== undefined || metrics.weeklyActiveSubscriptionsCount !== undefined) && (
-                        <> ({metrics.monthlyActiveSubscriptionsCount ?? 0} mensais/anuais + {metrics.weeklyActiveSubscriptionsCount ?? 0} semanais)</>
+                        <> ({metrics.monthlyActiveSubscriptionsCount ?? 0} no cartão + {metrics.asaasActiveUsersCount ?? 0} no Asaas + {metrics.wooviActiveUsersCount ?? 0} na Woovi; sem experimentações)</>
                       )}
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3 text-xs">
                       <div>
-                        <span className="text-muted-foreground">Comprometido (mensal/anual): </span>
+                        <span className="text-muted-foreground">Cartão recorrente: </span>
                         <div className="font-semibold text-foreground">R$ {metrics.mrrCommittedBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                         <div className="text-[10px] text-muted-foreground">{metrics.monthlyActiveSubscriptionsCount ?? metrics.activeSubscriptionsCount} assinaturas mensais/anuais</div>
                       </div>
@@ -1270,7 +1272,7 @@ export default function AdminEngagement() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <UserMinus className="h-4 w-4" />
-                      Churn Total no Período (Voluntário + Involuntário)
+                      Cancelamento da base inicial · cartão
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -1279,20 +1281,20 @@ export default function AdminEngagement() {
                         {metrics.churnRate}%
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {metrics.canceledInPeriod} usuários (banco) / {metrics.activeAtPeriodStart} ativos no início
+                        {metrics.canceledInPeriod} assinaturas encerradas / {metrics.activeAtPeriodStart} ativos no início
                       </div>
                     </div>
                     {(metrics.totalChurnFromStripe ?? 0) > 0 && (
                       <div className="mt-2 text-xs text-muted-foreground">
-                        🔎 <strong>Stripe (30d real):</strong> {metrics.totalChurnFromStripe} cancelamentos · {metrics.voluntaryChurnLive ?? 0} voluntários + {metrics.involuntaryChurnLive ?? 0} involuntários
+                        🔎 <strong>Cartão (período selecionado):</strong> {metrics.totalChurnFromStripe} cancelamentos · {metrics.voluntaryChurnLive ?? 0} voluntários + {metrics.involuntaryChurnLive ?? 0} involuntários
                       </div>
                     )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-xs">
                       <div className="border rounded-md p-2.5 bg-muted/30">
-                        <div className="text-muted-foreground mb-1">🟦 Voluntário (Stripe 30d)</div>
+                        <div className="text-muted-foreground mb-1">🟦 Voluntário · cartão</div>
                         <div className="font-semibold text-foreground">{metrics.voluntaryChurnLive ?? metrics.voluntaryChurnInPeriod}</div>
                         <div className="text-[10px] text-muted-foreground mt-1">
-                          inclui Portal Stripe · banco: {metrics.voluntaryChurnInPeriod}
+                          encerradas da base inicial: {metrics.voluntaryChurnInPeriod}
                         </div>
                       </div>
                       <div className="border rounded-md p-2.5 bg-yellow-500/10 border-yellow-500/30">
@@ -1306,14 +1308,14 @@ export default function AdminEngagement() {
                         <div className="text-[10px] text-muted-foreground mt-1">R$ {(metrics.mrrAtRiskCriticalBRL ?? 0).toFixed(2)} · Stripe ainda tentando</div>
                       </div>
                       <div className="border rounded-md p-2.5 bg-destructive/10 border-destructive/30">
-                        <div className="text-muted-foreground mb-1">🔴 Churn involuntário (Stripe 30d)</div>
+                        <div className="text-muted-foreground mb-1">🔴 Involuntário · cartão</div>
                         <div className="font-semibold text-destructive">{metrics.involuntaryChurnLive ?? 0}</div>
                         <div className="text-[10px] text-muted-foreground mt-1">canceladas pelo Stripe por falha de pagamento</div>
                       </div>
                     </div>
                     {metrics.stripeChurnReasons && Object.keys(metrics.stripeChurnReasons).length > 0 && (
                       <div className="mt-3 p-2.5 border rounded-md bg-muted/20">
-                        <div className="text-[11px] font-medium text-muted-foreground mb-1.5">Razões de cancelamento (Stripe, últimos 30d):</div>
+                        <div className="text-[11px] font-medium text-muted-foreground mb-1.5">Razões de cancelamento · cartão · período selecionado:</div>
                         <div className="flex flex-wrap gap-1.5">
                           {Object.entries(metrics.stripeChurnReasons)
                             .sort(([, a], [, b]) => b - a)
