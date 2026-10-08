@@ -19,7 +19,7 @@ const WINDOWS: { key: string; days: number }[] = [
   { key: 'today', days: 0 },
   { key: '7d', days: 7 },
   { key: '14d', days: 14 },
-  { key: '30d', days: 30 },
+  { key: '30d', days: 29 },
   { key: '90d', days: 90 },
 ];
 
@@ -29,8 +29,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) throw new Error('Configuração ausente');
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
     // Lê o segredo compartilhado com o cron via função SECURITY DEFINER.
@@ -52,7 +53,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const brtNow = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const today = brtNow.toISOString().slice(0, 10);
     const startedAt = Date.now();
     const results: { window: string; ok: boolean; ms?: number; error?: string }[] = [];
 
@@ -60,7 +62,7 @@ Deno.serve(async (req) => {
     // A função alvo já paraleliza chamadas Stripe internamente e é idempotente por window_key.
     await Promise.all(WINDOWS.map(async (w) => {
       const t0 = Date.now();
-      const dateFrom = new Date(Date.now() - w.days * 24 * 60 * 60 * 1000)
+      const dateFrom = new Date(brtNow.getTime() - w.days * 24 * 60 * 60 * 1000)
         .toISOString()
         .slice(0, 10);
       try {
