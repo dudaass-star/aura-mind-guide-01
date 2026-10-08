@@ -65,3 +65,17 @@ test('cliente histórico removido mantém identidade exata de cobrança entre pr
    expect(source.intervals[0]?.recurringStart).toBeNull();
    expect(monthlyChurn(source.intervals, '2026-10-01')[11].trialBase).toBe(1);
  });
+test('evento oficial do mandato fecha semana paga sem inventar updated_at', () => {
+  const subs = [{ subscription_id: 's', user_id: 'u', billing_period: 'monthly', status: 'REJEITADA', is_trial: true, entry_paid_at: '2026-09-28T12:00:00Z', updated_at: '2026-10-08T12:00:00Z' }];
+  const events = [{ payload: { globalID: 's', event: 'PIX_AUTOMATIC_REJECTED', pixRecurring: { status: 'REJECTED' } }, created_at: '2026-09-29T12:00:00Z' }];
+  const source = churnSources([{ id: 'a', user_id: 'u' }], { subscriptions: [] }, [{ provider: 'woovi', subscriptions: subs, charges: [] }], [], events);
+  expect(source.excluded.missingEnd).toBe(0);
+  expect(source.intervals[0]).toMatchObject({ start: '2026-09-28', end: '2026-10-05', endUncertain: false });
+  expect(monthlyChurn(source.intervals, '2026-10-08')[11]).toMatchObject({ base: 1, lost: 1, trialLost: 1, rate: 100 });
+  const other = churnSources([{ id: 'a', user_id: 'u' }], { subscriptions: [] }, [{ provider: 'woovi', subscriptions: subs, charges: [] }], [], [{ ...events[0], payload: { ...events[0].payload, globalID: 'outro' } }]);
+  expect(other.excluded.missingEnd).toBe(1);
+});
+test('evento rejeitado sem status terminal e cobertura incompleta não validam taxa', () => {
+  const source = churnSources([{ id: 'a', user_id: 'u' }], { subscriptions: [] }, [{ provider: 'woovi', subscriptions: [{ subscription_id: 's', user_id: 'u', billing_period: 'monthly', status: 'CANCELADA' }], charges: [{ subscription_id: 's', paid_at: '2026-09-01T12:00:00Z', status: 'COMPLETED' }] }], [], [{ payload: { globalID: 's', event: 'PIX_AUTOMATIC_REJECTED', pixRecurring: { status: 'CREATED' } }, created_at: '2026-09-02T12:00:00Z' }]);
+  expect(source.excluded.missingEnd).toBe(1);
+});
