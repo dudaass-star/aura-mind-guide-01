@@ -6,6 +6,7 @@
 # Roadmap
 
 ## Panorama do negócio
+- [ ] Conferir entradas/saídas e lista de ativos em cada início de mês, corrigir a reconstrução e tornar explícitos no gráfico os meses cuja taxa não está validada.
 - [x] Incluir semana paga e separar base/perdas de experimentação e recorrência; preservar cobertura histórica e ocultar taxas incertas. 16 testes/45 asserções passaram. Cálculo local sobre registros reais: outubro 157 = 26 semanas + 131 recorrentes, parcial; gráfico/filtro testados autenticados com resposta recalculada localmente, sem erros.
 - [ ] Confirmar disponibilização da nova função de churn: hospedado ainda responde versão antiga; painel bloqueia números incompatíveis até receber versão 2, sem apresentar o recorte antigo como novo.
 - [x] Criar e validar gráfico de churn mensal: 12 meses, filtros 3/6/12, base inicial por pessoa, taxa/perdas e mês parcial. Conta administrativa: 4,22 s, filtro correto, sem erros e sem atualização financeira na abertura; 13 testes/38 asserções passaram.
