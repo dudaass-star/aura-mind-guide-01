@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'https://esm.sh/stripe@18.5.0';
+import { asaasGetJson } from '../_shared/asaas-reconcile.ts';
 import { listInstallments } from '../_shared/woovi.ts';
 import { brtDay, validDay, mergeBilling } from '../_shared/admin-billing.ts';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
@@ -48,7 +49,7 @@ Deno.serve(async (req) => {
       all('profiles', 'user_id,email,name,status,canceled_at'),
       all('woovi_subscriptions', 'subscription_id,user_id,customer_name,customer_email,plan,billing_period,value_cents,next_charge_date,entry_paid_at,replaced_by_subscription_id,status,is_trial,trial_value_cents,start_date,created_at'),
       all('woovi_charges', 'id,subscription_id,installment_id,user_id,kind,cycle_index,due_date,paid_at,value_cents,status'),
-      all('asaas_payments', 'id,user_id,customer_name,customer_email,plan,billing_period,amount_cents,status,paid_at,asaas_subscription_id,raw_payload'),
+      all('asaas_payments', 'id,asaas_payment_id,user_id,customer_name,customer_email,plan,billing_period,amount_cents,status,paid_at,asaas_subscription_id,raw_payload,is_trial'),
       all('inter_pix_charges', 'id,user_id,cycle_index,due_date,paid_at,value_cents,status'),
       all('messages', 'id,user_id,created_at,channel', q => q.eq('role', 'user').eq('channel', 'in_app').gte('created_at', start).lt('created_at', end)),
       all('sessions', 'id,user_id,scheduled_at,status', q => q.gte('scheduled_at', start).lt('scheduled_at', end)),
@@ -76,11 +77,11 @@ Deno.serve(async (req) => {
       mergeBilling(entries, e);
     }
     const subMap = new Map(subs.map(s => [s.subscription_id, s]));
-    for (const c of charges.filter(c => c.kind !== 'entry' && c.cycle_index > 0)) {
+    for (const c of charges) {
       const s = subMap.get(c.subscription_id);
-      if (s?.billing_period !== 'monthly') continue;
+      if (s?.billing_period !== 'monthly' || (c.kind === 'entry' && s.is_trial)) continue;
       const inst = (official.get(c.subscription_id) || []).find(i => String(i.globalID || i.id) === c.installment_id);
-      const due = c.due_date || String(inst?.dueDate || inst?.dateGenerateCharge || inst?.cobr?.dueDate || '').slice(0, 10) || null;
+      const due = c.due_date || (c.kind === 'entry' ? s.start_date : null) || String(inst?.dueDate || inst?.dateGenerateCharge || inst?.cobr?.dueDate || '').slice(0, 10) || null;
       add({ id: `woovi:${c.subscription_id}:${due || c.installment_id || c.id}`, userId: c.user_id || s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due, source: 'cobrança registrada', paid: c.status === 'COMPLETED' && c.paid_at ? day(c.paid_at) : null, cents: c.value_cents || s.value_cents });
     }
     // Parcelas oficiais preservam vencimentos históricos mesmo após cancelamento.
@@ -100,12 +101,16 @@ Deno.serve(async (req) => {
       if (p?.canceled_at && s.next_charge_date > day(p.canceled_at)) continue;
       add({ id: `woovi:${s.subscription_id}:${s.next_charge_date}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due: s.next_charge_date, paid: null, cents: s.value_cents });
     }
-    for (const p of asaas.filter(p => p.billing_period === 'monthly' && p.asaas_subscription_id && p.status !== 'DELETED')) {
-      const due = p.raw_payload?.dueDate || p.raw_payload?.payment?.dueDate || null;
+    for (const p of asaas.filter(p => p.billing_period === 'monthly' && p.asaas_subscription_id && p.status !== 'DELETED' && !p.is_trial)) {
+      let due = p.raw_payload?.dueDate || p.raw_payload?.payment?.dueDate || null;
+      if (!due && p.paid_at && day(p.paid_at) >= dateFrom && day(p.paid_at) <= dateTo) {
+        const officialPayment = await asaasGetJson(`/payments/${encodeURIComponent(p.asaas_payment_id)}`);
+        due = officialPayment?.dueDate || null;
+      }
       add({ id: `asaas:${p.asaas_subscription_id}:${due || p.id}`, userId: p.user_id, email: p.customer_email, name: p.customer_name, plan: p.plan, provider: 'asaas', due, paid: ['RECEIVED', 'CONFIRMED'].includes(p.status) && p.paid_at ? day(p.paid_at) : null, cents: p.amount_cents });
     }
     // O Inter sem identificação do ciclo mensal não é misturado às mensalidades.
-    if (inter.length) warnings.push('Inter não incluído: o histórico local não identifica o intervalo mensal com segurança.');
+    if (inter.length) { warnings.push('Inter não incluído: o histórico local não identifica o intervalo mensal com segurança.'); issues.push({ provider: 'inter', reason: 'Ciclo das cobranças Inter não comprovado', count: inter.length, cents: 0 }); }
     const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
     if (!stripeKey) throw new Error('Cartão indisponível: configuração ausente');
     const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });

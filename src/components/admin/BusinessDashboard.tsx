@@ -10,11 +10,11 @@ import { Line, LineChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { RefreshCw, CalendarDays, AlertCircle, ChevronDown } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 
-interface BillingEntry { id: string; name?: string; email?: string; plan: string; provider: string; due: string; paid: string | null; cents: number; receivedCents?: number }
+interface BillingEntry { id: string; name?: string; email?: string; plan: string; provider: string; due: string | null; paid: string | null; cents: number; receivedCents?: number }
 interface DailyUsage { date: string; active: number; messages: number; completed: number; missed: number }
-interface DashboardData { billing: BillingEntry[]; days: DailyUsage[]; warnings: string[]; updatedAt: string }
+interface DashboardData { billing: BillingEntry[]; days: DailyUsage[]; warnings: string[]; updatedAt: string; issues?: { provider: string; reason: string; count: number; cents: number }[]; completeness?: string }
 const brtNow = () => new Date(`${new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)}T12:00:00`);
-const shortDate = (date: string) => date.slice(5).split('-').reverse().join('/');
+const shortDate = (date: string | null) => date ? date.slice(5).split('-').reverse().join('/') : 'Não comprovado';
 const currency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const config = {
   expected: { label: 'Previstas', color: 'hsl(var(--primary))' },
@@ -76,13 +76,13 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
     const received = rows.filter(b => b.paid === d.date);
     return { ...d, expected: money ? expected.reduce((s, b) => s + b.cents, 0) / 100 : expected.length, received: money ? received.reduce((s, b) => s + (b.receivedCents ?? b.cents), 0) / 100 : received.length };
   });
-  const dueRows = rows.filter(b => b.due >= range.from && b.due <= range.to);
+  const dueRows = rows.filter(b => b.due && b.due >= range.from && b.due <= range.to);
   const paidRows = rows.filter(b => b.paid && b.paid >= range.from && b.paid <= range.to);
-  const pending = dueRows.filter(b => !b.paid && b.due <= format(brtNow(), 'yyyy-MM-dd'));
+  const pending = dueRows.filter(b => !b.paid && b.due && b.due < format(brtNow(), 'yyyy-MM-dd'));
   const totals = [
     { label: 'Mensalidades previstas', value: money ? currency(dueRows.reduce((s, b) => s + b.cents, 0) / 100) : dueRows.length, detail: 'Vencimentos no período' },
     { label: 'Mensalidades recebidas', value: money ? currency(paidRows.reduce((s, b) => s + (b.receivedCents ?? b.cents), 0) / 100) : paidRows.length, detail: 'Entradas no dia do pagamento' },
-    { label: 'Vencidas sem pagamento', value: money ? currency(pending.reduce((s, b) => s + b.cents, 0) / 100) : pending.length, detail: 'Vencimentos até hoje' },
+    { label: 'Vencidas sem pagamento', value: money ? currency(pending.reduce((s, b) => s + b.cents, 0) / 100) : pending.length, detail: 'Vencimentos anteriores a hoje' },
     { label: 'Sessões realizadas', value: days.reduce((s, d) => s + d.completed, 0), detail: 'Agendadas no período' },
   ];
   return <div className="space-y-8 py-4">
@@ -98,6 +98,7 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
     {validation && <p role="alert" className="text-sm text-destructive">{validation}</p>}
     {query.isPending ? <div className="h-[420px] bg-muted/40 animate-pulse flex items-center justify-center text-muted-foreground" role="status">Carregando gráficos…</div> : query.isError ? <div role="alert" className="py-12 text-center space-y-3"><AlertCircle className="mx-auto h-6 w-6 text-destructive" /><p>Não foi possível carregar o panorama.</p><Button variant="outline" onClick={() => query.refetch()}>Tentar novamente</Button></div> : <>
       {!onlyUsage && <>
+        {!!query.data?.issues?.length && <div role="alert" className="border-l-2 border-destructive pl-4 text-sm space-y-1"><p className="font-semibold text-destructive">Conciliação incompleta — não usar como fechamento financeiro</p>{query.data.issues.map((issue, index) => <p key={index} className="text-muted-foreground">{issue.reason}: {issue.count}{issue.cents > 0 ? ` · ${currency(issue.cents / 100)}` : ''}</p>)}</div>}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">{totals.map(t => <div key={t.label} className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">{t.label}</p><p className="text-3xl font-semibold mt-2">{t.value}</p><p className="text-xs text-muted-foreground mt-1">{t.detail}</p></div>)}</div>
         <section className="space-y-4 border-b border-border pb-8">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-lg">Mensalidades · previstas × recebidas</h3><p className="text-xs text-muted-foreground mt-1">Recebidas no dia real do pagamento, inclusive mensalidades atrasadas.</p></div><div className="flex flex-wrap gap-2"><Select value={provider} onValueChange={v => { setProvider(v); setSelectedDay(null); }}><SelectTrigger className="w-[160px]" aria-label="Meio de pagamento"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Cartão e PIX</SelectItem><SelectItem value="stripe">Cartão · Stripe</SelectItem><SelectItem value="woovi">PIX · Woovi</SelectItem><SelectItem value="asaas">PIX · Asaas</SelectItem></SelectContent></Select><Tabs value={unit} onValueChange={setUnit}><TabsList><TabsTrigger value="count">Quantidade</TabsTrigger><TabsTrigger value="money">R$</TabsTrigger></TabsList></Tabs></div></div>
