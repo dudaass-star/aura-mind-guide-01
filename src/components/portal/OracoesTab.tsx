@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ChevronDown, Compass, Headphones, Loader2, Moon, Pause, Play, RotateCcw, RotateCw, Text } from "lucide-react";
+import { ChevronDown, CloudMoon, Compass, Headphones, Loader2, Moon, Pause, Play, RotateCcw, RotateCw, Text } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { PRAYERS, type PrayerTrack } from "@/lib/prayers";
 
 const formatTime = (time: number) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
+const iconForPrayer = (id: string) => id === "prayer-night" ? Moon : id === "prayer-restless-mind" ? CloudMoon : Compass;
 
 export function OracoesTab({ isActive = true }: { isActive?: boolean }) {
   const [selectedPrayer, setSelectedPrayer] = useState<PrayerTrack | null>(null);
@@ -13,7 +14,7 @@ export function OracoesTab({ isActive = true }: { isActive?: boolean }) {
   return <section className="space-y-6">
     <div className="space-y-2"><p className="text-xs font-semibold text-primary">Um momento com Deus</p><h2 className="font-display text-3xl leading-tight text-foreground">O dia termina.<br />O cuidado permanece.</h2><p className="text-sm text-muted-foreground">Orações cristãs guiadas, no seu tempo.</p></div>
     <div className="grid gap-6 lg:grid-cols-2">{PRAYERS.map((prayer) => {
-      const Icon = prayer.id === "prayer-night" ? Moon : Compass;
+      const Icon = iconForPrayer(prayer.id);
       return <article key={prayer.id} className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
         <img src={prayer.image} alt={prayer.imageAlt} width={1536} height={1024} loading="lazy" className="aspect-[3/2] w-full object-cover" />
         <div className="flex flex-1 flex-col gap-4 p-5"><p className="flex items-center gap-2 text-xs font-semibold text-primary"><Icon className="h-4 w-4 shrink-0" /> {prayer.moment} <span className="ml-auto shrink-0 text-muted-foreground">{formatTime(prayer.duration)}</span></p><h3 className="font-display text-2xl leading-tight text-foreground">{prayer.title}</h3><p className="text-sm leading-relaxed text-muted-foreground">{prayer.description}</p><Button size="lg" className="mt-auto w-full" onClick={() => setSelectedPrayer(prayer)} aria-label={`Ouvir oração: ${prayer.title}`}><Play /> Ouvir oração</Button></div>
@@ -25,7 +26,7 @@ export function OracoesTab({ isActive = true }: { isActive?: boolean }) {
 
 function PrayerPlayer({ prayer, open, onOpenChange }: { prayer: PrayerTrack; open: boolean; onOpenChange: (value: boolean) => void }) {
   const cues = prayer.cues;
-  const Icon = prayer.id === "prayer-night" ? Moon : Compass;
+  const Icon = iconForPrayer(prayer.id);
   const audioRef = useRef<HTMLAudioElement>(null);
   const lyricsRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
