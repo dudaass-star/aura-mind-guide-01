@@ -1,9 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'https://esm.sh/stripe@18.5.0';
+import { listInstallments } from '../_shared/woovi.ts';
+import { brtDay, validDay, mergeBilling } from '../_shared/admin-billing.ts';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const cache = new Map<string, { at: number; data: unknown }>();
-const day = (value: string | number) => new Date(new Date(typeof value === 'number' ? value * 1000 : value).getTime() - 3 * 3600e3).toISOString().slice(0, 10);
+const day = brtDay;
 const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 Deno.serve(async (req) => {
@@ -22,7 +24,7 @@ Deno.serve(async (req) => {
     if (roleError || !admin) return reply({ error: 'Acesso restrito' }, 403);
     const body = await req.json();
     const { dateFrom, dateTo } = body;
-    const validDate = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
+    const validDate = validDay;
     if (!validDate(dateFrom) || !validDate(dateTo) || dateFrom > dateTo || (Date.parse(dateTo) - Date.parse(dateFrom)) / 864e5 > 365) return reply({ error: 'Escolha um período válido de até 366 dias.' }, 400);
     const cacheKey = `${dateFrom}:${dateTo}`;
     const hit = cache.get(cacheKey);
@@ -44,8 +46,8 @@ Deno.serve(async (req) => {
     }
     const [profiles, subs, charges, asaas, inter, messages, sessions] = await Promise.all([
       all('profiles', 'user_id,email,name,status,canceled_at'),
-      all('woovi_subscriptions', 'subscription_id,user_id,customer_name,customer_email,plan,billing_period,value_cents,next_charge_date,entry_paid_at,replaced_by_subscription_id,status'),
-      all('woovi_charges', 'id,subscription_id,user_id,kind,cycle_index,due_date,paid_at,value_cents,status'),
+      all('woovi_subscriptions', 'subscription_id,user_id,customer_name,customer_email,plan,billing_period,value_cents,next_charge_date,entry_paid_at,replaced_by_subscription_id,status,is_trial,trial_value_cents,start_date,created_at'),
+      all('woovi_charges', 'id,subscription_id,installment_id,user_id,kind,cycle_index,due_date,paid_at,value_cents,status'),
       all('asaas_payments', 'id,user_id,customer_name,customer_email,plan,billing_period,amount_cents,status,paid_at,asaas_subscription_id,raw_payload'),
       all('inter_pix_charges', 'id,user_id,cycle_index,due_date,paid_at,value_cents,status'),
       all('messages', 'id,user_id,created_at,channel', q => q.eq('role', 'user').eq('channel', 'in_app').gte('created_at', start).lt('created_at', end)),
@@ -55,17 +57,43 @@ Deno.serve(async (req) => {
     const demoEmails = new Set(profiles.filter(p => p.status === 'demo').map(p => p.email?.toLowerCase()).filter(Boolean));
     const profileMap = new Map(profiles.map(p => [p.user_id, p]));
     const entries = new Map<string, any>();
-    const warnings = ['PIX: vencimentos registrados, mais o próximo vencimento de mandatos ativos/aprovados. Histórico não salvo não é reconstruído; cancelados/rejeitados sem cobrança registrada não são projetados.'];
+    const warnings: string[] = [];
+    const issues: { provider: string; reason: string; count: number; cents: number }[] = [];
+    const official = new Map<string, any[]>();
+    const candidates = subs.filter(s => s.billing_period === 'monthly' && (s.entry_paid_at || charges.some(c => c.subscription_id === s.subscription_id && c.paid_at)) && !demoIds.has(s.user_id));
+    let cursor = 0;
+    await Promise.all(Array.from({ length: Math.min(6, candidates.length) }, async () => {
+      while (cursor < candidates.length) {
+        const s = candidates[cursor++];
+        try { official.set(s.subscription_id, await listInstallments(s.subscription_id)); }
+        catch { issues.push({ provider: 'woovi', reason: 'Histórico oficial de parcelas indisponível', count: 1, cents: 0 }); }
+      }
+    }));
     function add(e: any) {
-      if (demoIds.has(e.userId) || demoEmails.has(e.email?.toLowerCase()) || !e.due || !validDate(e.due)) return;
-      const old = entries.get(e.id);
-      if (!old || (e.paid && !old.paid)) entries.set(e.id, e);
+      if (demoIds.has(e.userId) || demoEmails.has(e.email?.trim().toLowerCase())) return;
+      e.due = validDate(e.due) ? e.due : null;
+      if (!e.due && !e.paid) return;
+      mergeBilling(entries, e);
     }
     const subMap = new Map(subs.map(s => [s.subscription_id, s]));
     for (const c of charges.filter(c => c.kind !== 'entry' && c.cycle_index > 0)) {
       const s = subMap.get(c.subscription_id);
-      if (s?.billing_period !== 'monthly' || !s?.entry_paid_at) continue;
-      add({ id: `woovi:${c.subscription_id}:${c.due_date}`, userId: c.user_id || s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due: c.due_date, paid: c.status === 'COMPLETED' && c.paid_at ? day(c.paid_at) : null, cents: c.value_cents || s.value_cents });
+      if (s?.billing_period !== 'monthly') continue;
+      const inst = (official.get(c.subscription_id) || []).find(i => String(i.globalID || i.id) === c.installment_id);
+      const due = c.due_date || String(inst?.dueDate || inst?.dateGenerateCharge || inst?.cobr?.dueDate || '').slice(0, 10) || null;
+      add({ id: `woovi:${c.subscription_id}:${due || c.installment_id || c.id}`, userId: c.user_id || s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due, source: 'cobrança registrada', paid: c.status === 'COMPLETED' && c.paid_at ? day(c.paid_at) : null, cents: c.value_cents || s.value_cents });
+    }
+    // Parcelas oficiais preservam vencimentos históricos mesmo após cancelamento.
+    for (const s of candidates) {
+      for (const i of official.get(s.subscription_id) || []) {
+        const due = String(i.dueDate || i.dateGenerateCharge || i.cobr?.dueDate || '').slice(0, 10);
+        const cents = Number(i.value ?? i.cobr?.value ?? s.value_cents);
+        if (!validDate(due) || (s.is_trial && cents === s.trial_value_cents)) continue;
+        if (['CANCELED', 'CANCELLED', 'DELETED'].includes(String(i.status).toUpperCase())) continue;
+        const charge = charges.find(c => c.subscription_id === s.subscription_id && (c.installment_id === String(i.globalID || i.id) || c.due_date === due) && c.paid_at);
+        add({ id: `woovi:${s.subscription_id}:${due}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due, paid: charge?.status === 'COMPLETED' ? day(charge.paid_at) : null, cents, source: 'parcela oficial Woovi' });
+        if (['PAID', 'COMPLETED', 'CONFIRMED', 'CONCLUDED'].includes(String(i.status).toUpperCase()) && !charge) issues.push({ provider: 'woovi', reason: 'Parcela oficial paga sem pagamento conciliado', count: 1, cents });
+      }
     }
     for (const s of subs.filter(s => s.billing_period === 'monthly' && s.entry_paid_at && !s.replaced_by_subscription_id && ['ATIVA', 'APROVADA'].includes(s.status))) {
       const p = profileMap.get(s.user_id);
@@ -73,8 +101,8 @@ Deno.serve(async (req) => {
       add({ id: `woovi:${s.subscription_id}:${s.next_charge_date}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due: s.next_charge_date, paid: null, cents: s.value_cents });
     }
     for (const p of asaas.filter(p => p.billing_period === 'monthly' && p.asaas_subscription_id && p.status !== 'DELETED')) {
-      const due = p.raw_payload?.dueDate;
-      add({ id: `asaas:${p.asaas_subscription_id}:${due}`, userId: p.user_id, email: p.customer_email, name: p.customer_name, plan: p.plan, provider: 'asaas', due, paid: ['RECEIVED', 'CONFIRMED'].includes(p.status) && p.paid_at ? day(p.paid_at) : null, cents: p.amount_cents });
+      const due = p.raw_payload?.dueDate || p.raw_payload?.payment?.dueDate || null;
+      add({ id: `asaas:${p.asaas_subscription_id}:${due || p.id}`, userId: p.user_id, email: p.customer_email, name: p.customer_name, plan: p.plan, provider: 'asaas', due, paid: ['RECEIVED', 'CONFIRMED'].includes(p.status) && p.paid_at ? day(p.paid_at) : null, cents: p.amount_cents });
     }
     // O Inter sem identificação do ciclo mensal não é misturado às mensalidades.
     if (inter.length) warnings.push('Inter não incluído: o histórico local não identifica o intervalo mensal com segurança.');
@@ -92,12 +120,18 @@ Deno.serve(async (req) => {
         return p?.recurring?.interval === 'month' && p.recurring.interval_count === 1;
       });
       if (!monthlyLine) continue;
-      const due = day(inv.due_date || monthlyLine.period.start || inv.created);
+      // Não confundir a compra de 7 dias (item avulso) com primeira mensalidade.
+      if (inv.billing_reason === 'subscription_create' && monthlyLine.amount <= 0) continue;
+      const due = inv.due_date ? day(inv.due_date) : day(inv.created);
       const paid = inv.status === 'paid' && inv.status_transitions?.paid_at ? day(inv.status_transitions.paid_at) : null;
       if (!(due >= dateFrom && due <= dateTo) && !(paid && paid >= dateFrom && paid <= dateTo)) continue;
       add({ id: inv.id, email: inv.customer_email, name: inv.customer_name, provider: 'stripe', plan: inv.metadata?.plan || 'mensal', due, paid, cents: inv.amount_due, receivedCents: inv.amount_paid });
     }
-    const billing = [...entries.values()].filter(e => (e.due >= dateFrom && e.due <= dateTo) || (e.paid && e.paid >= dateFrom && e.paid <= dateTo));
+    const billing = [...entries.values()].filter(e => (e.due && e.due >= dateFrom && e.due <= dateTo) || (e.paid && e.paid >= dateFrom && e.paid <= dateTo));
+    const missingDue = billing.filter(e => !e.due && e.paid);
+    if (missingDue.length) issues.push({ provider: 'all', reason: 'Pagamento contado sem vencimento comprovado', count: missingDue.length, cents: missingDue.reduce((n, e) => n + e.cents, 0) });
+    if (issues.length) warnings.push('Dados parciais: há lacunas de conciliação ou de vencimento. Recebimentos comprovados sem vencimento continuam na série recebida.');
+    warnings.push('Mensalidades: ciclos mensais integrais; entradas de experimentação semanal não são mensalidades. Previstas seguem vencimentos oficiais disponíveis, sem reconstrução por suposição.');
     const messageDays = new Map<string, { users: Set<string>; count: number }>();
     for (const m of messages) {
       if (demoIds.has(m.user_id)) continue;
@@ -121,7 +155,7 @@ Deno.serve(async (req) => {
       const ss = sessionDays.get(date);
       days.push({ date, active: sent?.users.size || 0, messages: sent?.count || 0, completed: ss?.completed || 0, missed: ss?.missed || 0 });
     }
-    const result = { billing, days, warnings, updatedAt: new Date().toISOString() };
+    const result = { billing, days, warnings, issues, completeness: issues.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString() };
     if (cache.size > 20) cache.clear();
     cache.set(cacheKey, { at: Date.now(), data: result });
     return reply(result);
