@@ -26,4 +26,5 @@
 - A reconciliação do extrato Woovi percorre a paginação crescente até o fim e só atribui pagador diferente mediante E2E exato na parcela do mandato, priorizando relações anteriores do pagador; isso alcança mensalidades recentes sem criar vínculos por heurística.
 - A conversa principal usa raciocínio do Gemini 3 em nível baixo e médio apenas no reenquadre e no fechamento da sessão; isso derruba a espera sem tirar reflexão dos momentos de aterrissagem.
 - A preparação da conversa busca em paralelo, após o perfil, cota e sessões, sem bloquear em configuração ou contador; isso reduz a espera sem mudar o contexto.
-- Movement UI is collective-first; admin previews stay local-only. Live and preview invitations share one text module to prevent copy drift; previews never change membership, record impact or send invitations.
+- Movement is collective-first; previews stay local and share live invitation copy to prevent drift.
+- Prayers use a separate App area with cues aligned to final audio to avoid drift.

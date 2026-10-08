@@ -1,6 +1,6 @@
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, HeartHandshake, Loader2, LogOut, Mic, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Trash2, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, HeartHandshake, Loader2, LogOut, Mic, Moon, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -329,8 +329,8 @@ export function ConversarTab({
 }: {
   userId: string;
   firstName: string;
-  onNavigate?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "movimento") => void;
-  onPrefetch?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "movimento") => void;
+  onNavigate?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "oracoes" | "movimento") => void;
+  onPrefetch?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "oracoes" | "movimento") => void;
   onOpenBilling: () => void;
   onChangePlan: () => void;
   onSignOut: () => void;
@@ -1201,6 +1201,7 @@ export function ConversarTab({
     { label: "Sessões", detail: "Seus encontros com a AURA", tab: "sessoes", icon: CalendarDays, tone: "portal-area-sessions" },
     { label: "Jornadas", detail: "Conteúdos para acompanhar você", tab: "jornadas", icon: BookOpen, tone: "portal-area-content" },
     { label: "Percurso", detail: "O que vem mudando", tab: "insights", icon: Sparkles, tone: "portal-area-journey" },
+    { label: "Orações", detail: "Um momento com Deus", tab: "oracoes", icon: Moon, tone: "portal-area-journey" },
     { label: "Meditações", detail: "Pausas guiadas para você", tab: "meditacoes", icon: Headphones, tone: "portal-area-audio" },
     { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound, tone: "portal-area-profile" },
     { label: "Movimento", detail: "Faça parte de algo maior", tab: "movimento", icon: HeartHandshake, tone: "portal-area-movement" },

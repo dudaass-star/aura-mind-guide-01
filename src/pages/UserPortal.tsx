@@ -4,7 +4,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import { ArrowLeft, BookOpen, Sparkles, Headphones, HeartHandshake, Lock, Sun, Calendar, User } from "lucide-react";
+import { ArrowLeft, BookOpen, Sparkles, Headphones, HeartHandshake, Lock, Sun, Calendar, User, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
@@ -17,12 +17,14 @@ import { rememberPushAttribution, reportPushPresence } from "@/lib/push-notifica
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { isAppStandalone } from "@/components/portal/InstallAppMenuItem";
 
-type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "movimento";
+type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "oracoes" | "movimento";
 
 const loadHoje = () => import("@/components/portal/HojeTab");
 const loadSessoes = () => import("@/components/portal/SessoesTab");
 const loadJornadas = () => import("@/components/portal/JornadasTab");
 const loadInsights = () => import("@/components/portal/InsightsTab");
+const loadOracoes = () => import("@/components/portal/OracoesTab");
+const OracoesTab = lazy(() => loadOracoes().then((module) => ({ default: module.OracoesTab })));
 const loadMeditacoes = () => import("@/components/portal/MeditacoesTab");
 const loadSobre = () => import("@/components/portal/SobreVoceTab");
 const loadMovimento = () => import("@/components/movement/MovementDashboard");
@@ -40,6 +42,7 @@ const AREA_LOADERS: Record<Exclude<TabId, "conversar">, () => Promise<unknown>> 
   jornadas: loadJornadas,
   insights: loadInsights,
   meditacoes: loadMeditacoes,
+  oracoes: loadOracoes,
   sobre: loadSobre,
   movimento: loadMovimento,
 };
@@ -49,6 +52,7 @@ const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebro
   sessoes: { label: "Sessões", eyebrow: "Seus encontros", icon: Calendar, tone: "portal-area-sessions" },
   jornadas: { label: "Jornadas", eyebrow: "Conteúdos para você", icon: BookOpen, tone: "portal-area-content" },
   insights: { label: "Percurso", eyebrow: "Sua evolução", icon: Sparkles, tone: "portal-area-journey" },
+  oracoes: { label: "Orações", eyebrow: "Sua fé", icon: Moon, tone: "portal-area-journey" },
   meditacoes: { label: "Meditações", eyebrow: "Sua pausa", icon: Headphones, tone: "portal-area-audio" },
   sobre: { label: "Sobre você", eyebrow: "Sua história", icon: User, tone: "portal-area-profile" },
   movimento: { label: "Movimento", eyebrow: "Algo maior", icon: HeartHandshake, tone: "portal-area-movement" },
@@ -63,7 +67,7 @@ const UserPortal = () => {
     ? "sobre"
     : rawTab === "percurso"
       ? "insights"
-      : rawTab && ["conversar", "hoje", "sessoes", "jornadas", "insights", "sobre", "meditacoes", "movimento"].includes(rawTab)
+      : rawTab && ["conversar", "hoje", "sessoes", "jornadas", "insights", "sobre", "meditacoes", "oracoes", "movimento"].includes(rawTab)
         ? rawTab as TabId
         : "conversar";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
@@ -519,6 +523,7 @@ const UserPortal = () => {
           {visitedTabs.has("jornadas") && <div className={activeTab === "jornadas" ? "block" : "hidden"} aria-hidden={activeTab !== "jornadas"}><JornadasTab userId={userId} profile={profile} onJourneyChanged={() => void refetchProfile()} /></div>}
           {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
+          {visitedTabs.has("oracoes") && <div className={activeTab === "oracoes" ? "block" : "hidden"} aria-hidden={activeTab !== "oracoes"}><OracoesTab isActive={activeTab === "oracoes"} /></div>}
           {visitedTabs.has("meditacoes") && <div className={activeTab === "meditacoes" ? "block" : "hidden"} aria-hidden={activeTab !== "meditacoes"}><MeditacoesTab userId={userId} /></div>}
           {visitedTabs.has("movimento") && <div className={activeTab === "movimento" ? "block" : "hidden"} aria-hidden={activeTab !== "movimento"}><MovementDashboard userId={userId} suggestedName={profile?.name || ""} embedded onJoined={() => void refetchMovementMember()} /></div>}
           </Suspense>
