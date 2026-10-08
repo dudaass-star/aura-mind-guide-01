@@ -6,6 +6,7 @@
 # Roadmap
 
 ## Panorama do negócio
+- [ ] Separar conferência dos provedores da abertura dos gráficos, com atualização automática e data da última conferência visível.
 - [x] Corrigir paginação de parcelas/extrato Woovi, recuperação Asaas e identificadores locais; 11 testes passaram, extrato real percorreu 373 lançamentos e painel autenticado foi conferido sem alterar cobranças. A inspeção do extrato não equivale à conciliação contábil individual de todas as entradas.
 - [x] Corrigir mensalidades com fontes rastreáveis, recuperação em lotes de parcelas oficiais, recebimentos independentes e lacunas explícitas.
 - [x] Corrigir retorno, cobrança por fatura única, cancelamento da base inicial, normalização de receita por ciclo e sessões; recortes de cartão e estimativas identificados.
