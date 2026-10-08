@@ -6,6 +6,7 @@
 # Roadmap
 
 ## Panorama do negócio
+- [ ] Incluir semana paga na base inicial de clientes ativos, separar perdas de experimentação/recorrência e conferir reconstrução histórica sem excluir cobertura comprovada de contratos encerrados.
 - [x] Criar e validar gráfico de churn mensal: 12 meses, filtros 3/6/12, base inicial por pessoa, taxa/perdas e mês parcial. Conta administrativa: 4,22 s, filtro correto, sem erros e sem atualização financeira na abertura; 13 testes/38 asserções passaram.
 - [ ] Completar histórico de churn: 21 contratos encerrados sem data efetiva ou cobertura paga comprovada; resultados identificados como parciais até obter evidência oficial, sem usar updated_at como cancelamento.
 - [x] Corrigir regressão de receita e abertura lenta: cartão completo (290 assinaturas/742 faturas), PIX paginado, potencial separado de cobertura paga. Teste autenticado: abertura 1,99 s, cópia persistida, sem consultas de provedores; 9 testes/30 asserções passaram.
