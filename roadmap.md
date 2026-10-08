@@ -6,6 +6,7 @@
 # Roadmap
 
 ## Panorama do negócio
+- [ ] Criar e validar gráfico de churn mensal: 12 meses, base inicial recorrente por pessoa, taxa/quantidade, meses sem histórico e mês atual parcial; leitura de cópias sem consultas financeiras na abertura.
 - [x] Corrigir regressão de receita e abertura lenta: cartão completo (290 assinaturas/742 faturas), PIX paginado, potencial separado de cobertura paga. Teste autenticado: abertura 1,99 s, cópia persistida, sem consultas de provedores; 9 testes/30 asserções passaram.
 - [x] Implementar conciliação de receita por pagamento do ciclo, vínculo perfil/autenticação, ciclos semestrais e todos os meios; separar experimentação, risco e valores sem comprovação. Sete testes passaram, fontes PIX completas conferidas (517 contratos Woovi, 573 cobranças), layout sem erros.
 - [ ] Confirmar disponibilização da versão 8: teste anterior da versão 7 abriu em 1,99 s, mas as duas últimas disponibilizações responderam versão 5 e logs confirmaram consultas antigas ao Stripe. Não certificar abertura ou totais hospedados enquanto a versão correta não responder. Conferência local: 164 contratos, potencial R$5.488,69; 186 perfis ativos, 30 sem contrato vigente.
