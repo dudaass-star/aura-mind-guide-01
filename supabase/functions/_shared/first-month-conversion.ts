@@ -32,12 +32,14 @@ export function pixFirstDue(start: string, installments: any[], trialCents: numb
   const dueDates = installments.filter(i => Number(i.value ?? i.cobr?.value) > 0 && Number(i.value ?? i.cobr?.value) !== trialCents)
     .map(i => String(i.dueDate || i.dateGenerateCharge || i.cobr?.dueDate || '').slice(0, 10))
     .filter(d => validDay(d) && d >= start).sort();
-  if (dueDates.length) return dueDates[0];
   if (!validDay(start)) return null;
   const first = new Date(`${start}T12:00:00Z`); first.setUTCDate(first.getUTCDate() + 7);
   const due = first.toISOString().slice(0, 10);
   // Só usa D+7 quando o dia oficial do mandato confirma esse calendário.
-  return Number(generationDay) === Number(due.slice(8)) ? due : null;
+  if (Number(generationDay) === Number(due.slice(8))) return due;
+  // Não toma uma parcela de meses seguintes por primeira mensalidade.
+  const earliest = dueDates[0];
+  return earliest && Date.parse(earliest) - Date.parse(start) <= 10 * 864e5 ? earliest : null;
 }
 
 export function conversionCohort(rows: FirstMonthCohort[], from: string, to: string, today: string) {
