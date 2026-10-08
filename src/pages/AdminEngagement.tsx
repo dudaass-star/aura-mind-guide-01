@@ -1009,9 +1009,6 @@ export default function AdminEngagement() {
                         <div className="font-semibold text-destructive">R$ {(metrics.revenueReconciliation?.risk.brl ?? metrics.mrrAtRiskBRL).toFixed(2)}</div>
                         <div className="text-[10px] text-muted-foreground">{metrics.revenueReconciliation?.risk.contracts ?? 0} contratos · cartão e PIX · fora do total</div>
                       </div>
-                          )}
-                        </div>
-                      </div>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-3">
                       Contratos vigentes com pagamento do ciclo comprovado, normalizados por mês. Experimentações, atrasos e vínculos não conciliados ficam fora do total. PIX: R$ {(metrics.mrrPixBRL ?? 0).toFixed(2)} · Woovi: R$ {(metrics.wooviMrrBRL ?? 0).toFixed(2)}.
