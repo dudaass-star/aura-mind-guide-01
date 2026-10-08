@@ -30,4 +30,4 @@
 - Prayers share one catalog/player to keep art, audio and cues matched.
 - Home keeps tracking; practice dialogs stop audio on exit.
 
-- Revenue separates potential/coverage; churn unions paid customers, uses exact mandate events and marks uncertain rates.
+- Revenue splits potential/coverage; churn unions paid people, using official E2E and contract dates to avoid cross-plan attribution.
