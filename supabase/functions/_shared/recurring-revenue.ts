@@ -28,6 +28,7 @@ export function reconcileRevenue(profiles: Row[], contracts: Row[], today: strin
     let state = 'unverified';
     if (!p) warnings.push('Contrato sem vínculo único com cliente; separado da receita confirmada.');
     else if (!c.monthlyCents || c.monthlyCents < 0) warnings.push('Contrato sem valor ou ciclo comprovado; separado da receita confirmada.');
+    else if (c.missingCoverage) warnings.push('Pagamento sem vencimento comprovado; contrato separado até conciliação.');
     else if (c.paidUntil && c.paidUntil > today) state = c.overdue ? 'risk' : 'recurring';
     else if (c.trialPaid && c.trialUntil > today) state = 'trial';
     else if (c.paidBefore || c.trialPaid || c.overdue) state = 'risk';
@@ -62,12 +63,12 @@ export function pixContract(provider: string, s: Row, charges: Row[], today: str
   const recurring = paid.filter(c => !(s.is_trial && (c.kind === 'entry' || c.cycle_index === 0 || Number(c.value_cents ?? c.amount_cents) === Number(s.trial_value_cents))));
   const covered = recurring.map(c => addMonths(String(c.due_date || c.raw_payload?.dueDate || c.raw_payload?.payment?.dueDate || '').slice(0, 10), months)).filter(Boolean).sort();
   const entry = s.entry_paid_at || paid.find(c => !recurring.includes(c))?.paid_at;
-  const trialUntil = entry ? new Date(Date.parse(entry) + 7 * 864e5).toISOString().slice(0, 10) : '';
+  const trialUntil = entry ? brtDay(new Date(Date.parse(entry) + 7 * 864e5).toISOString()) : '';
   const paidUntil = covered.at(-1) || '';
-  return { id: s.subscription_id || s.id_rec || s.asaas_subscription_id || s.id, provider, userId: s.user_id, email: s.customer_email, monthlyCents: months ? Math.round(Number(s.value_cents) / months) : 0, paidUntil, paidBefore: recurring.length > 0, trialPaid: !!(s.is_trial && entry), trialUntil, overdue: !!(paidUntil && paidUntil <= today) };
+  return { id: s.subscription_id || s.id_rec || s.asaas_subscription_id || s.id, provider, userId: s.user_id, email: s.customer_email, monthlyCents: months ? Math.round(Number(s.value_cents) / months) : 0, paidUntil, missingCoverage: recurring.length > 0 && !paidUntil, paidBefore: recurring.length > 0, trialPaid: !!(s.is_trial && entry), trialUntil, overdue: !!(paidUntil && paidUntil <= today) };
 }
 
-export function stripeContract(s: Row, invoices: Row[]): Row {
+export function stripeContract(s: Row, invoices: Row[], weeklyPayments: Row[] = []): Row {
   const paid = invoices.filter(i => (i.subscription || i.parent?.subscription_details?.subscription) === s.id && i.status === 'paid' && i.amount_paid > 0);
   const latest = paid.sort((a, b) => b.created - a.created)[0];
   const monthlyCents = (s.items?.data || []).reduce((n: number, item: Row) => {
@@ -78,5 +79,7 @@ export function stripeContract(s: Row, invoices: Row[]): Row {
     return n + Math.round((price.unit_amount * (item.quantity || 1) - discount) / months);
   }, 0);
   const ends = paid.flatMap(i => (i.lines?.data || []).filter((l: Row) => !l.parent?.subscription_item_details?.proration).map((l: Row) => brtDay(l.period?.end || 0))).sort();
-  return { id: s.id, provider: 'stripe', userId: s.metadata?.user_id, email: s.metadata?.email || latest?.customer_email, monthlyCents, paidUntil: ends.at(-1), paidBefore: paid.length > 0, trialPaid: s.status === 'trialing' && s.metadata?.trial === 'true', trialUntil: brtDay(s.trial_end || 0), overdue: s.status === 'past_due' };
+  const customer = typeof s.customer === 'string' ? s.customer : s.customer?.id;
+  const trialPaid = weeklyPayments.some(p => p.customer === customer && p.status === 'succeeded' && p.amount_received > 0 && p.created <= s.trial_start && s.trial_start - p.created <= 86400);
+  return { id: s.id, provider: 'stripe', userId: s.metadata?.user_id, email: s.metadata?.email || latest?.customer_email, monthlyCents, paidUntil: ends.at(-1), paidBefore: paid.length > 0, trialPaid: s.status === 'trialing' && trialPaid, trialUntil: brtDay(s.trial_end || 0), overdue: s.status === 'past_due' };
 }

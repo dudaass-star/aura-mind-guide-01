@@ -42,7 +42,8 @@ Deno.serve(async req => {
    for await (const p of stripe.paymentIntents.list({ limit: 100 })) {
     if (p.status === 'succeeded' && p.metadata?.trial === 'true') weeklyPayments.push({ id: p.id, customer: p.customer, status: p.status, amount_received: p.amount_received, created: p.created, metadata: { trial: p.metadata.trial } });
    }
-   // Só substitui depois de percorrer todas as páginas com sucesso.
+    // Cópia completa usada também na conciliação de recorrência e experimentação.
+    // Só substitui depois de percorrer todas as páginas com sucesso.
    await store('stripe:billing', 'stripe', [{ prices, invoices, subscriptions, weeklyPayments }]);
   } catch { errors.push('Cartão: última cópia preservada'); }
   const [subs, snapshots, payments] = await Promise.all([all('woovi_subscriptions', 'id,subscription_id,billing_period'), all('admin_billing_provider_snapshots', 'id,fetched_at,provider'), all('asaas_payments', 'id,asaas_payment_id,billing_period,raw_payload,paid_at')]);

@@ -934,7 +934,7 @@ Deno.serve(async (req) => {
     if (!Array.isArray(revenueStripe?.subscriptions)) metricWarnings.push('Receita cartão aguardando cópia completa de assinaturas; total ainda parcial.');
     for (const sub of revenueStripe?.subscriptions || []) {
       if (sub.pause_collection || !['active', 'trialing', 'past_due'].includes(sub.status)) continue;
-      revenueContracts.push(stripeContract(sub, revenueStripe.invoices || []));
+      revenueContracts.push(stripeContract(sub, revenueStripe.invoices || [], revenueStripe.weeklyPayments || []));
     }
 
     // ========== 🔴 CHURN REAL DO STRIPE (Voluntário + Involuntário) ==========
