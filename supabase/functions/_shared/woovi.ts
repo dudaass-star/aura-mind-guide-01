@@ -7,6 +7,8 @@
 // (`PAYMENT_ON_APPROVAL`), em que UM único QR Code cobra o valor de entrada E
 // autoriza o mandato recorrente no mesmo scan — a UX que o Inter não entrega
 // (o Inter só faz a Jornada 2, com aprovação separada).
+import { collectProviderPages } from './provider-pagination.ts';
+
 export const WOOVI_API_BASE = "https://api.woovi.com";
 
 export type WooviResponse<T = unknown> = {
@@ -229,15 +231,7 @@ function toInstallment(i: Record<string, any>): WooviInstallment {
 export async function findUnpaidInstallment(
   subscriptionId: string,
 ): Promise<WooviInstallment | null> {
-  const path = `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/installments`;
-  const r = await wooviFetch<Record<string, any>>(path);
-  if (!r.ok) throw new WooviUnavailable(r.status, path, r.raw);
-  const raw = r.data as Record<string, any> | null;
-  const list: Record<string, any>[] = Array.isArray(raw?.installments)
-    ? raw!.installments
-    : Array.isArray(raw)
-      ? (raw as unknown as Record<string, any>[])
-      : [];
+  const list = await listInstallments(subscriptionId);
   const today = brtDate();
   const unpaid = list
     .filter((i) => !INSTALLMENT_PAID_STATUSES.includes(String(i?.status || "").toUpperCase()))
@@ -353,16 +347,7 @@ export async function createInstallmentCobr(
 export async function findScheduledInstallment(
   subscriptionId: string,
 ): Promise<WooviInstallment | null> {
-  const path = `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/installments`;
-  const r = await wooviFetch<Record<string, any>>(path);
-  // Indisponibilidade não é "sem parcela": quem chama precisa reconferir depois.
-  if (!r.ok) throw new WooviUnavailable(r.status, path, r.raw);
-  const raw = r.data as Record<string, any> | null;
-  const list: Record<string, any>[] = Array.isArray(raw?.installments)
-    ? raw!.installments
-    : Array.isArray(raw)
-      ? (raw as unknown as Record<string, any>[])
-      : [];
+  const list = await listInstallments(subscriptionId);
   const today = brtDate();
   const scheduled = list
     .filter((i) => ["SCHEDULED", "ACTIVE", "CREATED", "PENDING"].includes(String(i?.status || "").toUpperCase()))
@@ -426,10 +411,24 @@ export async function listInstallments(
   subscriptionId: string,
 ): Promise<Record<string, any>[]> {
   const path = `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/installments`;
-  const r = await wooviFetch<Record<string, any>>(path);
-  if (!r.ok) throw new WooviUnavailable(r.status, path, r.raw);
-  const raw = r.data as Record<string, any> | null;
-  return Array.isArray(raw?.installments)
-    ? raw!.installments
-    : Array.isArray(raw) ? (raw as unknown as Record<string, any>[]) : [];
+  return collectProviderPages<Record<string, any>>(async (offset, limit) => {
+    const r = await wooviFetch<Record<string, any>>(`${path}?limit=${limit}&skip=${offset}`);
+    if (!r.ok) throw new WooviUnavailable(r.status, path, r.raw);
+    const raw = r.data;
+    const items = Array.isArray(raw) ? raw : raw?.installments;
+    if (!Array.isArray(items)) throw new Error('Resposta de parcelas Woovi inválida');
+    return { items, hasMore: typeof raw?.pageInfo?.hasNextPage === 'boolean' ? raw.pageInfo.hasNextPage : undefined, total: typeof raw?.pageInfo?.totalCount === 'number' ? raw.pageInfo.totalCount : undefined };
+  }, i => String(i.globalID || i.id || i.cobr?.installmentId || i.correlationID || ''));
+}
+
+/** Extrato completo, sem interromper nas páginas antigas. */
+export async function listTransactions(): Promise<Record<string, any>[]> {
+  return collectProviderPages<Record<string, any>>(async (offset, limit) => {
+    const path = `/api/v1/transaction?limit=${limit}&skip=${offset}`;
+    const r = await wooviFetch<Record<string, any>>(path);
+    if (!r.ok) throw new WooviUnavailable(r.status, path, r.raw);
+    const raw = r.data;
+    if (!Array.isArray(raw?.transactions)) throw new Error('Resposta de extrato Woovi inválida');
+    return { items: raw.transactions, hasMore: typeof raw.pageInfo?.hasNextPage === 'boolean' ? raw.pageInfo.hasNextPage : undefined, total: typeof raw.pageInfo?.totalCount === 'number' ? raw.pageInfo.totalCount : undefined };
+  }, t => String(t.transactionID || t.id || t.globalID || t.endToEndId || ''));
 }

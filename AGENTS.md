@@ -24,10 +24,10 @@
 - Disputas PIX vinculam a cobrança pelo End-to-End ID tanto em campos diretos quanto no payload original, recusando associação ambígua; isso preserva a defesa automática sem atribuir evidência ao cliente errado.
 - O público histórico de compradores da Meta recebe diariamente compras concluídas desde 08/09/2026, com e-mail e telefone normalizados e protegidos por hash, sem contas demo; a carga é aditiva e idempotente para preservar o histórico.
 - A reconciliação do extrato Woovi percorre a paginação crescente até o fim e só atribui pagador diferente mediante E2E exato na parcela do mandato, priorizando relações anteriores do pagador; isso alcança mensalidades recentes sem criar vínculos por heurística.
-- A conversa principal usa raciocínio do Gemini 3 em nível baixo e médio apenas no reenquadre e no fechamento da sessão; isso derruba a espera sem tirar reflexão dos momentos de aterrissagem.
-- A preparação da conversa busca em paralelo, após o perfil, cota e sessões, sem bloquear em configuração ou contador; isso reduz a espera sem mudar o contexto.
+- Chat thinking stays low except in session reframe and closure to reduce latency without losing reflection.
+- Chat preparation parallelizes independent reads after profile, quota and sessions to reduce waits without changing context.
 - Movement is collective-first; local previews share live invite copy.
 - Prayers share one catalog/player to keep art, audio and cues matched.
 - Home keeps tracking; practice dialogs stop audio on exit.
 
-- Admin billing uses shared pure normalization, exact installment matching and admin-only provider snapshots fetched in serial batches; this avoids rate-limit timeouts while keeping provider gaps explicit and receipts independent of due dates.
+- Admin billing uses shared pure normalization, exact installment matching and serial admin snapshots and checked pagination; request failures, repeated pages, inconsistent totals and safety caps must reject partial results.
