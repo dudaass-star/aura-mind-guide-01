@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { brtDay } from '../_shared/admin-billing.ts';
 import { churnSources, monthlyChurn } from '../_shared/monthly-churn.ts';
+import { churnPaymentHistory } from '../_shared/churn-payment-history.ts';
 
 const cache = new Map<string, { at: number; data: unknown }>();
 const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -37,30 +38,30 @@ Deno.serve(async req => {
     }
     const [profiles, woovi, wooviCharges, asaas, asaasCharges, inter, interCharges, events, mandateEvents, snap] = await Promise.all([
       all('profiles', 'id,user_id,email,status'),
-      all('woovi_subscriptions', 'id,subscription_id,recurrency_id,user_id,customer_email,billing_period,is_trial,trial_value_cents,entry_paid_at,status,raw_payload'),
+      all('woovi_subscriptions', 'id,subscription_id,recurrency_id,entry_charge_correlation_id,user_id,customer_email,billing_period,is_trial,trial_value_cents,entry_paid_at,status,raw_payload'),
       all('woovi_charges', 'id,subscription_id,kind,cycle_index,value_cents,due_date,paid_at,status,raw_payload'),
-      all('asaas_pix_authorizations', 'id,asaas_subscription_id,user_id,customer_email,billing_period,is_trial,trial_value_cents,status,cancelled_at,raw_payload'),
+      all('asaas_pix_authorizations', 'id,asaas_subscription_id,user_id,customer_email,billing_period,is_trial,trial_value_cents,status,cancelled_at,start_date,value_cents,raw_payload'),
       all('asaas_payments', 'id,asaas_subscription_id,amount_cents,is_trial,status,paid_at,raw_payload'),
       all('inter_pix_recurrences', 'id,id_rec,user_id,customer_email,billing_period,is_trial,trial_value_cents,status,raw_payload'),
       all('inter_pix_charges', 'id,id_rec,cycle_index,value_cents,due_date,paid_at,status'),
       all('retention_events', 'id,user_id,tier,action,metadata,created_at'),
       all('woovi_webhook_events', 'id,payload,created_at'),
-      db.from('admin_billing_provider_snapshots').select('installments,fetched_at').eq('id', 'stripe:billing').eq('provider', 'stripe').maybeSingle(),
+      all('admin_billing_provider_snapshots', 'id,provider,installments,fetched_at'),
     ]);
-    if (snap.error) throw snap.error;
-    const segments = Array.isArray(snap.data?.installments) ? snap.data.installments : [];
+    const stripeSnapshot = snap.find(s => s.id === 'stripe:billing' && s.provider === 'stripe');
+    const segments = Array.isArray(stripeSnapshot?.installments) ? stripeSnapshot.installments : [];
     const stripe = segments.length ? {
       subscriptions: [...new Map(segments.flatMap((s: Record<string, any>) => s.subscriptions || []).map((s: Record<string, any>) => [s.id, s])).values()],
       invoices: [...new Map(segments.flatMap((s: Record<string, any>) => s.invoices || []).map((i: Record<string, any>) => [i.id, i])).values()],
       weeklyPayments: [...new Map(segments.flatMap((s: Record<string, any>) => s.weeklyPayments || []).map((p: Record<string, any>) => [p.id, p])).values()],
     } : null;
     const source = churnSources(profiles, stripe, [
-      { provider: 'woovi', subscriptions: woovi, charges: wooviCharges },
-      { provider: 'asaas', subscriptions: asaas, charges: asaasCharges },
+      { provider: 'woovi', subscriptions: woovi, charges: churnPaymentHistory('woovi', woovi, wooviCharges, snap) },
+      { provider: 'asaas', subscriptions: asaas, charges: churnPaymentHistory('asaas', asaas, asaasCharges, snap) },
       { provider: 'inter', subscriptions: inter, charges: interCharges },
     ], events, mandateEvents);
-    const result = { version: 3, months: monthlyChurn(source.intervals, today), warnings: source.warnings, excluded: source.excluded,
-      completeness: source.warnings.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString(), providerUpdatedAt: snap.data?.fetched_at || null };
+    const result = { version: 4, months: monthlyChurn(source.intervals, today), warnings: source.warnings, excluded: source.excluded,
+      completeness: source.warnings.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString(), providerUpdatedAt: stripeSnapshot?.fetched_at || null };
     cache.clear(); cache.set(today, { at: Date.now(), data: result });
     return reply(result);
   } catch (error) {

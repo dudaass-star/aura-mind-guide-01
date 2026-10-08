@@ -79,3 +79,15 @@ test('evento rejeitado sem status terminal e cobertura incompleta não validam t
   const source = churnSources([{ id: 'a', user_id: 'u' }], { subscriptions: [] }, [{ provider: 'woovi', subscriptions: [{ subscription_id: 's', user_id: 'u', billing_period: 'monthly', status: 'CANCELADA' }], charges: [{ subscription_id: 's', paid_at: '2026-09-01T12:00:00Z', status: 'COMPLETED' }] }], [], [{ payload: { globalID: 's', event: 'PIX_AUTOMATIC_REJECTED', pixRecurring: { status: 'CREATED' } }, created_at: '2026-09-02T12:00:00Z' }]);
   expect(source.excluded.missingEnd).toBe(1);
 });
+test('contratos sem identificador não recebem pagamentos órfãos', () => {
+  const result = churnSources([{ id: 'a', user_id: 'u' }], { subscriptions: [] }, [{ provider: 'woovi', subscriptions: [{ user_id: 'u', billing_period: 'monthly' }], charges: [{ status: 'COMPLETED', paid_at: '2026-08-01T12:00:00Z' }] }], []);
+  expect(result.intervals).toHaveLength(0);
+  expect(result.excluded.invalidHistory).toBe(1);
+});
+test('outro contrato ainda vigente impede churn por cancelamento de um contrato sobreposto', () => {
+  const month = monthlyChurn([
+    { identity: 'a', start: '2026-07-01', end: null, cause: 'unknown' },
+    { identity: 'a', start: '2026-07-15', end: '2026-08-10', cause: 'voluntary' },
+  ], '2026-10-08')[11];
+  expect(month).toMatchObject({ base: 1, lost: 0, rate: 0 });
+});

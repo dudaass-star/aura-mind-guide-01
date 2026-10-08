@@ -11,10 +11,10 @@ const config = { trialLost: { label: 'Perdas da semana paga', color: 'hsl(var(--
 const label = (m: string) => new Date(`${m}-01T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'America/Sao_Paulo' });
 export default function MonthlyChurnChart() {
   const [period, setPeriod] = useState('12');
-  const query = useQuery({ queryKey: ['admin-monthly-churn', 3], staleTime: 300_000, queryFn: async () => {
+  const query = useQuery({ queryKey: ['admin-monthly-churn', 4], staleTime: 300_000, queryFn: async () => {
     const { data, error } = await supabase.functions.invoke('admin-monthly-churn', { body: {} });
     if (error || data?.error) throw new Error('Não foi possível carregar o churn.');
-    if (data?.version !== 3) throw new Error('A nova base do churn ainda está sendo disponibilizada.');
+    if (data?.version !== 4) throw new Error('A nova base do churn ainda está sendo disponibilizada.');
     return data as Data;
   } });
   const months = (query.data?.months || []).slice(-Number(period));
