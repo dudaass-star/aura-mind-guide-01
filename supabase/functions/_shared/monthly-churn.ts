@@ -58,7 +58,7 @@ export function monthlyChurn(intervals: RecurringInterval[], today: string): Chu
   return result;
 }
 
-export function churnSources(profiles: Row[], stripe: Row | null, pix: { provider: string; subscriptions: Row[]; charges: Row[] }[], events: Row[]) {
+export function churnSources(profiles: Row[], stripe: Row | null, pix: { provider: string; subscriptions: Row[]; charges: Row[] }[], events: Row[], mandateEvents: Row[] = []) {
   const identities = new Map<string, string>(), emails = new Map<string, Set<string>>(), demos = new Set<string>();
   for (const p of profiles) {
     const identity = p.id || p.user_id;
@@ -124,7 +124,14 @@ export function churnSources(profiles: Row[], stripe: Row | null, pix: { provide
     let end: string | null = null, uncertain = false;
     const terminal = ['CANCELADA', 'CANCELADO', 'CANCELED', 'CANCELLED', 'REJEITADA', 'REJECTED', 'EXPIRADA', 'EXPIRED', 'INACTIVE'].includes(String(s.status).toUpperCase());
     if (terminal || cancellation) {
-      const cancelDay = cancellation || brtDay(s.cancelled_at || raw.cancelledAt || raw.canceledAt || raw.endedAt || '');
+      // Eventos oficiais são vinculados por identificador exato, nunca por nome ou data de atualização.
+      const mandateEnd = source.provider === 'woovi' ? latestDay(mandateEvents.filter(e => {
+        const payload = e.payload || {};
+        return (payload.globalID === id || (s.recurrency_id && payload.pixRecurring?.recurrencyId === s.recurrency_id))
+          && ['PIX_AUTOMATIC_REJECTED', 'PIX_AUTOMATIC_CANCELED', 'PIX_AUTOMATIC_CANCELLED', 'PIX_AUTOMATIC_EXPIRED'].includes(payload.event)
+          && ['REJECTED', 'CANCELED', 'CANCELLED', 'EXPIRED'].includes(payload.pixRecurring?.status);
+      }).map(e => brtDay(e.created_at))) : null;
+      const cancelDay = cancellation || brtDay(s.cancelled_at || raw.cancelledAt || raw.canceledAt || raw.endedAt || '') || mandateEnd;
       const coverage = paid.map(c => {
         const due = String(c.due_date || c.raw_payload?.dueDate || c.raw_payload?.payment?.dueDate || '').slice(0, 10);
         return validDay(due) ? addMonths(due, months) : '';

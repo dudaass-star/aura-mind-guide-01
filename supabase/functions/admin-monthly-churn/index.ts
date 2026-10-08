@@ -35,15 +35,16 @@ Deno.serve(async req => {
         lastId = nextId;
       }
     }
-    const [profiles, woovi, wooviCharges, asaas, asaasCharges, inter, interCharges, events, snap] = await Promise.all([
+    const [profiles, woovi, wooviCharges, asaas, asaasCharges, inter, interCharges, events, mandateEvents, snap] = await Promise.all([
       all('profiles', 'id,user_id,email,status'),
-      all('woovi_subscriptions', 'id,subscription_id,user_id,customer_email,billing_period,is_trial,trial_value_cents,entry_paid_at,status,raw_payload'),
+      all('woovi_subscriptions', 'id,subscription_id,recurrency_id,user_id,customer_email,billing_period,is_trial,trial_value_cents,entry_paid_at,status,raw_payload'),
       all('woovi_charges', 'id,subscription_id,kind,cycle_index,value_cents,due_date,paid_at,status,raw_payload'),
       all('asaas_pix_authorizations', 'id,asaas_subscription_id,user_id,customer_email,billing_period,is_trial,trial_value_cents,status,cancelled_at,raw_payload'),
       all('asaas_payments', 'id,asaas_subscription_id,amount_cents,is_trial,status,paid_at,raw_payload'),
       all('inter_pix_recurrences', 'id,id_rec,user_id,customer_email,billing_period,is_trial,trial_value_cents,status,raw_payload'),
       all('inter_pix_charges', 'id,id_rec,cycle_index,value_cents,due_date,paid_at,status'),
       all('retention_events', 'id,user_id,tier,action,metadata,created_at'),
+      all('woovi_webhook_events', 'id,payload,created_at'),
       db.from('admin_billing_provider_snapshots').select('installments,fetched_at').eq('id', 'stripe:billing').eq('provider', 'stripe').maybeSingle(),
     ]);
     if (snap.error) throw snap.error;
@@ -57,8 +58,8 @@ Deno.serve(async req => {
       { provider: 'woovi', subscriptions: woovi, charges: wooviCharges },
       { provider: 'asaas', subscriptions: asaas, charges: asaasCharges },
       { provider: 'inter', subscriptions: inter, charges: interCharges },
-    ], events);
-    const result = { version: 2, months: monthlyChurn(source.intervals, today), warnings: source.warnings, excluded: source.excluded,
+    ], events, mandateEvents);
+    const result = { version: 3, months: monthlyChurn(source.intervals, today), warnings: source.warnings, excluded: source.excluded,
       completeness: source.warnings.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString(), providerUpdatedAt: snap.data?.fetched_at || null };
     cache.clear(); cache.set(today, { at: Date.now(), data: result });
     return reply(result);
