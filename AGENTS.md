@@ -29,5 +29,3 @@
 - Movement is collective-first; local previews share live invite copy.
 - Prayers are separate; cues match final audio.
 - Home callbacks preserve tracking; meditation dialogs close on tab exit to stop audio.
-
-- Meditation artwork is mapped by stable track ID and shared by the library, featured track and player; this preserves each track’s visual identity across views.
