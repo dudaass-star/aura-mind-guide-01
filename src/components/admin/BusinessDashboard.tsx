@@ -9,6 +9,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { RefreshCw, CalendarDays, AlertCircle, ChevronDown } from 'lucide-react';
 import { format, subDays } from 'date-fns';
+import MonthlyChurnChart from './MonthlyChurnChart';
 
 interface BillingEntry { id: string; name?: string; email?: string; plan: string; provider: string; due: string | null; paid: string | null; cents: number; receivedCents?: number }
 interface DailyUsage { date: string; active: number; messages: number; completed: number; missed: number }
@@ -104,6 +105,7 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
     </div>
     {query.data?.providerUpdatedAt && <p className="text-xs text-muted-foreground">Dados dos provedores conferidos em {new Date(query.data.providerUpdatedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} · atualização automática</p>}
     {validation && <p role="alert" className="text-sm text-destructive">{validation}</p>}
+    {!onlyUsage && <MonthlyChurnChart />}
     {query.isPending ? <div className="h-[420px] bg-muted/40 animate-pulse flex items-center justify-center text-muted-foreground" role="status">Carregando gráficos…</div> : query.isError ? <div role="alert" className="py-12 text-center space-y-3"><AlertCircle className="mx-auto h-6 w-6 text-destructive" /><p>Não foi possível carregar o panorama.</p><Button variant="outline" onClick={() => query.refetch()}>Tentar novamente</Button></div> : <>
       {!onlyUsage && <>
         {!!query.data?.issues?.length && <div role="alert" className="border-l-2 border-destructive pl-4 text-sm space-y-1"><p className="font-semibold text-destructive">Conciliação incompleta — não usar como fechamento financeiro</p>{query.data.issues.map((issue, index) => <p key={index} className="text-muted-foreground">{issue.reason}: {issue.count}{issue.cents > 0 ? ` · ${currency(issue.cents / 100)}` : ''}</p>)}</div>}
