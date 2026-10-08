@@ -30,4 +30,4 @@
 - Prayers share one catalog/player to keep art, audio and cues matched.
 - Home keeps tracking; practice dialogs stop audio on exit.
 
-- Revenue uses snapshots, paid cycles and matched IDs; trials/risk/ambiguity stay separate. Conversion excludes renewals.
+- Revenue uses paid snapshots/matched IDs; trials/risk stay separate; conversion excludes renewals.
