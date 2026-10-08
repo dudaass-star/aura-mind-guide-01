@@ -7,6 +7,9 @@ import directionCues from "@/lib/prayer-direction-cues.json";
 import restlessMindImage from "@/assets/prayer-restless-mind.jpg";
 import restlessMindAudio from "@/assets/prayer-restless-mind-audio.asset.json";
 import restlessMindCues from "@/lib/prayer-restless-mind-cues.json";
+import lovedOnesImage from "@/assets/prayer-loved-ones.jpg";
+import lovedOnesAudio from "@/assets/prayer-loved-ones-audio.asset.json";
+import lovedOnesCues from "@/lib/prayer-loved-ones-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -57,5 +60,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: restlessMindAudio.url,
     duration: 104.571,
     cues: restlessMindCues,
+  },
+  {
+    id: "prayer-loved-ones",
+    title: "Por quem eu amo",
+    moment: "Por pessoas queridas",
+    theme: "Amor e cuidado",
+    description: "Perto ou longe, cada pessoa tem um lugar em nós. Uma oração de gratidão e cuidado por quem queremos ver bem.",
+    image: lovedOnesImage,
+    imageAlt: "Mãos de três gerações unidas sobre uma mesa verde em um jardim florido",
+    audioUrl: lovedOnesAudio.url,
+    duration: 121.854,
+    cues: lovedOnesCues,
   },
 ];
