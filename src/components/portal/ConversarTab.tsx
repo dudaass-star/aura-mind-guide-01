@@ -16,6 +16,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { sanitizePortalText } from "@/components/portal/sanitize";
+import { PortalHomeAreas, type HomeArea } from "@/components/portal/PortalHomeAreas";
 
 type ChatMessage = {
   id: string;
@@ -1196,17 +1197,7 @@ export function ConversarTab({
   const latestPreview = latestMessage?.is_audio
     ? "Áudio"
     : latestMessage?.content?.replace(/\s+/g, " ").trim() || "Sua conversa com a AURA começa aqui.";
-  const appAreas = [
-    { label: "Hoje", detail: "O que te acompanha agora", tab: "hoje", icon: Sun, tone: "portal-area-today" },
-    { label: "Sessões", detail: "Seus encontros com a AURA", tab: "sessoes", icon: CalendarDays, tone: "portal-area-sessions" },
-    { label: "Jornadas", detail: "Conteúdos para acompanhar você", tab: "jornadas", icon: BookOpen, tone: "portal-area-content" },
-    { label: "Percurso", detail: "O que vem mudando", tab: "insights", icon: Sparkles, tone: "portal-area-journey" },
-    { label: "Orações", detail: "Um momento com Deus", tab: "oracoes", icon: Moon, tone: "portal-area-journey" },
-    { label: "Meditações", detail: "Pausas guiadas para você", tab: "meditacoes", icon: Headphones, tone: "portal-area-audio" },
-    { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound, tone: "portal-area-profile" },
-    { label: "Movimento", detail: "Faça parte de algo maior", tab: "movimento", icon: HeartHandshake, tone: "portal-area-movement" },
-  ] as const;
-  const navigateFromConversation = (tab: typeof appAreas[number]["tab"]) => {
+  const navigateFromConversation = (tab: HomeArea) => {
     recordConversationEvent(userId, "area_opened_from_conversation", { destination: tab });
     onNavigate?.(tab);
   };
@@ -1214,14 +1205,14 @@ export function ConversarTab({
 
   const conversationList = (
     <aside className={cn(
-       "flex h-full min-h-0 w-full flex-col bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
+       "flex h-full min-h-0 w-full flex-col overflow-y-auto bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
        chatOpen && "hidden",
     )}>
-      <header className="border-b border-border/70 bg-card/90 pb-5 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl md:pt-6">
+      <header className="shrink-0 pb-5 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] md:pt-6">
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Olá, {firstName}</p>
-            <h1 className="font-display text-[2rem] font-semibold leading-none text-foreground">Conversas</h1>
+            <h1 className="font-display text-[2rem] font-semibold leading-none text-foreground">Seu espaço</h1>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1259,7 +1250,7 @@ export function ConversarTab({
       </header>
 
       {installApp.available && !installApp.installed && installInviteResolved && !installBannerHidden && (
-        <div className="px-4 pt-4">
+        <div className="shrink-0 px-4 pt-4">
           <div className="portal-area-content flex items-center gap-3 rounded-2xl border border-current/15 px-3 py-3 shadow-sm">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background/70" aria-hidden="true">
               <Download className="h-5 w-5" />
@@ -1280,13 +1271,12 @@ export function ConversarTab({
         </div>
       )}
 
-      <div className="px-4 pb-3 pt-5">
-        <p className="mb-3 px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Conversa principal</p>
+      <div className="shrink-0 px-4 pb-7">
         <Button
           type="button"
           variant="ghost"
           onClick={() => setChatOpen(true)}
-          className="portal-primary-conversation group h-auto w-full justify-start gap-3 rounded-2xl border px-3 py-4 text-left shadow-sm transition-transform active:scale-[0.99] hover:border-primary/30"
+          className="portal-primary-conversation group h-auto w-full justify-start gap-3 rounded-lg border px-3 py-4 text-left transition-transform active:scale-[0.99] hover:border-primary/30"
           aria-label="Abrir conversa com a AURA"
         >
           <div className="relative shrink-0">
@@ -1295,7 +1285,7 @@ export function ConversarTab({
           </div>
            <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="font-body text-base font-bold text-foreground">AURA</span>
+              <span className="font-body text-base font-bold text-foreground">Converse com a AURA</span>
               <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{formatTime(latestMessage?.created_at || null)}</span>
             </div>
             <div className="mt-1 flex items-center gap-2">
@@ -1306,35 +1296,8 @@ export function ConversarTab({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto border-t border-border/50 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5">
-        {!hasJoinedMovement && <div className="mb-5 rounded-lg border border-primary/30 bg-secondary/55 p-4"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl portal-area-movement"><HeartHandshake className="h-5 w-5" /></span><div className="min-w-0"><p className="text-[10px] font-bold uppercase text-primary">Novo no App</p><h2 className="mt-1 font-display text-lg font-semibold">Conheça o Movimento Olá Aura</h2><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Faça parte de algo que pode levar compreensão e direção a mais pessoas.</p><Button type="button" size="sm" className="mt-3" onClick={() => navigateFromConversation("movimento")}>Conhecer o Movimento <ArrowRight /></Button></div></div></div>}
-        <div className="mb-3 flex items-center justify-between px-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">No app Olá Aura</p>
-          <p className="text-[11px] text-muted-foreground">Tudo em um só lugar</p>
-        </div>
-        <div className="space-y-1">
-          {appAreas.map(({ label, detail, tab, icon: Icon, tone }) => (
-            <Button
-              key={tab}
-              type="button"
-              variant="ghost"
-              onClick={() => navigateFromConversation(tab)}
-              onPointerEnter={() => onPrefetch?.(tab)}
-              onFocus={() => onPrefetch?.(tab)}
-              onTouchStart={() => onPrefetch?.(tab)}
-              className="group h-auto w-full justify-start gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-card"
-            >
-              <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105", tone)}>
-                <Icon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2 text-sm font-bold text-foreground">{label}{tab === "movimento" && movementIsNew && !hasJoinedMovement && <span className="rounded-full bg-primary px-2 py-0.5 text-[9px] uppercase text-primary-foreground">Novo</span>}</span>
-                <span className="block truncate text-xs font-normal text-muted-foreground">{detail}</span>
-              </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5" />
-            </Button>
-          ))}
-        </div>
+      <div className="shrink-0 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <PortalHomeAreas onNavigate={navigateFromConversation} onPrefetch={onPrefetch} hasJoinedMovement={hasJoinedMovement} movementIsNew={movementIsNew} />
       </div>
     </aside>
   );
