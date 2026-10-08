@@ -837,3 +837,40 @@
   .prayer-player footer { padding-top: 0.75rem; }
 }
 @media (prefers-reduced-motion: reduce) { .prayer-line { transition: none; } }
+
+/* Identidade própria de Meditações; imagens e reprodução separadas de Orações. */
+.meditations-theme {
+  --primary: 270 31% 45%;
+  --primary-foreground: 270 30% 98%;
+  --accent: 270 38% 92%;
+  --accent-foreground: 270 31% 35%;
+  --ring: 270 31% 45%;
+  --meditation-photo-shade: 260 14% 10%;
+  --meditation-photo-text: 270 30% 98%;
+}
+.meditation-feature { color: hsl(var(--meditation-photo-text)); }
+.meditation-feature-shade { background: linear-gradient(180deg, hsl(var(--meditation-photo-shade) / 0.02) 10%, hsl(var(--meditation-photo-shade) / 0.88) 100%); }
+.meditation-feature-copy { text-shadow: 0 2px 12px hsl(var(--meditation-photo-shade) / 0.6); }
+.meditation-player-theme {
+  --background: 260 9% 11%;
+  --foreground: 270 25% 96%;
+  --primary: 270 46% 79%;
+  --primary-foreground: 260 14% 14%;
+  --secondary: 260 12% 24%;
+  --secondary-foreground: 270 25% 96%;
+  --muted-foreground: 270 10% 70%;
+  --accent: 260 12% 22%;
+  --accent-foreground: 270 25% 96%;
+  --border: 260 12% 30%;
+  --ring: 270 46% 79%;
+  --destructive: 0 75% 78%;
+  font-family: "Figtree", sans-serif;
+}
+.meditation-player { height: 100dvh; letter-spacing: 0; }
+.meditation-player .font-display { font-family: "Outfit", sans-serif; }
+.meditation-player-cover { aspect-ratio: 1; max-height: 48dvh; }
+@media (max-height: 700px) {
+  .meditation-player-cover { aspect-ratio: 3 / 2; max-height: 30dvh; }
+  .meditation-player-body { gap: 0.75rem; }
+  .meditation-player footer { padding-top: 0.75rem; }
+}
