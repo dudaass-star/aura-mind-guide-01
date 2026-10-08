@@ -110,6 +110,7 @@ export function churnSources(profiles: Row[], stripe: Row | null, pix: { provide
     const months = cycleMonths(s.billing_period);
     if (!months) continue;
     const id = s.subscription_id || s.id_rec || s.asaas_subscription_id;
+    if (!id) { invalidHistory++; continue; }
     const allPaid = source.charges.filter(c => (c.subscription_id || c.id_rec || c.asaas_subscription_id) === id && c.paid_at && ['COMPLETED', 'CONCLUIDA', 'CONFIRMED', 'RECEIVED', 'PAID'].includes(c.status));
     const isWeek = (c: Row) => Boolean(s.is_trial && (c.kind === 'entry' || c.cycle_index === 0 || c.is_trial || Number(c.value_cents ?? c.amount_cents) === Number(s.trial_value_cents)));
     const paid = allPaid.filter(c => !isWeek(c));
