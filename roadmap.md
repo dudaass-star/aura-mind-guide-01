@@ -6,6 +6,7 @@
 # Roadmap
 
 ## Tela inicial
+- [ ] Preparar e conferir prévias privadas da página de Meditações e da reprodução, sem alterar o App dos clientes.
 - [x] Aplicar a prévia aprovada com áreas agrupadas, práticas visuais e Movimento próprio; navegação autenticada de Eduardo, Orações, Meditações, Movimento, conversa e telas pequena/grande conferidos sem erros. Aguarda publicação do App.
 
 ## Orações
