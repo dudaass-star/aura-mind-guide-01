@@ -30,4 +30,4 @@
 - Prayers share one catalog/player to keep art, audio and cues matched.
 - Home keeps tracking; practice dialogs stop audio on exit.
 
-- Billing reads snapshots; separate refresh preserves copies. Conversion requires paid weeks and first-cycle dates, not renewals.
+- Billing reads snapshots; conversion uses paid weeks/first cycles. Revenue reconciles profile/auth IDs and paid coverage; trials, risk and ambiguous contracts stay separate.

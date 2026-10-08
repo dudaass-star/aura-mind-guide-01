@@ -2,6 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { brtDay, validDay, monthlyCents } from "../_shared/admin-billing.ts";
 
+import { reconcileRevenue, pixContract, stripeContract } from "../_shared/recurring-revenue.ts";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -202,7 +204,7 @@ Deno.serve(async (req) => {
     console.log(`📊 Period: ${periodStart} → ${periodEnd} (BRT-aligned)`);
 
     // ⚡ Cache check
-    const cacheKey = `v4:${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
+    const cacheKey = `v5:${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
     if (!forceRefresh) {
       const cached = getCached(cacheKey);
       if (cached) {
@@ -227,7 +229,7 @@ Deno.serve(async (req) => {
         .select('payload, computed_at')
         .eq('window_key', windowKey)
         .maybeSingle();
-      if (snap?.payload && (snap.payload as Record<string, unknown>)._metricsVersion === 4) {
+      if (snap?.payload && (snap.payload as Record<string, unknown>)._metricsVersion === 5) {
         const ageMs = Date.now() - new Date(snap.computed_at as string).getTime();
         if (ageMs < 15 * 60 * 1000) {
           console.log(`📸 Snapshot HIT window=${windowKey} age=${Math.round(ageMs / 1000)}s`);
@@ -924,120 +926,15 @@ Deno.serve(async (req) => {
     let pastDueRecentCount = 0;                // past_due ≤7d
     let pastDueCriticalCount = 0;              // past_due >7d (Stripe ainda tentando)
 
-    if (stripeKey) {
-      const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
-      
-      // Fetch all active + trialing + past_due subscriptions (paginated)
-      // NOTE: 'trialing' is required because weekly plans (R$6.90/9.90/19.90) stay
-      // in 'trialing' status during the first 7 days before converting to 'active' monthly.
-      const allSubs: Stripe.Subscription[] = [];
-      for (const status of ['active', 'trialing', 'past_due'] as const) {
-        let hasMore = true;
-        let startingAfter: string | undefined;
-        while (hasMore) {
-          const params: Stripe.SubscriptionListParams = { status, limit: 100 };
-          if (startingAfter) params.starting_after = startingAfter;
-          const result = await stripe.subscriptions.list(params);
-          allSubs.push(...result.data);
-          hasMore = result.has_more;
-          if (result.data.length > 0) startingAfter = result.data[result.data.length - 1].id;
-        }
-      }
-
-      for (const sub of allSubs) {
-        const priceId = sub.items.data[0]?.price?.id;
-        if (!priceId) continue;
-        const price = sub.items.data[0]?.price;
-        const recurring = price?.recurring;
-        if (!recurring) { metricWarnings.push('Assinatura cartão sem intervalo recorrente comprovado'); continue; }
-        if (demoEmails.has(String(sub.metadata?.email || '').trim().toLowerCase())) continue;
-        const mapping = priceToPlan[priceId] || { plan: sub.metadata?.plan || price?.metadata?.plan || 'outros', cycle: recurring.interval === 'week' ? 'weekly' : recurring.interval === 'year' ? 'yearly' : 'monthly' };
-        const normalizedAmount = monthlyCents(price?.unit_amount || 0, recurring.interval, recurring.interval_count || 1) * (sub.items.data[0]?.quantity || 1);
-
-        const { plan, cycle } = mapping;
-        if (!mrrByPlan[plan]) mrrByPlan[plan] = { committed: 0, weekly: 0, users: 0 };
-        mrrByPlan[plan].users++;
-
-        // Skip paused subscriptions for MRR
-        if (sub.pause_collection) continue;
-
-        // Past due → conta como "Em risco" enquanto Stripe ainda está tentando recuperar (até ~30 dias).
-        // Smart Retries do Stripe roda por ~4 semanas antes de marcar como canceled/unpaid.
-        // Separamos em "recente" (≤7d) e "crítico" (>7d) apenas para visualização — ambos são recuperáveis.
-        if (sub.status === 'past_due') {
-          const periodEndMs = (sub.current_period_end || 0) * 1000;
-          const daysSinceFailure = periodEndMs > 0
-            ? (Date.now() - periodEndMs) / (1000 * 60 * 60 * 24)
-            : 999;
-
-          pastDueSubscriptionsCount++;
-          const realAmount = normalizedAmount;
-          let monthlyContribution = 0;
-          if (cycle === 'monthly') {
-            monthlyContribution = realAmount;
-            mrrAtRiskMonthlyCents += realAmount;
-          } else if (cycle === 'yearly') {
-            monthlyContribution = realAmount;
-            mrrAtRiskMonthlyCents += monthlyContribution;
-          } else if (cycle === 'weekly') {
-            monthlyContribution = realAmount;
-            mrrAtRiskWeeklyCents += monthlyContribution;
-          }
-          mrrAtRiskCents += monthlyContribution;
-          if (daysSinceFailure > 7) {
-            pastDueCriticalCount++;
-            mrrAtRiskCriticalCents += monthlyContribution;
-          } else {
-            pastDueRecentCount++;
-            mrrAtRiskRecentCents += monthlyContribution;
-          }
-          continue;
-        }
-
-        // 'trialing' status in this project = paid 7-day weekly cycle on a MONTHLY price.
-        // Stripe holds the subscription in 'trialing' until the first full monthly charge.
-        // Economically these users are on the WEEKLY plan (R$6.90/9.90/19.90), not monthly yet.
-        // We count them as weekly revenue (× 4.33) to avoid inflating committed MRR.
-        if (sub.status === 'trialing') {
-          if (cycle === 'monthly' || cycle === 'weekly') {
-            activeSubscriptionsCount++;
-            weeklyActiveSubscriptionsCount++;
-            const weeklyPrice = WEEKLY_PRICES[plan] || 0;
-            const monthlyEquivalent = Math.round(weeklyPrice * 4.33);
-            weeklyRevenueCents += monthlyEquivalent;
-            mrrByPlan[plan].weekly += monthlyEquivalent;
-          }
-          // yearly trialing = legacy free trial, ignore
-          continue;
-        }
-
-        if (cycle === 'monthly') {
-          activeSubscriptionsCount++;
-          monthlyActiveSubscriptionsCount++;
-          // Usa preço REAL do Stripe (respeita cupons, preços legados, A/B).
-          // Fallback para hardcoded só se Stripe não retornar amount.
-          mrrCommittedCents += normalizedAmount;
-          mrrByPlan[plan].committed += normalizedAmount;
-        } else if (cycle === 'yearly') {
-          activeSubscriptionsCount++;
-          monthlyActiveSubscriptionsCount++;
-          const yearlyAmount = sub.items.data[0]?.price?.unit_amount || 0;
-          const monthlyEquiv = normalizedAmount;
-          mrrCommittedCents += monthlyEquiv;
-          mrrByPlan[plan].committed += monthlyEquiv;
-        } else if (cycle === 'weekly') {
-          // Active weekly (rare — usually means recurring weekly price exists)
-          activeSubscriptionsCount++;
-          weeklyActiveSubscriptionsCount++;
-          const realAmount = sub.items.data[0]?.price?.unit_amount || WEEKLY_PRICES[plan] || 0;
-          const monthlyEquivalent = Math.round(realAmount * 4.33);
-          weeklyRevenueCents += monthlyEquivalent;
-          mrrByPlan[plan].weekly += monthlyEquivalent;
-        }
-      }
-
-      // Sync paymentAtRiskCount with real past_due count from Stripe
-      paymentAtRiskCount = pastDueSubscriptionsCount;
+    // Receita lê a cópia financeira preparada a cada seis horas.
+    const { data: revenueSnapshot, error: revenueSnapshotError } = await supabase.from('admin_billing_provider_snapshots').select('installments,fetched_at').eq('id', 'stripe:billing').maybeSingle();
+    if (revenueSnapshotError) throw revenueSnapshotError;
+    const revenueStripe = revenueSnapshot?.installments?.[0];
+    const revenueContracts: Record<string, any>[] = [];
+    if (!Array.isArray(revenueStripe?.subscriptions)) metricWarnings.push('Receita cartão aguardando cópia completa de assinaturas; total ainda parcial.');
+    for (const sub of revenueStripe?.subscriptions || []) {
+      if (sub.pause_collection || !['active', 'trialing', 'past_due'].includes(sub.status)) continue;
+      revenueContracts.push(stripeContract(sub, revenueStripe.invoices || []));
     }
 
     // ========== 🔴 CHURN REAL DO STRIPE (Voluntário + Involuntário) ==========
@@ -1267,16 +1164,6 @@ Deno.serve(async (req) => {
       const churnCutoff = new Date(nowMs - 35 * DAY_MS).toISOString();
 
       const authorizations = await fetchAllPaginated(supabase, 'asaas_pix_authorizations', 'id,user_id,status,billing_period,value_cents,replaced_by_authorization_id', []);
-      const activeAsaasUsers = new Set<string>();
-      for (const auth of authorizations) {
-        if (auth.status !== 'ACTIVE' || auth.replaced_by_authorization_id || demoUserIds.has(auth.user_id as string)) continue;
-        const months = ({ monthly: 1, quarterly: 3, semiannual: 6, yearly: 12 } as Record<string, number>)[String(auth.billing_period)];
-        if (!months) { metricWarnings.push('Ciclo Asaas não reconhecido; MRR parcial'); continue; }
-        asaasMrrCents += Math.round(Number(auth.value_cents) / months);
-        activeAsaasUsers.add(String(auth.user_id));
-      }
-      asaasActiveUsersCount = activeAsaasUsers.size;
-
       // 2) Funil de checkout PIX no período
       // Criados: conta por created_at (intenção de pagar via PIX no período)
       // IMPORTANTE: o funil de "checkout abandonado" mede SOMENTE novos clientes que
@@ -1453,17 +1340,34 @@ Deno.serve(async (req) => {
       throw new Error('Não foi possível calcular indicadores Asaas');
     }
 
-    const wooviSubs = await fetchAllPaginated(supabase, 'woovi_subscriptions', 'id,user_id,status,pix_status,billing_period,value_cents,replaced_by_subscription_id,entry_paid_at', []);
-    let wooviMrrCents = 0;
-    const wooviActiveUsers = new Set<string>();
-    for (const sub of wooviSubs) {
-      if (!['ATIVA', 'APROVADA'].includes(String(sub.status)) || sub.pix_status !== 'APPROVED' || sub.replaced_by_subscription_id || !sub.entry_paid_at || demoUserIds.has(sub.user_id as string)) continue;
-      const months = ({ monthly: 1, quarterly: 3, semiannual: 6, yearly: 12 } as Record<string, number>)[String(sub.billing_period)];
-      if (!months) { metricWarnings.push('Ciclo Woovi não reconhecido; MRR parcial'); continue; }
-      wooviMrrCents += Math.round(Number(sub.value_cents) / months);
-      wooviActiveUsers.add(String(sub.user_id));
-    }
-    const mrrPixBRL = (asaasMrrCents + wooviMrrCents) / 100;
+    const [revenueProfiles, wooviSubs, wooviCharges, interSubs, interCharges, asaasAuths, asaasCharges] = await Promise.all([
+      fetchAllPaginated(supabase, 'profiles', 'id,user_id,email,status', []),
+      fetchAllPaginated(supabase, 'woovi_subscriptions', 'id,subscription_id,user_id,customer_email,status,pix_status,billing_period,value_cents,replaced_by_subscription_id,entry_paid_at,is_trial,trial_value_cents', []),
+      fetchAllPaginated(supabase, 'woovi_charges', 'id,subscription_id,status,paid_at,due_date,value_cents,kind,cycle_index', []),
+      fetchAllPaginated(supabase, 'inter_pix_recurrences', 'id,id_rec,user_id,customer_email,status,billing_period,value_cents,replaced_by_id_rec,is_trial,trial_value_cents', []),
+      fetchAllPaginated(supabase, 'inter_pix_charges', 'id,id_rec,status,paid_at,due_date,value_cents,cycle_index', []),
+      fetchAllPaginated(supabase, 'asaas_pix_authorizations', 'id,asaas_subscription_id,user_id,customer_email,status,billing_period,value_cents,replaced_by_authorization_id', []),
+      fetchAllPaginated(supabase, 'asaas_payments', 'id,asaas_subscription_id,status,paid_at,amount_cents,raw_payload,is_trial', []),
+    ]);
+    const revenueToday = brtDay(now.toISOString());
+    for (const s of wooviSubs) if (['ATIVA','APROVADA'].includes(String(s.status)) && s.pix_status === 'APPROVED' && !s.replaced_by_subscription_id) revenueContracts.push(pixContract('woovi', s, wooviCharges.filter(c => c.subscription_id === s.subscription_id), revenueToday));
+    for (const s of interSubs) if (s.status === 'ATIVA' && !s.replaced_by_id_rec) revenueContracts.push(pixContract('inter', s, interCharges.filter(c => c.id_rec === s.id_rec), revenueToday));
+    for (const s of asaasAuths) if (s.status === 'ACTIVE' && !s.replaced_by_authorization_id) revenueContracts.push(pixContract('asaas', s, asaasCharges.filter(c => c.asaas_subscription_id === s.asaas_subscription_id), revenueToday));
+    const revenueReconciliation = { ...reconcileRevenue(revenueProfiles, revenueContracts, revenueToday), providerUpdatedAt: revenueSnapshot?.fetched_at || null, complete: Array.isArray(revenueStripe?.subscriptions) };
+    metricWarnings.push(...revenueReconciliation.warnings);
+    mrrCommittedCents = Math.round(revenueReconciliation.providers.stripe.brl * 100);
+    monthlyActiveSubscriptionsCount = revenueReconciliation.providers.stripe.contracts;
+    asaasMrrCents = Math.round(revenueReconciliation.providers.asaas.brl * 100);
+    asaasActiveUsersCount = revenueReconciliation.providers.asaas.contracts;
+    const wooviMrrCents = Math.round(revenueReconciliation.providers.woovi.brl * 100);
+    const interMrrCents = Math.round(revenueReconciliation.providers.inter.brl * 100);
+    const wooviActiveUsers = new Set(revenueReconciliation.rows.filter(r => r.provider === 'woovi' && r.state === 'recurring').map(r => r.profileId));
+    const mrrPixBRL = (asaasMrrCents + wooviMrrCents + interMrrCents) / 100;
+    weeklyActiveSubscriptionsCount = revenueReconciliation.trial.contracts;
+    activeSubscriptionsCount = revenueReconciliation.recurring.contracts;
+    mrrAtRiskCents = Math.round(revenueReconciliation.risk.brl * 100);
+    pastDueSubscriptionsCount = revenueReconciliation.risk.contracts;
+    paymentAtRiskCount = pastDueSubscriptionsCount;
 
     // ---------- PIX Automático (Bacen): saúde da autorização recorrente ----------
     // A etapa que mais perdemos é o consentimento no app do banco. Aqui medimos
@@ -1525,8 +1429,8 @@ Deno.serve(async (req) => {
     const mrrAtRiskWeeklyBRL = Math.round(mrrAtRiskWeeklyCents / 100 * 100) / 100;
 
     // 📊 Derivadas (Fase 2): ARR, ARPU, MRR Growth, Margem, Tempo até churn
-    const mrrGrandTotalBRL = (mrrCommittedCents + asaasMrrCents + wooviMrrCents) / 100;
-    const totalRecurringSubscribers = monthlyActiveSubscriptionsCount + asaasActiveUsersCount + wooviActiveUsers.size;
+    const mrrGrandTotalBRL = revenueReconciliation.recurring.brl;
+    const totalRecurringSubscribers = revenueReconciliation.recurring.customers;
     const arrBRL = Math.round(mrrGrandTotalBRL * 12 * 100) / 100;
     const arpuBRL = totalRecurringSubscribers > 0
       ? Math.round((mrrGrandTotalBRL / totalRecurringSubscribers) * 100) / 100
@@ -1899,7 +1803,10 @@ Deno.serve(async (req) => {
     }
 
     const responsePayload = JSON.stringify({
-      _metricsVersion: 4,
+      _metricsVersion: 5,
+      revenueReconciliation,
+      interActiveUsersCount: revenueReconciliation.providers.inter.contracts,
+      interMrrBRL: interMrrCents / 100,
       metricWarnings: [...new Set(metricWarnings)],
       wooviMrrBRL: wooviMrrCents / 100,
       wooviActiveUsersCount: wooviActiveUsers.size,
