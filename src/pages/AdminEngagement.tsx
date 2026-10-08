@@ -1291,8 +1291,8 @@ export default function AdminEngagement() {
                     )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-xs">
                       <div className="border rounded-md p-2.5 bg-muted/30">
-                        <div className="text-muted-foreground mb-1">🟦 Voluntário · cartão</div>
-                        <div className="font-semibold text-foreground">{metrics.voluntaryChurnLive ?? metrics.voluntaryChurnInPeriod}</div>
+                        <div className="text-muted-foreground mb-1">🟦 Voluntário · base inicial</div>
+                        <div className="font-semibold text-foreground">{metrics.voluntaryChurnInPeriod}</div>
                         <div className="text-[10px] text-muted-foreground mt-1">
                           encerradas da base inicial: {metrics.voluntaryChurnInPeriod}
                         </div>
@@ -1308,8 +1308,8 @@ export default function AdminEngagement() {
                         <div className="text-[10px] text-muted-foreground mt-1">R$ {(metrics.mrrAtRiskCriticalBRL ?? 0).toFixed(2)} · Stripe ainda tentando</div>
                       </div>
                       <div className="border rounded-md p-2.5 bg-destructive/10 border-destructive/30">
-                        <div className="text-muted-foreground mb-1">🔴 Involuntário · cartão</div>
-                        <div className="font-semibold text-destructive">{metrics.involuntaryChurnLive ?? 0}</div>
+                        <div className="text-muted-foreground mb-1">🔴 Involuntário · base inicial</div>
+                        <div className="font-semibold text-destructive">{metrics.involuntaryChurnInPeriod}</div>
                         <div className="text-[10px] text-muted-foreground mt-1">canceladas pelo Stripe por falha de pagamento</div>
                       </div>
                     </div>
