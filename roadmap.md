@@ -6,10 +6,11 @@
 # Roadmap
 
 ## Panorama do negócio
-- [ ] Criar e validar gráfico de churn mensal: 12 meses, base inicial recorrente por pessoa, taxa/quantidade, meses sem histórico e mês atual parcial; leitura de cópias sem consultas financeiras na abertura.
+- [x] Criar e validar gráfico de churn mensal: 12 meses, filtros 3/6/12, base inicial por pessoa, taxa/perdas e mês parcial. Conta administrativa: 4,22 s, filtro correto, sem erros e sem atualização financeira na abertura; 13 testes/38 asserções passaram.
+- [ ] Completar histórico de churn: 21 contratos encerrados sem data efetiva ou cobertura paga comprovada; resultados identificados como parciais até obter evidência oficial, sem usar updated_at como cancelamento.
 - [x] Corrigir regressão de receita e abertura lenta: cartão completo (290 assinaturas/742 faturas), PIX paginado, potencial separado de cobertura paga. Teste autenticado: abertura 1,99 s, cópia persistida, sem consultas de provedores; 9 testes/30 asserções passaram.
 - [x] Implementar conciliação de receita por pagamento do ciclo, vínculo perfil/autenticação, ciclos semestrais e todos os meios; separar experimentação, risco e valores sem comprovação. Sete testes passaram, fontes PIX completas conferidas (517 contratos Woovi, 573 cobranças), layout sem erros.
-- [ ] Confirmar disponibilização da versão 8: teste anterior da versão 7 abriu em 1,99 s, mas as duas últimas disponibilizações responderam versão 5 e logs confirmaram consultas antigas ao Stripe. Não certificar abertura ou totais hospedados enquanto a versão correta não responder. Conferência local: 164 contratos, potencial R$5.488,69; 186 perfis ativos, 30 sem contrato vigente.
+- [x] Confirmar disponibilização da versão 8: resposta autenticada hospedada via SNAPSHOT conferida, potencial R$5.488,69 em 164 contratos/163 clientes, sem atualização financeira na abertura; pendências de comprovação continuam separadas.
 - [ ] Resolver evidências ausentes: quatro contratos PIX sem cobertura comprovada e um cartão sem perfil; faltam dados oficiais, sem inventar vínculo ou cobertura e sem alterar acesso/cobranças.
 - [x] Implementar gráfico de conversão semanal para primeira mensalidade com coortes, cancelados e exclusão de semanas futuras; 7 testes passaram e fórmula PIX conferida com 225 semanas reais.
 - [x] Disponibilizar cópia completa do cartão e funções atualizadas; testes da conversão passaram. Leitura autenticada e filtro de 30 dias usam cópias, sem conferência financeira na abertura.
