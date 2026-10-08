@@ -58,7 +58,7 @@ Deno.serve(async req => {
       { provider: 'asaas', subscriptions: asaas, charges: asaasCharges },
       { provider: 'inter', subscriptions: inter, charges: interCharges },
     ], events);
-    const result = { months: monthlyChurn(source.intervals, today), warnings: source.warnings, excluded: source.excluded,
+    const result = { version: 2, months: monthlyChurn(source.intervals, today), warnings: source.warnings, excluded: source.excluded,
       completeness: source.warnings.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString(), providerUpdatedAt: snap.data?.fetched_at || null };
     cache.clear(); cache.set(today, { at: Date.now(), data: result });
     return reply(result);
