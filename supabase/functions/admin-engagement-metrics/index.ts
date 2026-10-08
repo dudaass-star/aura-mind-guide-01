@@ -1011,6 +1011,7 @@ Deno.serve(async (req) => {
         const price = sub.items.data[0]?.price;
         const recurring = price?.recurring;
         if (!recurring) { metricWarnings.push('Assinatura cartão sem intervalo recorrente comprovado'); continue; }
+        if (demoEmails.has(String(sub.metadata?.email || '').trim().toLowerCase())) continue;
         const mapping = priceToPlan[priceId] || { plan: sub.metadata?.plan || price?.metadata?.plan || 'outros', cycle: recurring.interval === 'week' ? 'weekly' : recurring.interval === 'year' ? 'yearly' : 'monthly' };
         const normalizedAmount = monthlyCents(price?.unit_amount || 0, recurring.interval, recurring.interval_count || 1) * (sub.items.data[0]?.quantity || 1);
 
@@ -1503,22 +1504,9 @@ Deno.serve(async (req) => {
       asaasCheckoutCreatedAllTime = pixEmailsCreated.size;
       asaasCheckoutConfirmedAllTime = pixEmailsConfirmed.size;
 
-      // 3) Churn PIX: profile com asaas_customer_id, sem pagamento confirmado nos últimos 35d
-      const { data: asaasProfiles } = await supabase
-        .from('profiles')
-        .select('user_id, email')
-        .not('asaas_customer_id', 'is', null);
-
-      for (const prof of asaasProfiles || []) {
-        const email = prof.email as string | null;
-        if (!email) continue;
-        if (email.startsWith('e2e+') && email.endsWith('@olaaura.com.br')) continue;
-        const last = lastPaidByEmail.get(email);
-        if (!last || last.paid_at < churnCutoff) {
-          asaasChurnCount++;
-        }
-      }
-
+      // Cancelamentos PIX pelo evento explícito, nunca por ausência presumida.
+      asaasChurnCount = authorizations.filter(a => ['CANCELLED', 'CANCELED'].includes(String(a.status)) && !demoUserIds.has(a.user_id as string)).length;
+      metricWarnings.push('Cancelamentos Asaas: autorizações canceladas acumuladas; não é churn do período.');
       console.log(`💠 Asaas/PIX: active=${asaasActiveUsersCount}, mrr=R$${(asaasMrrCents/100).toFixed(2)}, checkout(${asaasCheckoutCreatedInPeriod}→${asaasCheckoutConfirmedInPeriod}), churn=${asaasChurnCount}`);
     } catch (e) {
       throw new Error('Não foi possível calcular indicadores Asaas');
@@ -1585,7 +1573,7 @@ Deno.serve(async (req) => {
       console.warn('⚠️ Falha ao computar métricas de PIX Automático:', e);
     }
 
-    const mrrTotalCents = mrrCommittedCents + weeklyRevenueCents;
+    const mrrTotalCents = mrrCommittedCents;
     const mrrCommittedBRL = Math.round(mrrCommittedCents / 100 * 100) / 100;
     const mrrWeeklyEquivBRL = Math.round(weeklyRevenueCents / 100 * 100) / 100;
     const mrrTotalBRL = Math.round(mrrTotalCents / 100 * 100) / 100;
@@ -1971,7 +1959,7 @@ Deno.serve(async (req) => {
 
     const responsePayload = JSON.stringify({
       _metricsVersion: 3,
-      metricWarnings,
+      metricWarnings: [...new Set(metricWarnings)],
       wooviMrrBRL: wooviMrrCents / 100,
       wooviActiveUsersCount: wooviActiveUsers.size,
       // Engagement
