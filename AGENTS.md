@@ -29,3 +29,5 @@
 - Movement is collective-first; local previews share live invite copy.
 - Prayers share one catalog/player to keep art, audio and cues matched.
 - Home keeps tracking; practice dialogs stop audio on exit.
+
+- Admin billing uses shared pure normalization and deduplication rules; provider gaps stay explicit and confirmed receipts never depend on a known due date.

@@ -6,6 +6,9 @@
 # Roadmap
 
 ## Panorama do negócio
+- [ ] Corrigir mensalidades com fontes rastreáveis, recuperação de vencimentos oficiais, recebimentos independentes e lacunas explícitas.
+- [ ] Corrigir taxas legadas, normalização de receita por ciclo e critérios de sessões; impedir totais incompletos silenciosos.
+- [ ] Validar fórmulas em cenários de regressão e conferir painel autenticado com cobranças reais.
 - [x] Criar visão geral com gráfico diário de mensalidades previstas versus recebidas, quantidade/R$, 30 dias e filtros.
 - [x] Separar uso, sessões e detalhes de custos para limpar a área de Engajamento.
 - [x] Validar consulta financeira real, filtros, detalhes por dia e gráficos na conta de Eduardo; previsão PIX limitada aos registros existentes e mandatos ativos/aprovados, sem inventar histórico ausente.

@@ -31,6 +31,11 @@ interface CostBreakdown {
 }
 
 interface Metrics {
+  metricWarnings?: string[];
+  mrrGrandTotalBRL?: number;
+  activeSubscriptionsTotalCount?: number;
+  mrrPixBRL?: number;
+  wooviMrrBRL?: number;
   _snapshot_computed_at?: string;
   _snapshot_window?: string;
   activeUsers: number;
@@ -960,18 +965,19 @@ export default function AdminEngagement() {
           <TabsContent value="revenue" className="mt-3 space-y-4">
             {loading && !metrics ? <SkeletonCards /> : metrics && (
               <>
+                {!!metrics.metricWarnings?.length && <div className="border-l-2 border-border pl-4 text-xs text-muted-foreground space-y-1">{metrics.metricWarnings.map(w => <p key={w}>{w}</p>)}</div>}
                 {/* Hero MRR Card */}
                 <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-accent/5">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <DollarSign className="h-4 w-4" />
-                      MRR Total (Stripe — fonte da verdade)
+                      Receita recorrente mensalizada · cartão e PIX
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-4xl font-bold text-foreground">R$ {metrics.mrrTotalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                    <div className="text-4xl font-bold text-foreground">R$ {(metrics.mrrGrandTotalBRL ?? metrics.mrrTotalBRL).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                     <div className="text-[11px] text-muted-foreground mt-1">
-                      {metrics.activeSubscriptionsCount} assinaturas ativas
+                      {metrics.activeSubscriptionsTotalCount ?? metrics.activeSubscriptionsCount} assinaturas recorrentes
                       {(metrics.monthlyActiveSubscriptionsCount !== undefined || metrics.weeklyActiveSubscriptionsCount !== undefined) && (
                         <> ({metrics.monthlyActiveSubscriptionsCount ?? 0} mensais/anuais + {metrics.weeklyActiveSubscriptionsCount ?? 0} semanais)</>
                       )}
@@ -1006,7 +1012,7 @@ export default function AdminEngagement() {
                       </div>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-3">
-                      💡 Dados em tempo real do Stripe. Inclui status <code>active</code>, <code>trialing</code> (semanal pago) e <code>past_due</code>. Valores reais (<code>unit_amount</code>) por assinatura.
+                      Cartão e autorizações PIX vigentes, normalizados pelo ciclo contratado. Experimentação de 7 dias e cobranças em risco não compõem o total recorrente. PIX: R$ {(metrics.mrrPixBRL ?? 0).toFixed(2)} · Woovi: R$ {(metrics.wooviMrrBRL ?? 0).toFixed(2)}.
                     </p>
                   </CardContent>
                 </Card>
@@ -1073,7 +1079,7 @@ export default function AdminEngagement() {
                   {/* MRR Growth */}
                   <Card>
                     <CardHeader className="p-3 pb-1">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">📈 MRR Growth (30d)</CardTitle>
+                      <CardTitle className="text-xs font-medium text-muted-foreground">📈 Variação cartão (30d)</CardTitle>
                     </CardHeader>
                     <CardContent className="p-3 pt-0">
                       <div className={`text-xl font-bold ${(metrics.mrrGrowthBRL ?? 0) > 0 ? 'text-green-600' : (metrics.mrrGrowthBRL ?? 0) < 0 ? 'text-destructive' : 'text-foreground'}`}>
@@ -1091,7 +1097,7 @@ export default function AdminEngagement() {
                   {/* Margem de contribuição */}
                   <Card>
                     <CardHeader className="p-3 pb-1">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">💚 Margem</CardTitle>
+                      <CardTitle className="text-xs font-medium text-muted-foreground">Saldo após IA estimada</CardTitle>
                     </CardHeader>
                     <CardContent className="p-3 pt-0">
                       <div className={`text-xl font-bold ${(metrics.grossMarginPct ?? 0) >= 70 ? 'text-green-600' : (metrics.grossMarginPct ?? 0) >= 40 ? 'text-yellow-600' : 'text-destructive'}`}>
@@ -1102,7 +1108,7 @@ export default function AdminEngagement() {
                         className="text-[11px] text-muted-foreground cursor-help"
                         title={`Custo do período: R$ ${(metrics.totalCostBRL ?? 0).toFixed(2)} em ${metrics.periodDays ?? 0} dias → mensalizado: R$ ${(metrics.totalCostMonthlyBRL ?? 0).toFixed(2)}/mês`}
                       >
-                        MRR mensal − custo IA mensalizado
+                        Receita contratada − IA estimada; não é lucro
                       </p>
                     </CardContent>
                   </Card>
@@ -1913,7 +1919,7 @@ export default function AdminEngagement() {
                         </CardHeader>
                         <CardContent className="p-3 pt-0">
                           <div className="text-xl font-bold text-foreground">{metrics.billingTotalInPeriod}</div>
-                          <p className="text-[11px] text-muted-foreground">tentativas</p>
+                          <p className="text-[11px] text-muted-foreground">faturas únicas do cartão</p>
                         </CardContent>
                       </Card>
                       <Card>
@@ -1923,7 +1929,7 @@ export default function AdminEngagement() {
                         </CardHeader>
                         <CardContent className="p-3 pt-0">
                           <div className="text-xl font-bold text-green-600">{metrics.billingSuccessInPeriod}</div>
-                          <p className="text-[11px] text-muted-foreground">confirmados</p>
+                          <p className="text-[11px] text-muted-foreground">faturas pagas</p>
                         </CardContent>
                       </Card>
                       <Card>
