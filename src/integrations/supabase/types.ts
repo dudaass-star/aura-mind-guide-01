@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_billing_provider_snapshots: {
+        Row: {
+          fetched_at: string
+          id: string
+          installments: Json
+          provider: string
+        }
+        Insert: {
+          fetched_at?: string
+          id: string
+          installments?: Json
+          provider: string
+        }
+        Update: {
+          fetched_at?: string
+          id?: string
+          installments?: Json
+          provider?: string
+        }
+        Relationships: []
+      }
       admin_metrics_snapshots: {
         Row: {
           compute_ms: number | null
