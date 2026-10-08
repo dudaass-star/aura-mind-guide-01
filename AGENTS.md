@@ -30,4 +30,4 @@
 - Prayers share one catalog/player to keep art, audio and cues matched.
 - Home keeps tracking; practice dialogs stop audio on exit.
 
-- Admin billing shares normalization and exact matching; checked pagination rejects partial data. Charts read stored snapshots only; authorized scheduled refresh preserves old copies on failures.
+- Billing charts read snapshots; exact matching rejects partial data. Separate authorized refresh preserves copies and other admin schedules.

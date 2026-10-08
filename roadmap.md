@@ -6,6 +6,7 @@
 # Roadmap
 
 ## Panorama do negócio
+- [x] Ajustar somente a atualização financeira para cada 6 horas (00h, 06h, 12h e 18h BRT); agendamento ativo e autenticação protegida conferidos, sem chamada financeira na rotina administrativa de 5 minutos.
 - [x] Separar conferência dos provedores da abertura: leitura somente das cópias persistidas, atualização no agendamento administrativo existente e última conferência visível. Testado na conta de Eduardo: abertura em 5,7 s, nenhuma chamada de conferência, filtros e valores preservados, sem erros. Asaas ainda não disponibilizou três vencimentos antigos na atualização separada.
 - [x] Corrigir paginação de parcelas/extrato Woovi, recuperação Asaas e identificadores locais; 11 testes passaram, extrato real percorreu 373 lançamentos e painel autenticado foi conferido sem alterar cobranças. A inspeção do extrato não equivale à conciliação contábil individual de todas as entradas.
 - [x] Corrigir mensalidades com fontes rastreáveis, recuperação em lotes de parcelas oficiais, recebimentos independentes e lacunas explícitas.
