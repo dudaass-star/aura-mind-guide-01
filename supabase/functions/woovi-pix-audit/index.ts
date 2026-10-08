@@ -18,7 +18,7 @@
 //   3. Abandono: QR expirado sem entrada e sem mandato → cancela na Woovi.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import {
-  wooviFetch, brtDate, getSubscriptionCustomerCorrelation, listInstallments,
+  wooviFetch, brtDate, getSubscriptionCustomerCorrelation, listInstallments, listTransactions,
   MANDATE_ACTIVE_STATUSES, WOOVI_PAID_STATUSES,
   findScheduledInstallment, daysUntil, WooviUnavailable,
   findUnpaidInstallment, createInstallmentCobr, normalizeMandateStatus,
@@ -295,7 +295,33 @@ Deno.serve(async (req) => {
     erros: [],
   };
 
+  async function allKnownChargeIds(): Promise<Record<string, any>[]> {
+    const rows: Record<string, any>[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase.from("woovi_charges")
+        .select("id,installment_id").not("installment_id", "is", null)
+        .order("id").range(offset, offset + 999);
+      if (error) throw new Error('Consulta de identificadores locais incompleta');
+      rows.push(...(data || []));
+      if (!data || data.length < 1000) return rows;
+    }
+  }
+
   try {
+    // Inspeção retorna ANTES de quaisquer replays, avisos ou atualizações.
+    if (debugExtrato) {
+      const transactions = await listTransactions();
+      const known = await allKnownChargeIds();
+      const ids = new Set(known.map(r => String(r.installment_id)));
+      const days = Math.min(Math.max(Number(body.extrato_days) || 30, 1), 90);
+      const since = new Date(Date.now() - days * 86400000).toISOString();
+      const entries = transactions.filter(t => String(t.time || t.createdAt || '') >= since && String(t.type || 'PAYMENT').toUpperCase() === 'PAYMENT' && Number(t.value) > 0);
+      return new Response(JSON.stringify({ debugExtrato: true, completeness: 'complete', resumo: {
+        janela_dias: days, lancamentos_consultados: transactions.length, identificadores_locais: known.length,
+        entradas_no_extrato: entries.length, total_recebido: entries.reduce((n, t) => n + Number(t.value), 0) / 100,
+        sem_registro_local: entries.filter(t => !ids.has(String(t.endToEndId)) && !ids.has(String(t.charge?.correlationID))).length,
+      } }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     const now = new Date();
     const graceBefore = new Date(now.getTime() - PARTIAL_GRACE_MINUTES * 60 * 1000).toISOString();
 
@@ -1330,22 +1356,7 @@ Deno.serve(async (req) => {
     // maiores) e pagina por `skip`, DO MAIS ANTIGO PARA O MAIS RECENTE. Portanto,
     // uma primeira página anterior à janela NÃO permite interromper a busca: é
     // necessário avançar até o fim para alcançar os pagamentos atuais.
-    const TX_PAGE = 100;
-    // Teto defensivo amplo: cobre até 5.000 lançamentos sem permitir loop
-    // infinito caso a Woovi devolva pageInfo inconsistente.
-    const TX_MAX_PAGES = 50;
-    const transactions: Record<string, any>[] = [];
-    for (let page = 0; page < TX_MAX_PAGES; page++) {
-      const tx = await wooviFetch<Record<string, any>>(
-        `/api/v1/transaction?limit=${TX_PAGE}&skip=${page * TX_PAGE}`,
-      );
-      const list: Record<string, any>[] = Array.isArray((tx.data as any)?.transactions)
-        ? (tx.data as any).transactions
-        : [];
-      transactions.push(...list);
-      if (list.length < TX_PAGE) break;
-      if ((tx.data as any)?.pageInfo?.hasNextPage === false) break;
-    }
+    const transactions = await listTransactions();
 
     // Modo inspeção: devolve o extrato cru da janela (usado para vincular
     // pagamento órfão à mão, quando o pagador não é o titular).
@@ -1379,8 +1390,7 @@ Deno.serve(async (req) => {
 
       // Resumo de conferência contra o painel da Woovi: quanto entrou na janela,
       // quantos desses pagamentos já estão gravados aqui e quantos não estão.
-      const { data: knownForSummary } = await supabase.from("woovi_charges")
-        .select("installment_id").not("installment_id", "is", null).limit(5000);
+      const knownForSummary = await allKnownChargeIds();
       const knownSummarySet = new Set(
         (knownForSummary || []).map((r: Record<string, any>) => String(r.installment_id)),
       );
@@ -1416,8 +1426,7 @@ Deno.serve(async (req) => {
 
     // Identificadores já gravados: pagamento conhecido nem entra na varredura
     // (era isso que estourava o tempo — dezenas de consultas na Woovi por nada).
-    const { data: knownIds } = await supabase.from("woovi_charges")
-      .select("installment_id").not("installment_id", "is", null).limit(2000);
+    const knownIds = await allKnownChargeIds();
     const knownIdSet = new Set((knownIds || []).map((r: Record<string, any>) => String(r.installment_id)));
     // Parcelas da Woovi consultadas nesta rodada (mandato → lista), com teto de
     // chamadas: a prova é caríssima em API e não pode derrubar a auditoria.

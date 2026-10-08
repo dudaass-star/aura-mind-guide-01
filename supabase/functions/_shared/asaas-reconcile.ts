@@ -3,6 +3,8 @@
 // para o próprio webhook-asaas (fonte única de verdade de insert + ativação).
 // Idempotente: se a linha já existe em asaas_payments, o webhook só atualiza.
 
+import { collectProviderPages } from './provider-pagination.ts';
+
 const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
 const ASAAS_ENV = (Deno.env.get("ASAAS_ENV") || "sandbox").toLowerCase();
 const ASAAS_BASE_URL =
@@ -63,9 +65,12 @@ export async function reconcileOrphanPayments(
   const recovered: string[] = [];
   let checked = 0;
   for (const status of ["RECEIVED", "CONFIRMED"]) {
-    const qs = new URLSearchParams({ ...filter, status, limit: "100" }).toString();
-    const list = await asaasGetJson(`/payments?${qs}`);
-    const items = (list?.data as Array<Record<string, unknown>>) || [];
+    const items = await collectProviderPages<Record<string, unknown>>(async (offset, limit) => {
+      const qs = new URLSearchParams({ ...filter, status, limit: String(limit), offset: String(offset) }).toString();
+      const list = await asaasGetJson(`/payments?${qs}`);
+      if (!list || !Array.isArray(list.data)) throw new Error('Consulta de pagamentos Asaas incompleta');
+      return { items: list.data, hasMore: typeof list.hasMore === 'boolean' ? list.hasMore : undefined, total: typeof list.totalCount === 'number' ? list.totalCount : undefined };
+    }, payment => String(payment.id || ''));
     for (const p of items) {
       const id = p.id as string;
       if (!id) continue;
