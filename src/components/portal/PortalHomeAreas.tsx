@@ -7,7 +7,7 @@ import { trackMovement, useMovementVisibility } from "@/lib/movement-analytics";
 import { cn } from "@/lib/utils";
 
 export type HomeArea = "hoje" | "sessoes" | "insights" | "oracoes" | "meditacoes" | "jornadas" | "sobre" | "movimento";
-type Props = { onNavigate: (area: HomeArea) => void; onPrefetch?: (area: HomeArea) => void; hasJoinedMovement: boolean; movementIsNew: boolean };
+type Props = { onNavigate: (area: HomeArea) => void; onPrefetch?: (area: HomeArea) => void; hasJoinedMovement: boolean; movementIsNew: boolean; isActive?: boolean };
 const groups = [
   { title: "Seu acompanhamento", areas: [
     { label: "Hoje", detail: "O que te acompanha agora", tab: "hoje", icon: Sun, tone: "portal-area-today" },
@@ -24,8 +24,8 @@ const practices = [
   { label: "Meditações", detail: "Pausas guiadas para você.", action: "Escolha sua pausa", tab: "meditacoes", image: meditationImage, alt: "Um momento tranquilo ao fim do dia", icon: Headphones, tone: "portal-area-audio" },
 ] as const;
 
-export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, movementIsNew }: Props) {
-  const trackingRef = useMovementVisibility("app", true, "home_viewed");
+export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, movementIsNew, isActive = true }: Props) {
+  const trackingRef = useMovementVisibility("app", isActive, "home_viewed");
   const access = (area: HomeArea) => ({ onClick: () => { if (area === "movimento") trackMovement("card_clicked", "app"); onNavigate(area); }, onPointerEnter: () => onPrefetch?.(area), onFocus: () => onPrefetch?.(area), onTouchStart: () => onPrefetch?.(area) });
   const renderGroup = (group: typeof groups[number]) => (
     <section key={group.title} aria-label={group.title}>
