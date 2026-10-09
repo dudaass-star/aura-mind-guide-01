@@ -361,7 +361,11 @@ export default function AdminSupport() {
     try {
       const { data, error } = await supabase.functions.invoke('support-imap-poll');
       if (error) throw error;
-      toast({ title: 'Caixa verificada', description: `${data?.processed_count || 0} novas mensagens` });
+      if (data?.errors?.length) {
+        toast({ title: 'Verificação parcial', description: `${data?.processed_count || 0} mensagens importadas. ${data.errors.join('; ')}`, variant: 'destructive' });
+      } else {
+        toast({ title: 'Caixa verificada', description: `${data?.processed_count || 0} novas mensagens${data?.remaining ? ` · ${data.remaining} aguardando a próxima leitura` : ''}` });
+      }
       fetchTickets();
     } catch (e) {
       toast({ title: 'Erro ao verificar', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });

@@ -593,7 +593,8 @@ Analise e responda com a estrutura solicitada.`;
     const isLowSeverity = args.severity === "baixa";
     // Bloqueia auto-resposta se ticket já foi auto-respondido antes (regra: nunca 2x)
     const previouslyAutoReplied = (ticket.auto_reply_attempts || 0) > 0 || !!ticket.reopened_at;
-    const autoEligible = isSafeCategory && isSafeAction && hasGoodKbMatch && isLowSeverity && !recurringCustomer && !previouslyAutoReplied;
+    const manualReview = (messages || []).some(m => m.direction === "inbound" && m.headers?.["manual-review"] === true);
+    const autoEligible = !manualReview && isSafeCategory && isSafeAction && hasGoodKbMatch && isLowSeverity && !recurringCustomer && !previouslyAutoReplied;
 
     log("Auto-reply eligibility", {
       ticket_id,

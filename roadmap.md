@@ -5,6 +5,9 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Suporte por e-mail
+- [ ] Corrigir importação travada, recuperar mensagens sem envio automático e conferir o pedido da cliente no painel autenticado.
+
 ## Panorama do negócio
 - [x] Conferir fontes paginadas, entradas/saídas e bases mensais: corrigir atribuição por E2E oficial, duplicação de entradas e cobertura inicial imediata Asaas. Doze meses locais e hospedados coincidem; validação autenticada de gráfico/filtro sem erros. Não equivale a auditoria contábil integral.
 - [x] Incluir semana paga e separar base/perdas de experimentação e recorrência; preservar cobertura histórica e ocultar taxas incertas. 16 testes/45 asserções passaram. Cálculo local sobre registros reais: outubro 157 = 26 semanas + 131 recorrentes, parcial; gráfico/filtro testados autenticados com resposta recalculada localmente, sem erros.

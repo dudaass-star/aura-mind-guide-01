@@ -103,7 +103,8 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const updatePreference = async (field: "show_achievements" | "receive_updates", value: boolean) => {
     if (!member) return;
     setMember({ ...member, [field]: value });
-    await supabasePortal.from("movement_members").update({ [field]: value }).eq("id", member.id);
+    const preference = field === "show_achievements" ? { show_achievements: value } : { receive_updates: value };
+    await supabasePortal.from("movement_members").update(preference).eq("id", member.id);
   };
 
   const recordEvent = (eventType: string, metadata: Record<string, string> = {}) => {
