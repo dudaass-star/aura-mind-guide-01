@@ -1297,7 +1297,7 @@ export function ConversarTab({
       </div>
 
       <div className="shrink-0 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-        <PortalHomeAreas onNavigate={navigateFromConversation} onPrefetch={onPrefetch} hasJoinedMovement={hasJoinedMovement} movementIsNew={movementIsNew} />
+        <PortalHomeAreas onNavigate={navigateFromConversation} onPrefetch={onPrefetch} hasJoinedMovement={hasJoinedMovement} movementIsNew={movementIsNew} isActive={isActive && !chatOpen} />
       </div>
     </aside>
   );

@@ -12,6 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import movementGroupImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
 import movementImage from "@/assets/movimento-ola-aura.jpg";
 import { MovementAchievementSymbol, MovementCollectiveProgress, MovementCommunityMural, MovementMemberOpening } from "./MovementCommunityVisuals";
+import { trackMovement, useMovementVisibility } from "@/lib/movement-analytics";
 import { MOVEMENT_INVITE_MESSAGES } from "@/lib/movement-invite";
 
 const messages = MOVEMENT_INVITE_MESSAGES;
@@ -19,7 +20,7 @@ const messages = MOVEMENT_INVITE_MESSAGES;
 type Member = { id: string; public_name: string; display_mode: string; referral_code: string; show_achievements: boolean; receive_updates: boolean; created_at: string; ambassador_since: string | null };
 type Recognition = { id: string; kind: string; title: string; body: string; status: string; consent_decision: string; created_at: string };
 type MovementSnapshot = { members: number; started: number; continued: number; mural: Array<{ id: string; title: string; body: string; member_name: string }> };
-type Props = { userId: string; suggestedName?: string; embedded?: boolean; initialAmbassadorIntent?: boolean; onJoined?: () => void; previewIntroduction?: boolean };
+type Props = { userId: string; suggestedName?: string; embedded?: boolean; initialAmbassadorIntent?: boolean; onJoined?: () => void; previewIntroduction?: boolean; isActive?: boolean };
 
 const causeMessages = [
   "Ninguém deveria precisar enfrentar tudo sozinho.",
@@ -27,7 +28,8 @@ const causeMessages = [
   "Uma conversa com direção pode mudar o começo de uma história.",
 ] as const;
 
-export function MovementDashboard({ userId, suggestedName = "", embedded = false, initialAmbassadorIntent = false, onJoined, previewIntroduction = false }: Props) {
+export function MovementDashboard({ userId, suggestedName = "", embedded = false, initialAmbassadorIntent = false, onJoined, previewIntroduction = false, isActive = true }: Props) {
+  const surface = embedded ? "app" : "area";
   const [member, setMember] = useState<Member | null>(null);
   const [referrals, setReferrals] = useState<Array<{ reached_at: string; started_at: string | null; continued_at: string | null; is_valid: boolean }>>([]);
   const [recognitions, setRecognitions] = useState<Recognition[]>([]);
@@ -37,6 +39,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const [displayMode, setDisplayMode] = useState("first_name");
   const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(!previewIntroduction);
+  const trackingRef = useMovementVisibility(surface, isActive && !previewIntroduction && !loading, "area_opened");
   const [saving, setSaving] = useState(false);
   const [activatingAmbassador, setActivatingAmbassador] = useState(false);
   const [messageKind, setMessageKind] = useState<keyof typeof messages>("supporter");
@@ -84,13 +87,15 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const nextProgress = nextAchievement ? Math.min(100, Math.round((nextCurrent / nextAchievement.threshold) * 100)) : 100;
   const createMember = async () => {
     if (previewIntroduction || !name.trim() || !accepted) return;
+    recordEvent("join_started");
     setSaving(true);
     const joiningAsAmbassador = initialAmbassadorIntent || selectedRole === "ambassador";
     const ambassadorSince = joiningAsAmbassador ? new Date().toISOString() : null;
     const { data, error } = await supabasePortal.from("movement_members").insert({ user_id: userId, public_name: name.trim(), display_mode: displayMode, receive_updates: false, ambassador_since: ambassadorSince }).select("*").single();
     setSaving(false);
-    if (error) return toast({ title: "Não conseguimos concluir agora", description: "Tente novamente em instantes.", variant: "destructive" });
+    if (error) { recordEvent("join_failed"); return toast({ title: "Não conseguimos concluir agora", description: "Tente novamente em instantes.", variant: "destructive" }); }
     setMember(data);
+    recordEvent("member_joined", { role: joiningAsAmbassador ? "ambassador" : "participant" });
     onJoined?.();
     if (joiningAsAmbassador) {
       recordEvent("ambassador_joined");
@@ -104,12 +109,14 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
     if (!member) return;
     setMember({ ...member, [field]: value });
     const preference = field === "show_achievements" ? { show_achievements: value } : { receive_updates: value };
-    await supabasePortal.from("movement_members").update(preference).eq("id", member.id);
+    const { error } = await supabasePortal.from("movement_members").update(preference).eq("id", member.id);
+    if (!error && field === "receive_updates") recordEvent(value ? "updates_enabled" : "updates_disabled");
   };
 
   const recordEvent = (eventType: string, metadata: Record<string, string> = {}) => {
-    if (previewIntroduction) return;
-    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "movement", event_type: eventType, source: "app", metadata });
+    if (previewIntroduction || !isActive) return;
+    trackMovement(eventType, surface, eventType === "cause_selected" ? {} : metadata);
+    if (eventType === "cause_selected") void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "movement", event_type: eventType, source: "app", metadata });
   };
 
   const selectCauseMessage = (message: string) => {
@@ -134,7 +141,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   if (loading) return <div className="py-20 text-center text-sm text-muted-foreground">Abrindo o Movimento…</div>;
 
   if (!member && embedded && !selectedRole) return (
-    <div className="space-y-10 pb-6">
+    <div ref={trackingRef} data-movement-event="introduction_viewed" className="space-y-10 pb-6">
       {/* Abertura com a foto do Movimento, como no site */}
       <section className="relative overflow-hidden rounded-2xl shadow-xl">
         <img src={movementGroupImage} alt="Pessoas se abraçando com camisetas da Olá Aura" className="h-[440px] w-full object-cover sm:h-[480px]" />
@@ -143,7 +150,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-bold uppercase tracking-wide"><Sparkles className="h-3.5 w-3.5" /> Movimento Olá Aura</span>
           <h2 className="mt-4 max-w-xl font-display text-3xl font-semibold leading-tight sm:text-4xl">Compreender a si mesmo não deveria ser privilégio de poucos.</h2>
           <p className="mt-3 max-w-xl leading-relaxed text-primary-foreground/85">Pessoas que acreditam que apoio, compreensão e direção precisam chegar a mais gente — com respeito e sem pressão.</p>
-          <Button type="button" size="lg" className="mt-5 w-full sm:w-auto" onClick={() => document.getElementById("app-escolha-movimento")?.scrollIntoView({ behavior: "smooth" })}>Quero fazer parte <ArrowRight /></Button>
+          <Button type="button" size="lg" className="mt-5 w-full sm:w-auto" onClick={() => { recordEvent("join_cta_clicked"); document.getElementById("app-escolha-movimento")?.scrollIntoView({ behavior: "smooth" }); }}>Quero fazer parte <ArrowRight /></Button>
         </div>
       </section>
 
@@ -194,7 +201,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   );
 
   if (!member) return (
-    <div className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 sm:py-14 lg:grid-cols-[.85fr_1.15fr] lg:gap-20 lg:py-20">
+    <div ref={trackingRef} data-movement-event="form_viewed" className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 sm:py-14 lg:grid-cols-[.85fr_1.15fr] lg:gap-20 lg:py-20">
       <section className="lg:pt-3">
         <p className="text-xs font-bold uppercase text-primary">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Seu primeiro gesto" : "Seu primeiro passo"}</p>
         <h2 className="mt-3 font-display text-3xl font-semibold sm:text-4xl">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Entre para o Movimento como Embaixador." : "Faça parte de algo que pode chegar muito além de você."}</h2>
@@ -204,7 +211,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
         </div>
       </section>
       <section className="border-t border-border pt-7 lg:border-l lg:border-t-0 lg:pl-12 lg:pt-1">
-         <div className="flex items-start justify-between gap-4"><div><p className="font-display text-xl font-semibold">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Confirme sua entrada como Embaixador" : "Confirme sua participação"}</p><p className="mt-1 text-sm text-muted-foreground">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Ser Embaixador também confirma seu lugar como Participante do Movimento." : "Você controla como seu nome aparece e pode mudar isso depois."}</p></div>{embedded && <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedRole(null); setAccepted(false); }}>Voltar</Button>}</div>
+         <div className="flex items-start justify-between gap-4"><div><p className="font-display text-xl font-semibold">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Confirme sua entrada como Embaixador" : "Confirme sua participação"}</p><p className="mt-1 text-sm text-muted-foreground">{initialAmbassadorIntent || selectedRole === "ambassador" ? "Ser Embaixador também confirma seu lugar como Participante do Movimento." : "Você controla como seu nome aparece e pode mudar isso depois."}</p></div>{embedded && <Button type="button" variant="ghost" size="sm" onClick={() => { recordEvent("form_back"); setSelectedRole(null); setAccepted(false); }}>Voltar</Button>}</div>
         <div className="mt-6 space-y-5">
           <label className="block"><span className="mb-2 block text-sm font-semibold">Como devemos chamar você?</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" /></label>
           <label className="block"><span className="mb-2 block text-sm font-semibold">Como aparecer no Mural?</span><select value={displayMode} onChange={(e) => setDisplayMode(e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="first_name">Primeiro nome</option><option value="full_name">Nome completo</option><option value="initials">Iniciais</option><option value="private">Participação privada</option></select></label>
@@ -227,10 +234,10 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   };
 
   if (!member.ambassador_since) return (
-    <div className={embedded ? "space-y-8" : "mx-auto max-w-4xl space-y-10 px-5 py-10"}>
+    <div ref={trackingRef} className={embedded ? "space-y-8" : "mx-auto max-w-4xl space-y-10 px-5 py-10"}>
       <MovementMemberOpening ambassador={false} />
       <MovementCollectiveProgress snapshot={snapshot} />
-      <MovementCommunityMural stories={snapshot?.mural || []} />
+      <div data-movement-event="mural_viewed"><MovementCommunityMural stories={snapshot?.mural || []} /></div>
       <section className="border-l-4 border-primary bg-[hsl(var(--portal-journey))] px-5 py-6 text-[hsl(var(--portal-journey-foreground))] sm:px-8">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground px-3 py-1 text-[11px] font-bold uppercase text-primary"><Sparkles className="h-3.5 w-3.5" /> Seu lugar nessa história · Participante</span>
         <h2 className="mt-4 font-display text-3xl font-semibold leading-tight">{member.public_name}, você faz parte.</h2>
@@ -252,18 +259,23 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
 
   const shareUrl = `${window.location.origin}/movimento?por=${member.referral_code}`;
   const shareText = `${shareMessage.trim()}\n${shareUrl}`;
-  const selectMessage = (kind: keyof typeof messages) => { setMessageKind(kind); setShareMessage(messages[kind]); };
+  const selectMessage = (kind: keyof typeof messages) => { setMessageKind(kind); setShareMessage(messages[kind]); recordEvent("message_selected", { message_kind: kind }); };
   const copy = async () => { await navigator.clipboard.writeText(shareText); recordEvent("invite_copied", { message_kind: messageKind }); toast({ title: "Convite copiado", description: "Agora é só enviar para quem veio à sua mente." }); };
-  const share = async () => { recordEvent("share_started", { message_kind: messageKind }); if (navigator.share) await navigator.share({ title: "Movimento Olá Aura", text: shareMessage.trim(), url: shareUrl }); else await copy(); };
+  const share = async () => {
+    if (!navigator.share) { await copy(); return; }
+    recordEvent("share_started", { message_kind: messageKind });
+    try { await navigator.share({ title: "Movimento Olá Aura", text: shareMessage.trim(), url: shareUrl }); recordEvent("share_completed"); }
+    catch (error) { recordEvent(error instanceof Error && error.name === "AbortError" ? "share_cancelled" : "share_failed"); }
+  };
   const pendingRecognitions = recognitions.filter((recognition) => recognition.consent_decision === "pending");
   const decidedRecognitions = recognitions.filter((recognition) => recognition.consent_decision !== "pending");
   const recentImpact = referrals.filter((referral) => referral.is_valid).slice(0, 4);
 
   return (
-    <div className={embedded ? "space-y-8" : "mx-auto max-w-5xl space-y-10 px-5 py-10"}>
+    <div ref={trackingRef} className={embedded ? "space-y-8" : "mx-auto max-w-5xl space-y-10 px-5 py-10"}>
       <MovementMemberOpening ambassador />
       <MovementCollectiveProgress snapshot={snapshot} />
-      <MovementCommunityMural stories={snapshot?.mural || []} />
+      <div data-movement-event="mural_viewed"><MovementCommunityMural stories={snapshot?.mural || []} /></div>
       <section aria-label="Seu impacto no Movimento" className="overflow-hidden border-l-4 border-primary bg-primary text-primary-foreground">
         <div className="px-5 pt-6 sm:px-8 sm:pt-8">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground px-3 py-1 text-[11px] font-bold uppercase text-primary"><Sparkles className="h-3.5 w-3.5" /> Seu lugar nessa história · Embaixador</span>
@@ -291,7 +303,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
       </section>
       {pendingRecognitions.length > 0 && <section className="space-y-3"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Você foi reconhecido</h3></div>{pendingRecognitions.map((recognition) => <article key={recognition.id} className="rounded-lg border border-primary/30 bg-secondary/50 p-5"><p className="text-xs font-bold uppercase text-primary">Voz do Movimento</p><h4 className="mt-2 font-display text-xl font-semibold">{recognition.title}</h4><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{recognition.body}</p><p className="mt-4 text-xs text-muted-foreground">Você decide se este reconhecimento pode aparecer no Mural público.</p><div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => decideRecognition(recognition, "accepted")}><CheckCircle2 /> Autorizar publicação</Button><Button variant="outline" onClick={() => decideRecognition(recognition, "declined")}>Manter privado</Button></div></article>)}</section>}
       {decidedRecognitions.length > 0 && <section><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Seus reconhecimentos</h3></div><div className="mt-4 space-y-3">{decidedRecognitions.map((recognition) => <article key={recognition.id} className="border-l-2 border-primary bg-secondary/30 p-5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-primary">{recognition.kind === "voice" ? "Voz do Movimento" : "Reconhecimento"}</p><p className="text-xs text-muted-foreground">{recognition.consent_decision === "accepted" ? "Autorizado para o Mural" : "Visível somente para você"}</p></div><h4 className="mt-2 font-display text-xl font-semibold">{recognition.title}</h4><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{recognition.body}</p></article>)}</div></section>}
-      <section id="movement-ambassador-kit" className="scroll-mt-5">
+      <section data-movement-event="kit_viewed" id="movement-ambassador-kit" className="scroll-mt-5">
         <div className="flex items-center gap-3"><Share2 className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Kit do Embaixador</h3></div>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Escolha um convite, ajuste com suas palavras e envie com seu link pessoal. Você não precisa baixar nada para indicar alguém.</p>
         <p className="mt-5 text-xs font-bold uppercase text-primary">Mensagens com link pessoal</p>

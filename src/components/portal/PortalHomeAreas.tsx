@@ -3,10 +3,11 @@ import { Button } from "@/components/ui/button";
 import prayerImage from "@/assets/prayer-night.jpg";
 import meditationImage from "@/assets/v3/hero-mulher-noite.jpg";
 import movementImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
+import { trackMovement, useMovementVisibility } from "@/lib/movement-analytics";
 import { cn } from "@/lib/utils";
 
 export type HomeArea = "hoje" | "sessoes" | "insights" | "oracoes" | "meditacoes" | "jornadas" | "sobre" | "movimento";
-type Props = { onNavigate: (area: HomeArea) => void; onPrefetch?: (area: HomeArea) => void; hasJoinedMovement: boolean; movementIsNew: boolean };
+type Props = { onNavigate: (area: HomeArea) => void; onPrefetch?: (area: HomeArea) => void; hasJoinedMovement: boolean; movementIsNew: boolean; isActive?: boolean };
 const groups = [
   { title: "Seu acompanhamento", areas: [
     { label: "Hoje", detail: "O que te acompanha agora", tab: "hoje", icon: Sun, tone: "portal-area-today" },
@@ -23,8 +24,9 @@ const practices = [
   { label: "Meditações", detail: "Pausas guiadas para você.", action: "Escolha sua pausa", tab: "meditacoes", image: meditationImage, alt: "Um momento tranquilo ao fim do dia", icon: Headphones, tone: "portal-area-audio" },
 ] as const;
 
-export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, movementIsNew }: Props) {
-  const access = (area: HomeArea) => ({ onClick: () => onNavigate(area), onPointerEnter: () => onPrefetch?.(area), onFocus: () => onPrefetch?.(area), onTouchStart: () => onPrefetch?.(area) });
+export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, movementIsNew, isActive = true }: Props) {
+  const trackingRef = useMovementVisibility("app", isActive, "home_viewed");
+  const access = (area: HomeArea) => ({ onClick: () => { if (area === "movimento") trackMovement("card_clicked", "app"); onNavigate(area); }, onPointerEnter: () => onPrefetch?.(area), onFocus: () => onPrefetch?.(area), onTouchStart: () => onPrefetch?.(area) });
   const renderGroup = (group: typeof groups[number]) => (
     <section key={group.title} aria-label={group.title}>
       <h2 className="mb-3 text-[17px] font-medium text-foreground">{group.title}</h2>
@@ -40,7 +42,7 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
     </section>
   );
   return (
-    <div className="space-y-7">
+    <div ref={trackingRef} className="space-y-7">
       {renderGroup(groups[0])}
       <section aria-label="Um momento para você">
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Um momento para você</h2>
@@ -56,7 +58,7 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
       {renderGroup(groups[1])}
       <section aria-label="Faça parte de algo maior">
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Faça parte de algo maior</h2>
-        <article className="overflow-hidden rounded-lg portal-area-journey">
+        <article data-movement-event="card_viewed" className="overflow-hidden rounded-lg portal-area-journey">
           <img src={movementImage} alt="Pessoas abraçadas com camisetas do Movimento Olá Aura" className="aspect-[2.8/1] w-full object-cover" loading="lazy" />
           <div className="p-4">
             <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase"><HeartHandshake className="h-4 w-4" /><span>Movimento Olá Aura</span>{movementIsNew && !hasJoinedMovement && <span className="rounded-full bg-primary px-2 py-0.5 text-[9px] text-primary-foreground">Novo</span>}</div>

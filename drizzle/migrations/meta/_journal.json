@@ -15,6 +15,13 @@
       "when": 1791554240805,
       "tag": "0001_protect_support_mail_poll_cron",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791568096391,
+      "tag": "0002_movement_usage_tracking",
+      "breakpoints": true
     }
   ]
 }

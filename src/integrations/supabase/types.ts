@@ -2319,6 +2319,39 @@ export type Database = {
           },
         ]
       }
+      movement_usage_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          session_hash: string
+          surface: string
+          user_id: string | null
+          visitor_hash: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id: string
+          metadata?: Json
+          session_hash: string
+          surface: string
+          user_id?: string | null
+          visitor_hash: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          session_hash?: string
+          surface?: string
+          user_id?: string | null
+          visitor_hash?: string
+        }
+        Relationships: []
+      }
       notification_deliveries: {
         Row: {
           category: string
@@ -5238,6 +5271,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_movement_usage: {
+        Args: { _days?: number; _include_tests?: boolean }
+        Returns: Json
+      }
       allocate_whatsapp_instance: { Args: never; Returns: string }
       claim_movement_referral: {
         Args: { _visitor_key: string }
@@ -5395,6 +5432,17 @@ export type Database = {
       record_movement_reach: {
         Args: { _referral_code: string; _visitor_key: string }
         Returns: Json
+      }
+      record_movement_usage: {
+        Args: {
+          _event_type: string
+          _id: string
+          _metadata?: Json
+          _session_id: string
+          _surface: string
+          _visitor_id: string
+        }
+        Returns: boolean
       }
       record_portal_session_experience: {
         Args: {
