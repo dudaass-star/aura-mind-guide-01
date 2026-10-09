@@ -10,6 +10,7 @@ import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
 import { markCheckoutAccessPaid, markCheckoutAccessPaidByReference } from "../_shared/checkout-access.ts";
+import { isStripePlanAdjustment, isStripeRecurringInvoice } from "../_shared/stripe-invoice-kind.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1468,7 +1469,7 @@ Me conta: como você está hoje?`;
       // Linha de chegada do funil confirmada pelo servidor. O evento do
       // navegador (`purchase`, no /obrigado) só existe quando a pessoa volta
       // pra tela; este acontece sempre. Steps distintos pra não contar duas vezes.
-      if (invoice.billing_reason === 'subscription_create') {
+      if (invoice.billing_reason === 'subscription_create' && !isStripePlanAdjustment(invoice)) {
         try {
           await supabase.from('checkout_funnel_events').insert({
             anon_session_id: `stripe:${customerId}`,
@@ -1486,7 +1487,18 @@ Me conta: como você está hoje?`;
       // é a conversão comercial real. Envia `Subscribe` com o valor do ciclo
       // para o Meta/GA4/ChatGPT Ads ler receita correta — sem trocar o alvo de
       // otimização das campanhas, que segue no `Purchase`.
-      if (invoice.billing_reason && invoice.billing_reason !== 'subscription_create' && Number(invoice.amount_paid || 0) > 0) {
+      if (isStripePlanAdjustment(invoice) && Number(invoice.amount_paid || 0) > 0) {
+        const { error } = await supabase.from('checkout_funnel_events').insert({
+          anon_session_id: `stripe:${customerId}`,
+          step: 'plan_adjustment_paid',
+          payment_method: 'card',
+          detail: 'stripe',
+          meta: { invoice: invoice.id, amount_paid: invoice.amount_paid, billing_reason: invoice.billing_reason },
+        });
+        if (error) console.warn('⚠️ Falha ao registrar ajuste proporcional:', error.message);
+      }
+
+      if (isStripeRecurringInvoice(invoice) && invoice.billing_reason === 'subscription_cycle' && Number(invoice.amount_paid || 0) > 0) {
         try {
           const cust = await stripe.customers.retrieve(customerId);
           if (!cust.deleted) {
