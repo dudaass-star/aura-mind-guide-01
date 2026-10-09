@@ -200,7 +200,7 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Diferenciar visualmente a conversa durante uma sessão, com estado no topo, tempo decorrido, progresso discreto e fechamento apenas no cabeçalho; validado em celular e desktop sem repetir uma sessão completa.
 
 ## Movimento Olá Aura
-- [ ] Corrigir medição rejeitada e instrumentar exposição, abertura, escolha, adesão, Kit e convites; exibir funil administrativo com filtros, testes separados e histórico indisponível identificado.
+- [x] Corrigir medição rejeitada e instrumentar exposição, abertura, escolha, adesão, Kit e convites; painel administrativo com filtros, testes separados e histórico indisponível identificado. Fluxo autenticado de abertura, Kit, retorno e destaque conferido com leitura dos eventos no painel; administração excluída por padrão, sem erros. Coleta nos clientes depende da publicação do App.
 - [x] Levar o convite aprovado ao Kit de uso real, com as duas versões editáveis e link individual; área autenticada, edição e conteúdo do WhatsApp conferidos sem envio real. Aguarda publicação do App.
 - [x] Atualizar e conferir o convite aprovado na prévia privada, com versões para usuários e apoiadores; consentimento, edição e retorno testados na conta administrativa, sem erros, gravações ou envios reais.
 - [x] Criar e conferir prévia administrativa interativa do primeiro gesto, convite imediato, adesão voluntária como Embaixador e retorno; percurso autenticado e recusa conferidos, sem gravações nem compartilhamentos reais.
