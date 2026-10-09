@@ -3546,6 +3546,8 @@ export type Database = {
           last_user_emotional_state: string | null
           post_session_sent: boolean | null
           preparation_note: string | null
+          quota_exempt: boolean
+          quota_exempt_reason: string | null
           rating_requested: boolean | null
           reframe_feedback: string | null
           reframe_feedback_at: string | null
@@ -3588,6 +3590,8 @@ export type Database = {
           last_user_emotional_state?: string | null
           post_session_sent?: boolean | null
           preparation_note?: string | null
+          quota_exempt?: boolean
+          quota_exempt_reason?: string | null
           rating_requested?: boolean | null
           reframe_feedback?: string | null
           reframe_feedback_at?: string | null
@@ -3630,6 +3634,8 @@ export type Database = {
           last_user_emotional_state?: string | null
           post_session_sent?: boolean | null
           preparation_note?: string | null
+          quota_exempt?: boolean
+          quota_exempt_reason?: string | null
           rating_requested?: boolean | null
           reframe_feedback?: string | null
           reframe_feedback_at?: string | null

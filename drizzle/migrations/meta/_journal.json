@@ -29,6 +29,13 @@
       "when": 1791569620614,
       "tag": "0003_durable_chat_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791571333597,
+      "tag": "0004_session_quota_compensation",
+      "breakpoints": true
     }
   ]
 }
