@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import Stripe from "https://esm.sh/stripe@18.5.0";
+import { SERVICE_POLICY } from "./service-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,19 +76,7 @@ SIGILO DA CONVERSA (REGRA INVIOLÁVEL):
 - Se quiser explorar algo que só sabe pelo WhatsApp, faça uma pergunta aberta como se não soubesse (ex: "como tem sido sua experiência?" em vez de "vi que sua última sessão não foi boa").
 - A conversa terapêutica é sagrada; demonstrar que a equipe lê quebra a confiança e a percepção de privacidade do cliente.
 
-PROTOCOLO DE CANCELAMENTO (PRIMEIRA RESPOSTA — RETENÇÃO ANTES DE EXECUTAR):
-Quando category = "cancelamento" e este é o PRIMEIRO contato do cliente sobre o tema (sem motivo declarado e sem reconfirmação):
-- NÃO confirme o cancelamento. NÃO diga "garantimos que nenhuma cobrança será feita". NÃO explique como o acesso continuará. NÃO descreva o que vai acontecer com o trial/assinatura.
-- Foco único: acolher de forma curta + abrir espaço pra entender o motivo + sinalizar disponibilidade pra ajustar, SEM pressão e SEM chantagem.
-- Estrutura sugerida do rascunho (curto, 3–5 linhas no total):
-  1. Acolhimento humano e curto (1 linha). Evite "sinto muito que queira sair".
-  2. Pergunta aberta sobre o motivo (ex: "antes de seguir, posso te perguntar o que te levou a essa decisão?" / "tem algo específico que não fluiu como você esperava?").
-  3. Sinalize que existem caminhos (pausar, trocar de plano, ajustar algo) SEM listar tudo de bandeja — só uma menção leve.
-  4. Deixe claro que, se mesmo assim quiser seguir com o cancelamento, é só responder confirmando — sem fricção.
-- suggested_action.type DEVE ser "none" nesta primeira resposta. NÃO sugira cancel_subscription / cancel_asaas_subscription ainda.
-- Severidade: "media".
-- Só prossiga com cancel_subscription / cancel_asaas_subscription quando o cliente RECONFIRMAR explicitamente após a pergunta de retenção, OU quando o primeiro email já trouxer motivo claro + pedido reconfirmado ("já tentei tudo, quero cancelar mesmo", "não me serve, pode cancelar definitivamente").
-- Importante: respeite a regra de SIGILO acima — não justifique a pergunta com nada que você só saberia lendo o WhatsApp.
+${SERVICE_POLICY}
 
 TOM DA RESPOSTA:
 - Português do Brasil informal mas profissional
@@ -118,7 +107,7 @@ AÇÕES SUGERIDAS (use 1 ou mais, em ordem):
 - change_plan: trocar plano (informe new_plan: essencial|direcao|transformacao e billing: monthly|yearly)
 - refund_asaas_payment: reembolsar cobrança PIX/Asaas (informe asaas_payment_id e amount_cents se parcial)
 - cancel_asaas_subscription: cancelar assinatura PIX/Asaas (informe asaas_subscription_id)
-- Exemplo combinado: cliente quer cancelar E reembolsar últimas 2 faturas → suggested_actions = [{ type: "cancel_subscription", params: { subscription_id: "..." } }, { type: "refund_invoice", params: { invoice_id: "in_AAA..." } }, { type: "refund_invoice", params: { invoice_id: "in_BBB..." } }].
+- Exemplo combinado SOMENTE após comprovar fundamento para cada devolução e respeitar a etapa de retenção: cancelamento + duas faturas elegíveis → suggested_actions = [{ type: "cancel_subscription", params: { subscription_id: "..." } }, { type: "refund_invoice", params: { invoice_id: "in_AAA..." } }, { type: "refund_invoice", params: { invoice_id: "in_BBB..." } }]. Pedido do cliente sozinho NÃO autoriza incluir reembolsos.
 - Se prometer reembolso de N faturas no texto, DEVE haver N itens refund_invoice na lista, cada um com seu invoice_id distinto vindo de stripe.invoices.
 
 REGRA DE PROVEDOR:
@@ -355,6 +344,14 @@ serve(async (req) => {
       .filter((m) => m.direction === "inbound")
       .map((m) => `[${m.from_email}]: ${m.body_text || "(sem texto)"}`)
       .join("\n\n---\n\n");
+    // Apenas mensagens enviadas: rascunhos não entram como retenção realizada.
+    const conversationHistory = (messages || [])
+      .map((m) => {
+        const timestamp = m.created_at ? Date.parse(m.created_at) : NaN;
+        const dateBrt = Number.isFinite(timestamp) ? fmtBRT(timestamp / 1000) : null;
+        return `[${m.direction === "inbound" ? "CLIENTE" : "EQUIPE — RESPOSTA ENVIADA"} | ${dateBrt || "data indisponível"}]: ${m.body_text || "(sem texto)"}`;
+      })
+      .join("\n\n---\n\n");
 
     // ========== RAG: search knowledge base ==========
     let kbBlock = "";
@@ -431,6 +428,9 @@ Assunto: ${ticket.subject}
 De: ${ticket.customer_email}
 
 ${inboundEmails}
+
+HISTÓRICO CRONOLÓGICO DO ATENDIMENTO (não são rascunhos):
+${conversationHistory}
 
 CONTEXTO DO CLIENTE:
 ${JSON.stringify(context, null, 2)}${kbBlock}
