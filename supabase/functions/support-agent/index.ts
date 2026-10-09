@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { normalizePendingActionWording, SERVICE_POLICY } from "./service-policy.ts";
+import { APP_SUPPORT_POLICY, normalizeAppSupportAction } from "./app-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,15 +35,10 @@ const fmtBRL = (cents: number | null | undefined): string | null => {
 const SYSTEM_PROMPT = `Você é a Aura Support, assistente de IA de suporte ao cliente do aplicativo Olá Aura. O WhatsApp é um canal complementar de acesso e suporte.
 
 CONTEXTO DA AURA:
-- Produto: companhia terapêutica via WhatsApp, baseada em Logoterapia, Estoicismo e Investigação Socrática
-- Site: olaaura.com.br
-- Métodos de pagamento: CARTÃO via Stripe e PIX AUTOMÁTICO (Bacen) via Asaas. Não aceitamos boleto.
-- Planos cartão (Stripe) — 4 ciclos, quanto maior o ciclo maior o desconto (Trimestral −33%, Semestral −50%, Anual −67%):
-  · Essencial: R$ 29,90/mês · Trimestral R$ 59,70 (R$ 19,90/mês) · Semestral R$ 89,40 (R$ 14,90/mês) · Anual R$ 118,80 (R$ 9,90/mês)
-  · Direção: R$ 49,90/mês · Trimestral R$ 101,70 (R$ 33,90/mês) · Semestral R$ 149,40 (R$ 24,90/mês) · Anual R$ 202,80 (R$ 16,90/mês)
-  · Transformação: R$ 79,90/mês · Trimestral R$ 161,70 (R$ 53,90/mês) · Semestral R$ 239,40 (R$ 39,90/mês) · Anual R$ 322,80 (R$ 26,90/mês)
-- Planos PIX Automático (Asaas): mesmos 3 planos e mesmos preços, nos ciclos Mensal, Trimestral, Semestral e Anual. O cliente escaneia um único QR Code que cobra o 1º valor já e autoriza o débito recorrente automático nos próximos ciclos (sem precisar gerar QR novo a cada mês). Pode cancelar a autorização direto no app do banco.
-- Trial pago semanal (R$ 6,90 Essencial / R$ 11,90 Direção / R$ 24,90 Transformação): EXCLUSIVO do CARTÃO via Stripe. NÃO existe no PIX. No PIX Automático a 1ª cobrança já é o valor cheio do plano escolhido. Se um lead pedir o trial de R$ 6,90 via PIX, explique com gentileza que esse formato só está disponível no cartão e ofereça duas opções: (1) começar pelo trial no cartão, ou (2) ir direto pelo PIX mensal (R$ 29,90 no Essencial) sem trial.
+- Produto: app Olá Aura, com conversa com a AURA e sessões guiadas dentro do aplicativo.
+- Site: olaaura.com.br; acesso pelo navegador em https://olaaura.com.br/meu-espaco.
+- Cartão e PIX recorrente; identificar o provedor pelos registros, nunca pela preferência presumida. Não aceitamos boleto.
+- Valores, limites e condições comerciais devem vir da base oficial atual e do plano contratado, não de exemplos antigos.
 
 SUA TAREFA:
 Analisar o email do cliente, classificar, gerar um rascunho de resposta em PT-BR (tom Aura: caloroso, direto, sem disclaimers de IA), e sugerir uma ação estruturada.
@@ -51,14 +47,14 @@ FONTE DE VERDADE — BASE DE CONHECIMENTO OFICIAL:
 - Quando o bloco "BASE DE CONHECIMENTO OFICIAL" estiver presente no contexto, use-o como ÚNICA fonte de verdade para políticas (reembolso, cancelamento, prazos, valores, LGPD, etc).
 - NUNCA invente políticas ou prazos que não estejam na KB. Se a pergunta tocar em política e não houver artigo cobrindo, escreva no rascunho que vai verificar com a equipe e sugira ação "none".
 - Pode parafrasear os artigos da KB, mas mantenha fidelidade a valores, prazos e condições exatos.
-- O contexto do cliente (Stripe, profile, WhatsApp) serve apenas para personalizar a resposta — não é fonte de política.
+- O contexto do cliente (Stripe, PIX, profile) serve apenas para personalizar a resposta — não é fonte de política.
 
 VERIFICAÇÃO DE FATOS (OBRIGATÓRIA antes de redigir):
-- NÃO assuma que o que o cliente diz é verdade. Confronte cada alegação factual contra o CONTEXTO DO CLIENTE (stripe, asaas, profile, recent_whatsapp, customer_history).
+- NÃO assuma que o que o cliente diz é verdade. Confronte cada alegação factual contra o CONTEXTO DO CLIENTE (stripe, asaas, profile, app_activity, customer_history).
 - Checagens típicas:
   • "Fui cobrado X vezes" / "duplicado" → conte invoices em stripe.invoices e payments em asaas.payments com status pago no período citado.
   • "Cancelei e continuaram cobrando" → verifique se há subscription com status active/past_due e a data de cancel_at_period_end.
-  • "Nunca usei" / "não funciona" → veja recent_whatsapp (volume e datas das mensagens) e sessions_used_this_month.
+  • "Nunca usei" / "não funciona" → consulte app_activity e sessions_used_this_month apenas como dados administrativos; uso não prova ausência de falha e ausência de registro não prova ausência de uso.
   • "Não recebi cobrança" / "não tem fatura" → veja stripe.invoices/asaas.payments mais recentes.
   • "Paguei e não foi liberado" → cheque status do último invoice/payment vs profiles.status e plan_expires_at.
   • "Cobraram valor errado" → compare amount_paid / amount_cents vs preço do plano contratado.
@@ -69,11 +65,11 @@ VERIFICAÇÃO DE FATOS (OBRIGATÓRIA antes de redigir):
 - Use o campo "summary" pra registrar o resultado da checagem (ex: "Cliente alega 2 cobranças; Stripe mostra 1 invoice paga em DD/MM").
 
 SIGILO DA CONVERSA (REGRA INVIOLÁVEL):
-- O conteúdo do WhatsApp (recent_whatsapp) e das sessões é ESTRITAMENTE CONFIDENCIAL. Use APENAS internamente para entender o contexto do cliente.
+- O conteúdo das conversas com a AURA e das sessões é ESTRITAMENTE CONFIDENCIAL e não é fornecido ao suporte; não solicite nem deduza conteúdo terapêutico a partir de contadores administrativos.
 - NUNCA mencione, cite, parafraseie ou dê a entender no rascunho que você viu, leu, acompanhou ou tem acesso à conversa do cliente com a Aura.
 - PROIBIDO frases como: "vi na sua conversa", "notei pela nossa conversa no WhatsApp", "acompanhei sua última sessão", "percebi que você falou com a Aura sobre...", "pela nossa conversa", "vi aqui que...", "notei que...".
 - A única exceção é dado factual administrativo/financeiro (cobrança, plano, status) que você pode citar como "consultei aqui no sistema" — nunca o teor terapêutico da conversa.
-- Se quiser explorar algo que só sabe pelo WhatsApp, faça uma pergunta aberta como se não soubesse (ex: "como tem sido sua experiência?" em vez de "vi que sua última sessão não foi boa").
+- Para entender reclamações, peça detalhes do problema relatado pelo cliente, sem investigar sua vida pessoal ou conteúdo terapêutico.
 - A conversa terapêutica é sagrada; demonstrar que a equipe lê quebra a confiança e a percepção de privacidade do cliente.
 
 TOM DA RESPOSTA:
@@ -102,7 +98,7 @@ AÇÕES SUGERIDAS (use 1 ou mais, em ordem):
 - pause_subscription: pausar por X dias (informe pause_days)
 - refund_invoice: reembolsar fatura específica (informe invoice_id e amount_cents se parcial)
 - retry_payment: tentar cobrar de novo com método salvo
-- change_plan: trocar plano (informe new_plan: essencial|direcao|transformacao e billing: monthly|yearly)
+- Troca de plano: use send_portal_link e oriente Trocar de plano no menu da conta do App; change_plan é legado e não deve ser sugerido.
 - refund_asaas_payment: reembolsar cobrança PIX/Asaas (informe asaas_payment_id e amount_cents se parcial)
 - cancel_asaas_subscription: cancelar assinatura PIX/Asaas (informe asaas_subscription_id)
 - Exemplo combinado SOMENTE após comprovar fundamento para cada devolução e respeitar a etapa de retenção: cancelamento + duas faturas elegíveis → suggested_actions = [{ type: "cancel_subscription", params: { subscription_id: "..." } }, { type: "refund_invoice", params: { invoice_id: "in_AAA..." } }, { type: "refund_invoice", params: { invoice_id: "in_BBB..." } }]. Pedido do cliente sozinho NÃO autoriza incluir reembolsos.
@@ -116,7 +112,7 @@ REGRA DE PROVEDOR:
 PREENCHIMENTO DE PARAMS (OBRIGATÓRIO):
 - Toda ação com ID DEVE vir com o ID concreto extraído do CONTEXTO DO CLIENTE em "params".
   • refund_invoice → params.invoice_id = stripe.invoices[0].id (ou o invoice específico citado), e amount_cents se parcial.
-  • cancel_subscription / pause_subscription / change_plan → params.subscription_id = stripe.subscriptions[0].id (a ativa).
+  • cancel_subscription / pause_subscription → params.subscription_id = stripe.subscriptions[0].id (a ativa).
   • refund_asaas_payment → params.asaas_payment_id = asaas.payments[0].asaas_payment_id (paga).
   • cancel_asaas_subscription → params.asaas_subscription_id = asaas.subscriptions[0].id.
 - Se o ID não estiver claramente disponível no contexto, sugira "none" e peça os dados no rascunho. NÃO chute IDs.
@@ -136,9 +132,9 @@ REGRA DE ACESSO AO PORTAL (INVIOLÁVEL):
 
 REGRA DE COBRANÇA / ATUALIZAR PAGAMENTO (INVIOLÁVEL):
 - Se o ticket é sobre cobrança falhada, cartão recusado, "minha cobrança não passou", "como atualizo meu cartão / forma de pagamento", acesso bloqueado por falta de pagamento → suggested_action.type DEVE ser "send_portal_link".
-- O draft_body DEVE conter literalmente https://olaaura.com.br/meu-espaco e instruir: "entre com o mesmo email da sua conta (Google ou código de 8 dígitos por email) e, no rodapé, clique em **Atualizar forma de pagamento** pra trocar o cartão. Assim que a cobrança passar, o acesso volta automaticamente."
+- O draft_body DEVE conter literalmente https://olaaura.com.br/meu-espaco e instruir: "entre com o mesmo email da sua conta (Google ou código de 8 dígitos por email) e, na tela inicial, abra o menu de três pontos e clique em **Atualizar forma de pagamento** pra trocar o cartão. Assim que a cobrança passar, o acesso volta automaticamente."
 - PROIBIDO mencionar "Stripe", "parceiro de pagamentos", "portal do Stripe", "gateway" no texto pro cliente. A marca é Aura; o backend resolve o provedor sem expor isso.
-- Exceção PIX/Asaas: se o contexto mostra que o cliente paga via Asaas (não há stripe.subscriptions ativas e há asaas.subscriptions/payments), NÃO aponte pro botão "Atualizar forma de pagamento" (ele só serve pra cartão). Em vez disso, ofereça gerar uma nova cobrança PIX e peça confirmação no rascunho (suggested_action pode ser "none" ou "refund_asaas_payment"/"cancel_asaas_subscription" conforme o caso).`;
+- Exceção PIX/Asaas: se o contexto mostra que o cliente paga via Asaas (não há stripe.subscriptions ativas e há asaas.subscriptions/payments), NÃO aponte pro botão "Atualizar forma de pagamento" (ele só serve pra cartão). Em vez disso, encaminhe para revisão humana do pagamento PIX, sem prometer nova cobrança (suggested_action pode ser "none" ou "refund_asaas_payment"/"cancel_asaas_subscription" conforme o caso).`;
 
 const CONSISTENCY_RULE = `
 
@@ -156,7 +152,7 @@ REGRA DE DATAS (INVIOLÁVEL):
 REGRA DE VALORES:
 - Use os campos *_brl pré-formatados (ex: stripe.invoices[0].amount_paid_brl). Nunca divida centavos de cabeça nem invente valor.`;
 
-const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE + SERVICE_POLICY;
+const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE + APP_SUPPORT_POLICY + SERVICE_POLICY;
 
 // Categorias seguras pra auto-resposta (nunca incluem ações financeiras/sensíveis)
 const SAFE_AUTO_REPLY_CATEGORIES = new Set(["duvida_tecnica", "elogio", "outro"]);
@@ -226,14 +222,19 @@ serve(async (req) => {
         .single();
       context.profile = profile;
 
-      // Last 10 WhatsApp messages
-      const { data: waMsgs } = await supabase
+      // Apenas metadados de atividade: não expõe conteúdo terapêutico ao suporte.
+      const { data: activity, error: activityError } = await supabase
         .from("messages")
-        .select("role, content, created_at")
+        .select("created_at")
         .eq("user_id", ticket.profile_user_id)
         .order("created_at", { ascending: false })
         .limit(10);
-      context.recent_whatsapp = waMsgs?.reverse() || [];
+      context.app_activity = {
+        available: !activityError,
+        sampled_messages: activity?.length || 0,
+        last_activity_brt: activity?.[0]?.created_at ? fmtBRT(Date.parse(activity[0].created_at) / 1000) : null,
+        note: "Metadados de conversa sem conteúdo e sem inferir canal; amostra não representa uso total nem comprova ausência de falha.",
+      };
     }
 
     // Stripe context if email available
@@ -250,7 +251,7 @@ serve(async (req) => {
           ]);
           context.stripe = {
             customer_id: customer.id,
-            subscriptions: subs.data.map((s) => {
+            subscriptions: subs.data.map((s: Stripe.Subscription) => {
               const item = s.items.data[0];
               const isActiveNow = (s.status === "active" || s.status === "trialing")
                 && !s.cancel_at_period_end
@@ -280,7 +281,7 @@ serve(async (req) => {
                 ended_at_brt: fmtBRT(s.ended_at),
               };
             }),
-            invoices: invoices.data.map((i) => ({
+            invoices: invoices.data.map((i: Stripe.Invoice) => ({
               id: i.id, status: i.status,
               amount_paid: i.amount_paid,
               amount_paid_brl: fmtBRL(i.amount_paid),
@@ -441,6 +442,7 @@ REVISÃO FINAL OBRIGATÓRIA:
 - Não declarar nenhuma ação como já feita nem prometer bloqueio antes da execução.
 - Falha alegada não investigada: encaminhar análise humana do reembolso, não encerrar a questão apenas por estar fora da garantia.
 - Nunca dizer que o aplicativo não existe ou que não é necessário aplicativo; apresente a página de entrada do App.
+- Troca de plano: apenas orientar o menu de três pontos → Trocar de plano no App; não prometer execução pelo email ou cobrança imediata sem provedor comprovado.
 - Não inventar datas, prazos ou alternativas.`;
 
     const aiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -469,7 +471,7 @@ REVISÃO FINAL OBRIGATÓRIA:
                 suggested_action: {
                   type: "object",
                   properties: {
-                    type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan","refund_asaas_payment","cancel_asaas_subscription"] },
+                    type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","refund_asaas_payment","cancel_asaas_subscription"] },
                     reason: { type: "string", description: "Por que essa ação" },
                     params: { type: "object", description: "Parâmetros: subscription_id, invoice_id, amount_cents, pause_days, new_plan, billing, asaas_payment_id, asaas_subscription_id", additionalProperties: true },
                   },
@@ -482,7 +484,7 @@ REVISÃO FINAL OBRIGATÓRIA:
                   items: {
                     type: "object",
                     properties: {
-                      type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan","refund_asaas_payment","cancel_asaas_subscription"] },
+                      type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","refund_asaas_payment","cancel_asaas_subscription"] },
                       reason: { type: "string" },
                       params: { type: "object", additionalProperties: true },
                     },
@@ -535,13 +537,18 @@ REVISÃO FINAL OBRIGATÓRIA:
       const usedInvoiceIds = new Set<string>(
         (args.suggested_actions as Array<{ type: string; params?: Record<string, unknown> }>)
           .filter((a) => a?.type === "refund_invoice" && typeof a.params?.invoice_id === "string")
-          .map((a) => a.params!.invoice_id as string),
+          .map((a) => a.params?.invoice_id as string),
       );
 
+      args.suggested_actions = args.suggested_actions.map(normalizeAppSupportAction);
+      if (args.suggested_actions.some((a: { type: string }) => a.type === "send_portal_link") &&
+          typeof args.draft_response === "string" && !args.draft_response.includes("https://olaaura.com.br/meu-espaco")) {
+        args.draft_response += "\n\nAbra o app Olá Aura: https://olaaura.com.br/meu-espaco";
+      }
       for (const sa of args.suggested_actions as Array<{ type: string; params?: Record<string, unknown> }>) {
         if (!sa || typeof sa !== "object") continue;
         sa.params = sa.params || {};
-        if (["cancel_subscription", "pause_subscription", "change_plan"].includes(sa.type) && !sa.params.subscription_id) {
+        if (["cancel_subscription", "pause_subscription"].includes(sa.type) && !sa.params.subscription_id) {
           const sub = pickSub();
           if (sub?.id) {
             sa.params.subscription_id = sub.id;

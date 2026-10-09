@@ -57,7 +57,7 @@ serve(async (req) => {
     // o ID concreto. Em vez de falhar, o backend resolve automaticamente a partir
     // do email do ticket (Stripe customer + última invoice/sub paga, ou Asaas pelo profile).
     const needsStripeInvoice = action.type === "refund_invoice" && !params.invoice_id;
-    const needsStripeSub = ["cancel_subscription", "pause_subscription", "change_plan"].includes(action.type) && !params.subscription_id;
+    const needsStripeSub = ["cancel_subscription", "pause_subscription"].includes(action.type) && !params.subscription_id;
     const needsAsaasPayment = action.type === "refund_asaas_payment" && !params.asaas_payment_id;
     const needsAsaasSub = action.type === "cancel_asaas_subscription" && !params.asaas_subscription_id;
 
@@ -294,8 +294,8 @@ serve(async (req) => {
           // Idempotente: se a fatura já foi estornada (total ou no valor pedido), não tenta de novo.
           const existing = await stripe.refunds.list({ payment_intent: piId, limit: 100 });
           const refundedSoFar = existing.data
-            .filter((r) => r.status !== "failed" && r.status !== "canceled")
-            .reduce((sum, r) => sum + (r.amount || 0), 0);
+            .filter((r: Stripe.Refund) => r.status !== "failed" && r.status !== "canceled")
+            .reduce((sum: number, r: Stripe.Refund) => sum + (r.amount || 0), 0);
           const wanted = params.amount_cents ? Number(params.amount_cents) : (invoice.amount_paid || 0);
           if (refundedSoFar > 0 && refundedSoFar >= wanted) {
             stripeResponse = {
@@ -327,31 +327,8 @@ serve(async (req) => {
         }
 
         case "change_plan": {
-          const subId = params.subscription_id;
-          const newPlan = params.new_plan;
-          const billing = params.billing || "monthly";
-          if (!subId || !newPlan) throw new Error("subscription_id and new_plan required");
-          const priceMap: Record<string, string | undefined> = {
-            essencial_monthly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY"),
-            essencial_yearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY"),
-            direcao_monthly: Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY"),
-            direcao_yearly: Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY"),
-            transformacao_monthly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY"),
-            transformacao_yearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY"),
-          };
-          const newPrice = priceMap[`${newPlan}_${billing}`];
-          if (!newPrice) throw new Error(`Price not found for ${newPlan}_${billing}`);
-          const sub = await stripe.subscriptions.retrieve(subId);
-          const updated = await stripe.subscriptions.update(subId, {
-            items: [{ id: sub.items.data[0].id, price: newPrice }],
-            proration_behavior: "create_prorations",
-          });
-          stripeResponse = { id: updated.id, new_price: newPrice };
-          if (ticket.profile_user_id) {
-            await supabase.from("profiles").update({ plan: newPlan }).eq("user_id", ticket.profile_user_id);
-          }
-          success = true;
-          break;
+          // Rascunhos antigos não podem executar um fluxo divergente do App.
+          throw new Error("Troca de plano deve ser confirmada pelo cliente no App: menu da conta → Trocar de plano. Regenere o rascunho para orientar esse acesso.");
         }
 
         case "refund_asaas_payment": {
