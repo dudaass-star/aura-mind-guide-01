@@ -6,7 +6,7 @@
 # Roadmap
 
 ## Reposição da sessão da Daiane
-- [ ] Devolver uma sessão afetada por falha técnica sem apagar histórico ou alterar plano, conferir autorização/cota e enviar aviso pelo WhatsApp.
+- [x] Compensar sessão de Daiane Petarnella de 08/10 sem apagar histórico nem alterar plano: cota hospedada 3/4, duas agendadas mantidas, regra de agendamento e agente atualizados. Aviso aceito pelo WhatsApp e registrado; a verificação repetiu indevidamente o envio (dois registros), sem nova sessão liberada. Entrega/leitura não confirmadas. Tela atualizada na prévia, publicação pendente; fluxo da cliente não simulado para não criar sessão real.
 
 ## Recuperação da conversa
 - [x] Adicionar registros de falhas da geração Google com status permitido, causa classificada, duração e correlação aleatória; sem corpo bruto, conteúdo terapêutico, chamadas adicionais ou rotina periódica. Sete testes passaram, incluindo wrapper real com rede simulada (sucesso, 503 e transporte); build OK. Nenhuma falha real foi provocada; origem histórica permanece sem comprovação e registro hospedado aguarda uma ocorrência natural.
