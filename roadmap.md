@@ -6,7 +6,7 @@
 # Roadmap
 
 ## Suporte por e-mail
-- [ ] Corrigir importação travada, recuperar mensagens sem envio automático e conferir o pedido da cliente no painel autenticado.
+- [x] Corrigir importação travada e recuperar 15 mensagens, incluindo original de 8,87 MB; entrada em lotes e agendamento protegido. Pedido de Jana recebido em 02/10 às 21h22 BRT conferido no painel autenticado; botão verifica caixa vazia, dois testes passaram e nenhuma resposta/cancelamento foi executado. Mensagens grandes ficam completas em anexo .eml para revisão humana.
 
 ## Panorama do negócio
 - [x] Conferir fontes paginadas, entradas/saídas e bases mensais: corrigir atribuição por E2E oficial, duplicação de entradas e cobertura inicial imediata Asaas. Doze meses locais e hospedados coincidem; validação autenticada de gráfico/filtro sem erros. Não equivale a auditoria contábil integral.
