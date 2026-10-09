@@ -31,3 +31,6 @@
 - Home keeps tracking; practice dialogs stop audio on exit.
 
 - Revenue splits potential/coverage; churn unions paid people, using official E2E and contract dates to avoid cross-plan attribution.
+<!-- LOVABLE:BEGIN -->
+- Support ingestion uses bounded UID reads and lightweight MIME parsing; message-level deduplication and human review prevent lost mail and unintended sends.
+<!-- LOVABLE:END -->
