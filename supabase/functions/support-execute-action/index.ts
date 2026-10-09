@@ -294,8 +294,8 @@ serve(async (req) => {
           // Idempotente: se a fatura já foi estornada (total ou no valor pedido), não tenta de novo.
           const existing = await stripe.refunds.list({ payment_intent: piId, limit: 100 });
           const refundedSoFar = existing.data
-            .filter((r) => r.status !== "failed" && r.status !== "canceled")
-            .reduce((sum, r) => sum + (r.amount || 0), 0);
+            .filter((r: Stripe.Refund) => r.status !== "failed" && r.status !== "canceled")
+            .reduce((sum: number, r: Stripe.Refund) => sum + (r.amount || 0), 0);
           const wanted = params.amount_cents ? Number(params.amount_cents) : (invoice.amount_paid || 0);
           if (refundedSoFar > 0 && refundedSoFar >= wanted) {
             stripeResponse = {

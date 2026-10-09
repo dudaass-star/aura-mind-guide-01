@@ -251,7 +251,7 @@ serve(async (req) => {
           ]);
           context.stripe = {
             customer_id: customer.id,
-            subscriptions: subs.data.map((s) => {
+            subscriptions: subs.data.map((s: Stripe.Subscription) => {
               const item = s.items.data[0];
               const isActiveNow = (s.status === "active" || s.status === "trialing")
                 && !s.cancel_at_period_end
@@ -281,7 +281,7 @@ serve(async (req) => {
                 ended_at_brt: fmtBRT(s.ended_at),
               };
             }),
-            invoices: invoices.data.map((i) => ({
+            invoices: invoices.data.map((i: Stripe.Invoice) => ({
               id: i.id, status: i.status,
               amount_paid: i.amount_paid,
               amount_paid_brl: fmtBRL(i.amount_paid),
@@ -471,7 +471,7 @@ REVISÃO FINAL OBRIGATÓRIA:
                 suggested_action: {
                   type: "object",
                   properties: {
-                    type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan","refund_asaas_payment","cancel_asaas_subscription"] },
+                    type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","refund_asaas_payment","cancel_asaas_subscription"] },
                     reason: { type: "string", description: "Por que essa ação" },
                     params: { type: "object", description: "Parâmetros: subscription_id, invoice_id, amount_cents, pause_days, new_plan, billing, asaas_payment_id, asaas_subscription_id", additionalProperties: true },
                   },
@@ -484,7 +484,7 @@ REVISÃO FINAL OBRIGATÓRIA:
                   items: {
                     type: "object",
                     properties: {
-                      type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan","refund_asaas_payment","cancel_asaas_subscription"] },
+                      type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","refund_asaas_payment","cancel_asaas_subscription"] },
                       reason: { type: "string" },
                       params: { type: "object", additionalProperties: true },
                     },
@@ -537,7 +537,7 @@ REVISÃO FINAL OBRIGATÓRIA:
       const usedInvoiceIds = new Set<string>(
         (args.suggested_actions as Array<{ type: string; params?: Record<string, unknown> }>)
           .filter((a) => a?.type === "refund_invoice" && typeof a.params?.invoice_id === "string")
-          .map((a) => a.params!.invoice_id as string),
+          .map((a) => a.params?.invoice_id as string),
       );
 
       args.suggested_actions = args.suggested_actions.map(normalizeAppSupportAction);
@@ -548,7 +548,7 @@ REVISÃO FINAL OBRIGATÓRIA:
       for (const sa of args.suggested_actions as Array<{ type: string; params?: Record<string, unknown> }>) {
         if (!sa || typeof sa !== "object") continue;
         sa.params = sa.params || {};
-        if (["cancel_subscription", "pause_subscription", "change_plan"].includes(sa.type) && !sa.params.subscription_id) {
+        if (["cancel_subscription", "pause_subscription"].includes(sa.type) && !sa.params.subscription_id) {
           const sub = pickSub();
           if (sub?.id) {
             sa.params.subscription_id = sub.id;
