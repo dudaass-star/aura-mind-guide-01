@@ -5,6 +5,11 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Recuperação da conversa
+- [x] Separar leitura de balões do estado da Aura, limitar esperas e registrar duração de consultas falhas; janela sobreposta evita lacunas de sequência. App atualizado na prévia; publicação pendente.
+- [x] Persistir recuperação limitada de turnos, com retomadas autorizadas e desarme após drenagem; silêncio com turno sem resposta impede conclusão e pausa no teto operacional. Funções implantadas, sem alterar o avaliador.
+- [x] Seis testes passaram: consulta de estado bloqueada/falha, política de erros e proteção contra conclusão com turno sem resposta. Conversa autenticada respondeu sem erros; fila hospedada retomou pendência já respondida, resolveu e removeu o agendamento sem duplicar balões. A origem histórica exata dos 50/46 segundos continua sem comprovação; não houve simulação hospedada de indisponibilidade longa da IA.
+
 ## Suporte por e-mail
 - [x] Alinhar suporte às áreas e ações reais do App; troca orientada pelo menu da conta, execução antiga bloqueada e contexto sem conteúdo terapêutico. Seis testes passaram, funções verificadas e menu/diálogo conferidos autenticados; nenhuma mensagem enviada ou cobrança executada. Rascunhos anteriores precisam ser regenerados.
 - [x] Ajustar retenção breve e reembolso por garantia/evidências, incluindo histórico de respostas enviadas; seis simulações de ações com IA aprovadas sem envio nem execução financeira, e testes da política/linguagem pendente. Rascunhos financeiros continuam sujeitos à revisão humana.

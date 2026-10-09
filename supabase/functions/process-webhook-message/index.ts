@@ -2201,6 +2201,11 @@ Deno.serve(async (req) => {
           status: 'failed',
           error_code: describedError.code || (error instanceof Error ? error.name : 'unknown'),
         }).eq('user_id', profile.user_id).eq('client_message_id', currentMessageId);
+        // Erros definitivos não devem alimentar a fila de retomada.
+        if (!shouldRecoverChatTurn(error, 0, false)) {
+          await supabase.from('chat_response_recovery').update({ status: 'exhausted', last_error: describedError.message.slice(0, 200), updated_at: new Date().toISOString() })
+            .eq('user_id', profile.user_id).eq('client_message_id', currentMessageId).in('status', ['pending', 'running']);
+        }
       } catch (metricsError) {
         console.error('⚠️ Falha não bloqueante na telemetria do chat:', metricsError);
       }

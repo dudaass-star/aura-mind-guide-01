@@ -499,6 +499,48 @@ export type Database = {
           },
         ]
       }
+      chat_response_recovery: {
+        Row: {
+          attempts: number
+          client_message_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          last_error: string | null
+          lease_until: string | null
+          next_attempt_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          client_message_id: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_error?: string | null
+          lease_until?: string | null
+          next_attempt_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          client_message_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_error?: string | null
+          lease_until?: string | null
+          next_attempt_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_turn_metrics: {
         Row: {
           channel: string
@@ -5276,6 +5318,28 @@ export type Database = {
         Returns: Json
       }
       allocate_whatsapp_instance: { Args: never; Returns: string }
+      claim_chat_response_recovery: {
+        Args: never
+        Returns: {
+          attempts: number
+          client_message_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          last_error: string | null
+          lease_until: string | null
+          next_attempt_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "chat_response_recovery"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_movement_referral: {
         Args: { _visitor_key: string }
         Returns: boolean
@@ -5468,6 +5532,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Json
       }
+      wake_chat_response_recovery: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "user"
