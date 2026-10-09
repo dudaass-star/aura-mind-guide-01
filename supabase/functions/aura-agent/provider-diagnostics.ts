@@ -27,7 +27,7 @@ export function providerFailureDiagnostic(input: {
   if (!input.status) reason = input.errorName === 'AbortError' ? 'request_aborted' : 'transport_failure';
   return {
     event: 'aura_provider_failure_v1',
-    at_brt: new Date().toISOString().replace('Z', '+00:00'),
+    at_brt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().replace('Z', '-03:00'),
     provider: 'google_native',
     model: /^[a-zA-Z0-9._-]{1,80}$/.test(input.model) ? input.model : 'unknown',
     stage: input.stage,

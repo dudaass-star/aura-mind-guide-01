@@ -6,6 +6,7 @@ import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { pickNextJourney, hasExplicitJourneyIntent } from "../_shared/journey-helper.ts";
 import { describeChatError } from "../_shared/chat-error.ts";
 import { detectLiveDisclosure } from "./phase-safety.ts";
+import { providerFailureDiagnostic } from "./provider-diagnostics.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -348,6 +349,24 @@ async function callAI(
     }
 
     const geminiModel = actualModel.replace('google/', '');
+    const diagnosticRequestId = crypto.randomUUID();
+    async function fetchGeneration(url: string, body: unknown, stage: 'generation' | 'cache_fallback') {
+      const startedAt = performance.now();
+      try {
+        return await fetch(url, {
+          method: 'POST',
+          headers: { 'x-goog-api-key': GEMINI_API_KEY ?? '', 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      } catch (error) {
+        console.error(JSON.stringify(providerFailureDiagnostic({
+          model: geminiModel, stage, requestId: diagnosticRequestId,
+          elapsedMs: performance.now() - startedAt,
+          errorName: error instanceof Error ? error.name : 'unknown',
+        })));
+        throw error;
+      }
+    }
     console.log('🔀 Routing to Gemini native API, model:', geminiModel, reasoningLevel ? `reasoning: ${reasoningLevel}` : '');
 
     // 1. Extrair system messages e separar estático vs dinâmico
@@ -440,18 +459,15 @@ async function callAI(
     // 5. Chamar endpoint nativo
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`;
     const providerStartedAt = performance.now();
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'x-goog-api-key': GEMINI_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(geminiBody),
-    });
+    const response = await fetchGeneration(url, geminiBody, 'generation');
     const providerMs = performance.now() - providerStartedAt;
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(JSON.stringify(providerFailureDiagnostic({
+        model: geminiModel, stage: 'generation', requestId: diagnosticRequestId,
+        elapsedMs: providerMs, status: response.status, body: errorText,
+      })));
       
       // Fallback: if cache-related 403, retry WITHOUT cache using inline system_instruction
       if (response.status === 403 && cacheName && errorText.includes('CachedContent')) {
@@ -477,15 +493,15 @@ async function callAI(
         }
         
         const retryProviderStartedAt = performance.now();
-        const retryResponse = await fetch(url, {
-          method: 'POST',
-          headers: { 'x-goog-api-key': GEMINI_API_KEY, 'Content-Type': 'application/json' },
-          body: JSON.stringify(geminiBody),
-        });
+        const retryResponse = await fetchGeneration(url, geminiBody, 'cache_fallback');
         const retryProviderMs = performance.now() - retryProviderStartedAt;
         
         if (!retryResponse.ok) {
           const retryErr = await retryResponse.text();
+          console.error(JSON.stringify(providerFailureDiagnostic({
+            model: geminiModel, stage: 'cache_fallback', requestId: diagnosticRequestId,
+            elapsedMs: retryProviderMs, status: retryResponse.status, body: retryErr,
+          })));
           throw Object.assign(new Error(`Gemini API error (retry): ${retryResponse.status}`), { status: retryResponse.status, body: retryErr });
         }
         
