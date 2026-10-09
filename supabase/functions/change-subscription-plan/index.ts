@@ -6,6 +6,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { stripeSubscriptionDescription } from "../_shared/stripe-invoice-kind.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -328,6 +329,7 @@ serve(async (req) => {
     try {
       updated = await stripe.subscriptions.update(activeSub.id, {
         items: [{ id: item.id, price: targetPriceId }],
+        description: stripeSubscriptionDescription(PLAN_NAMES[plan], cycle),
         // always_invoice: cria invoice imediatamente cobrando/creditando a diferença
         // no cartão já cadastrado. Alinha com o texto "cobrança proporcional hoje" da UI.
         proration_behavior: "always_invoice",
