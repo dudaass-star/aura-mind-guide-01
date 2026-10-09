@@ -5,6 +5,9 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Reposição da sessão da Daiane
+- [ ] Devolver uma sessão afetada por falha técnica sem apagar histórico ou alterar plano, conferir autorização/cota e enviar aviso pelo WhatsApp.
+
 ## Recuperação da conversa
 - [x] Adicionar registros de falhas da geração Google com status permitido, causa classificada, duração e correlação aleatória; sem corpo bruto, conteúdo terapêutico, chamadas adicionais ou rotina periódica. Sete testes passaram, incluindo wrapper real com rede simulada (sucesso, 503 e transporte); build OK. Nenhuma falha real foi provocada; origem histórica permanece sem comprovação e registro hospedado aguarda uma ocorrência natural.
 - [x] Separar leitura de balões do estado da Aura, limitar esperas e registrar duração de consultas falhas; janela sobreposta evita lacunas de sequência. App atualizado na prévia; publicação pendente.

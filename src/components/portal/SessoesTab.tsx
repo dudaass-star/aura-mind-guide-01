@@ -19,6 +19,7 @@ const PLAN_SESSION_LIMITS: Record<string, number> = { essencial: 1, direcao: 4, 
 type SessionProfile = { plan?: string | null; plan_tier?: string | null; status?: string | null } | null;
 type PortalSession = {
   id: string;
+  quota_exempt?: boolean;
   scheduled_at: string;
   ended_at?: string | null;
   focus_topic?: string | null;
@@ -142,7 +143,7 @@ export function SessoesTab({
     queryKey: ["portal-sessions", userId],
     queryFn: async () => {
       const { data, error } = await supabasePortal.from("sessions")
-        .select("id, scheduled_at, ended_at, status, focus_topic, theme_label, session_summary, continuity_thread, reframe_text, closure_type, closure_text, preparation_note, reframe_feedback, reframe_feedback_text")
+        .select("id, quota_exempt, scheduled_at, ended_at, status, focus_topic, theme_label, session_summary, continuity_thread, reframe_text, closure_type, closure_text, preparation_note, reframe_feedback, reframe_feedback_text")
         .eq("user_id", userId).order("scheduled_at", { ascending: false }).limit(150);
       if (error) throw error;
       return (data || []) as PortalSession[];
@@ -163,7 +164,7 @@ export function SessoesTab({
   const upcomingSessions = monthSessions.filter((session) => ["scheduled", "in_progress"].includes(session.status)).sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
   const completedSessions = allSessions.filter((session) => session.status === "completed").sort((a, b) => new Date(b.ended_at || b.scheduled_at).getTime() - new Date(a.ended_at || a.scheduled_at).getTime());
   const lastThread = completedSessions[0]?.continuity_thread;
-  const monthUsed = monthSessions.filter((session) => ["scheduled", "in_progress", "completed", "no_show"].includes(session.status)).length;
+  const monthUsed = monthSessions.filter((session) => !session.quota_exempt && ["scheduled", "in_progress", "completed", "no_show"].includes(session.status)).length;
   const activeSessions = allSessions.filter((session) => ["scheduled", "in_progress"].includes(session.status));
   const ratingMap = new Map(ratings.map((rating) => [rating.session_id, rating.rating]));
   const planLimit = sessionLimit(profile);
