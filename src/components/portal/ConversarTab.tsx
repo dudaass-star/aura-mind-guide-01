@@ -813,9 +813,9 @@ export function ConversarTab({
     const pendingPoll = window.setInterval(() => {
       if (document.visibilityState !== "visible" || checkingCompletion) return;
       const trace = responseTraceRef.current;
-      const traceActive = Boolean(trace && !trace.completed && Date.now() - Date.parse(trace.sentAt) < 180_000);
+      const traceActive = Boolean(trace && !trace.completed && Date.now() - Date.parse(trace.sentAt) < 900_000);
       const awaiting = awaitingResponseRef.current;
-      const awaitingActive = Boolean(awaiting && Date.now() - awaiting.createdAt < 180_000);
+      const awaitingActive = Boolean(awaiting && Date.now() - awaiting.createdAt < 900_000);
       if (!traceActive && !awaitingActive) return;
       checkingCompletion = true;
       void (async () => {
@@ -832,7 +832,7 @@ export function ConversarTab({
             try {
               const { data: state, error } = await supabasePortal.from("aura_response_state")
                 .select("is_responding,processed_user_message_id,last_user_message_id")
-                .eq("user_id", userId).maybeSingle().abortSignal(controller.signal);
+                .eq("user_id", userId).abortSignal(controller.signal).maybeSingle();
               if (error) throw error;
               return state;
             } catch {
