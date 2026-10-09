@@ -3,7 +3,7 @@
 - Contas de demonstração usam `profiles.status = 'demo'`, com direito de acesso apenas ao App e sem telefone/cobrança; isso permite separar personagens fictícios de clientes ativos em rotinas e indicadores.
 - Demo sharing uses protected individual seven-day invites; sessions start on click, without extending normal links.
 - Chat errors share descriptors; retry only transient failures to prevent terminal resends.
-- A conversa móvel herda a altura do contêiner ajustado pelo visualViewport, em vez de fixar 100dvh nas telas internas; isso mantém a caixa vazia visível quando o teclado reduz a área útil.
+- Mobile chat inherits visualViewport-adjusted container height; avoid inner 100dvh so keyboard cannot hide input.
 - Record home-icon launches in `portal_value_events` only after authentication and standalone detection; admin reads the latest launch, never inferring installation from browser use.
 - O PortalAuthProvider isola a sessão admin e serializa o vínculo; consolidação transacional só ocorre se a identidade antiga já não existe.
 - A tela de entrada do App permanece no pacote principal, sem carregamento dinâmico; isso impede tela branca por arquivo de versão anterior após uma atualização.
