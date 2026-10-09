@@ -10,5 +10,7 @@ Deno.test("Preserva anexos sem confundir o texto da solicitação", async () => 
   const raw = "From: cliente@example.org\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=teste\r\n\r\n--teste\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nComprovante em anexo\r\n--teste\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=prova.txt\r\nContent-Transfer-Encoding: base64\r\n\r\ncHJvdmE=\r\n--teste--";
   const mail = await PostalMime.parse(new TextEncoder().encode(raw));
   const attachment = mail.attachments[0];
-  if (!mail.text?.includes("Comprovante") || attachment?.filename !== "prova.txt" || new TextDecoder().decode(attachment.content) !== "prova") throw new Error("Anexo não preservado");
+  if (!attachment) throw new Error("Anexo ausente");
+  const content = typeof attachment.content === "string" ? attachment.content : new TextDecoder().decode(attachment.content);
+  if (!mail.text?.includes("Comprovante") || attachment.filename !== "prova.txt" || content !== "prova") throw new Error("Anexo não preservado");
 });
