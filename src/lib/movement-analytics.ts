@@ -41,15 +41,18 @@ export function useMovementVisibility(surface: Surface, active = true, pageEvent
     const observer = new IntersectionObserver(entries => {
       for (const entry of entries) {
         const element = entry.target as HTMLElement;
-        const event = element === root ? pageEvent : element.dataset.movementEvent;
-        if (!event || seen.has(event)) continue;
+        const events = [element === root ? pageEvent : undefined, element.dataset.movementEvent].filter((event): event is string => Boolean(event));
+        if (events.every(event => seen.has(event))) continue;
         const old = timers.get(element);
         if (old) { clearTimeout(old); timers.delete(element); }
         if (entry.isIntersecting && document.visibilityState === "visible") {
           timers.set(element, setTimeout(() => {
             if (document.visibilityState !== "visible" || !element.getClientRects().length) return;
-            seen.add(event);
-            trackMovement(event, surface);
+            for (const event of events) {
+              if (seen.has(event)) continue;
+              seen.add(event);
+              trackMovement(event, surface);
+            }
           }, 500));
         }
       }
