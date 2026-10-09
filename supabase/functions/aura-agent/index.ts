@@ -5187,6 +5187,7 @@ serve(async (req) => {
         .from('sessions')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', profile.user_id)
+        .eq('quota_exempt', false)
         .in('status', ['scheduled', 'in_progress', 'completed', 'no_show'])
         .gte('scheduled_at', pfMonthStart.toISOString())
         .lt('scheduled_at', pfNextMonthStart.toISOString());
