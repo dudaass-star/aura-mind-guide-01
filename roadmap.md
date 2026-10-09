@@ -6,7 +6,6 @@
 # Roadmap
 
 ## Ajustes proporcionais de plano
-- [ ] Atualizar nome nas trocas de plano, separar ajustes de mensalidades/conversões e corrigir o registro histórico de 09/10 sem alterar valores ou apagar auditoria da Meta.
 - [ ] Validar regras com testes e conferir a cobrança existente após corrigir sua descrição.
 
 ## Reposição da sessão da Daiane
