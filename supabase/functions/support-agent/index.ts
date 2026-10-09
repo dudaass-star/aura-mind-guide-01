@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import Stripe from "https://esm.sh/stripe@18.5.0";
+import { normalizePendingActionWording, SERVICE_POLICY } from "./service-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,20 +76,6 @@ SIGILO DA CONVERSA (REGRA INVIOLÁVEL):
 - Se quiser explorar algo que só sabe pelo WhatsApp, faça uma pergunta aberta como se não soubesse (ex: "como tem sido sua experiência?" em vez de "vi que sua última sessão não foi boa").
 - A conversa terapêutica é sagrada; demonstrar que a equipe lê quebra a confiança e a percepção de privacidade do cliente.
 
-PROTOCOLO DE CANCELAMENTO (PRIMEIRA RESPOSTA — RETENÇÃO ANTES DE EXECUTAR):
-Quando category = "cancelamento" e este é o PRIMEIRO contato do cliente sobre o tema (sem motivo declarado e sem reconfirmação):
-- NÃO confirme o cancelamento. NÃO diga "garantimos que nenhuma cobrança será feita". NÃO explique como o acesso continuará. NÃO descreva o que vai acontecer com o trial/assinatura.
-- Foco único: acolher de forma curta + abrir espaço pra entender o motivo + sinalizar disponibilidade pra ajustar, SEM pressão e SEM chantagem.
-- Estrutura sugerida do rascunho (curto, 3–5 linhas no total):
-  1. Acolhimento humano e curto (1 linha). Evite "sinto muito que queira sair".
-  2. Pergunta aberta sobre o motivo (ex: "antes de seguir, posso te perguntar o que te levou a essa decisão?" / "tem algo específico que não fluiu como você esperava?").
-  3. Sinalize que existem caminhos (pausar, trocar de plano, ajustar algo) SEM listar tudo de bandeja — só uma menção leve.
-  4. Deixe claro que, se mesmo assim quiser seguir com o cancelamento, é só responder confirmando — sem fricção.
-- suggested_action.type DEVE ser "none" nesta primeira resposta. NÃO sugira cancel_subscription / cancel_asaas_subscription ainda.
-- Severidade: "media".
-- Só prossiga com cancel_subscription / cancel_asaas_subscription quando o cliente RECONFIRMAR explicitamente após a pergunta de retenção, OU quando o primeiro email já trouxer motivo claro + pedido reconfirmado ("já tentei tudo, quero cancelar mesmo", "não me serve, pode cancelar definitivamente").
-- Importante: respeite a regra de SIGILO acima — não justifique a pergunta com nada que você só saberia lendo o WhatsApp.
-
 TOM DA RESPOSTA:
 - Português do Brasil informal mas profissional
 - Empática mas resolutiva — sem rodeios
@@ -118,7 +105,7 @@ AÇÕES SUGERIDAS (use 1 ou mais, em ordem):
 - change_plan: trocar plano (informe new_plan: essencial|direcao|transformacao e billing: monthly|yearly)
 - refund_asaas_payment: reembolsar cobrança PIX/Asaas (informe asaas_payment_id e amount_cents se parcial)
 - cancel_asaas_subscription: cancelar assinatura PIX/Asaas (informe asaas_subscription_id)
-- Exemplo combinado: cliente quer cancelar E reembolsar últimas 2 faturas → suggested_actions = [{ type: "cancel_subscription", params: { subscription_id: "..." } }, { type: "refund_invoice", params: { invoice_id: "in_AAA..." } }, { type: "refund_invoice", params: { invoice_id: "in_BBB..." } }].
+- Exemplo combinado SOMENTE após comprovar fundamento para cada devolução e respeitar a etapa de retenção: cancelamento + duas faturas elegíveis → suggested_actions = [{ type: "cancel_subscription", params: { subscription_id: "..." } }, { type: "refund_invoice", params: { invoice_id: "in_AAA..." } }, { type: "refund_invoice", params: { invoice_id: "in_BBB..." } }]. Pedido do cliente sozinho NÃO autoriza incluir reembolsos.
 - Se prometer reembolso de N faturas no texto, DEVE haver N itens refund_invoice na lista, cada um com seu invoice_id distinto vindo de stripe.invoices.
 
 REGRA DE PROVEDOR:
@@ -156,7 +143,7 @@ REGRA DE COBRANÇA / ATUALIZAR PAGAMENTO (INVIOLÁVEL):
 const CONSISTENCY_RULE = `
 
 REGRA DE CONSISTÊNCIA AÇÃO × TEXTO (INVIOLÁVEL):
-- O draft NUNCA pode afirmar que uma ação foi executada se ela ainda não foi. Só descreva como já-feito aquilo que o backend efetivamente vai executar a partir do suggested_action.
+- O draft é escrito ANTES da aprovação/execução: NUNCA descreva ação sugerida como já executada, mesmo quando presente em suggested_actions. Use futuro/intenção ("vou encaminhar o cancelamento", "vou solicitar o reembolso"). Proibido "já encaminhei", "cancelei", "reembolsei" sem registro prévio de execução no contexto.
 - Se suggested_action.type = "none", PROIBIDO escrever frases como: "cancelei", "cancelamos", "confirmei o cancelamento", "reembolsei", "estornei", "garantimos que nenhuma cobrança será feita", "sua assinatura foi encerrada". Use apenas linguagem de intenção condicional ("se confirmar, faço o cancelamento agora").
 - Se em stripe.subscriptions houver alguma com is_active_now = true e suggested_action.type NÃO for cancel_subscription, PROIBIDO afirmar no draft que a assinatura está cancelada / foi encerrada / não terá novas cobranças.
 - Mesma regra vale para asaas.subscriptions com is_active_now = true e cancel_asaas_subscription.
@@ -169,7 +156,7 @@ REGRA DE DATAS (INVIOLÁVEL):
 REGRA DE VALORES:
 - Use os campos *_brl pré-formatados (ex: stripe.invoices[0].amount_paid_brl). Nunca divida centavos de cabeça nem invente valor.`;
 
-const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE;
+const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE + SERVICE_POLICY;
 
 // Categorias seguras pra auto-resposta (nunca incluem ações financeiras/sensíveis)
 const SAFE_AUTO_REPLY_CATEGORIES = new Set(["duvida_tecnica", "elogio", "outro"]);
@@ -355,6 +342,14 @@ serve(async (req) => {
       .filter((m) => m.direction === "inbound")
       .map((m) => `[${m.from_email}]: ${m.body_text || "(sem texto)"}`)
       .join("\n\n---\n\n");
+    // Apenas mensagens enviadas: rascunhos não entram como retenção realizada.
+    const conversationHistory = (messages || [])
+      .map((m) => {
+        const timestamp = m.created_at ? Date.parse(m.created_at) : NaN;
+        const dateBrt = Number.isFinite(timestamp) ? fmtBRT(timestamp / 1000) : null;
+        return `[${m.direction === "inbound" ? "CLIENTE" : "EQUIPE — RESPOSTA ENVIADA"} | ${dateBrt || "data indisponível"}]: ${m.body_text || "(sem texto)"}`;
+      })
+      .join("\n\n---\n\n");
 
     // ========== RAG: search knowledge base ==========
     let kbBlock = "";
@@ -432,12 +427,21 @@ De: ${ticket.customer_email}
 
 ${inboundEmails}
 
+HISTÓRICO CRONOLÓGICO DO ATENDIMENTO (não são rascunhos):
+${conversationHistory}
+
 CONTEXTO DO CLIENTE:
 ${JSON.stringify(context, null, 2)}${kbBlock}
 ${recurringCustomer ? `\n⚠️ ATENÇÃO: Cliente RECORRENTE (${RECURRING_CUSTOMER_THRESHOLD}+ tickets em 30 dias). Reconheça o histórico no rascunho, evite respostas genéricas, e sugira escalonar pra revisão humana se for o mesmo problema repetido.\n` : ""}
 
 ${hint ? `INSTRUÇÃO DO ADMIN: ${hint}\n` : ""}
-Analise e responda com a estrutura solicitada.`;
+Analise e responda com a estrutura solicitada.
+REVISÃO FINAL OBRIGATÓRIA:
+- Pedido definitivo/retencão recusada: cancelar sem reconfirmar, mesmo com investigação de reembolso pendente.
+- Não declarar nenhuma ação como já feita nem prometer bloqueio antes da execução.
+- Falha alegada não investigada: encaminhar análise humana do reembolso, não encerrar a questão apenas por estar fora da garantia.
+- Nunca dizer que o aplicativo não existe ou que não é necessário aplicativo; apresente a página de entrada do App.
+- Não inventar datas, prazos ou alternativas.`;
 
     const aiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!aiKey) throw new Error("LOVABLE_API_KEY not configured");
@@ -588,6 +592,9 @@ Analise e responda com a estrutura solicitada.`;
     const actionsList: Array<{ type: string }> = Array.isArray(args.suggested_actions) && args.suggested_actions.length > 0
       ? args.suggested_actions
       : (args.suggested_action ? [args.suggested_action] : []);
+    if (typeof args.draft_response === "string" && actionsList.some(a => a.type.startsWith("cancel_") || a.type.startsWith("refund_"))) {
+      args.draft_response = normalizePendingActionWording(args.draft_response);
+    }
     const isSafeAction = actionsList.every((a) => a?.type === "none" || a?.type === "send_portal_link");
     const hasGoodKbMatch = kbTopScore !== null && kbTopScore >= AUTO_REPLY_KB_THRESHOLD;
     const isLowSeverity = args.severity === "baixa";
