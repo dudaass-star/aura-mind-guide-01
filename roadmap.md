@@ -6,6 +6,7 @@
 # Roadmap
 
 ## Recuperação da conversa
+- [ ] Registrar falhas do Google com status, causa técnica classificada, duração e correlação; sem corpo bruto, conteúdo terapêutico, chamadas adicionais ou rotina periódica. Validar privacidade e integração.
 - [x] Separar leitura de balões do estado da Aura, limitar esperas e registrar duração de consultas falhas; janela sobreposta evita lacunas de sequência. App atualizado na prévia; publicação pendente.
 - [x] Persistir recuperação limitada de turnos, com retomadas autorizadas e desarme após drenagem; silêncio com turno sem resposta impede conclusão e pausa no teto operacional. Funções implantadas, sem alterar o avaliador.
 - [x] Seis testes passaram: consulta de estado bloqueada/falha, política de erros e proteção contra conclusão com turno sem resposta. Conversa autenticada respondeu sem erros; fila hospedada retomou pendência já respondida, resolveu e removeu o agendamento sem duplicar balões. A origem histórica exata dos 50/46 segundos continua sem comprovação; não houve simulação hospedada de indisponibilidade longa da IA.
