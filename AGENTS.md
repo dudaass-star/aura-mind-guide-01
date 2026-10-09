@@ -4,7 +4,7 @@
 - O acesso compartilhado à personagem usa convites individuais com token protegido e validade de 7 dias, que geram uma sessão apenas no clique; isso evita ampliar globalmente a validade dos links normais.
 - Chat failures share descriptors; only transient failures retry to avoid terminal resends.
 - A conversa móvel herda a altura do contêiner ajustado pelo visualViewport, em vez de fixar 100dvh nas telas internas; isso mantém a caixa vazia visível quando o teclado reduz a área útil.
-- A abertura pelo ícone da tela inicial é registrada em portal_value_events somente após autenticação e detecção de modo standalone; o painel consulta a última abertura por usuário sem inferir instalação a partir do navegador.
+- Record home-icon launches in `portal_value_events` only after authentication and standalone detection; admin reads the latest launch, never inferring installation from browser use.
 - O PortalAuthProvider isola a sessão admin e serializa o vínculo; consolidação transacional só ocorre se a identidade antiga já não existe.
 - A tela de entrada do App permanece no pacote principal, sem carregamento dinâmico; isso impede tela branca por arquivo de versão anterior após uma atualização.
 - Pedidos explícitos de encerrar uma sessão aceitam artigos e pronomes entre o verbo e “sessão/encontro”; isso reconhece a fala natural sem transformar despedidas comuns em encerramento.
@@ -23,7 +23,7 @@
 - App processing skips the legacy WhatsApp instance; only WhatsApp uses it, avoiding unnecessary network waits.
 - Disputas PIX vinculam a cobrança pelo End-to-End ID tanto em campos diretos quanto no payload original, recusando associação ambígua; isso preserva a defesa automática sem atribuir evidência ao cliente errado.
 - O público histórico de compradores da Meta recebe diariamente compras concluídas desde 08/09/2026, com e-mail e telefone normalizados e protegidos por hash, sem contas demo; a carga é aditiva e idempotente para preservar o histórico.
-- A reconciliação do extrato Woovi percorre a paginação crescente até o fim e só atribui pagador diferente mediante E2E exato na parcela do mandato, priorizando relações anteriores do pagador; isso alcança mensalidades recentes sem criar vínculos por heurística.
+- Woovi reconciliation exhausts ascending pagination and links a different payer only through exact installment E2E, prioritizing prior payer relationships; this avoids heuristic attribution.
 - Chat thinking stays low except in session reframe and closure to reduce latency without losing reflection.
 - Chat preparation parallelizes independent reads after profile, quota and sessions to reduce waits without changing context.
 - Movement is collective-first; local previews share live invite copy.
