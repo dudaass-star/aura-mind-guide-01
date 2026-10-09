@@ -17,10 +17,10 @@
 - A atribuição do Movimento é reivindicada na autenticação global do App e o Mural exige consentimento individual; isso preserva impacto e privacidade sem depender de visitar a área do Movimento.
 - Participante e Embaixador são papéis distintos; link, divulgação, impacto e conquistas de indicação exigem adesão voluntária registrada em `movement_members.ambassador_since`.
 - Movement onboarding presents the cause and role choice before the form; launch highlights remain until joining, and demo Mural/Kit content stays admin-only to protect public data.
-- A latência da conversa é medida em `chat_turn_metrics.performance_breakdown`, com `preparation_stages_ms` subdividindo a preparação em perfil, cota, agenda, sessão e contexto, além de download/transcrição do áudio, provedor, tratamento e gravação; isso permite localizar gargalos sem atribuir atrasos ao modelo.
+- Chat latency uses `chat_turn_metrics.performance_breakdown`: `preparation_stages_ms` separates profile, quota, agenda, session and context; audio download/transcription, provider, handling and persistence remain separate to locate bottlenecks.
 - Chat reconciliation reads messages independently from response state, with bounded waits and an overlap window; this prevents stalled state reads and sequence gaps from hiding persisted replies.
-- O tempo completo da conversa termina quando o último balão do turno foi renderizado após o processamento encerrar, separado do primeiro balão; isso distingue latência técnica do ritmo de entrega.
-- O processamento no App não consulta a instância legada de WhatsApp; ela só é usada no canal WhatsApp para evitar espera de rede desnecessária antes da resposta.
+- Full-turn latency ends after processing and the last bubble renders, separately from first-bubble latency; this distinguishes delivery cadence from technical delay.
+- App processing skips the legacy WhatsApp instance; only WhatsApp uses it, avoiding unnecessary network waits.
 - Disputas PIX vinculam a cobrança pelo End-to-End ID tanto em campos diretos quanto no payload original, recusando associação ambígua; isso preserva a defesa automática sem atribuir evidência ao cliente errado.
 - O público histórico de compradores da Meta recebe diariamente compras concluídas desde 08/09/2026, com e-mail e telefone normalizados e protegidos por hash, sem contas demo; a carga é aditiva e idempotente para preservar o histórico.
 - A reconciliação do extrato Woovi percorre a paginação crescente até o fim e só atribui pagador diferente mediante E2E exato na parcela do mandato, priorizando relações anteriores do pagador; isso alcança mensalidades recentes sem criar vínculos por heurística.
