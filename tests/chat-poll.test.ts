@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { pollChatIndependently } from './chat-poll';
+import { pollChatIndependently } from '../src/lib/chat-poll';
 
 test('balões chegam mesmo enquanto consulta do estado está bloqueada', async () => {
   let release: (value: string) => void = () => {};
