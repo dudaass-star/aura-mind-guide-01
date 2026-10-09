@@ -5,6 +5,10 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Ajustes proporcionais de plano
+- [ ] Atualizar nome nas trocas de plano, separar ajustes de mensalidades/conversões e corrigir o registro histórico de 09/10 sem alterar valores ou apagar auditoria da Meta.
+- [ ] Validar regras com testes e conferir a cobrança existente após corrigir sua descrição.
+
 ## Reposição da sessão da Daiane
 - [x] Compensar sessão de Daiane Petarnella de 08/10 sem apagar histórico nem alterar plano: cota hospedada 3/4, duas agendadas mantidas, regra de agendamento e agente atualizados. Aviso aceito pelo WhatsApp e registrado; a verificação repetiu indevidamente o envio (dois registros), sem nova sessão liberada. Entrega/leitura não confirmadas. Tela atualizada na prévia, publicação pendente; fluxo da cliente não simulado para não criar sessão real.
 
