@@ -5,6 +5,11 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Recuperação da conversa
+- [ ] Desbloquear consulta de balões do estado da Aura, limitar esperas e registrar tempos por consulta.
+- [ ] Persistir recuperação limitada de turnos e impedir encerramento por silêncio causado por falha técnica.
+- [ ] Simular atraso, indisponibilidade e proteção da sessão; conferir implantação sem alterar o avaliador.
+
 ## Suporte por e-mail
 - [x] Alinhar suporte às áreas e ações reais do App; troca orientada pelo menu da conta, execução antiga bloqueada e contexto sem conteúdo terapêutico. Seis testes passaram, funções verificadas e menu/diálogo conferidos autenticados; nenhuma mensagem enviada ou cobrança executada. Rascunhos anteriores precisam ser regenerados.
 - [x] Ajustar retenção breve e reembolso por garantia/evidências, incluindo histórico de respostas enviadas; seis simulações de ações com IA aprovadas sem envio nem execução financeira, e testes da política/linguagem pendente. Rascunhos financeiros continuam sujeitos à revisão humana.
