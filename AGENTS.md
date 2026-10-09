@@ -18,7 +18,7 @@
 - Participante e Embaixador são papéis distintos; link, divulgação, impacto e conquistas de indicação exigem adesão voluntária registrada em `movement_members.ambassador_since`.
 - Movement onboarding presents the cause and role choice before the form; launch highlights remain until joining, and demo Mural/Kit content stays admin-only to protect public data.
 - A latência da conversa é medida em `chat_turn_metrics.performance_breakdown`, com `preparation_stages_ms` subdividindo a preparação em perfil, cota, agenda, sessão e contexto, além de download/transcrição do áudio, provedor, tratamento e gravação; isso permite localizar gargalos sem atribuir atrasos ao modelo.
-- A conversa consulta respostas pendentes periodicamente enquanto a aba está visível e registra envio, recebimento e exibição correlacionados; isso recupera eventos ao vivo perdidos sem confundir gravação com entrega.
+- Chat reconciliation reads messages independently from response state, with bounded waits and an overlap window; this prevents stalled state reads and sequence gaps from hiding persisted replies.
 - O tempo completo da conversa termina quando o último balão do turno foi renderizado após o processamento encerrar, separado do primeiro balão; isso distingue latência técnica do ritmo de entrega.
 - O processamento no App não consulta a instância legada de WhatsApp; ela só é usada no canal WhatsApp para evitar espera de rede desnecessária antes da resposta.
 - Disputas PIX vinculam a cobrança pelo End-to-End ID tanto em campos diretos quanto no payload original, recusando associação ambígua; isso preserva a defesa automática sem atribuir evidência ao cliente errado.
@@ -34,3 +34,6 @@
 <!-- LOVABLE:BEGIN -->
 - Support ingestion uses bounded UID reads and lightweight MIME parsing; message-level deduplication and human review prevent lost mail and unintended sends.
 <!-- LOVABLE:END -->
+
+- Chat recovery is persisted on accepted turns, claimed with leases, bounded in time and attempts, and unscheduled after drain; this survives worker loss without replaying old topics.
+- Session inactivity closure checks unanswered App turns and pauses at the operational cap; this prevents technical silence from counting as therapeutic completion.

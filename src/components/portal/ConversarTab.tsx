@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
+import { pollChatIndependently } from "@/lib/chat-poll";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { InstallAppMenuItem, useInstallApp } from "@/components/portal/InstallAppMenuItem";
 import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDialog";
@@ -353,6 +354,7 @@ export function ConversarTab({
   );
   const [messages, setMessages] = useState<ChatMessage[]>(cachedMessages);
   const [draft, setDraft] = useState("");
+  const [responseNotice, setResponseNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(cachedMessages.length === 0);
   const [sending, setSending] = useState(false);
   const [responding, setResponding] = useState(false);
@@ -403,6 +405,7 @@ export function ConversarTab({
     if (!trace || trace.receivedAt || message.role !== "assistant" || isResponseFailure(message)) return;
     const target = replyTargetId(message);
     if (target && trace.messageId === target) {
+      setResponseNotice(null);
       trace.receivedAt = new Date().toISOString();
       trace.transport = transport;
     }
@@ -748,6 +751,7 @@ export function ConversarTab({
           responseTimerRef.current = window.setTimeout(() => {
             setResponding(false);
             recordConversationEvent(userId, "response_timeout", { seconds: 40, source: "response_state" });
+            setResponseNotice("A resposta está demorando. Sua mensagem está salva; estamos verificando a recuperação.");
           }, remainingMs);
         },
       )
@@ -770,13 +774,19 @@ export function ConversarTab({
       });
 
     const reconcile = async () => {
-      const { data } = await supabasePortal
+      const startedAt = performance.now();
+      const controller = new AbortController();
+      const deadline = window.setTimeout(() => controller.abort(), 6000);
+      try {
+      const { data, error } = await supabasePortal
         .from("messages")
         .select("id,user_id,role,content,created_at,sequence_no,client_message_id,delivery_status,is_audio,audio_url,metadata")
         .eq("user_id", userId)
-        .gt("sequence_no", latestSequenceRef.current)
-        .order("sequence_no", { ascending: true })
-        .limit(PAGE_SIZE);
+        .gte("sequence_no", Math.max(0, latestSequenceRef.current - PAGE_SIZE))
+        .order("sequence_no", { ascending: false })
+        .limit(PAGE_SIZE)
+        .abortSignal(controller.signal);
+      if (error) throw error;
       if (data?.length) {
         const hydrated = await hydrateAudioUrls(data as ChatMessage[]);
         hydrated.forEach((message) => noteResponseArrival(message, "reconcile"));
@@ -794,6 +804,9 @@ export function ConversarTab({
           setResponding(false);
         }
       }
+      } catch (error) {
+        recordConversationEvent(userId, "response_poll_failed", { elapsed_ms: Math.round(performance.now() - startedAt), operation: "messages" });
+      } finally { window.clearTimeout(deadline); }
     };
     // Enquanto há resposta pendente, confirma também pelo histórico: o canal ao vivo pode perder um evento.
     let checkingCompletion = false;
@@ -812,22 +825,46 @@ export function ConversarTab({
             await reconcile();
             return;
           }
-          const { data: state } = await supabasePortal.from("aura_response_state")
-            .select("is_responding,processed_user_message_id,last_user_message_id")
-            .eq("user_id", userId).maybeSingle();
-          await reconcile();
-          if (responseTraceRef.current !== trace || !state || state.is_responding) return;
-          if (state.processed_user_message_id === trace.clientId || state.processed_user_message_id === trace.messageId) {
-            trace.completedAt = new Date().toISOString();
-            trace.interrupted = state.last_user_message_id !== trace.clientId && state.last_user_message_id !== trace.messageId;
-            // A reconciliação atualizou a lista; a medição ocorre após os balões renderizarem.
-            setMessages((current) => [...current]);
-          }
+          await pollChatIndependently(reconcile, async () => {
+            const startedAt = performance.now();
+            const controller = new AbortController();
+            const deadline = window.setTimeout(() => controller.abort(), 6000);
+            try {
+              const { data: state, error } = await supabasePortal.from("aura_response_state")
+                .select("is_responding,processed_user_message_id,last_user_message_id")
+                .eq("user_id", userId).maybeSingle().abortSignal(controller.signal);
+              if (error) throw error;
+              return state;
+            } catch {
+              recordConversationEvent(userId, "response_poll_failed", { elapsed_ms: Math.round(performance.now() - startedAt), operation: "state" });
+              return null;
+            } finally { window.clearTimeout(deadline); }
+          }, (state) => {
+            if (responseTraceRef.current !== trace || !state || state.is_responding) return;
+            if (state.processed_user_message_id === trace.clientId || state.processed_user_message_id === trace.messageId) {
+              trace.completedAt = new Date().toISOString();
+              trace.interrupted = state.last_user_message_id !== trace.clientId && state.last_user_message_id !== trace.messageId;
+              setMessages((current) => [...current]);
+            }
+          });
         } finally {
           checkingCompletion = false;
         }
       })();
     }, 2000);
+    const recoveryPoll = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      const awaiting = awaitingResponseRef.current;
+      if (!awaiting) return;
+      void supabasePortal.from("chat_response_recovery").select("status").eq("user_id", userId)
+        .eq("client_message_id", awaiting.clientId).maybeSingle().then(({ data }) => {
+          if (awaitingResponseRef.current !== awaiting || answeredMessageIdsRef.current.has(awaiting.messageId)) return;
+          if (data?.status === "exhausted") {
+            setResponding(false);
+            setResponseNotice("Não conseguimos concluir a resposta. Sua mensagem está salva; você pode tentar novamente.");
+          }
+        });
+    }, 10_000);
     const onFocus = () => void reconcile();
     const onVisibility = () => document.visibilityState === "visible" && void reconcile();
     const onOnline = () => void reconcile();
@@ -836,6 +873,7 @@ export function ConversarTab({
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.clearInterval(pendingPoll);
+      window.clearInterval(recoveryPoll);
       if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       window.removeEventListener("focus", onFocus);
@@ -1017,6 +1055,7 @@ export function ConversarTab({
       if (!awaitingResponseRef.current) return;
       setResponding(false);
       recordConversationEvent(userId, "response_timeout", { seconds: 40 });
+      setResponseNotice("A resposta está demorando. Sua mensagem está salva; estamos verificando a recuperação.");
     }, 40_000);
   };
 
@@ -1052,6 +1091,7 @@ export function ConversarTab({
     event?.preventDefault();
     const text = draft.trim();
     if (!text || sending) return;
+    setResponseNotice(null);
 
     const clientId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
@@ -1360,6 +1400,23 @@ export function ConversarTab({
         )}
 
           <MessageTimeline messages={messages} responding={responding} onOpenReport={openReport} onOpenEpisode={openEpisode} onRetry={(message) => void retryFailedMessage(message)} onDelete={deleteFailedMessage} />
+          {responseNotice && (
+            <div role="status" className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{responseNotice}</span>
+              {awaitingResponseRef.current && !responding && (
+                <Button variant="ghost" size="icon" aria-label="Tentar resposta novamente" onClick={() => {
+                  const awaiting = awaitingResponseRef.current;
+                  if (!awaiting) return;
+                  setResponding(true);
+                  setResponseNotice("Tentando recuperar sua resposta…");
+                  void supabasePortal.functions.invoke("app-chat", { body: { action: "retry_response", source_message_id: awaiting.messageId } }).then(({ error }) => {
+                    if (error) { setResponding(false); setResponseNotice("Não foi possível retomar agora. Sua mensagem continua salva."); }
+                  });
+                }}><RefreshCw className="h-4 w-4" /></Button>
+              )}
+            </div>
+          )}
           {pendingRating?.continuity_thread && !responding && (
             <div className="mt-4 max-w-[86%] border-l-2 border-primary pl-4" aria-label="Para o próximo encontro">
               <p className="text-xs font-semibold text-primary">Para o próximo encontro</p>

@@ -1,3 +1,4 @@
+import { hasUnansweredSessionTurn } from "../_shared/session-response-guard.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
@@ -672,6 +673,29 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
         }
         
         
+        // Silêncio causado por falha técnica não é abandono nem fechamento terapêutico.
+        const { data: latestUser, error: latestUserError } = await supabase.from('messages')
+          .select('id,client_message_id,channel').eq('user_id', session.user_id).eq('role', 'user')
+          .gte('created_at', session.started_at).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (latestUserError) continue;
+        if (latestUser?.channel === 'in_app') {
+          const [{ data: replies, error: repliesError }, { data: state, error: stateError }] = await Promise.all([
+            supabase.from('messages').select('metadata').eq('user_id', session.user_id).eq('role', 'assistant')
+              .contains('metadata', { reply_to_message_id: latestUser.id }).limit(20),
+            supabase.from('aura_response_state').select('is_responding').eq('user_id', session.user_id).maybeSingle(),
+          ]);
+          if (repliesError || stateError) continue;
+          if (state?.is_responding || hasUnansweredSessionTurn(latestUser.id, replies || [])) {
+            if (now < hardCapEnd) continue;
+            // Teto operacional: registra interrupção, nunca conclusão, resumo ou avaliação.
+            const { error: pauseError } = await supabase.from('sessions').update({ status: 'paused', closure_mode: 'pausa', ended_at: now.toISOString() }).eq('id', session.id).eq('status', 'in_progress');
+            if (pauseError) { console.warn('Não foi possível pausar sessão com resposta pendente', session.id); continue; }
+            await supabase.from('portal_value_events').insert({ user_id: session.user_id, feature: 'session', event_type: 'technical_interruption', source: 'backend', metadata: { session_id: session.id, reason: 'unanswered_turn' } });
+            abandonedSessionsClosed++;
+            continue;
+          }
+        }
+
         // NOVO: Contar mensagens do usuário DURANTE a sessão para diferenciar
         const { count: userMsgsInSession } = await supabase
           .from('messages')
