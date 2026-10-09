@@ -30,7 +30,6 @@ const causeMessages = [
 
 export function MovementDashboard({ userId, suggestedName = "", embedded = false, initialAmbassadorIntent = false, onJoined, previewIntroduction = false, isActive = true }: Props) {
   const surface = embedded ? "app" : "area";
-  const trackingRef = useMovementVisibility(surface, isActive && !previewIntroduction, "area_opened");
   const [member, setMember] = useState<Member | null>(null);
   const [referrals, setReferrals] = useState<Array<{ reached_at: string; started_at: string | null; continued_at: string | null; is_valid: boolean }>>([]);
   const [recognitions, setRecognitions] = useState<Recognition[]>([]);
@@ -40,6 +39,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
   const [displayMode, setDisplayMode] = useState("first_name");
   const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(!previewIntroduction);
+  const trackingRef = useMovementVisibility(surface, isActive && !previewIntroduction && !loading, "area_opened");
   const [saving, setSaving] = useState(false);
   const [activatingAmbassador, setActivatingAmbassador] = useState(false);
   const [messageKind, setMessageKind] = useState<keyof typeof messages>("supporter");
