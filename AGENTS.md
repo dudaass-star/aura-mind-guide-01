@@ -2,7 +2,7 @@
 
 - Contas de demonstração usam `profiles.status = 'demo'`, com direito de acesso apenas ao App e sem telefone/cobrança; isso permite separar personagens fictícios de clientes ativos em rotinas e indicadores.
 - O acesso compartilhado à personagem usa convites individuais com token protegido e validade de 7 dias, que geram uma sessão apenas no clique; isso evita ampliar globalmente a validade dos links normais.
-- Chat failures share descriptors; only transient failures retry to avoid terminal resends.
+- Chat errors share descriptors; retry only transient failures to prevent terminal resends.
 - A conversa móvel herda a altura do contêiner ajustado pelo visualViewport, em vez de fixar 100dvh nas telas internas; isso mantém a caixa vazia visível quando o teclado reduz a área útil.
 - Record home-icon launches in `portal_value_events` only after authentication and standalone detection; admin reads the latest launch, never inferring installation from browser use.
 - O PortalAuthProvider isola a sessão admin e serializa o vínculo; consolidação transacional só ocorre se a identidade antiga já não existe.
@@ -25,7 +25,7 @@
 - O público histórico de compradores da Meta recebe diariamente compras concluídas desde 08/09/2026, com e-mail e telefone normalizados e protegidos por hash, sem contas demo; a carga é aditiva e idempotente para preservar o histórico.
 - Woovi reconciliation exhausts ascending pagination and links a different payer only through exact installment E2E, prioritizing prior payer relationships; this avoids heuristic attribution.
 - Chat thinking stays low except in session reframe and closure to reduce latency without losing reflection.
-- Chat preparation parallelizes independent reads after profile, quota and sessions to reduce waits without changing context.
+- Parallelize independent chat reads after profile, quota and sessions; reduce waits without changing context.
 - Movement is collective-first; local previews share live invite copy.
 - Prayers share one catalog/player to keep art, audio and cues matched.
 - Home keeps tracking; practice dialogs stop audio on exit.
