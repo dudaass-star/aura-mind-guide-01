@@ -76,8 +76,6 @@ SIGILO DA CONVERSA (REGRA INVIOLÁVEL):
 - Se quiser explorar algo que só sabe pelo WhatsApp, faça uma pergunta aberta como se não soubesse (ex: "como tem sido sua experiência?" em vez de "vi que sua última sessão não foi boa").
 - A conversa terapêutica é sagrada; demonstrar que a equipe lê quebra a confiança e a percepção de privacidade do cliente.
 
-${SERVICE_POLICY}
-
 TOM DA RESPOSTA:
 - Português do Brasil informal mas profissional
 - Empática mas resolutiva — sem rodeios
@@ -145,7 +143,7 @@ REGRA DE COBRANÇA / ATUALIZAR PAGAMENTO (INVIOLÁVEL):
 const CONSISTENCY_RULE = `
 
 REGRA DE CONSISTÊNCIA AÇÃO × TEXTO (INVIOLÁVEL):
-- O draft NUNCA pode afirmar que uma ação foi executada se ela ainda não foi. Só descreva como já-feito aquilo que o backend efetivamente vai executar a partir do suggested_action.
+- O draft é escrito ANTES da aprovação/execução: NUNCA descreva ação sugerida como já executada, mesmo quando presente em suggested_actions. Use futuro/intenção ("vou encaminhar o cancelamento", "vou solicitar o reembolso"). Proibido "já encaminhei", "cancelei", "reembolsei" sem registro prévio de execução no contexto.
 - Se suggested_action.type = "none", PROIBIDO escrever frases como: "cancelei", "cancelamos", "confirmei o cancelamento", "reembolsei", "estornei", "garantimos que nenhuma cobrança será feita", "sua assinatura foi encerrada". Use apenas linguagem de intenção condicional ("se confirmar, faço o cancelamento agora").
 - Se em stripe.subscriptions houver alguma com is_active_now = true e suggested_action.type NÃO for cancel_subscription, PROIBIDO afirmar no draft que a assinatura está cancelada / foi encerrada / não terá novas cobranças.
 - Mesma regra vale para asaas.subscriptions com is_active_now = true e cancel_asaas_subscription.
@@ -437,7 +435,13 @@ ${JSON.stringify(context, null, 2)}${kbBlock}
 ${recurringCustomer ? `\n⚠️ ATENÇÃO: Cliente RECORRENTE (${RECURRING_CUSTOMER_THRESHOLD}+ tickets em 30 dias). Reconheça o histórico no rascunho, evite respostas genéricas, e sugira escalonar pra revisão humana se for o mesmo problema repetido.\n` : ""}
 
 ${hint ? `INSTRUÇÃO DO ADMIN: ${hint}\n` : ""}
-Analise e responda com a estrutura solicitada.`;
+Analise e responda com a estrutura solicitada.
+REVISÃO FINAL OBRIGATÓRIA:
+- Pedido definitivo/retencão recusada: cancelar sem reconfirmar, mesmo com investigação de reembolso pendente.
+- Não declarar nenhuma ação como já feita nem prometer bloqueio antes da execução.
+- Falha alegada não investigada: encaminhar análise humana do reembolso, não encerrar a questão apenas por estar fora da garantia.
+- Nunca dizer que o aplicativo não existe ou que não é necessário aplicativo; apresente a página de entrada do App.
+- Não inventar datas, prazos ou alternativas.`;
 
     const aiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!aiKey) throw new Error("LOVABLE_API_KEY not configured");
