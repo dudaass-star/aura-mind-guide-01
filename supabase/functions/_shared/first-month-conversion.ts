@@ -1,4 +1,5 @@
 import { brtDay, validDay } from './admin-billing.ts';
+import { isStripeRecurringInvoice } from './stripe-invoice-kind.ts';
 
 export interface FirstMonthCohort { id: string; identity: string; provider: string; due: string; paid: string | null }
 const objectId = (value: any): string => typeof value === 'string' ? value : value?.id || '';
@@ -19,7 +20,7 @@ export function stripeFirstMonths(subscriptions: any[], intents: any[], invoices
     if (paidWeekly.length !== 1) { warnings.push('Cartão: semana paga sem vínculo único com a assinatura mensal.'); continue; }
     const due = brtDay(sub.trial_end);
     const firstInvoices = invoices.filter(i => invoiceSubscription(i) === sub.id
-      && i.billing_reason === 'subscription_cycle' && i.amount_due > 0
+      && isStripeRecurringInvoice(i) && i.billing_reason === 'subscription_cycle' && i.amount_due > 0
       && i.lines?.data?.some((line: any) => brtDay(line.period?.start) === due));
     const paid = firstInvoices.find(i => i.status === 'paid' && i.amount_paid >= i.amount_due && i.status_transitions?.paid_at);
     cohorts.push({ id: sub.id, identity: email || `stripe:${objectId(sub.customer)}`, provider: 'stripe', due, paid: paid ? brtDay(paid.status_transitions.paid_at) : null });
