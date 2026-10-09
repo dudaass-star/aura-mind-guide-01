@@ -6,7 +6,7 @@
 # Roadmap
 
 ## Suporte por e-mail
-- [ ] Ajustar retenção breve e reembolso por garantia/evidências; validar simulações sem envio nem execução financeira.
+- [x] Ajustar retenção breve e reembolso por garantia/evidências, incluindo histórico de respostas enviadas; seis simulações de ações com IA aprovadas sem envio nem execução financeira, e testes da política/linguagem pendente. Rascunhos financeiros continuam sujeitos à revisão humana.
 - [x] Corrigir importação travada e recuperar 15 mensagens, incluindo original de 8,87 MB; entrada em lotes e agendamento protegido. Pedido de Jana recebido em 02/10 às 21h22 BRT conferido no painel autenticado; botão verifica caixa vazia, dois testes passaram e nenhuma resposta/cancelamento foi executado. Mensagens grandes ficam completas em anexo .eml para revisão humana.
 
 ## Panorama do negócio

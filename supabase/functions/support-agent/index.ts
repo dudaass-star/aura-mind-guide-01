@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import Stripe from "https://esm.sh/stripe@18.5.0";
-import { SERVICE_POLICY } from "./service-policy.ts";
+import { normalizePendingActionWording, SERVICE_POLICY } from "./service-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -592,6 +592,9 @@ REVISÃO FINAL OBRIGATÓRIA:
     const actionsList: Array<{ type: string }> = Array.isArray(args.suggested_actions) && args.suggested_actions.length > 0
       ? args.suggested_actions
       : (args.suggested_action ? [args.suggested_action] : []);
+    if (typeof args.draft_response === "string" && actionsList.some(a => a.type.startsWith("cancel_") || a.type.startsWith("refund_"))) {
+      args.draft_response = normalizePendingActionWording(args.draft_response);
+    }
     const isSafeAction = actionsList.every((a) => a?.type === "none" || a?.type === "send_portal_link");
     const hasGoodKbMatch = kbTopScore !== null && kbTopScore >= AUTO_REPLY_KB_THRESHOLD;
     const isLowSeverity = args.severity === "baixa";

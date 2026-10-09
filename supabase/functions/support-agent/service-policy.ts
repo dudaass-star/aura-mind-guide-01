@@ -23,3 +23,10 @@ REEMBOLSO — CRITÉRIO, NÃO CONCESSÃO AUTOMÁTICA:
 - Todo reembolso exige aprovação humana. No summary, registre fundamento (garantia/cobrança indevida/exceção/pendente), evidências e lacunas, sem transformar hipótese em fato.
 - Mesmo com ação sugerida de cancelamento/reembolso, o rascunho é anterior à execução: escreva "vamos encaminhar" ou "vou solicitar", nunca "cancelei", "já encaminhei", "já foi devolvido" ou garantia de bloqueio já realizado. Não invente prazo bancário de estorno.
 `;
+
+// A sugestão ainda não foi aprovada: não apresentar seu encaminhamento como concluído.
+export function normalizePendingActionWording(text: string): string {
+  return text
+    .replace(/\bjá encaminhei\b/gi, "vou encaminhar")
+    .replace(/\bjá encaminhamos\b/gi, "vamos encaminhar");
+}
