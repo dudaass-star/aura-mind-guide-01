@@ -84,7 +84,7 @@ export function stripeContract(s: Row, invoices: Row[], weeklyPayments: Row[] = 
     const discount = line?.discount_amounts?.reduce((sum: number, d: Row) => sum + d.amount, 0) || 0;
     return n + Math.round((price.unit_amount * (item.quantity || 1) - discount) / months);
   }, 0);
-  const ends = paid.flatMap(i => (i.lines?.data || []).filter((l: Row) => !l.parent?.subscription_item_details?.proration).map((l: Row) => brtDay(l.period?.end || 0))).sort();
+   const ends = paid.flatMap(i => (i.lines?.data || []).filter((l: Row) => !l.proration && !l.parent?.subscription_item_details?.proration).map((l: Row) => brtDay(l.period?.end || 0))).sort();
   const customer = typeof s.customer === 'string' ? s.customer : s.customer?.id;
   const trialPaid = weeklyPayments.some(p => p.customer === customer && p.status === 'succeeded' && p.amount_received > 0 && p.created <= s.trial_start && s.trial_start - p.created <= 86400);
    return { id: s.id, provider: 'stripe', userId: s.metadata?.user_id, email: s.metadata?.email || s.customer?.email || latest?.customer_email, monthlyCents, paidUntil: ends.at(-1), paidBefore: paid.length > 0, trialPaid: s.status === 'trialing' && trialPaid, trialUntil: brtDay(s.trial_end || 0), overdue: s.status === 'past_due' };

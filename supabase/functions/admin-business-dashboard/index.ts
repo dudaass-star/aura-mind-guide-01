@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { brtDay, validDay, mergeBilling } from '../_shared/admin-billing.ts';
 import { conversionCohort, pixFirstDue, stripeFirstMonths, type FirstMonthCohort } from '../_shared/first-month-conversion.ts';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { isStripeRecurringInvoice } from '../_shared/stripe-invoice-kind.ts';
 
 const cache = new Map<string, { at: number; data: unknown }>();
 const day = brtDay;
@@ -132,7 +133,7 @@ Deno.serve(async (req) => {
     const stripeData = stripeSnapshot?.installments?.[0];
     const priceMap = new Map<string, any>((stripeData?.prices || []).map((p: any) => [p.id, p]));
     for (const inv of stripeData?.invoices || []) {
-      if (!['subscription_cycle', 'subscription_create'].includes(inv.billing_reason || '') || inv.status === 'draft' || inv.status === 'void' || inv.amount_due <= 0) continue;
+      if (!isStripeRecurringInvoice(inv) || inv.status === 'draft' || inv.status === 'void' || inv.amount_due <= 0) continue;
       const monthlyLine = inv.lines.data.find((l: any) => {
         const id = l.pricing?.price_details?.price || l.price?.id;
         const p = priceMap.get(id);

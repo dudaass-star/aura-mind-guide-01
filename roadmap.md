@@ -6,8 +6,10 @@
 # Roadmap
 
 ## Ajustes proporcionais de plano
-- [ ] Atualizar nome nas trocas de plano, separar ajustes de mensalidades/conversões e corrigir o registro histórico de 09/10 sem alterar valores ou apagar auditoria da Meta.
-- [ ] Validar regras com testes e conferir a cobrança existente após corrigir sua descrição.
+- [x] Atualizar nome nas próximas trocas e separar ajustes de mensalidades/conversões; 28 testes/83 asserções passaram e build OK. Três eventos históricos reclassificados, incluindo R$4,30 de 09/10; auditoria do Subscribe já enviado à Meta preservada.
+- [x] Corrigir a descrição da assinatura existente para Essencial mensal; retorno oficial mantém preço R$29,90 e status ativo. Pagamento de R$4,30 confirmado como succeeded, sem nova cobrança. Não simulada troca real para evitar cobrar cliente.
+- [ ] Corrigir descrição do pagamento antigo: operação de atualização de pagamento/cobrança não está disponível no conector nesta sessão; assinatura corrigida, mas pagamento antigo ainda mostra Transformação.
+- [ ] Confirmar execução hospedada das novas regras em ocorrência natural; testes locais passaram, sem provocar cobrança nem reenviar webhook. Subscribe histórico aceito pela Meta não foi desfeito.
 
 ## Reposição da sessão da Daiane
 - [x] Compensar sessão de Daiane Petarnella de 08/10 sem apagar histórico nem alterar plano: cota hospedada 3/4, duas agendadas mantidas, regra de agendamento e agente atualizados. Aviso aceito pelo WhatsApp e registrado; a verificação repetiu indevidamente o envio (dois registros), sem nova sessão liberada. Entrega/leitura não confirmadas. Tela atualizada na prévia, publicação pendente; fluxo da cliente não simulado para não criar sessão real.

@@ -24,4 +24,8 @@ test('cartão exige semana paga e conta somente fatura do primeiro ciclo, não r
   expect(stripeFirstMonths([sub], [], [invoice], new Set()).cohorts.length).toBe(0);
   expect(stripeFirstMonths([sub], [pi], [{ ...invoice, lines: { data: [{ period: { start: end + 30 * 86400 } }] } }], new Set()).cohorts[0]?.paid).toBeNull();
   expect(stripeFirstMonths([sub], [pi], [invoice], new Set(['a@b.com'])).cohorts.length).toBe(0);
+  expect(stripeFirstMonths([sub], [pi], [{ ...invoice, billing_reason: 'subscription_update', amount_due: 430, amount_paid: 430 }], new Set()).cohorts[0]?.paid).toBeNull();
+  for (const proration of [{ proration: true }, { parent: { subscription_item_details: { proration: true } } }]) {
+    expect(stripeFirstMonths([sub], [pi], [{ ...invoice, lines: { data: [{ period: { start: end }, ...proration }] } }], new Set()).cohorts[0]?.paid).toBeNull();
+  }
 });
