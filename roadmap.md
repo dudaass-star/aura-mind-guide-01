@@ -266,4 +266,4 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Reprocessar com segurança as mensalidades órfãs de 01 a 04/10 e confirmar cliente, cobrança e acesso.
 
 ## Atualização da oração de gratidão
-- [ ] Substituir o áudio enviado e alinhar texto e tempos à nova gravação; conferir reprodução e rolagem.
+- [x] Substituir o áudio de gratidão pela versão enviada (120,798 s), alinhar 22 frases e conferir reprodução, pausa, rolagem e modo só ouvir nas telas pequena/grande; gravação hospedada idêntica ao envio e sem erros. Aguarda publicação do App.
