@@ -264,3 +264,6 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 ## Reconciliação Woovi
 - [x] Corrigir a paginação crescente do extrato para alcançar pagamentos recentes e publicar a auditoria.
 - [x] Reprocessar com segurança as mensalidades órfãs de 01 a 04/10 e confirmar cliente, cobrança e acesso.
+
+## Atualização da oração de gratidão
+- [x] Substituir o áudio de gratidão pela versão enviada (120,798 s), alinhar 22 frases e conferir reprodução, pausa, rolagem e modo só ouvir nas telas pequena/grande; gravação hospedada idêntica ao envio e sem erros. Aguarda publicação do App.
