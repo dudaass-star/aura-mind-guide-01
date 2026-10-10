@@ -25,6 +25,9 @@ import authenticityCues from "@/lib/prayer-authenticity-cues.json";
 import gratitudeImage from "@/assets/prayer-gratitude.jpg";
 import gratitudeAudio from "@/assets/prayer-gratitude-audio.asset.json";
 import gratitudeCues from "@/lib/prayer-gratitude-cues.json";
+import lifeCompanionsImage from "@/assets/prayer-life-companions.jpg";
+import lifeCompanionsAudio from "@/assets/prayer-life-companions-audio.asset.json";
+import lifeCompanionsCues from "@/lib/prayer-life-companions-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -147,5 +150,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: gratitudeAudio.url,
     duration: 120.798,
     cues: gratitudeCues,
+  },
+  {
+    id: "prayer-life-companions",
+    title: "Pela vida e por quem caminha comigo",
+    moment: "Pela vida e pelos encontros",
+    theme: "Gratidão e cuidado",
+    description: "Agradecer pela vida, reconhecer o amor nos encontros e demonstrar hoje o carinho que podemos oferecer.",
+    image: lifeCompanionsImage,
+    imageAlt: "Mesa com três xícaras e flores entre cadeiras e um banco em um jardim verde iluminado",
+    audioUrl: lifeCompanionsAudio.url,
+    duration: 141.411,
+    cues: lifeCompanionsCues,
   },
 ];
