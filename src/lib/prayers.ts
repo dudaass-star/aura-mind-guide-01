@@ -13,6 +13,9 @@ import lovedOnesCues from "@/lib/prayer-loved-ones-cues.json";
 import strengthImage from "@/assets/prayer-strength.jpg";
 import strengthAudio from "@/assets/prayer-strength-audio.asset.json";
 import strengthCues from "@/lib/prayer-strength-cues.json";
+import stepsImage from "@/assets/prayer-steps.jpg";
+import stepsAudio from "@/assets/prayer-steps-audio.asset.json";
+import stepsCues from "@/lib/prayer-steps-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -87,5 +90,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: strengthAudio.url,
     duration: 120.740,
     cues: strengthCues,
+  },
+  {
+    id: "prayer-steps",
+    title: "Deus, sustenta meus passos",
+    moment: "Para caminhar com Deus",
+    theme: "Força e amparo",
+    description: "Encontrar firmeza, reconhecer a beleza da vida e seguir com o coração aberto ao cuidado de Deus.",
+    image: stepsImage,
+    imageAlt: "Caminho de pedras claras entre oliveiras e um campo verde sob o céu azul",
+    audioUrl: stepsAudio.url,
+    duration: 143.505,
+    cues: stepsCues,
   },
 ];
