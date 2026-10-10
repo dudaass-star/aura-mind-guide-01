@@ -145,7 +145,7 @@ export const PRAYERS: PrayerTrack[] = [
     image: gratitudeImage,
     imageAlt: "Mesa com flores, pão, frutas e água junto a uma janela aberta para um jardim iluminado",
     audioUrl: gratitudeAudio.url,
-    duration: 124.792,
+    duration: 120.798,
     cues: gratitudeCues,
   },
 ];
