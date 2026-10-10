@@ -31,6 +31,9 @@ import lifeCompanionsCues from "@/lib/prayer-life-companions-cues.json";
 import morningPresenceImage from "@/assets/prayer-morning-presence.jpg";
 import morningPresenceAudio from "@/assets/prayer-morning-presence-audio.asset.json";
 import morningPresenceCues from "@/lib/prayer-morning-presence-cues.json";
+import morningGuidanceImage from "@/assets/prayer-morning-guidance.jpg";
+import morningGuidanceAudio from "@/assets/prayer-morning-guidance-audio.asset.json";
+import morningGuidanceCues from "@/lib/prayer-morning-guidance-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -177,5 +180,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: morningPresenceAudio.url,
     duration: 149.918,
     cues: morningPresenceCues,
+  },
+  {
+    id: "prayer-morning-guidance",
+    title: "Guia meus passos hoje",
+    moment: "Para levar Deus comigo pelo dia",
+    theme: "Manhã e presença",
+    description: "Caminhar com Deus nas escolhas, nos encontros e no cotidiano, com discernimento, atenção e liberdade para escolher o bem.",
+    image: morningGuidanceImage,
+    imageAlt: "Ponte de pedras sobre um riacho entre flores e colinas verdes sob o céu azul da manhã",
+    audioUrl: morningGuidanceAudio.url,
+    duration: 155.532,
+    cues: morningGuidanceCues,
   },
 ];
