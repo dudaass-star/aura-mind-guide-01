@@ -10,6 +10,9 @@ import restlessMindCues from "@/lib/prayer-restless-mind-cues.json";
 import lovedOnesImage from "@/assets/prayer-loved-ones.jpg";
 import lovedOnesAudio from "@/assets/prayer-loved-ones-audio.asset.json";
 import lovedOnesCues from "@/lib/prayer-loved-ones-cues.json";
+import strengthImage from "@/assets/prayer-strength.jpg";
+import strengthAudio from "@/assets/prayer-strength-audio.asset.json";
+import strengthCues from "@/lib/prayer-strength-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -72,5 +75,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: lovedOnesAudio.url,
     duration: 121.854,
     cues: lovedOnesCues,
+  },
+  {
+    id: "prayer-strength",
+    title: "Deus, renova minhas forças",
+    moment: "Para renovar as forças",
+    theme: "Força e amparo",
+    description: "Entregar o cansaço, acolher os próprios limites e encontrar em Deus sustento para continuar sem se abandonar.",
+    image: strengthImage,
+    imageAlt: "Oliveira enraizada entre rochas claras diante de um mar tranquilo à luz da manhã",
+    audioUrl: strengthAudio.url,
+    duration: 120.740,
+    cues: strengthCues,
   },
 ];

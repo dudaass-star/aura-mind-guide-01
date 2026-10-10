@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ChevronDown, CloudMoon, Compass, Heart, Headphones, Loader2, Moon, Pause, Play, RotateCcw, RotateCw, Text } from "lucide-react";
+import { ChevronDown, CloudMoon, Compass, Heart, Headphones, Loader2, Moon, Pause, Play, RotateCcw, RotateCw, Sprout, Text } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { PRAYERS, type PrayerTrack } from "@/lib/prayers";
 
 const formatTime = (time: number) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
-const iconForPrayer = (id: string) => id === "prayer-night" ? Moon : id === "prayer-restless-mind" ? CloudMoon : id === "prayer-loved-ones" ? Heart : Compass;
+const iconForPrayer = (id: string) => id === "prayer-night" ? Moon : id === "prayer-restless-mind" ? CloudMoon : id === "prayer-loved-ones" ? Heart : id === "prayer-strength" ? Sprout : Compass;
 
 export function OracoesTab({ isActive = true }: { isActive?: boolean }) {
   const [selectedPrayer, setSelectedPrayer] = useState<PrayerTrack | null>(null);
