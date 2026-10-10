@@ -22,6 +22,9 @@ import courageCues from "@/lib/prayer-courage-cues.json";
 import authenticityImage from "@/assets/prayer-authenticity.jpg";
 import authenticityAudio from "@/assets/prayer-authenticity-audio.asset.json";
 import authenticityCues from "@/lib/prayer-authenticity-cues.json";
+import gratitudeImage from "@/assets/prayer-gratitude.jpg";
+import gratitudeAudio from "@/assets/prayer-gratitude-audio.asset.json";
+import gratitudeCues from "@/lib/prayer-gratitude-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -132,5 +135,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: authenticityAudio.url,
     duration: 155.260,
     cues: authenticityCues,
+  },
+  {
+    id: "prayer-gratitude",
+    title: "Obrigado pelo cuidado de cada dia",
+    moment: "Para agradecer pela vida",
+    theme: "Gratidão e cuidado",
+    description: "Reconhecer a beleza do cotidiano, receber o cuidado com alegria e levar a gratidão para a maneira de viver.",
+    image: gratitudeImage,
+    imageAlt: "Mesa com flores, pão, frutas e água junto a uma janela aberta para um jardim iluminado",
+    audioUrl: gratitudeAudio.url,
+    duration: 124.792,
+    cues: gratitudeCues,
   },
 ];

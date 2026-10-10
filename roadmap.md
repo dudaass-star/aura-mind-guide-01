@@ -54,6 +54,7 @@
 - [x] Aplicar a prévia aprovada com áreas agrupadas, práticas visuais e Movimento próprio; navegação autenticada de Eduardo, Orações, Meditações, Movimento, conversa e telas pequena/grande conferidos sem erros. Aguarda publicação do App.
 
 ## Orações
+- [ ] Incluir “Obrigado pelo cuidado de cada dia” com áudio aprovado, capa própria e frases extraídas da gravação; conferir reprodução e controles na conta de Eduardo.
 - [x] Incluir “Coragem para ser quem sou” com áudio aprovado, capa própria e 26 frases extraídas da gravação; reprodução, pausa, busca por frase, modo só ouvir e saída conferidos na conta de Eduardo sem erros. Áudio hospedado idêntico ao enviado; teste local usou os mesmos bytes com suporte a intervalos. Build OK; aguarda publicação do App.
 - [x] Incluir “Coragem para viver a vida” com áudio aprovado, capa própria e 25 frases alinhadas à gravação; reprodução, pausa, busca por frase, modo só ouvir e saída conferidos na conta de Eduardo em telas pequena/grande sem erros. Áudio hospedado retornou 200 e bytes idênticos ao enviado; teste local serviu os mesmos bytes com suporte a intervalos. Build OK; aguarda publicação do App.
 - [x] Incluir “Deus, sustenta meus passos” com áudio aprovado, capa própria e 23 frases alinhadas à gravação; reprodução, pausa, busca por frase, modo só ouvir e saída conferidos na conta de Eduardo em telas pequena/grande sem erros. Áudio hospedado retornou 200 e bytes idênticos ao enviado; teste local serviu esses mesmos bytes com suporte a intervalos. Aguarda publicação do App.
