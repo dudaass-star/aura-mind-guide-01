@@ -19,6 +19,9 @@ import stepsCues from "@/lib/prayer-steps-cues.json";
 import courageImage from "@/assets/prayer-courage.jpg";
 import courageAudio from "@/assets/prayer-courage-audio.asset.json";
 import courageCues from "@/lib/prayer-courage-cues.json";
+import authenticityImage from "@/assets/prayer-authenticity.jpg";
+import authenticityAudio from "@/assets/prayer-authenticity-audio.asset.json";
+import authenticityCues from "@/lib/prayer-authenticity-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -117,5 +120,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: courageAudio.url,
     duration: 145.729,
     cues: courageCues,
+  },
+  {
+    id: "prayer-authenticity",
+    title: "Coragem para ser quem sou",
+    moment: "Para ser quem sou",
+    theme: "Coragem e presença",
+    description: "Reconhecer o próprio valor, viver com verdade e crescer com Deus sem se abandonar para caber na vida dos outros.",
+    image: authenticityImage,
+    imageAlt: "Magnólia com flores brancas refletida em um lago tranquilo diante de montanhas",
+    audioUrl: authenticityAudio.url,
+    duration: 155.260,
+    cues: authenticityCues,
   },
 ];
