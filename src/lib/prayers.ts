@@ -28,6 +28,9 @@ import gratitudeCues from "@/lib/prayer-gratitude-cues.json";
 import lifeCompanionsImage from "@/assets/prayer-life-companions.jpg";
 import lifeCompanionsAudio from "@/assets/prayer-life-companions-audio.asset.json";
 import lifeCompanionsCues from "@/lib/prayer-life-companions-cues.json";
+import morningPresenceImage from "@/assets/prayer-morning-presence.jpg";
+import morningPresenceAudio from "@/assets/prayer-morning-presence-audio.asset.json";
+import morningPresenceCues from "@/lib/prayer-morning-presence-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -162,5 +165,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: lifeCompanionsAudio.url,
     duration: 141.411,
     cues: lifeCompanionsCues,
+  },
+  {
+    id: "prayer-morning-presence",
+    title: "Antes de começar, estou aqui",
+    moment: "Para começar o dia com Deus",
+    theme: "Manhã e presença",
+    description: "Abrir o coração à presença de Deus e atravessar o dia com atenção, liberdade e amor nas pequenas escolhas.",
+    image: morningPresenceImage,
+    imageAlt: "Janela aberta com flores brancas diante de um campo verde e montanhas à luz da manhã",
+    audioUrl: morningPresenceAudio.url,
+    duration: 149.918,
+    cues: morningPresenceCues,
   },
 ];
