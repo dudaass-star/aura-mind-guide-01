@@ -35,6 +35,8 @@ function PrayerPlayer({ prayer, open, onOpenChange }: { prayer: PrayerTrack; ope
   const [duration, setDuration] = useState(prayer.duration);
   const [showText, setShowText] = useState(true);
   const [error, setError] = useState("");
+  const [lyricsHeight, setLyricsHeight] = useState(0);
+  const previousCueRef = useRef<number | null>(null);
   const activeIndex = cues.reduce((active, cue, index) => currentTime >= cue.start ? index : active, 0);
   useEffect(() => {
     if (!open) { audioRef.current?.pause(); setPlaying(false); setWaiting(false); setCurrentTime(0); setError(""); }
@@ -52,10 +54,33 @@ function PrayerPlayer({ prayer, open, onOpenChange }: { prayer: PrayerTrack; ope
   }, [playing]);
   useEffect(() => {
     const container = lyricsRef.current;
+    if (!container || !showText || !open) return;
+    const observer = new ResizeObserver(() => setLyricsHeight(container.clientHeight));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [showText, open]);
+  useEffect(() => {
+    const container = lyricsRef.current;
     const line = container?.querySelector<HTMLElement>(`[data-cue="${activeIndex}"]`);
-    if (!container || !line || !showText || !open) return;
-    container.scrollTo({ top: line.offsetTop - (container.clientHeight - line.clientHeight) / 2, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-  }, [activeIndex, showText, open]);
+    const cue = cues[activeIndex];
+    if (!container || !line || !cue || !showText || !open) return;
+    // Acompanhar frases longas dentro da faixa sem transparência da máscara.
+    const visibleTop = container.clientHeight * 0.14;
+    const visibleBottom = container.clientHeight * 0.82;
+    const visibleHeight = visibleBottom - visibleTop;
+    const lineTop = line.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+    const isLong = line.clientHeight > visibleHeight;
+    const progress = Math.max(0, Math.min(1, (currentTime - cue.start) / Math.max(0.1, cue.end - cue.start)));
+    const top = isLong
+      ? lineTop - visibleTop + (line.clientHeight - visibleHeight) * progress
+      : lineTop - visibleTop - (visibleHeight - line.clientHeight) / 2;
+    const changedCue = previousCueRef.current !== activeIndex;
+    previousCueRef.current = activeIndex;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (isLong || changedCue || Math.abs(container.scrollTop - top) > 1 && !playing) {
+      container.scrollTo({ top, behavior: !isLong && changedCue && !reducedMotion ? "smooth" : "auto" });
+    }
+  }, [activeIndex, currentTime, cues, showText, open, lyricsHeight, playing]);
   const seek = (time: number) => {
     const audio = audioRef.current;
     if (!audio) return;
