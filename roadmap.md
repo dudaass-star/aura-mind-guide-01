@@ -54,7 +54,7 @@
 - [x] Aplicar a prévia aprovada com áreas agrupadas, práticas visuais e Movimento próprio; navegação autenticada de Eduardo, Orações, Meditações, Movimento, conversa e telas pequena/grande conferidos sem erros. Aguarda publicação do App.
 
 ## Orações
-- [ ] Incluir “Deus, renova minhas forças” com áudio aprovado, capa própria e frases extraídas da gravação; conferir reprodução e acompanhamento no App.
+- [x] Incluir “Deus, renova minhas forças” com áudio aprovado, capa própria e 24 frases alinhadas à gravação; reprodução, pausa, busca por frase, modo só ouvir e saída conferidos na conta de Eduardo sem erros. Áudio publicado retornou 200; teste local utilizou esses mesmos bytes com suporte a intervalos, pois o endereço de mídia não é servido pelo localhost. Aguarda publicação do App.
 - [x] Incluir “Por quem eu amo” com áudio enviado, capa própria e 24 frases fiéis à narração sincronizadas; reprodução real, pausa, busca por frase e modo só ouvir conferidos na conta de Eduardo sem erros. Aguarda publicação do App.
 - [x] Incluir “Quando a mente não desliga” com áudio enviado, capa própria e 18 frases extraídas da narração e alinhadas; reprodução real, pausa, busca por frase e modo só ouvir conferidos na conta de Eduardo sem erros. Aguarda publicação do App.
 - [x] Incluir “Quando não sei qual caminho seguir” com áudio enviado, capa própria e 21 frases alinhadas; reprodução real via CDN, pausa, busca por frase, modo só ouvir e oração anterior conferidos na conta de Eduardo sem erros. Aguarda publicação do App.
