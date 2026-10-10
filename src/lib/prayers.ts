@@ -16,6 +16,9 @@ import strengthCues from "@/lib/prayer-strength-cues.json";
 import stepsImage from "@/assets/prayer-steps.jpg";
 import stepsAudio from "@/assets/prayer-steps-audio.asset.json";
 import stepsCues from "@/lib/prayer-steps-cues.json";
+import courageImage from "@/assets/prayer-courage.jpg";
+import courageAudio from "@/assets/prayer-courage-audio.asset.json";
+import courageCues from "@/lib/prayer-courage-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -102,5 +105,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: stepsAudio.url,
     duration: 143.505,
     cues: stepsCues,
+  },
+  {
+    id: "prayer-courage",
+    title: "Coragem para viver a vida",
+    moment: "Para viver com coragem",
+    theme: "Coragem e presença",
+    description: "Abrir o coração à vida, escolher com consciência e encontrar em Deus coragem para amar, aprender e participar.",
+    image: courageImage,
+    imageAlt: "Árvore em uma colina verde com flores pequenas diante de montanhas e um céu azul aberto",
+    audioUrl: courageAudio.url,
+    duration: 145.729,
+    cues: courageCues,
   },
 ];
