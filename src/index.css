@@ -798,6 +798,19 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground));
 }
+/* Biblioteca visual: a paisagem e o convite precedem a escolha por tema. */
+.prayer-library {
+  --prayer-photo-text: 105 20% 98%;
+  --prayer-photo-shade: 160 22% 9%;
+  --prayer-photo-overlay: linear-gradient(180deg, hsl(var(--prayer-photo-shade) / 0.02) 0%, hsl(var(--prayer-photo-shade) / 0.2) 25%, hsl(var(--prayer-photo-shade) / 0.88) 100%);
+  --prayer-photo-shadow: 0 2px 12px hsl(var(--prayer-photo-shade) / 0.45);
+}
+.prayer-feature { color: hsl(var(--prayer-photo-text)); }
+.prayer-feature-shade { background: var(--prayer-photo-overlay); }
+.prayer-feature-copy { text-shadow: var(--prayer-photo-shadow); }
+.prayer-feature-copy button { text-shadow: none; }
+.prayer-library .font-display { font-family: "Outfit", sans-serif; }
+
 /* Reprodução contemplativa das orações, isolada das meditações. */
 .prayer-theme {
   --background: 160 22% 9%;
