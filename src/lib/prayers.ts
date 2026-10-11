@@ -34,6 +34,9 @@ import morningPresenceCues from "@/lib/prayer-morning-presence-cues.json";
 import morningGuidanceImage from "@/assets/prayer-morning-guidance.jpg";
 import morningGuidanceAudio from "@/assets/prayer-morning-guidance-audio.asset.json";
 import morningGuidanceCues from "@/lib/prayer-morning-guidance-cues.json";
+import hopeImage from "@/assets/prayer-hope.jpg";
+import hopeAudio from "@/assets/prayer-hope-audio.asset.json";
+import hopeCues from "@/lib/prayer-hope-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -192,5 +195,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: morningGuidanceAudio.url,
     duration: 155.532,
     cues: morningGuidanceCues,
+  },
+  {
+    id: "prayer-hope",
+    title: "Deus, renova minha esperança",
+    moment: "Para renovar a esperança",
+    theme: "Esperança e vida",
+    description: "Manter o coração aberto à vida, reconhecer o bem presente e encontrar em Deus esperança para amar, aprender e seguir.",
+    image: hopeImage,
+    imageAlt: "Campo de flores diante de um vale verde com rio e montanhas iluminados pelo sol",
+    audioUrl: hopeAudio.url,
+    duration: 133.322,
+    cues: hopeCues,
   },
 ];
