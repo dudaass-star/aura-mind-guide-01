@@ -41,8 +41,12 @@ import flourishImage from "@/assets/prayer-flourish.jpg";
 import flourishAudio from "@/assets/prayer-flourish-audio.asset.json";
 import flourishCues from "@/lib/prayer-flourish-cues.json";
 
+export const PRAYER_CATEGORIES = ["Manhã", "Noite", "Força", "Coragem", "Gratidão", "Esperança", "Direção", "Amor"] as const;
+export type PrayerCategory = typeof PRAYER_CATEGORIES[number];
+
 export interface PrayerTrack {
   id: string;
+  category: PrayerCategory;
   title: string;
   moment: string;
   theme: string;
@@ -57,6 +61,7 @@ export interface PrayerTrack {
 export const PRAYERS: PrayerTrack[] = [
   {
     id: "prayer-night",
+    category: "Noite",
     title: "Para entregar a Deus o que ficou sem resolver hoje",
     moment: "Para esta noite",
     theme: "Entrega e descanso",
@@ -69,6 +74,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-direction",
+    category: "Direção",
     title: "Quando não sei qual caminho seguir",
     moment: "Diante de uma decisão",
     theme: "Discernimento e coragem",
@@ -81,6 +87,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-restless-mind",
+    category: "Noite",
     title: "Quando a mente não desliga",
     moment: "Quando os pensamentos continuam",
     theme: "Presença e descanso",
@@ -93,6 +100,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-loved-ones",
+    category: "Amor",
     title: "Por quem eu amo",
     moment: "Por pessoas queridas",
     theme: "Amor e cuidado",
@@ -105,6 +113,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-strength",
+    category: "Força",
     title: "Deus, renova minhas forças",
     moment: "Para renovar as forças",
     theme: "Força e amparo",
@@ -117,6 +126,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-steps",
+    category: "Força",
     title: "Deus, sustenta meus passos",
     moment: "Para caminhar com Deus",
     theme: "Força e amparo",
@@ -129,6 +139,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-courage",
+    category: "Coragem",
     title: "Coragem para viver a vida",
     moment: "Para viver com coragem",
     theme: "Coragem e presença",
@@ -141,6 +152,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-authenticity",
+    category: "Coragem",
     title: "Coragem para ser quem sou",
     moment: "Para ser quem sou",
     theme: "Coragem e presença",
@@ -153,6 +165,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-gratitude",
+    category: "Gratidão",
     title: "Obrigado pelo cuidado de cada dia",
     moment: "Para agradecer pela vida",
     theme: "Gratidão e cuidado",
@@ -165,6 +178,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-life-companions",
+    category: "Gratidão",
     title: "Pela vida e por quem caminha comigo",
     moment: "Pela vida e pelos encontros",
     theme: "Gratidão e cuidado",
@@ -177,6 +191,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-morning-presence",
+    category: "Manhã",
     title: "Antes de começar, estou aqui",
     moment: "Para começar o dia com Deus",
     theme: "Manhã e presença",
@@ -189,6 +204,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-morning-guidance",
+    category: "Manhã",
     title: "Guia meus passos hoje",
     moment: "Para levar Deus comigo pelo dia",
     theme: "Manhã e presença",
@@ -201,6 +217,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-hope",
+    category: "Esperança",
     title: "Deus, renova minha esperança",
     moment: "Para renovar a esperança",
     theme: "Esperança e vida",
@@ -213,6 +230,7 @@ export const PRAYERS: PrayerTrack[] = [
   },
   {
     id: "prayer-flourish",
+    category: "Esperança",
     title: "Que eu possa florescer de novo",
     moment: "Para continuar florescendo",
     theme: "Esperança e vida",

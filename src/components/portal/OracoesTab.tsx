@@ -3,23 +3,32 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronDown, CloudMoon, Compass, Heart, Headphones, Loader2, Moon, Pause, Play, RotateCcw, RotateCw, Sprout, Sunrise, Text } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { PRAYERS, type PrayerTrack } from "@/lib/prayers";
+import { PRAYERS, PRAYER_CATEGORIES, type PrayerCategory, type PrayerTrack } from "@/lib/prayers";
 
 const formatTime = (time: number) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
 const iconForPrayer = (id: string) => id === "prayer-morning-presence" || id === "prayer-morning-guidance" ? Sunrise : id === "prayer-night" ? Moon : id === "prayer-restless-mind" ? CloudMoon : id === "prayer-loved-ones" || id === "prayer-gratitude" || id === "prayer-life-companions" ? Heart : id === "prayer-strength" || id === "prayer-steps" || id === "prayer-hope" || id === "prayer-flourish" ? Sprout : Compass;
 
 export function OracoesTab({ isActive = true }: { isActive?: boolean }) {
   const [selectedPrayer, setSelectedPrayer] = useState<PrayerTrack | null>(null);
+  const [category, setCategory] = useState<PrayerCategory | "Todas">("Todas");
+  const visiblePrayers = category === "Todas" ? PRAYERS : PRAYERS.filter((prayer) => prayer.category === category);
   useEffect(() => { if (!isActive) setSelectedPrayer(null); }, [isActive]);
   return <section className="space-y-6">
-    <div className="space-y-2"><p className="text-xs font-semibold text-primary">Um momento com Deus</p><h2 className="font-display text-3xl leading-tight text-foreground">O dia termina.<br />O cuidado permanece.</h2><p className="text-sm text-muted-foreground">Orações cristãs guiadas, no seu tempo.</p></div>
-    <div className="grid gap-6 lg:grid-cols-2">{PRAYERS.map((prayer) => {
-      const Icon = iconForPrayer(prayer.id);
-      return <article key={prayer.id} className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
-        <img src={prayer.image} alt={prayer.imageAlt} width={1536} height={1024} loading="lazy" className="aspect-[3/2] w-full object-cover" />
-        <div className="flex flex-1 flex-col gap-4 p-5"><p className="flex items-center gap-2 text-xs font-semibold text-primary"><Icon className="h-4 w-4 shrink-0" /> {prayer.moment} <span className="ml-auto shrink-0 text-muted-foreground">{formatTime(prayer.duration)}</span></p><h3 className="font-display text-2xl leading-tight text-foreground">{prayer.title}</h3><p className="text-sm leading-relaxed text-muted-foreground">{prayer.description}</p><Button size="lg" className="mt-auto w-full" onClick={() => setSelectedPrayer(prayer)} aria-label={`Ouvir oração: ${prayer.title}`}><Play /> Ouvir oração</Button></div>
+    <div className="space-y-2"><p className="text-xs font-semibold text-primary">Sua fé, no seu tempo</p><h2 className="font-display text-3xl leading-tight text-foreground">Um momento com Deus</h2><p className="text-sm text-muted-foreground">Como está seu coração hoje?</p></div>
+    <div role="group" aria-label="Temas das orações" className="flex flex-wrap gap-2">
+      {(["Todas", ...PRAYER_CATEGORIES] as const).map((item) => <Button key={item} variant={category === item ? "default" : "outline"} size="sm" className="min-h-10 px-3" aria-pressed={category === item} onClick={() => setCategory(item)}>{item}</Button>)}
+    </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-foreground">{category === "Todas" ? "Todas as orações" : category}</h3><p role="status" className="text-xs tabular-nums text-muted-foreground">{visiblePrayers.length} {visiblePrayers.length === 1 ? "oração" : "orações"}</p></div>
+      <div className="grid gap-2 lg:grid-cols-2">{visiblePrayers.map((prayer) => {
+      return <article key={prayer.id} className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
+        <Button variant="ghost" className="grid h-full min-h-24 w-full grid-cols-[4rem_minmax(0,1fr)_1.75rem] items-center gap-3 whitespace-normal p-3 text-left sm:grid-cols-[5rem_minmax(0,1fr)_2rem] sm:gap-4" onClick={() => setSelectedPrayer(prayer)} aria-label={`Ouvir oração: ${prayer.title}`}>
+          <img src={prayer.image} alt={prayer.imageAlt} width={80} height={80} loading="lazy" className="aspect-square w-full rounded-md object-cover" />
+          <span className="min-w-0 space-y-1.5"><span className="block text-xs font-normal text-muted-foreground">{prayer.category} · {formatTime(prayer.duration)}</span><span className="block font-display text-base font-medium leading-snug text-foreground sm:text-lg">{prayer.title}</span></span>
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary sm:h-8 sm:w-8" aria-hidden="true"><Play className="h-3.5 w-3.5" fill="currentColor" /></span>
+        </Button>
       </article>;
-    })}</div>
+    })}</div></div>
     {selectedPrayer && <PrayerPlayer key={selectedPrayer.id} prayer={selectedPrayer} open onOpenChange={(value) => { if (!value) setSelectedPrayer(null); }} />}
   </section>;
 }
