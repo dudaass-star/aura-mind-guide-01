@@ -3,7 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronDown, CloudMoon, Compass, Heart, Headphones, Loader2, Moon, Pause, Play, RotateCcw, RotateCw, Sprout, Sunrise, Text } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { PRAYERS, PRAYER_CATEGORIES, type PrayerCategory, type PrayerTrack } from "@/lib/prayers";
+import { getPrayerHighlight, PRAYERS, PRAYER_CATEGORIES, type PrayerCategory, type PrayerTrack } from "@/lib/prayers";
 
 const formatTime = (time: number) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
 const iconForPrayer = (id: string) => id === "prayer-morning-presence" || id === "prayer-morning-guidance" ? Sunrise : id === "prayer-night" ? Moon : id === "prayer-restless-mind" ? CloudMoon : id === "prayer-loved-ones" || id === "prayer-gratitude" || id === "prayer-life-companions" || id === "prayer-closeness" ? Heart : id === "prayer-strength" || id === "prayer-steps" || id === "prayer-hope" || id === "prayer-flourish" ? Sprout : Compass;
@@ -12,7 +12,16 @@ export function OracoesTab({ isActive = true }: { isActive?: boolean }) {
   const [selectedPrayer, setSelectedPrayer] = useState<PrayerTrack | null>(null);
   const [category, setCategory] = useState<PrayerCategory | "Todas">("Todas");
   const visiblePrayers = category === "Todas" ? PRAYERS : PRAYERS.filter((prayer) => prayer.category === category);
-  const featuredPrayer = PRAYERS.find((prayer) => prayer.id === "prayer-hope") ?? PRAYERS[0];
+  const [highlight, setHighlight] = useState(() => getPrayerHighlight());
+  const featuredPrayer = highlight.prayer;
+  useEffect(() => {
+    if (!isActive) return;
+    // Atualizar ao entrar ou voltar ao App, sem trocar a capa durante a leitura.
+    const refresh = () => { if (document.visibilityState === "visible") setHighlight(getPrayerHighlight()); };
+    refresh();
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
+  }, [isActive]);
   useEffect(() => { if (!isActive) setSelectedPrayer(null); }, [isActive]);
   return <section className="prayer-library space-y-7">
     <div className="space-y-1.5"><p className="text-xs font-semibold text-primary">Sua fé, no seu tempo</p><h2 className="font-display text-3xl leading-tight text-foreground">Um momento com Deus</h2></div>
@@ -20,9 +29,9 @@ export function OracoesTab({ isActive = true }: { isActive?: boolean }) {
       <img src={featuredPrayer.image} alt={featuredPrayer.imageAlt} width={1536} height={1024} fetchPriority="high" className="absolute inset-0 h-full w-full object-cover" />
       <div className="prayer-feature-shade absolute inset-0" aria-hidden="true" />
       <div className="prayer-feature-copy relative flex min-h-[19rem] flex-col justify-end gap-3 px-6 pb-6 pt-16 sm:min-h-[22rem] sm:px-8 sm:pb-8">
-        <p className="text-xs font-semibold">Um respiro de fé</p>
+        <p className="text-xs font-semibold">{highlight.label}</p>
         <h3 className="max-w-sm font-display text-3xl font-medium leading-tight sm:text-4xl">{featuredPrayer.title}</h3>
-        <p className="max-w-sm text-sm leading-relaxed">O bem ainda está presente. A vida ainda pode florescer.</p>
+        <p className="max-w-sm text-sm leading-relaxed">{featuredPrayer.description}</p>
         <div className="mt-1 flex items-center gap-4"><Button className="gap-2 rounded-full px-5" onClick={() => setSelectedPrayer(featuredPrayer)} aria-label={`Ouvir destaque: ${featuredPrayer.title}`}><Play className="h-4 w-4" fill="currentColor" />Ouvir oração</Button><span className="text-xs">{formatTime(featuredPrayer.duration)} · Com a Aura</span></div>
       </div>
     </div>}

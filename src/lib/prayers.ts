@@ -274,3 +274,21 @@ export const PRAYERS: PrayerTrack[] = [
     cues: trustCues,
   },
 ];
+
+export function getPrayerHighlight(now = new Date()) {
+  // Brasília (UTC-3), independentemente do fuso do aparelho.
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const hour = brt.getUTCHours();
+  const morning = hour >= 5 && hour < 12;
+  const night = hour >= 18 || hour < 5;
+  const candidates = PRAYERS.filter((prayer) => morning
+    ? prayer.category === "Manhã"
+    : night ? prayer.category === "Noite" : prayer.category !== "Manhã" && prayer.category !== "Noite");
+  // A madrugada mantém a oração da noite anterior até às 5h.
+  const day = Math.floor((brt.getTime() - (hour < 5 ? 86400000 : 0)) / 86400000);
+  const index = candidates.length ? ((day % candidates.length) + candidates.length) % candidates.length : 0;
+  return {
+    prayer: candidates[index] ?? PRAYERS[0],
+    label: morning ? "Para começar o dia com Deus" : night ? "Para esta noite" : "Um respiro de fé",
+  };
+}
