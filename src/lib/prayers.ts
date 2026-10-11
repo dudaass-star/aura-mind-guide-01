@@ -37,6 +37,9 @@ import morningGuidanceCues from "@/lib/prayer-morning-guidance-cues.json";
 import hopeImage from "@/assets/prayer-hope.jpg";
 import hopeAudio from "@/assets/prayer-hope-audio.asset.json";
 import hopeCues from "@/lib/prayer-hope-cues.json";
+import flourishImage from "@/assets/prayer-flourish.jpg";
+import flourishAudio from "@/assets/prayer-flourish-audio.asset.json";
+import flourishCues from "@/lib/prayer-flourish-cues.json";
 
 export interface PrayerTrack {
   id: string;
@@ -207,5 +210,17 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: hopeAudio.url,
     duration: 133.322,
     cues: hopeCues,
+  },
+  {
+    id: "prayer-flourish",
+    title: "Que eu possa florescer de novo",
+    moment: "Para continuar florescendo",
+    theme: "Esperança e vida",
+    description: "Cuidar das próprias raízes, acolher o tempo de crescer e abrir espaço para a vida com liberdade, ternura e Deus por perto.",
+    image: flourishImage,
+    imageAlt: "Árvore com flores brancas e rosadas junto a um riacho em um vale verde sob céu azul",
+    audioUrl: flourishAudio.url,
+    duration: 171.776,
+    cues: flourishCues,
   },
 ];
