@@ -54,7 +54,7 @@
 - [x] Aplicar a prévia aprovada com áreas agrupadas, práticas visuais e Movimento próprio; navegação autenticada de Eduardo, Orações, Meditações, Movimento, conversa e telas pequena/grande conferidos sem erros. Aguarda publicação do App.
 
 ## Orações
-- [ ] Devolver impacto visual à biblioteca com oração em destaque, capas maiores, descrições e temas discretos; preservar e conferir o player na conta de Eduardo.
+- [x] Devolver impacto visual à biblioteca com oração em destaque, capas maiores, descrições e temas discretos; 14 orações, oito filtros, áudio hospedado do destaque, pausa, modo só ouvir e retorno ao tema conferidos na conta de Eduardo em telas pequena/grande, sem erros. Player preservado; aguarda publicação do App.
 - [x] Reorganizar biblioteca com abertura ampla, oito filtros por tema e capas menores; 14 orações, todos os filtros, abertura do player, modo só ouvir e retorno preservando tema conferidos na conta de Eduardo em telas pequena/grande, sem erros. Player preservado; build OK. Aguarda publicação do App.
 - [x] Incluir “Que eu possa florescer de novo” com áudio aprovado (171,776 s), capa própria e 27 frases extraídas da gravação; áudio hospedado idêntico ao enviado. Reprodução, pausa, busca por frase, rolagem, modo só ouvir e saída conferidos na conta de Eduardo em telas pequena/grande sem erros; build OK. Aguarda publicação do App.
 - [x] Incluir “Deus, renova minha esperança” com gravação aprovada (133,322 s), capa própria e 25 frases sincronizadas; texto completo conferido por transcrição independente, áudio hospedado idêntico ao envio. Reprodução, pausa, busca, rolagem, modo só ouvir e saída testados na conta de Eduardo em telas pequena/grande sem erros; build OK. Aguarda publicação do App.

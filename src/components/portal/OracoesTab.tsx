@@ -32,7 +32,7 @@ export function OracoesTab({ isActive = true }: { isActive?: boolean }) {
           {(["Todas", ...PRAYER_CATEGORIES] as const).map((item) => <Button key={item} variant="ghost" size="sm" className={`min-h-10 rounded-none border-b-2 px-3 ${category === item ? "border-primary font-semibold text-primary" : "border-transparent font-normal text-muted-foreground"}`} aria-pressed={category === item} onClick={() => setCategory(item)}>{item}</Button>)}
         </div>
       </div>
-      <div className="flex items-center justify-between gap-3"><h4 className="text-sm font-semibold text-foreground">{category === "Todas" ? "Encontre sua oração" : category}</h4><p role="status" className="text-xs tabular-nums text-muted-foreground">{visiblePrayers.length} {visiblePrayers.length === 1 ? "oração" : "orações"}</p></div>
+      <div className="flex items-center justify-between gap-3"><h4 className="font-display text-sm font-semibold text-foreground">{category === "Todas" ? "Encontre sua oração" : category}</h4><p role="status" className="text-xs tabular-nums text-muted-foreground">{visiblePrayers.length} {visiblePrayers.length === 1 ? "oração" : "orações"}</p></div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:gap-x-5">{visiblePrayers.map((prayer) => {
       return <article key={prayer.id} className="min-w-0">
         <Button variant="ghost" className="group flex h-full w-full flex-col items-stretch justify-start gap-3 whitespace-normal rounded-lg p-0 text-left hover:bg-transparent" onClick={() => setSelectedPrayer(prayer)} aria-label={`Ouvir oração: ${prayer.title}`}>
