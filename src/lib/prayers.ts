@@ -40,8 +40,11 @@ import hopeCues from "@/lib/prayer-hope-cues.json";
 import flourishImage from "@/assets/prayer-flourish.jpg";
 import flourishAudio from "@/assets/prayer-flourish-audio.asset.json";
 import flourishCues from "@/lib/prayer-flourish-cues.json";
+import closenessImage from "@/assets/prayer-closeness.jpg";
+import closenessAudio from "@/assets/prayer-closeness-audio.asset.json";
+import closenessCues from "@/lib/prayer-closeness-cues.json";
 
-export const PRAYER_CATEGORIES = ["Manhã", "Noite", "Força", "Coragem", "Gratidão", "Esperança", "Direção", "Amor"] as const;
+export const PRAYER_CATEGORIES = ["Manhã", "Noite", "Força", "Coragem", "Gratidão", "Esperança", "Direção", "Amor", "Fé"] as const;
 export type PrayerCategory = typeof PRAYER_CATEGORIES[number];
 
 export interface PrayerTrack {
@@ -240,5 +243,18 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: flourishAudio.url,
     duration: 171.776,
     cues: flourishCues,
+  },
+  {
+    id: "prayer-closeness",
+    category: "Fé",
+    title: "Deus, quero estar mais perto de Ti",
+    moment: "Para me aproximar de Deus",
+    theme: "Fé e presença de Deus",
+    description: "Estar com Deus pelo amor de quem Ele é. Um encontro de confiança, entrega e gratidão pela Sua presença.",
+    image: closenessImage,
+    imageAlt: "Portão aberto entre flores brancas para um jardim com lago e montanhas sob o céu azul",
+    audioUrl: closenessAudio.url,
+    duration: 142.885,
+    cues: closenessCues,
   },
 ];
