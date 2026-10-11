@@ -54,7 +54,7 @@
 - [x] Aplicar a prévia aprovada com áreas agrupadas, práticas visuais e Movimento próprio; navegação autenticada de Eduardo, Orações, Meditações, Movimento, conversa e telas pequena/grande conferidos sem erros. Aguarda publicação do App.
 
 ## Orações
-- [ ] Incluir “Deus, em Ti eu confio” no tema Fé com gravação enviada, capa própria e frases sincronizadas; conferir reprodução e retorno sem publicar.
+- [x] Incluir “Deus, em Ti eu confio” no tema Fé com gravação enviada (166,860 s), capa própria e 26 frases sincronizadas à narração. Áudio hospedado idêntico ao envio; reprodução, pausa, busca por frase, modo só ouvir e retorno ao tema conferidos na conta de Eduardo, sem erros; build OK. Aguarda publicação do App.
 - [x] Incluir “Deus, quero estar mais perto de Ti” no tema Fé com gravação enviada (142,885 s), capa própria e 25 frases sincronizadas; transcrições independentes coincidem e áudio hospedado é idêntico ao envio. Reprodução, pausa, busca por frase, modo só ouvir e retorno ao tema conferidos na conta de Eduardo, sem erros; build OK. Aguarda publicação do App.
 - [x] Devolver impacto visual à biblioteca com oração em destaque, capas maiores, descrições e temas discretos; 14 orações, oito filtros, áudio hospedado do destaque, pausa, modo só ouvir e retorno ao tema conferidos na conta de Eduardo em telas pequena/grande, sem erros. Player preservado; aguarda publicação do App.
 - [x] Reorganizar biblioteca com abertura ampla, oito filtros por tema e capas menores; 14 orações, todos os filtros, abertura do player, modo só ouvir e retorno preservando tema conferidos na conta de Eduardo em telas pequena/grande, sem erros. Player preservado; build OK. Aguarda publicação do App.
