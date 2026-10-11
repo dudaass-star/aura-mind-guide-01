@@ -43,6 +43,9 @@ import flourishCues from "@/lib/prayer-flourish-cues.json";
 import closenessImage from "@/assets/prayer-closeness.jpg";
 import closenessAudio from "@/assets/prayer-closeness-audio.asset.json";
 import closenessCues from "@/lib/prayer-closeness-cues.json";
+import trustImage from "@/assets/prayer-trust.jpg";
+import trustAudio from "@/assets/prayer-trust-audio.asset.json";
+import trustCues from "@/lib/prayer-trust-cues.json";
 
 export const PRAYER_CATEGORIES = ["Manhã", "Noite", "Força", "Coragem", "Gratidão", "Esperança", "Direção", "Amor", "Fé"] as const;
 export type PrayerCategory = typeof PRAYER_CATEGORIES[number];
@@ -256,5 +259,18 @@ export const PRAYERS: PrayerTrack[] = [
     audioUrl: closenessAudio.url,
     duration: 142.885,
     cues: closenessCues,
+  },
+  {
+    id: "prayer-trust",
+    category: "Fé",
+    title: "Deus, em Ti eu confio",
+    moment: "Para confiar e entregar a Deus",
+    theme: "Fé e confiança",
+    description: "Deus é fiel. Entregar o coração, cuidar do que nos cabe e aprender a confiar sem ter todas as respostas.",
+    image: trustImage,
+    imageAlt: "Barco de madeira junto à margem de um lago tranquilo, com flores brancas e montanhas iluminadas",
+    audioUrl: trustAudio.url,
+    duration: 166.860,
+    cues: trustCues,
   },
 ];
