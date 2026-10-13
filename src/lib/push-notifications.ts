@@ -33,18 +33,19 @@ export async function enablePushNotifications(): Promise<PushActivationResult> {
   if (!firebaseConfig.apiKey || !firebaseConfig.projectId || !appId || !vapidKey || !firebaseConfig.messagingSenderId) {
     return { status: "not-configured" };
   }
-  if (!("Notification" in window) || !(await isSupported())) return { status: "unsupported" };
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) return { status: "unsupported" };
   if (window.top !== window.self) return { status: "open-in-new-tab" };
 
-  const permission = Notification.permission === "granted"
-    ? "granted"
-    : await Notification.requestPermission();
-  if (permission !== "granted") {
-    await supabasePortal.functions.invoke("register-push-device", { body: { action: "permission_denied" } });
-    return { status: "denied" };
-  }
-
   try {
+    // Solicita no toque original, antes de verificações assíncronas do Firebase.
+    const permission = Notification.permission === "granted"
+      ? "granted"
+      : await Notification.requestPermission();
+    if (permission !== "granted") {
+      await supabasePortal.functions.invoke("register-push-device", { body: { action: "permission_denied" } });
+      return { status: "denied" };
+    }
+    if (!(await isSupported())) return { status: "unsupported" };
     const query = new URLSearchParams(firebaseConfig).toString();
     const serviceWorkerRegistration = await navigator.serviceWorker.register(`/firebase-messaging-sw.js?${query}`);
     const app = getApps()[0] ?? initializeApp(firebaseConfig);
