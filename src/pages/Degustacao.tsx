@@ -201,17 +201,18 @@ export default function Degustacao() {
       <section className="container mx-auto max-w-6xl px-6 pb-20">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">Quem já viveu</span>
         <h2 className="mt-1 font-display text-2xl font-medium md:text-3xl">O que dizem depois do encontro</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Relatos anônimos de quem já viveu o encontro. Nomes e detalhes são omitidos para proteger a privacidade de cada pessoa.</p>
         <ul className="mt-6 grid gap-4 md:grid-cols-3">
           {[
-            { initial: "M.", text: "Eu achava que era só falta de foco. Na conversa, percebi que adiava as coisas por medo de falhar. Saí do encontro com um passo pequeno e possível — e finalmente comecei." },
-            { initial: "T.", text: "Passei a vida tentando agradar todo mundo e me anulando. A AURA me ajudou a enxergar isso com clareza, sem julgamento. Foi a primeira vez que me senti ouvida de verdade." },
-            { initial: "R.", text: "Cheguei exausta de ser sempre a fortaleza dos outros. Entendi que essa 'paz' tinha um custo: eu mesma. Hoje consigo colocar limites sem me sentir culpada." },
+            { tema: "medo de falhar", text: "Eu achava que era só falta de foco. Na conversa, percebi que adiava as coisas por medo de falhar. Saí do encontro com um passo pequeno e possível — e finalmente comecei." },
+            { tema: "se anular para agradar", text: "Passei a vida tentando agradar todo mundo e me anulando. A AURA me ajudou a enxergar isso com clareza, sem julgamento. Foi a primeira vez que me senti ouvida de verdade." },
+            { tema: "cansaço de ser sempre forte", text: "Cheguei exausta de ser sempre a fortaleza dos outros. Entendi que essa 'paz' tinha um custo: eu mesma. Hoje consigo colocar limites sem me sentir culpada." },
           ].map((d) => (
-            <li key={d.initial} className="rounded-xl border border-border bg-card p-6">
-              <p className="text-sm leading-relaxed text-foreground/80">“{d.text}”</p>
-              <p className="mt-4 flex items-center gap-2 text-sm font-semibold">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">{d.initial}</span>
-                <span className="text-muted-foreground font-normal">participante da Olá Aura</span>
+            <li key={d.tema} className="rounded-xl border border-border bg-card p-6">
+              <span aria-hidden="true" className="font-display text-4xl leading-none text-primary/40">“</span>
+              <p className="mt-1 text-sm leading-relaxed text-foreground/80">{d.text}</p>
+              <p className="mt-4 text-xs uppercase tracking-wide text-muted-foreground">
+                <span className="font-semibold text-foreground/70">relato anônimo</span> · {d.tema}
               </p>
             </li>
           ))}
