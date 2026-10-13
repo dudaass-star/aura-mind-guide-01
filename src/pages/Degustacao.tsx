@@ -12,6 +12,9 @@ import logoOlaAura from "@/assets/logo-ola-aura.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import prayerImage from "@/assets/prayer-closeness.jpg";
 import "@/styles/v2-theme.css";
+import { PreviewPlayer } from "@/components/degustacao/PreviewPlayer";
+import meditationImage from "@/assets/meditation-storm.jpg";
+import sessionImage from "@/assets/meditation-presence.jpg";
 
 const maskPhone = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 11);
@@ -21,9 +24,9 @@ const maskPhone = (v: string) => {
 };
 
 const gifts = [
-  { icon: MessageCircleHeart, badge: "Texto ou áudio", title: "Sessão guiada de 45 minutos", body: "Um encontro completo e profundo com a AURA para organizar pensamentos e clarear o que está pesando." },
-  { icon: HeartHandshake, badge: "Voz acolhedora", title: "Uma oração narrada", body: "Para os momentos em que você quer silenciar e se aproximar de Deus." },
-  { icon: Headphones, badge: "Respiração e calma", title: "Uma meditação guiada", body: "Para desacelerar o corpo e aliviar o ritmo acelerado da mente." },
+  { image: sessionImage, icon: MessageCircleHeart, badge: "Texto ou áudio", title: "Sessão guiada de 45 minutos", body: "Um encontro completo e profundo com a AURA para organizar pensamentos e clarear o que está pesando." },
+  { image: prayerImage, icon: HeartHandshake, badge: "Voz acolhedora", title: "Uma oração narrada", body: "Para os momentos em que você quer silenciar e se aproximar de Deus." },
+  { image: meditationImage, icon: Headphones, badge: "Respiração e calma", title: "Uma meditação guiada", body: "Para desacelerar o corpo e aliviar o ritmo acelerado da mente." },
 ];
 
 const pillars = [
@@ -68,7 +71,7 @@ export default function Degustacao() {
   };
 
   return (
-    <div className="theme-v2 min-h-dvh bg-background text-foreground">
+    <div className="theme-v2 deg-hero-bg min-h-dvh bg-background text-foreground">
       <Helmet>
         <title>Experimente grátis a Olá Aura | Sessão guiada de 45 minutos</title>
         <meta name="description" content="Faça grátis uma sessão guiada de 45 minutos com a AURA, uma oração e uma meditação. Sem cartão." />
@@ -87,27 +90,27 @@ export default function Degustacao() {
           <p className="mt-5 max-w-xl text-lg text-foreground/75">
             Experimente um encontro guiado com a AURA — ela escuta, conecta o que você conta e ajuda você a enxergar o próximo passo.
           </p>
-          <ul className="mt-8 grid gap-3">
+          <div className="mt-8"><PreviewPlayer /></div>
+          <ul className="mt-8 grid gap-3 sm:grid-cols-3">
             {gifts.map((g) => (
-              <li key={g.title} className="flex gap-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><g.icon className="h-5 w-5" /></span>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold">{g.title}</p>
-                    <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">{g.badge}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-foreground/70">{g.body}</p>
+              <li key={g.title} className="relative isolate overflow-hidden rounded-xl shadow-md">
+                <img src={g.image} alt="" loading="lazy" className="absolute inset-0 -z-10 h-full w-full object-cover" />
+                <div className="preview-shade absolute inset-0 -z-10" aria-hidden="true" />
+                <div className="preview-copy flex min-h-[11rem] flex-col justify-end p-4">
+                  <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground"><g.icon className="h-4 w-4" /></span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider opacity-80">{g.badge}</span>
+                  <p className="font-display text-lg font-medium leading-snug">{g.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed opacity-85">{g.body}</p>
                 </div>
               </li>
             ))}
           </ul>
-          <img src={prayerImage} alt="Momento de oração ao entardecer" className="mt-10 hidden aspect-[16/9] w-full rounded-lg object-cover md:block" loading="lazy" />
         </section>
 
-        <section className="rounded-xl border border-border bg-card p-6 shadow-sm md:sticky md:top-8 md:p-8">
+        <section className="rounded-2xl border border-border bg-card p-6 shadow-xl md:sticky md:top-8 md:p-8">
           <div className="mb-6 flex items-center gap-3">
             <img src={avatarAura} alt="AURA" className="h-12 w-12 rounded-full object-cover" />
-            <div><p className="font-semibold">Comece agora com a AURA</p><p className="text-sm text-muted-foreground">Leva menos de um minuto</p></div>
+            <div><p className="font-semibold">Gostou do que ouviu?</p><p className="text-sm text-muted-foreground">Libere seu acesso completo em menos de um minuto</p></div>
           </div>
           <form onSubmit={submit} className="space-y-4" noValidate>
             <div className="space-y-1.5"><Label htmlFor="deg-name">Seu nome</Label><Input id="deg-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></div>

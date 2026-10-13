@@ -90,3 +90,8 @@
   opacity: 0;
   animation: v2-bubble-in 0.6s ease-out forwards;
 }
+
+/* Player de prévia da degustação — mesmo clima escuro do player do App */
+.theme-v2 .preview-shade { background: linear-gradient(180deg, hsl(var(--v2-navy) / 0.25) 0%, hsl(var(--v2-navy) / 0.55) 45%, hsl(var(--v2-navy) / 0.92) 100%); }
+.theme-v2 .preview-copy { color: hsl(var(--v2-navy-foreground)); }
+.theme-v2 .deg-hero-bg { background: radial-gradient(ellipse at 15% 0%, hsl(var(--sage-soft)) 0%, transparent 55%), radial-gradient(ellipse at 90% 30%, hsl(var(--lavender-soft)) 0%, transparent 50%), hsl(var(--background)); }
