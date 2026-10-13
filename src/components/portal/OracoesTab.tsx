@@ -3,13 +3,18 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronDown, CloudMoon, Compass, Heart, Headphones, Loader2, Moon, Pause, Play, RotateCcw, RotateCw, Sprout, Sunrise, Text } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { requestDegustacaoContent } from "@/lib/degustacao";
 import { getPrayerHighlight, PRAYERS, PRAYER_CATEGORIES, type PrayerCategory, type PrayerTrack } from "@/lib/prayers";
 
 const formatTime = (time: number) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
 const iconForPrayer = (id: string) => id === "prayer-morning-presence" || id === "prayer-morning-guidance" ? Sunrise : id === "prayer-night" ? Moon : id === "prayer-restless-mind" ? CloudMoon : id === "prayer-loved-ones" || id === "prayer-gratitude" || id === "prayer-life-companions" || id === "prayer-closeness" ? Heart : id === "prayer-strength" || id === "prayer-steps" || id === "prayer-hope" || id === "prayer-flourish" ? Sprout : Compass;
 
-export function OracoesTab({ isActive = true }: { isActive?: boolean }) {
-  const [selectedPrayer, setSelectedPrayer] = useState<PrayerTrack | null>(null);
+export function OracoesTab({ isActive = true, isDegustacao = false }: { isActive?: boolean; isDegustacao?: boolean }) {
+  const [selectedPrayer, setSelectedPrayerState] = useState<PrayerTrack | null>(null);
+  const setSelectedPrayer = (prayer: PrayerTrack | null) => {
+    if (!prayer) { setSelectedPrayerState(null); return; }
+    void requestDegustacaoContent("prayer", prayer.id, isDegustacao).then((ok) => { if (ok) setSelectedPrayerState(prayer); });
+  };
   const [category, setCategory] = useState<PrayerCategory | "Todas">("Todas");
   const visiblePrayers = category === "Todas" ? PRAYERS : PRAYERS.filter((prayer) => prayer.category === category);
   const [highlight, setHighlight] = useState(() => getPrayerHighlight());
