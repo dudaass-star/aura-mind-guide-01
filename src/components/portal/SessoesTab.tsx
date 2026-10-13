@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { openDegustacaoPlans } from "@/lib/degustacao";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ArrowUpRight, Bell, Calendar, CalendarDays, Check, ChevronLeft, ChevronRight, Clock, MessageCircle, NotebookPen, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
@@ -270,6 +271,7 @@ export function SessoesTab({
     } catch (error) {
       const code = error instanceof Error ? error.message : "session_update_failed";
       track("action_failed", { action, code });
+      if (code === "plan_required") openDegustacaoPlans("session");
       toast({ title: "Não foi possível concluir", description: ERROR_MESSAGES[code] || ERROR_MESSAGES.session_update_failed, variant: "destructive" });
     } finally {
       setSaving(false);
@@ -285,6 +287,7 @@ export function SessoesTab({
       onOpenConversation("Vamos começar nossa sessão.");
     } catch (error) {
       const code = error instanceof Error ? error.message : "session_update_failed";
+      if (code === "plan_required") openDegustacaoPlans("session");
       toast({ title: "Ainda não foi possível entrar", description: ERROR_MESSAGES[code] || ERROR_MESSAGES.session_update_failed, variant: "destructive" });
     } finally {
       setSaving(false);
