@@ -147,7 +147,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[92dvh] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto overflow-x-hidden">
         {step === "plans" && (
           <>
             <DialogHeader className="-mx-6 -mt-6 rounded-t-lg bg-gradient-to-br from-primary/20 via-accent/15 to-background px-6 pb-5 pt-7 text-left">
@@ -158,7 +158,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
             <div className="grid grid-cols-4 gap-1 rounded-xl border border-border bg-muted/50 p-1" role="radiogroup" aria-label="Escolha o ciclo">
               {CYCLES.map((c) => {
                 const on = c.id === cycle;
-                const off = c.months > 1 ? Math.round((1 - CYCLE_PRICES[plan][c.id] / c.months / CYCLE_PRICES[plan].monthly) * 100) : 0;
+                const off = c.months > 1 ? Math.round((1 - CYCLE_PRICES.essencial[c.id] / c.months / CYCLE_PRICES.essencial.monthly) * 100) : 0;
                 return (
                   <button key={c.id} type="button" role="radio" aria-checked={on} onClick={() => { setCycle(c.id); setError(null); }}
                     className={`flex flex-col items-center gap-0.5 rounded-lg px-1 py-2 text-xs font-medium transition-all ${on ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:bg-background"}`}>
@@ -180,18 +180,20 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
                     onClick={() => setPlan(p.id)}
                     className={`w-full rounded-lg border p-4 text-left transition-colors ${active ? "border-primary bg-gradient-to-br from-primary/15 to-accent/10 shadow-lg ring-1 ring-primary" : "border-border bg-card hover:border-primary/40"}`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="flex items-center gap-2 font-semibold text-foreground">
-                          {p.name}
-                          {p.highlight && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground">Mais escolhido</span>}
-                        </p>
-                        <p className="mt-0.5 text-sm text-muted-foreground">{p.sessions}</p>
-                      </div>
-                      <p className="whitespace-nowrap text-right font-display text-lg font-semibold text-primary">{fmt(monthlyOf(p.id))}<span className="block font-sans text-xs font-normal text-muted-foreground">{cycle === "monthly" ? "por mês" : `/mês · ${fmt(priceOf(p.id))} por ${cycleInfo.period}`}</span>{cycle !== "monthly" && discountOf(p.id) > 0 && <span className="block font-sans text-[11px] font-semibold text-primary">economize {fmt(CYCLE_PRICES[p.id].monthly * cycleInfo.months - priceOf(p.id))}</span>}</p>
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                      <p className="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-foreground">
+                        {p.name}
+                        {p.highlight && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground">Mais escolhido</span>}
+                      </p>
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${active ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{active && <Check className="h-3 w-3" />}</span>
                     </div>
-                    <ul className="mt-2 space-y-1">
-                      {p.features.map((f) => <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground"><Check className="h-3.5 w-3.5 text-primary" />{f}</li>)}
+                    <p className="mt-0.5 text-sm text-muted-foreground">{p.sessions}</p>
+                    <div className="mt-3 rounded-md bg-background/60 px-3 py-2">
+                      <p className="font-display text-xl font-semibold text-primary">{fmt(monthlyOf(p.id))}<span className="ml-1 font-sans text-xs font-normal text-muted-foreground">/mês</span></p>
+                      {cycle !== "monthly" && <p className="text-xs leading-snug text-muted-foreground">{fmt(priceOf(p.id))} cobrado por {cycleInfo.period}{discountOf(p.id) > 0 && <span className="font-semibold text-primary"> · economize {fmt(CYCLE_PRICES[p.id].monthly * cycleInfo.months - priceOf(p.id))}</span>}</p>}
+                    </div>
+                    <ul className="mt-3 space-y-1.5">
+                      {p.features.map((f) => <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />{f}</li>)}
                     </ul>
                   </button>
                 );
@@ -210,9 +212,9 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
               <Input id="deg-cpf" inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(maskCpf(e.target.value))} />
             </div>}
             {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-            <Button size="lg" className="w-full gap-2 bg-gradient-to-r from-primary to-primary/80 shadow-lg" onClick={() => void (method === "pix" ? generatePix() : startCard())} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : method === "pix" ? <QrCode className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
-              Ativar {selected.name} · {fmt(priceOf(plan))}/{cycleInfo.period}
+            <Button size="lg" className="h-auto min-h-11 w-full whitespace-normal gap-2 bg-gradient-to-r from-primary to-primary/80 py-2.5 shadow-lg" onClick={() => void (method === "pix" ? generatePix() : startCard())} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : method === "pix" ? <QrCode className="h-4 w-4 shrink-0" /> : <CreditCard className="h-4 w-4 shrink-0" />}
+              <span>Ativar {selected.name} · {fmt(priceOf(plan))}</span>
             </Button>
             <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />{method === "pix" ? "PIX Automático" : "Cartão"} · cancele quando quiser, sem fidelidade</p>
           </>
