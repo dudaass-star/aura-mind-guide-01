@@ -5,6 +5,9 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Clipes do App para anúncios
+- [ ] Refazer o clipe de conversa com envio e chegada das respostas da AURA numa conta fictícia, acelerando somente a espera e verificando o vídeo final.
+
 ## Degustação gratuita (campanha "Experimente grátis")
 - [x] Auditar e simular a degustação em 13/10: 48 combinações de plano/ciclo, validações e cadastro existente, PIX trimestral/identidade de repetição, falha de cópia, cancelado versus ativo, pedido de cartão com ciclo/source corretos, agendamento autenticado simulado e leitura pela tela em Android/iPhone; 32 testes internos passaram. Confirmadas colunas/funções/trigger hospedados e acesso real de Eduardo. Sem cobrança ou sessão real; sem erros de página e build OK.
 - [x] Corrigir confirmação falsa de plano ativo, falha silenciosa de cópia PIX, convite ausente no Safari sem Notification, orientação iOS substituída por outro aviso, estado visual de push e perda do toque antes do pedido de permissão. Cadastro com falha de entrada não promete WhatsApp enviado.
