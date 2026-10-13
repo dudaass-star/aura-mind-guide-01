@@ -27,8 +27,6 @@
 - Chat thinking stays low except in session reframe and closure to reduce latency without losing reflection.
 - Parallelize independent chat reads after profile, quota and sessions; reduce waits without changing context.
 - Movement is collective-first; local previews share live invite copy.
-- Prayers share one catalog/player; BRT daily highlights rotate morning/day/night on entry, preserving playback.
-- Prayer lyrics use cue-relative progress and measured visible bounds for long-line scrolling; this keeps all words readable without shrinking text or moving playback controls.
 - Home keeps tracking; practice dialogs stop audio on exit.
 
 - Revenue splits potential/coverage; churn unions paid people, using official E2E and contract dates to avoid cross-plan attribution.
