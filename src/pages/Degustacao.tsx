@@ -12,6 +12,7 @@ import logoOlaAura from "@/assets/logo-ola-aura.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import prayerImage from "@/assets/prayer-closeness.jpg";
 import "@/styles/v2-theme.css";
+import { DegustacaoPlansDialog } from "@/components/portal/DegustacaoPlansDialog";
 import { PreviewPlayer } from "@/components/degustacao/PreviewPlayer";
 import meditationImage from "@/assets/meditation-storm.jpg";
 import sessionImage from "@/assets/meditation-presence.jpg";
@@ -47,6 +48,8 @@ function CtaButton() {
 
 export default function Degustacao() {
   const navigate = useNavigate();
+  // Atalho de visualização: ?ver=planos abre a janela de planos do App para revisão.
+  const [previewPlans, setPreviewPlans] = useState(() => new URLSearchParams(window.location.search).get("ver") === "planos");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -267,6 +270,7 @@ export default function Degustacao() {
           <p className="mt-2">© {new Date().getFullYear()} Olá AURA. Todos os direitos reservados.</p>
         </div>
       </footer>
+      {previewPlans && <DegustacaoPlansDialog open={previewPlans} onOpenChange={setPreviewPlans} reason="manual" userId="preview" onActivated={() => undefined} />}
     </div>
   );
 }
