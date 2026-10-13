@@ -5320,7 +5320,7 @@ serve(async (req) => {
         .select('id, status, quota_exempt_reason')
         .eq('user_id', profile.user_id)
         .eq('quota_exempt_reason', 'degustacao_gratuita')
-        .in('status', ['completed', 'paused', 'no_show'])
+        .in('status', ['completed', 'no_show'])
         .limit(1);
       degustacaoCourtesyDone = (degSessions || []).length > 0;
       if (degustacaoCourtesyDone) {
