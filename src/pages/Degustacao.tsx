@@ -109,7 +109,7 @@ export default function Degustacao() {
           </div>
           <form onSubmit={submit} className="space-y-4" noValidate>
             <div className="space-y-1.5"><Label htmlFor="deg-name">Seu nome</Label><Input id="deg-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></div>
-            <div className="space-y-1.5"><Label htmlFor="deg-phone">WhatsApp</Label><Input id="deg-phone" inputMode="tel" autoComplete="tel" placeholder="(11) 99999-9999" value={phone} onChange={(e) => setPhone(maskPhone(e.target.value))} /></div>
+            <div className="space-y-1.5"><Label htmlFor="deg-phone">WhatsApp</Label><Input id="deg-phone" inputMode="tel" autoComplete="tel" placeholder="(11) 99999-9999" value={phone} onChange={(e) => setPhone(maskPhone(e.target.value))} /><p className="text-xs text-muted-foreground">Usamos seu WhatsApp só para enviar seu acesso seguro e avisar quando seu encontro for começar.</p></div>
             <div className="space-y-1.5"><Label htmlFor="deg-email">E-mail</Label><Input id="deg-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={200} /></div>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             {existing && (
@@ -192,9 +192,29 @@ export default function Degustacao() {
             </li>
           ))}
         </ul>
-        <p className="mt-5 text-center text-sm text-foreground/70">Sem fidelidade · Cancele quando quiser com um clique</p>
+        <p className="mt-5 text-center text-sm text-foreground/70">Sua sessão gratuita é um presente da AURA e não consome os encontros do seu plano, caso decida continuar.</p>
+        <p className="mt-2 text-center text-sm text-foreground/70">Sem fidelidade · Cancele quando quiser com um clique</p>
         <CtaButton />
       </section>
+
+      <section className="container mx-auto max-w-3xl px-6 pb-20">
+        <h2 className="font-display text-2xl font-medium md:text-3xl">Dúvidas comuns</h2>
+        <div className="mt-6 space-y-3">
+          {[
+            { q: "Preciso cancelar alguma coisa depois?", a: "Não. Como não pedimos cartão, não existe nenhuma cobrança automática." },
+            { q: "Como funciona o encontro de 45 minutos?", a: "É um momento reservado só seu no App. Você fala por áudio ou texto, a AURA aprofunda no que você trouxer e, no final, vocês definem um fechamento claro e o tema do seu próximo passo." },
+            { q: "Preciso baixar um aplicativo pesado?", a: "Não. Abre direto no navegador do celular, rápido e leve." },
+            { q: "É sigiloso?", a: "Sim. Sua conversa é individual, privada e com dados criptografados." },
+          ].map((f) => (
+            <details key={f.q} className="group rounded-xl border border-border bg-card p-5">
+              <summary className="cursor-pointer list-none font-semibold">{f.q}</summary>
+              <p className="mt-2 text-sm leading-relaxed text-foreground/75">{f.a}</p>
+            </details>
+          ))}
+        </div>
+        <CtaButton />
+      </section>
+
 
 
 
