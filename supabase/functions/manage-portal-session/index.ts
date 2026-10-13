@@ -37,6 +37,8 @@ function publicError(message: string) {
     "reframe_not_available",
     "correction_required",
     "value_too_long",
+    "plan_required",
+    "degustacao_next_session_exists",
   ];
   const code = known.find((candidate) => message.includes(candidate));
   return code === "duplicate_session_window" ? "session_time_conflict" : code || "session_update_failed";

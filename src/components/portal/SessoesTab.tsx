@@ -50,6 +50,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   auth_required: "Seu acesso expirou. Entre novamente para continuar.",
   invalid_request: "Não foi possível validar os dados escolhidos. Confira e tente novamente.",
   session_update_failed: "Não foi possível atualizar sua sessão. Tente novamente.",
+  plan_required: "Para entrar no próximo encontro, ative seu plano. As opções já estão abertas na tela.",
+  degustacao_next_session_exists: "Seu próximo encontro já está marcado.",
 };
 
 function brtParts(date = new Date()) {
