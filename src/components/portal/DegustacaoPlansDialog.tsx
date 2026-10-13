@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Copy, Loader2, QrCode, ShieldCheck, Sparkles } from "lucide-react";
+import { Check, Copy, CreditCard, Loader2, QrCode, ShieldCheck, Sparkles } from "lucide-react";
+import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -35,7 +37,9 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
   const queryClient = useQueryClient();
   const [plan, setPlan] = useState<DegustacaoPlanId>("direcao");
   const [cpf, setCpf] = useState("");
-  const [step, setStep] = useState<"plans" | "pix" | "done">("plans");
+  const [method, setMethod] = useState<"pix" | "card">("pix");
+  const [step, setStep] = useState<"plans" | "pix" | "card" | "done">("plans");
+  const [card, setCard] = useState<{ clientSecret: string; stripe: Promise<StripeJs | null> } | null>(null);
   const [pix, setPix] = useState<Pix | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +56,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
 
   // Confirmação em tempo real: o webhook do PIX ativa o perfil; aqui só observamos.
   useEffect(() => {
-    if (!open || step !== "pix") return;
+    if (!open || (step !== "pix" && step !== "card")) return;
     const timer = window.setInterval(async () => {
       const { data } = await supabasePortal.from("profiles").select("status").eq("user_id", userId).maybeSingle();
       if (data?.status && data.status !== "degustacao") {
@@ -88,6 +92,28 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
       setStep("pix");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível gerar o PIX agora.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startCard = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const { data: profile } = await supabasePortal.from("profiles").select("name, email, phone").eq("user_id", userId).maybeSingle();
+      if (!profile?.email || !profile?.phone) throw new Error("Não encontramos seu cadastro. Atualize a tela e tente de novo.");
+      const { data, error: fnError } = await supabasePortal.functions.invoke("create-checkout", {
+        body: { plan, billing: "monthly", trial: false, paymentMethod: "card", embedded: true, source: "degustacao",
+          name: profile.name || "Cliente", email: profile.email, phone: profile.phone },
+      });
+      if (fnError || !data?.clientSecret || !data?.publishableKey) {
+        throw new Error((data as { error?: string } | null)?.error || "Não foi possível abrir o pagamento com cartão agora.");
+      }
+      setCard({ clientSecret: data.clientSecret, stripe: loadStripe(data.publishableKey) });
+      setStep("card");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível abrir o pagamento com cartão agora.");
     } finally {
       setLoading(false);
     }
@@ -138,16 +164,39 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
                 );
               })}
             </div>
-            <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Forma de pagamento">
+              {([["pix", "PIX Automático", QrCode], ["card", "Cartão", CreditCard]] as const).map(([id, label, Icon]) => (
+                <button key={id} type="button" role="radio" aria-checked={method === id} onClick={() => { setMethod(id); setError(null); }}
+                  className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-medium transition-colors ${method === id ? "border-primary bg-primary/5 text-foreground ring-1 ring-primary" : "border-border bg-card text-muted-foreground hover:border-primary/40"}`}>
+                  <Icon className="h-4 w-4" />{label}
+                </button>
+              ))}
+            </div>
+            {method === "pix" && <div className="space-y-1.5">
               <Label htmlFor="deg-cpf">CPF para o PIX Automático</Label>
               <Input id="deg-cpf" inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(maskCpf(e.target.value))} />
-            </div>
+            </div>}
             {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-            <Button size="lg" className="w-full gap-2" onClick={() => void generatePix()} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+            <Button size="lg" className="w-full gap-2" onClick={() => void (method === "pix" ? generatePix() : startCard())} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : method === "pix" ? <QrCode className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
               Ativar {selected.name} por {fmt(selected.price)}/mês
             </Button>
-            <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />PIX Automático · cancele quando quiser, sem fidelidade</p>
+            <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />{method === "pix" ? "PIX Automático" : "Cartão"} · cancele quando quiser, sem fidelidade</p>
+          </>
+        )}
+
+        {step === "card" && card && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="font-display text-2xl">Pague com cartão para ativar</DialogTitle>
+              <DialogDescription>{selected.name} · {fmt(selected.price)} por mês. Assim que o pagamento for aprovado, tudo libera aqui mesmo.</DialogDescription>
+            </DialogHeader>
+            <div className="overflow-hidden rounded-lg bg-card">
+              <EmbeddedCheckoutProvider key={card.clientSecret} stripe={card.stripe} options={{ clientSecret: card.clientSecret }}>
+                <EmbeddedCheckout />
+              </EmbeddedCheckoutProvider>
+            </div>
+            <Button variant="ghost" className="w-full" onClick={() => { setCard(null); setStep("plans"); }}>Trocar de plano ou forma de pagamento</Button>
           </>
         )}
 

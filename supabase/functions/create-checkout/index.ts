@@ -92,7 +92,7 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup, prewarm, accessToken, landingVariant, ctaSource } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup, prewarm, accessToken, landingVariant, ctaSource, source } = await req.json();
 
     // === WARMUP ===
     // O front chama isso no primeiro foco de campo pra matar o cold start da função
@@ -383,7 +383,9 @@ serve(async (req) => {
     };
     if (embedded) {
       sessionConfig.ui_mode = "embedded";
-      sessionConfig.return_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`;
+      // Degustação: o pagamento acontece dentro do App, sem sair da tela.
+      if (source === "degustacao") sessionConfig.redirect_on_completion = "never";
+      else sessionConfig.return_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`;
     } else {
       sessionConfig.success_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`;
       sessionConfig.cancel_url = `${origin}/v2/checkout?${cancelParams.toString()}`;
