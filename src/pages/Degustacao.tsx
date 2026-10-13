@@ -12,6 +12,7 @@ import logoOlaAura from "@/assets/logo-ola-aura.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import prayerImage from "@/assets/prayer-closeness.jpg";
 import "@/styles/v2-theme.css";
+import { DegustacaoPlansDialog } from "@/components/portal/DegustacaoPlansDialog";
 import { PreviewPlayer } from "@/components/degustacao/PreviewPlayer";
 import meditationImage from "@/assets/meditation-storm.jpg";
 import sessionImage from "@/assets/meditation-presence.jpg";
@@ -269,6 +270,7 @@ export default function Degustacao() {
           <p className="mt-2">© {new Date().getFullYear()} Olá AURA. Todos os direitos reservados.</p>
         </div>
       </footer>
+      {previewPlans && <DegustacaoPlansDialog open={previewPlans} onOpenChange={setPreviewPlans} reason="manual" userId="preview" onActivated={() => undefined} />}
     </div>
   );
 }
