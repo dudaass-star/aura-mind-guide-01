@@ -21,6 +21,20 @@ const HEADLINES: Record<DegustacaoReason, { title: string; body: string }> = {
   manual: { title: "Continue sua jornada com a AURA", body: "Escolha o plano que acompanha o seu ritmo." },
 };
 
+type Cycle = "monthly" | "quarterly" | "semestral" | "yearly";
+// Preços por ciclo iguais ao checkout principal (/v2/checkout).
+const CYCLE_PRICES: Record<DegustacaoPlanId, Record<Cycle, number>> = {
+  essencial: { monthly: 29.9, quarterly: 59.7, semestral: 89.4, yearly: 118.8 },
+  direcao: { monthly: 49.9, quarterly: 101.7, semestral: 149.4, yearly: 202.8 },
+  transformacao: { monthly: 79.9, quarterly: 161.7, semestral: 239.4, yearly: 322.8 },
+};
+const CYCLES: { id: Cycle; label: string; months: number; period: string }[] = [
+  { id: "monthly", label: "Mensal", months: 1, period: "mês" },
+  { id: "quarterly", label: "Trimestral", months: 3, period: "trimestre" },
+  { id: "semestral", label: "Semestral", months: 6, period: "semestre" },
+  { id: "yearly", label: "Anual", months: 12, period: "ano" },
+];
+
 const onlyDigits = (s: string) => s.replace(/\D/g, "");
 const maskCpf = (s: string) => onlyDigits(s).slice(0, 11)
   .replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d{1,2})$/, ".$1-$2");
@@ -37,6 +51,11 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
   const queryClient = useQueryClient();
   const [plan, setPlan] = useState<DegustacaoPlanId>("direcao");
   const [cpf, setCpf] = useState("");
+  const [cycle, setCycle] = useState<Cycle>("monthly");
+  const cycleInfo = CYCLES.find((c) => c.id === cycle)!;
+  const priceOf = (id: DegustacaoPlanId) => CYCLE_PRICES[id][cycle];
+  const monthlyOf = (id: DegustacaoPlanId) => priceOf(id) / cycleInfo.months;
+  const discountOf = (id: DegustacaoPlanId) => Math.round((1 - monthlyOf(id) / CYCLE_PRICES[id].monthly) * 100);
   const [method, setMethod] = useState<"pix" | "card">("pix");
   const [step, setStep] = useState<"plans" | "pix" | "card" | "done">("plans");
   const [card, setCard] = useState<{ clientSecret: string; stripe: Promise<StripeJs | null> } | null>(null);
@@ -79,9 +98,9 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
       if (!requestKey.current) requestKey.current = `deg_${crypto.randomUUID().replace(/-/g, "")}`;
       const { data, error: fnError } = await supabasePortal.functions.invoke("criar-pix-recorrente-woovi", {
         body: {
-          plan, billing: "monthly", name: profile.name || "Cliente", email: profile.email,
+          plan, billing: cycle, name: profile.name || "Cliente", email: profile.email,
           phone: profile.phone || "", cpf: onlyDigits(cpf), mode: "checkout",
-          requestKey: `${requestKey.current}_${plan}`,
+          requestKey: `${requestKey.current}_${plan}_${cycle}`,
         },
       });
       if (fnError) throw new Error("Não foi possível gerar o PIX agora. Tente novamente.");
@@ -104,7 +123,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
       const { data: profile } = await supabasePortal.from("profiles").select("name, email, phone").eq("user_id", userId).maybeSingle();
       if (!profile?.email || !profile?.phone) throw new Error("Não encontramos seu cadastro. Atualize a tela e tente de novo.");
       const { data, error: fnError } = await supabasePortal.functions.invoke("create-checkout", {
-        body: { plan, billing: "monthly", trial: false, paymentMethod: "card", embedded: true, source: "degustacao",
+        body: { plan, billing: cycle, trial: false, paymentMethod: "card", embedded: true, source: "degustacao",
           name: profile.name || "Cliente", email: profile.email, phone: profile.phone },
       });
       if (fnError || !data?.clientSecret || !data?.publishableKey) {
@@ -131,10 +150,24 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         {step === "plans" && (
           <>
-            <DialogHeader>
+            <DialogHeader className="-mx-6 -mt-6 rounded-t-lg bg-gradient-to-br from-primary/20 via-accent/15 to-background px-6 pb-5 pt-7 text-left">
+              <span className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-background/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary"><Sparkles className="h-3.5 w-3.5" />Continue com a AURA</span>
               <DialogTitle className="font-display text-2xl leading-tight">{head.title}</DialogTitle>
               <DialogDescription>{head.body}</DialogDescription>
             </DialogHeader>
+            <div className="grid grid-cols-4 gap-1 rounded-xl border border-border bg-muted/50 p-1" role="radiogroup" aria-label="Escolha o ciclo">
+              {CYCLES.map((c) => {
+                const on = c.id === cycle;
+                const off = c.months > 1 ? Math.round((1 - CYCLE_PRICES[plan][c.id] / c.months / CYCLE_PRICES[plan].monthly) * 100) : 0;
+                return (
+                  <button key={c.id} type="button" role="radio" aria-checked={on} onClick={() => { setCycle(c.id); setError(null); }}
+                    className={`flex flex-col items-center gap-0.5 rounded-lg px-1 py-2 text-xs font-medium transition-all ${on ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:bg-background"}`}>
+                    {c.label}
+                    {off > 0 ? <span className={`rounded px-1 text-[10px] font-bold ${on ? "bg-primary-foreground/20" : "bg-accent/25 text-accent-foreground"}`}>-{off}%</span> : <span className="text-[10px] opacity-70">sem desconto</span>}
+                  </button>
+                );
+              })}
+            </div>
             <div className="space-y-3" role="radiogroup" aria-label="Escolha seu plano">
               {DEGUSTACAO_PLANS.map((p) => {
                 const active = p.id === plan;
@@ -145,17 +178,17 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
                     role="radio"
                     aria-checked={active}
                     onClick={() => setPlan(p.id)}
-                    className={`w-full rounded-lg border p-4 text-left transition-colors ${active ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-card hover:border-primary/40"}`}
+                    className={`w-full rounded-lg border p-4 text-left transition-colors ${active ? "border-primary bg-gradient-to-br from-primary/15 to-accent/10 shadow-lg ring-1 ring-primary" : "border-border bg-card hover:border-primary/40"}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="flex items-center gap-2 font-semibold text-foreground">
                           {p.name}
-                          {p.highlight && <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">Mais escolhido</span>}
+                          {p.highlight && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground">Mais escolhido</span>}
                         </p>
                         <p className="mt-0.5 text-sm text-muted-foreground">{p.sessions}</p>
                       </div>
-                      <p className="whitespace-nowrap text-right font-semibold text-foreground">{fmt(p.price)}<span className="block text-xs font-normal text-muted-foreground">por mês</span></p>
+                      <p className="whitespace-nowrap text-right font-display text-lg font-semibold text-primary">{fmt(monthlyOf(p.id))}<span className="block font-sans text-xs font-normal text-muted-foreground">{cycle === "monthly" ? "por mês" : `/mês · ${fmt(priceOf(p.id))} por ${cycleInfo.period}`}</span>{cycle !== "monthly" && discountOf(p.id) > 0 && <span className="block font-sans text-[11px] font-semibold text-primary">economize {fmt(CYCLE_PRICES[p.id].monthly * cycleInfo.months - priceOf(p.id))}</span>}</p>
                     </div>
                     <ul className="mt-2 space-y-1">
                       {p.features.map((f) => <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground"><Check className="h-3.5 w-3.5 text-primary" />{f}</li>)}
@@ -177,9 +210,9 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
               <Input id="deg-cpf" inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(maskCpf(e.target.value))} />
             </div>}
             {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-            <Button size="lg" className="w-full gap-2" onClick={() => void (method === "pix" ? generatePix() : startCard())} disabled={loading}>
+            <Button size="lg" className="w-full gap-2 bg-gradient-to-r from-primary to-primary/80 shadow-lg" onClick={() => void (method === "pix" ? generatePix() : startCard())} disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : method === "pix" ? <QrCode className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
-              Ativar {selected.name} por {fmt(selected.price)}/mês
+              Ativar {selected.name} · {fmt(priceOf(plan))}/{cycleInfo.period}
             </Button>
             <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />{method === "pix" ? "PIX Automático" : "Cartão"} · cancele quando quiser, sem fidelidade</p>
           </>
@@ -189,7 +222,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
           <>
             <DialogHeader>
               <DialogTitle className="font-display text-2xl">Pague com cartão para ativar</DialogTitle>
-              <DialogDescription>{selected.name} · {fmt(selected.price)} por mês. Assim que o pagamento for aprovado, tudo libera aqui mesmo.</DialogDescription>
+              <DialogDescription>{selected.name} · {fmt(priceOf(plan))} por {cycleInfo.period}. Assim que o pagamento for aprovado, tudo libera aqui mesmo.</DialogDescription>
             </DialogHeader>
             <div className="overflow-hidden rounded-lg bg-card">
               <EmbeddedCheckoutProvider key={card.clientSecret} stripe={card.stripe} options={{ clientSecret: card.clientSecret }}>
@@ -205,7 +238,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
             <DialogHeader>
               <DialogTitle className="font-display text-2xl">Pague com PIX para ativar</DialogTitle>
               <DialogDescription>
-                {selected.name} · {fmt(pix.amount ?? selected.price)} hoje e depois todo mês, automaticamente. Assim que o banco confirmar, tudo libera aqui mesmo.
+                {selected.name} · {fmt(pix.amount ?? priceOf(plan))} hoje e depois a cada {cycleInfo.period}, automaticamente. Assim que o banco confirmar, tudo libera aqui mesmo.
               </DialogDescription>
             </DialogHeader>
             {pix.qrCodeImage && <img src={pix.qrCodeImage} alt="QR Code do PIX" className="mx-auto h-56 w-56 rounded-lg border border-border bg-card p-2" />}
