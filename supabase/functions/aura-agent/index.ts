@@ -5326,7 +5326,7 @@ serve(async (req) => {
       if (degustacaoCourtesyDone) {
         const wall =
           'Que bom te ver por aqui. 💛 O que você trouxe no nosso primeiro encontro continua guardado comigo. ' +
-          'Para a gente seguir conversando sempre que você precisar — e manter o próximo encontro — é só ativar seu plano no botão "Ativar meu plano", aqui no App.';
+          'Para a gente seguir conversando sempre que você precisar — e manter o próximo encontro — é só tocar em "Ativar meu plano", no topo da tela.';
         try {
           await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: wall });
         } catch (e) {

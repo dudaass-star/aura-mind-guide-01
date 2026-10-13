@@ -593,7 +593,7 @@ const UserPortal = () => {
       {userId && isDegustacao && (
         <>
           {degustacaoState?.courtesyStatus === "completed" && !degustacaoPlans.open && (
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+            <div className={`fixed inset-x-0 z-40 border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur ${activeTab === "conversar" ? "top-0 border-b" : "bottom-0 border-t"}`} style={activeTab === "conversar" ? { paddingTop: "max(0.75rem, env(safe-area-inset-top))" } : { paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
               <div className="mx-auto flex max-w-2xl items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-foreground">
