@@ -120,17 +120,28 @@ export default function Degustacao() {
               </div>
             )}
             <Button type="submit" size="lg" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Quero minha sessão grátis
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Quero meu encontro gratuito
             </Button>
           </form>
           <ul className="mt-6 space-y-2 text-sm text-muted-foreground">
-            <li className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" />Não pedimos cartão</li>
-            <li className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" />Você escolhe se quer continuar depois</li>
-            <li className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" />Sua conversa é privada</li>
+            <li className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" />Não pedimos dados de cartão</li>
+            <li className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" />Acesso liberado direto no App</li>
+            <li className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" />Conversa sigilosa e privada</li>
           </ul>
           <p className="mt-6 text-xs text-muted-foreground">A AURA não substitui acompanhamento psicológico ou médico. Em risco imediato, ligue 188 (CVV) ou 192.</p>
         </section>
       </main>
+      <section className="container mx-auto max-w-6xl px-6 pb-20">
+        <div className="grid gap-4 md:grid-cols-3">
+          {pillars.map((p, i) => (
+            <div key={p.title} className="rounded-xl border border-border bg-card p-6">
+              <span className="text-sm font-semibold text-primary">0{i + 1}</span>
+              <p className="mt-2 font-semibold">{p.title}</p>
+              <p className="mt-1 text-sm text-foreground/70">{p.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
