@@ -274,7 +274,6 @@ export function SessoesTab({
       if (pushRequest) void pushRequest.then((result) => {
         track("push_optin_result", { status: result.status });
         if (result.status === "registered") { setPushEnabledNow(true); setPushEnabled(true); }
-        if (result.status === "install-first") toast({ title: "Lembretes no iPhone", description: "Adicione o Olá Aura à Tela de Início e ative os lembretes pelo ícone." });
       }).catch(() => { track("push_optin_result", { status: "error" }); });
       setSchedulerOpen(false);
       setCancelOpen(false);
@@ -288,7 +287,9 @@ export function SessoesTab({
       }
       toast({
         title: action === "schedule" ? "Sessão agendada" : action === "reschedule" ? "Novo horário confirmado" : "Sessão cancelada",
-        description: action === "cancel" ? "Ela não contará no limite do seu plano." : "A AURA vai lembrar você 24 horas e 5 minutos antes.",
+        description: action === "cancel" ? "Ela não contará no limite do seu plano." : pushOptIn && showPushOptIn && isIosPushInstallRequired()
+          ? "No iPhone, adicione o Olá Aura à Tela de Início e ative os lembretes pelo ícone. Seu horário está confirmado."
+          : "A AURA vai lembrar você 24 horas e 5 minutos antes.",
       });
     } catch (error) {
       const code = error instanceof Error ? error.message : "session_update_failed";
