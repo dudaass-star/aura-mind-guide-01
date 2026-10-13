@@ -168,6 +168,31 @@ export default function Degustacao() {
         </div>
       </section>
 
+      {/* Transparência de planos: apenas informativo, sem botão de compra */}
+      <section className="container mx-auto max-w-6xl px-6 pb-20">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">Transparência total</span>
+        <h2 className="mt-1 font-display text-2xl font-medium md:text-3xl">O que esperar depois do seu teste</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-foreground/70">Sem surpresas. Você experimenta primeiro e só escolhe se e como continuar depois de viver o seu encontro.</p>
+        <ul className="mt-6 grid gap-4 md:grid-cols-3">
+          {[
+            { name: "Essencial", price: "29,90", body: "1 encontro guiado por mês, conversa com a AURA, orações e meditações." },
+            { name: "Direção", price: "49,90", body: "4 encontros guiados por mês — um por semana — para manter o ritmo.", featured: true },
+            { name: "Transformação", price: "79,90", body: "8 encontros guiados por mês — dois por semana — para um acompanhamento intenso." },
+          ].map((p) => (
+            <li key={p.name} className={`relative rounded-xl border bg-card p-6 ${p.featured ? "border-primary shadow-lg" : "border-border"}`}>
+              {p.featured && <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-0.5 text-[11px] font-semibold text-primary-foreground">Mais escolhido</span>}
+              <p className="font-display text-lg font-medium">{p.name}</p>
+              <p className="mt-2"><span className="text-sm text-foreground/60">R$ </span><span className="font-display text-3xl font-semibold">{p.price}</span><span className="text-sm text-foreground/60">/mês</span></p>
+              <p className="mt-3 text-sm leading-relaxed text-foreground/70">{p.body}</p>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-5 text-center text-sm text-foreground/70">PIX Automático · Sem fidelidade · Cancele quando quiser</p>
+        <CtaButton />
+      </section>
+
+
+
       <footer className="border-t border-border bg-card/60">
         <div className="container mx-auto grid max-w-6xl gap-8 px-6 py-10 md:grid-cols-3">
           <div>
