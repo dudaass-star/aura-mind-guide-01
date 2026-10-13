@@ -13,7 +13,8 @@ import { EmptyState, PortalLoadingInline } from "./shared";
 import { presentClosure } from "./whatsapp";
 import { sanitizePortalText } from "./sanitize";
 import type { Json } from "@/integrations/supabase/types";
-import { reportPushConversion } from "@/lib/push-notifications";
+import { enablePushNotifications, getPushPermission, reportPushConversion, type PushActivationResult } from "@/lib/push-notifications";
+import { Checkbox } from "@/components/ui/checkbox";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 
 const PLAN_SESSION_LIMITS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8 };
@@ -138,6 +139,14 @@ export function SessoesTab({
   const [time, setTime] = useState("");
   const [preparation, setPreparation] = useState("");
   const [correction, setCorrection] = useState("");
+  const [pushOptIn, setPushOptIn] = useState(true);
+  const [pushEnabledNow, setPushEnabledNow] = useState(false);
+  const pushPermission = typeof window === "undefined" ? "unsupported" : getPushPermission();
+  // Só oferece quando ainda não está ativo neste aparelho e o navegador ainda permite pedir.
+  const showPushOptIn = !pushEnabledNow
+    && pushPermission !== "unsupported"
+    && pushPermission !== "denied"
+    && !(pushPermission === "granted" && typeof localStorage !== "undefined" && localStorage.getItem("aura-push-enabled") === "true");
   const [saving, setSaving] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(() => localStorage.getItem("aura-push-enabled") === "true");
   const trackedViews = useRef(new Set<string>());
@@ -251,9 +260,22 @@ export function SessoesTab({
   const manageSession = async (action: "schedule" | "reschedule" | "cancel") => {
     if (action !== "cancel" && (!date || !time)) return;
     if (action !== "schedule" && !selectedSession?.id) return;
+    // Pedido de permissão precisa nascer no mesmo toque do usuário (exigência do navegador),
+    // por isso dispara antes de qualquer espera; o agendamento nunca depende do resultado.
+    let pushRequest: Promise<PushActivationResult> | null = null;
+    if (action !== "cancel" && showPushOptIn) {
+      void supabasePortal.functions.invoke("register-push-device", { body: { action: "event", eventType: pushOptIn ? "activation_started" : "invite_shown", source: "scheduling" } });
+      if (pushOptIn) pushRequest = enablePushNotifications();
+      track(pushOptIn ? "push_optin_accepted" : "push_optin_unchecked", { action });
+    }
     setSaving(true);
     try {
       await invoke({ action, scheduledAt: action === "cancel" ? null : new Date(brtIso(date, time)).toISOString(), sessionId: action === "schedule" ? null : selectedSession?.id });
+      if (pushRequest) void pushRequest.then((result) => {
+        track("push_optin_result", { status: result.status });
+        if (result.status === "registered") setPushEnabledNow(true);
+        if (result.status === "install-first") toast({ title: "Lembretes no iPhone", description: "Adicione o Olá Aura à Tela de Início e ative os lembretes pelo ícone." });
+      });
       setSchedulerOpen(false);
       setCancelOpen(false);
       setSelectedSession(null);
@@ -412,7 +434,7 @@ export function SessoesTab({
         </section>
       )}
 
-      <Dialog open={schedulerOpen} onOpenChange={(open) => { if (saving) return; if (!open && schedulerOpen) track("scheduling_abandoned", { month: selectedMonth, action: editing ? "reschedule" : "schedule", date_selected: Boolean(date), time_selected: Boolean(time) }); setSchedulerOpen(open); }}><DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg bg-card"><DialogHeader className="text-left"><DialogTitle>{editing ? "Escolher um novo horário" : "Agendar sessão"}</DialogTitle><DialogDescription>Horários de Brasília em {monthLabel(selectedMonth)}. Opções próximas de outra sessão já ficam ocultas.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><label className="block text-sm font-medium">Dia<Input className="mt-1.5" type="date" min={minDate} max={maxDate} value={date} onChange={(event) => { setDate(event.target.value); setTime(""); }} /></label><label className="block text-sm font-medium">Horário<select className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm" value={time} onChange={(event) => setTime(event.target.value)}><option value="">Selecione</option>{availableTimes.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></label>{availableTimes.length === 0 && <p className="text-sm text-muted-foreground">Não há horários disponíveis neste dia.</p>}</div><DialogFooter className="gap-2"><Button type="button" variant="outline" onClick={() => setSchedulerOpen(false)} disabled={saving}>Voltar</Button><Button type="button" onClick={() => void manageSession(editing ? "reschedule" : "schedule")} disabled={!date || !time || saving}>{saving ? "Confirmando..." : "Confirmar horário"}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={schedulerOpen} onOpenChange={(open) => { if (saving) return; if (!open && schedulerOpen) track("scheduling_abandoned", { month: selectedMonth, action: editing ? "reschedule" : "schedule", date_selected: Boolean(date), time_selected: Boolean(time) }); setSchedulerOpen(open); }}><DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg bg-card"><DialogHeader className="text-left"><DialogTitle>{editing ? "Escolher um novo horário" : "Agendar sessão"}</DialogTitle><DialogDescription>Horários de Brasília em {monthLabel(selectedMonth)}. Opções próximas de outra sessão já ficam ocultas.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><label className="block text-sm font-medium">Dia<Input className="mt-1.5" type="date" min={minDate} max={maxDate} value={date} onChange={(event) => { setDate(event.target.value); setTime(""); }} /></label><label className="block text-sm font-medium">Horário<select className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm" value={time} onChange={(event) => setTime(event.target.value)}><option value="">Selecione</option>{availableTimes.map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></label>{availableTimes.length === 0 && <p className="text-sm text-muted-foreground">Não há horários disponíveis neste dia.</p>}{showPushOptIn && <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3"><Checkbox className="mt-0.5" checked={pushOptIn} onCheckedChange={(value) => setPushOptIn(value === true)} aria-label="Receber lembretes da sessão" /><span className="text-sm leading-snug"><span className="flex items-center gap-1.5 font-semibold"><Bell className="h-3.5 w-3.5 text-primary" /> Me lembrar desta sessão</span><span className="mt-0.5 block text-xs text-muted-foreground">Ative os avisos neste aparelho para receber o lembrete antes do encontro e as respostas da AURA. Seu navegador vai pedir sua confirmação.</span></span></label>}</div><DialogFooter className="gap-2"><Button type="button" variant="outline" onClick={() => setSchedulerOpen(false)} disabled={saving}>Voltar</Button><Button type="button" onClick={() => void manageSession(editing ? "reschedule" : "schedule")} disabled={!date || !time || saving}>{saving ? "Confirmando..." : "Confirmar horário"}</Button></DialogFooter></DialogContent></Dialog>
 
       <Dialog open={preparationOpen} onOpenChange={(open) => !saving && setPreparationOpen(open)}><DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg bg-card"><DialogHeader className="text-left"><DialogTitle>Preparar este encontro</DialogTitle><DialogDescription>Opcional. O que você não quer esquecer de levar para esta sessão?</DialogDescription></DialogHeader>{lastThread && <div className="border-l-2 border-primary pl-3"><p className="text-xs font-semibold text-primary">Do encontro anterior</p><p className="mt-1 text-sm leading-relaxed">{sanitizePortalText(lastThread)}</p><p className="mt-2 text-xs text-muted-foreground">Podemos começar por aqui ou pelo que estiver mais vivo para você.</p></div>}<Textarea className="bg-background" value={preparation} onChange={(event) => setPreparation(event.target.value)} maxLength={500} rows={5} placeholder="Pode ser uma situação, dúvida ou algo que ficou da última conversa." /><p className="text-right text-xs text-muted-foreground">{preparation.length}/500</p><DialogFooter className="gap-2"><Button type="button" variant="outline" onClick={() => setPreparationOpen(false)}>Voltar</Button><Button type="button" disabled={saving || !selectedSession} onClick={() => selectedSession && void saveExperience("save_preparation", selectedSession, preparation)}>{saving ? "Guardando..." : "Guardar preparação"}</Button></DialogFooter></DialogContent></Dialog>
 
