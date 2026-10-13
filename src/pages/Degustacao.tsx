@@ -72,9 +72,9 @@ export default function Degustacao() {
       if (fnError || data?.error) throw new Error(data?.error || "Não foi possível liberar seu acesso agora.");
       if (data?.existing) { setExisting(data.message); return; }
       try { (window as any).fbq?.("track", "Lead", { content_name: "degustacao_gratuita" }); } catch { /* opcional */ }
-      if (!data?.token_hash) { setExisting(data?.message || "Cadastro feito. Enviamos o acesso pelo seu WhatsApp."); return; }
+      if (!data?.token_hash) { setExisting("Seu cadastro foi criado, mas a entrada automática não foi concluída. Entre pelo App com seu WhatsApp ou e-mail."); return; }
       const { error: verifyError } = await supabasePortal.auth.verifyOtp({ token_hash: data.token_hash, type: data.type === "signup" ? "signup" : "magiclink" });
-      if (verifyError) { setExisting("Cadastro feito. Enviamos o acesso pelo seu WhatsApp."); return; }
+      if (verifyError) { setExisting("Seu cadastro foi criado, mas a entrada automática não foi concluída. Entre pelo App com seu WhatsApp ou e-mail."); return; }
       navigate("/meu-espaco?tab=conversar&open=1&onboarding=new", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível liberar seu acesso agora.");

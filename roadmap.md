@@ -6,11 +6,15 @@
 # Roadmap
 
 ## Degustação gratuita (campanha "Experimente grátis")
+- [x] Auditar e simular a degustação em 13/10: 48 combinações de plano/ciclo, validações e cadastro existente, PIX trimestral/identidade de repetição, falha de cópia, cancelado versus ativo, pedido de cartão com ciclo/source corretos, agendamento autenticado simulado e leitura pela tela em Android/iPhone; 32 testes internos passaram. Confirmadas colunas/funções/trigger hospedados e acesso real de Eduardo. Sem cobrança ou sessão real; sem erros de página e build OK.
+- [x] Corrigir confirmação falsa de plano ativo, falha silenciosa de cópia PIX, convite ausente no Safari sem Notification, orientação iOS substituída por outro aviso, estado visual de push e perda do toque antes do pedido de permissão. Cadastro com falha de entrada não promete WhatsApp enviado.
+- [ ] Validar entrada nova real e sessão cortesia completa, consumo de oração/meditação, Stripe EmbeddedCheckout com aprovação/3DS e ativação Woovi real preservando próxima sessão/cota; depende de conta isolada e transações autorizadas, não comprovado pela simulação.
+- [ ] Validar permissão, registro, entrega e abertura de push em Android e iPhone físico instalado; emulação foi Chromium com perfis móveis, WebKit indisponível no sandbox.
 - [x] Página /degustacao e /teste-gratis com nome, WhatsApp e e-mail, entrada direta no App, sem cartão.
 - [x] Sessão cortesia isenta de cota; próximo encontro agendável, mas só começa com plano; Aura sem falar de planos e propondo o próximo encontro.
 - [x] Uma oração e uma meditação de cortesia; demais abrem os planos.
 - [x] Modal de planos no App com PIX Automático na própria tela, sem preço de entrada R$ 6,90; ativação inicia o ciclo no pagamento.
-- [ ] Cartão dentro do modal (hoje só PIX Automático).
+- [x] Cartão e PIX Automático no modal, com quatro ciclos e cartões sem transbordamento móvel.
 - [ ] Teste ponta a ponta com cadastro real e pagamento real (não feito para não gerar cobrança nem mensagem real).
 - [ ] Lembretes de meio de semana (push/WhatsApp) convidando ao uso — aguardando aprovação dos textos.
 
