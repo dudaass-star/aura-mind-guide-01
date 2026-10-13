@@ -6,7 +6,8 @@
 # Roadmap
 
 ## Clipes do App para anúncios
-- [ ] Gravar conversa v3 em velocidade normal com sequência de trocas reais na conta fictícia, sem aceleração; gravar sessão v2 desde o começo com transição real do layout e conferir ambos.
+- [x] Gravar conversa v3 em velocidade normal: quatro trocas reais na conta fictícia, 139,4 segundos, 1080×1920 sem áudio; sequência visual e decodificação conferidas.
+- [ ] Capturar a transição contínua ao iniciar sessão: início confirmado na conta fictícia e resposta real gravados, mas o estado visual só apareceu após recarregar na captura; clipe v2 é material parcial, não comprova a transição solicitada. Depende de investigar a atualização visual antes da gravação final.
 - [x] Clipe conversa v2: envio real na conta fictícia Marina e resposta real da AURA confirmados; espera acelerada sinalizada, pergunta final inteira, 1080×1920 sem áudio; quadros e decodificação conferidos, materiais reunidos em coleção.
 
 ## Degustação gratuita (campanha "Experimente grátis")
