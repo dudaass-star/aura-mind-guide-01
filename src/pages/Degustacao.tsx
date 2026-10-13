@@ -47,6 +47,8 @@ function CtaButton() {
 
 export default function Degustacao() {
   const navigate = useNavigate();
+  // Atalho de visualização: ?ver=planos abre a janela de planos do App para revisão.
+  const [previewPlans, setPreviewPlans] = useState(() => new URLSearchParams(window.location.search).get("ver") === "planos");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
