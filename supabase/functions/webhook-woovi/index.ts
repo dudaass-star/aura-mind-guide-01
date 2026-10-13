@@ -430,11 +430,14 @@ async function activateAccess(
       profile = prof || null;
     }
     // Aquisição real: só conta como 1ª compra quem não tinha perfil antes.
-    const isNewCustomer = !profile;
+    // Degustação gratuita nunca pagou: a 1ª mensalidade é aquisição real e o
+    // ciclo do plano começa no pagamento, sem herdar nada da cortesia.
+    const fromDegustacao = String(profile?.status || "").toLowerCase() === "degustacao";
+    const isNewCustomer = !profile || fromDegustacao;
 
     // A validade nova SEMPRE parte do `plan_expires_at` do perfil, para a
     // renovação somar ao que o cliente ainda tem.
-    const currentExpiry = profile?.plan_expires_at ? new Date(profile.plan_expires_at) : null;
+    const currentExpiry = !fromDegustacao && profile?.plan_expires_at ? new Date(profile.plan_expires_at) : null;
     const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
     // Promo de entrada (trial pago) = 7 dias de acesso; o débito do dia 8 é que
     // estende para o ciclo mensal cheio. Demais pagamentos compram o ciclo todo.
@@ -481,7 +484,7 @@ async function activateAccess(
       console.log(`[webhook-woovi] ✅ profile novo criado: ${userId} (${email})`);
     } else {
       userId = profile.user_id as string;
-      const isReturning = profile.status === "canceled";
+      const isReturning = profile.status === "canceled" || fromDegustacao;
       const updatePayload: Record<string, unknown> = {
         plan, status: "active", plan_expires_at: newExpiry,
         billing_cycle: billing, card_gateway: "woovi",
@@ -495,6 +498,10 @@ async function activateAccess(
         if (mandateValue === 1990) updatePayload.plan_tier = "lite";
         else if (mandateValue === 990) updatePayload.plan_tier = "base";
         else updatePayload.plan_tier = null;
+      }
+      if (fromDegustacao) {
+        updatePayload.degustacao_converted_at = now.toISOString();
+        updatePayload.converted_at = now.toISOString();
       }
       if (isReturning) {
         updatePayload.sessions_used_this_month = 0;

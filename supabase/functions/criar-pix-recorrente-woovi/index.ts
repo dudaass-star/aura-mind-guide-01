@@ -132,13 +132,14 @@ async function isReturningCustomer(supabase: any, email: string, phoneDigits: st
     const orParts = [`email.eq.${email}`];
     if (phoneDigits) orParts.push(`phone.eq.${phoneDigits}`, `phone.eq.55${phoneDigits}`);
     const { data: profiles, error: profErr } = await supabase
-      .from("profiles").select("id, plan, asaas_customer_id")
+      .from("profiles").select("id, plan, status, asaas_customer_id")
       .or(orParts.join(",")).limit(5);
     if (profErr) {
       console.error("[criar-pix-recorrente-woovi] checagem de perfil falhou:", profErr.message);
       return true; // fail-safe: na dúvida, sem promo.
     }
-    if ((profiles || []).some((p: any) => p.plan || p.asaas_customer_id)) return true;
+    // Degustação já experimentou de graça: o semanal de entrada não se aplica.
+    if ((profiles || []).some((p: any) => p.plan || p.asaas_customer_id || String(p.status || "").toLowerCase() === "degustacao")) return true;
 
     const { data: wooviPaid } = await supabase
       .from("woovi_subscriptions").select("id")
