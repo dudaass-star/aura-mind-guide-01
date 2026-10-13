@@ -6,11 +6,12 @@
 # Roadmap
 
 ## Degustação gratuita (campanha "Experimente grátis")
+- [ ] Auditar e simular ponta a ponta cadastro, planos/ciclos, PIX/cartão, ativação, cortesia e agendamento/push em Android e iOS; separar simulação de transação/aparelho real.
 - [x] Página /degustacao e /teste-gratis com nome, WhatsApp e e-mail, entrada direta no App, sem cartão.
 - [x] Sessão cortesia isenta de cota; próximo encontro agendável, mas só começa com plano; Aura sem falar de planos e propondo o próximo encontro.
 - [x] Uma oração e uma meditação de cortesia; demais abrem os planos.
 - [x] Modal de planos no App com PIX Automático na própria tela, sem preço de entrada R$ 6,90; ativação inicia o ciclo no pagamento.
-- [ ] Cartão dentro do modal (hoje só PIX Automático).
+- [x] Cartão e PIX Automático no modal, com quatro ciclos e cartões sem transbordamento móvel.
 - [ ] Teste ponta a ponta com cadastro real e pagamento real (não feito para não gerar cobrança nem mensagem real).
 - [ ] Lembretes de meio de semana (push/WhatsApp) convidando ao uso — aguardando aprovação dos textos.
 
