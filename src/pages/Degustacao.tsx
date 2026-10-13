@@ -175,19 +175,24 @@ export default function Degustacao() {
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-foreground/70">Sem surpresas. Você experimenta primeiro e só escolhe se e como continuar depois de viver o seu encontro.</p>
         <ul className="mt-6 grid gap-4 md:grid-cols-3">
           {[
-            { name: "Essencial", price: "29,90", body: "1 encontro guiado por mês, conversa com a AURA, orações e meditações." },
-            { name: "Direção", price: "49,90", body: "4 encontros guiados por mês — um por semana — para manter o ritmo.", featured: true },
-            { name: "Transformação", price: "79,90", body: "8 encontros guiados por mês — dois por semana — para um acompanhamento intenso." },
+            { name: "Essencial", price: "29,90", sessions: "1 encontro guiado (45 min) por mês", body: "Ideal para ter um ponto de apoio e clareza contínua no dia a dia." },
+            { name: "Direção", price: "49,90", sessions: "4 encontros guiados (45 min) por mês — 1 por semana", body: "Ideal para criar um ritmo semanal de reflexão e evolução.", featured: true },
+            { name: "Transformação", price: "79,90", sessions: "8 encontros guiados (45 min) por mês — 2 por semana", body: "Ideal para momentos de virada, crises ou transições profundas." },
           ].map((p) => (
             <li key={p.name} className={`relative rounded-xl border bg-card p-6 ${p.featured ? "border-primary shadow-lg" : "border-border"}`}>
               {p.featured && <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-0.5 text-[11px] font-semibold text-primary-foreground">Mais escolhido</span>}
               <p className="font-display text-lg font-medium">{p.name}</p>
               <p className="mt-2"><span className="text-sm text-foreground/60">R$ </span><span className="font-display text-3xl font-semibold">{p.price}</span><span className="text-sm text-foreground/60">/mês</span></p>
-              <p className="mt-3 text-sm leading-relaxed text-foreground/70">{p.body}</p>
+              <ul className="mt-4 space-y-2 text-sm text-foreground/80">
+                {[p.sessions, "Chat livre 24h por dia — converse quando quiser", "Todas as orações e meditações liberadas"].map((f) => (
+                  <li key={f} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{f}</li>
+                ))}
+              </ul>
+              <p className="mt-4 text-sm italic leading-relaxed text-foreground/65">{p.body}</p>
             </li>
           ))}
         </ul>
-        <p className="mt-5 text-center text-sm text-foreground/70">PIX Automático · Sem fidelidade · Cancele quando quiser</p>
+        <p className="mt-5 text-center text-sm text-foreground/70">Sem fidelidade · Cancele quando quiser com um clique</p>
         <CtaButton />
       </section>
 
