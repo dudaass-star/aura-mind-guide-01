@@ -21,9 +21,15 @@ const maskPhone = (v: string) => {
 };
 
 const gifts = [
-  { icon: MessageCircleHeart, title: "Uma sessão guiada de 45 minutos", body: "A AURA conduz, você fala no seu ritmo — por texto ou áudio. Um encontro de verdade com o que está pesando." },
-  { icon: HeartHandshake, title: "Uma oração com a voz da AURA", body: "Para os momentos em que você quer estar mais perto de Deus." },
-  { icon: Headphones, title: "Uma meditação guiada", body: "Para desacelerar o corpo quando a mente não para." },
+  { icon: MessageCircleHeart, badge: "Texto ou áudio", title: "Sessão guiada de 45 minutos", body: "Um encontro completo e profundo com a AURA para organizar pensamentos e clarear o que está pesando." },
+  { icon: HeartHandshake, badge: "Voz acolhedora", title: "Uma oração narrada", body: "Para os momentos em que você quer silenciar e se aproximar de Deus." },
+  { icon: Headphones, badge: "Respiração e calma", title: "Uma meditação guiada", body: "Para desacelerar o corpo e aliviar o ritmo acelerado da mente." },
+];
+
+const pillars = [
+  { title: "Você no seu ritmo", body: "Fale por áudio ou digite, sem pressa." },
+  { title: "Escuta de verdade", body: "A AURA conecta o que você conta, sem respostas genéricas." },
+  { title: "Livre para decidir", body: "Viva a experiência completa antes de pensar em qualquer plano." },
 ];
 
 export default function Degustacao() {
@@ -74,18 +80,24 @@ export default function Degustacao() {
 
       <main className="container mx-auto grid max-w-6xl gap-12 px-6 pb-20 pt-6 md:grid-cols-[1.1fr_1fr] md:items-start md:pt-12">
         <section>
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Grátis · sem cartão</p>
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Degustação gratuita · Sem cartão de crédito</p>
           <h1 className="font-display text-4xl font-medium leading-[1.08] tracking-tight md:text-6xl">
-            Você queria fazer terapia, mas o preço não cabia.
+            O que você está sentindo não precisa esperar.
           </h1>
           <p className="mt-5 max-w-xl text-lg text-foreground/75">
-            O que você está sentindo não precisa esperar. Experimente um encontro guiado com a AURA — ela escuta, conecta o que você conta e ajuda você a enxergar o próximo passo.
+            Experimente um encontro guiado com a AURA — ela escuta, conecta o que você conta e ajuda você a enxergar o próximo passo.
           </p>
-          <ul className="mt-8 space-y-5">
+          <ul className="mt-8 grid gap-3">
             {gifts.map((g) => (
-              <li key={g.title} className="flex gap-4">
+              <li key={g.title} className="flex gap-4 rounded-xl border border-border bg-card p-4 shadow-sm">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><g.icon className="h-5 w-5" /></span>
-                <div><p className="font-semibold">{g.title}</p><p className="text-sm text-foreground/70">{g.body}</p></div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold">{g.title}</p>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">{g.badge}</span>
+                  </div>
+                  <p className="mt-1 text-sm text-foreground/70">{g.body}</p>
+                </div>
               </li>
             ))}
           </ul>
