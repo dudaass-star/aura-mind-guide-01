@@ -130,13 +130,6 @@ export default function Degustacao() {
         </section>
       </main>
 
-      <section className="container mx-auto max-w-3xl px-6 pb-14">
-        <h2 className="font-display text-2xl font-medium md:text-3xl">Ouça uma prévia</h2>
-        <p className="mt-2 text-foreground/70">Um trecho de oração e de meditação, do jeito que você vai ouvir no App.</p>
-        <div className="mt-6"><PreviewPlayer /></div>
-        <CtaButton />
-      </section>
-
       <section className="container mx-auto max-w-6xl px-6 pb-14">
         <h2 className="font-display text-2xl font-medium md:text-3xl">O que está liberado para você</h2>
         <ul className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -154,8 +147,15 @@ export default function Degustacao() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="container mx-auto max-w-3xl px-6 pb-14">
+        <h2 className="font-display text-2xl font-medium md:text-3xl">Ouça uma prévia</h2>
+        <p className="mt-2 text-foreground/70">Agora ouça um trecho de oração e de meditação, do jeito que você vai ouvir no App.</p>
+        <div className="mt-6"><PreviewPlayer /></div>
         <CtaButton />
       </section>
+
       <section className="container mx-auto max-w-6xl px-6 pb-20">
         <div className="grid gap-4 md:grid-cols-3">
           {pillars.map((p, i) => (
