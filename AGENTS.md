@@ -39,3 +39,4 @@
 
 - Chat recovery is persisted on accepted turns, claimed with leases, bounded in time and attempts, and unscheduled after drain; this survives worker loss without replaying old topics.
 - Session inactivity closure checks unanswered App turns and pauses at the operational cap; this prevents technical silence from counting as therapeutic completion.
+- Free-trial (`profiles.status = 'degustacao'`) courtesy session is marked quota-exempt by a sessions trigger and later sessions cannot start without a plan; access rules live in the database so every scheduling path stays consistent.

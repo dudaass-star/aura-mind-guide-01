@@ -5,6 +5,15 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Degustação gratuita (campanha "Experimente grátis")
+- [x] Página /degustacao e /teste-gratis com nome, WhatsApp e e-mail, entrada direta no App, sem cartão.
+- [x] Sessão cortesia isenta de cota; próximo encontro agendável, mas só começa com plano; Aura sem falar de planos e propondo o próximo encontro.
+- [x] Uma oração e uma meditação de cortesia; demais abrem os planos.
+- [x] Modal de planos no App com PIX Automático na própria tela, sem preço de entrada R$ 6,90; ativação inicia o ciclo no pagamento.
+- [ ] Cartão dentro do modal (hoje só PIX Automático).
+- [ ] Teste ponta a ponta com cadastro real e pagamento real (não feito para não gerar cobrança nem mensagem real).
+- [ ] Lembretes de meio de semana (push/WhatsApp) convidando ao uso — aguardando aprovação dos textos.
+
 ## Ajustes proporcionais de plano
 - [x] Atualizar nome nas próximas trocas e separar ajustes de mensalidades/conversões; 28 testes/83 asserções passaram e build OK. Três eventos históricos reclassificados, incluindo R$4,30 de 09/10; auditoria do Subscribe já enviado à Meta preservada.
 - [x] Corrigir a descrição da assinatura existente para Essencial mensal; retorno oficial mantém preço R$29,90 e status ativo. Pagamento de R$4,30 confirmado como succeeded, sem nova cobrança. Não simulada troca real para evitar cobrar cliente.
