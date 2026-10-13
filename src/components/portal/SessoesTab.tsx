@@ -13,7 +13,8 @@ import { EmptyState, PortalLoadingInline } from "./shared";
 import { presentClosure } from "./whatsapp";
 import { sanitizePortalText } from "./sanitize";
 import type { Json } from "@/integrations/supabase/types";
-import { reportPushConversion } from "@/lib/push-notifications";
+import { enablePushNotifications, getPushPermission, reportPushConversion, type PushActivationResult } from "@/lib/push-notifications";
+import { Checkbox } from "@/components/ui/checkbox";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 
 const PLAN_SESSION_LIMITS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8 };
@@ -138,6 +139,14 @@ export function SessoesTab({
   const [time, setTime] = useState("");
   const [preparation, setPreparation] = useState("");
   const [correction, setCorrection] = useState("");
+  const [pushOptIn, setPushOptIn] = useState(true);
+  const [pushEnabledNow, setPushEnabledNow] = useState(false);
+  const pushPermission = typeof window === "undefined" ? "unsupported" : getPushPermission();
+  // Só oferece quando ainda não está ativo neste aparelho e o navegador ainda permite pedir.
+  const showPushOptIn = !pushEnabledNow
+    && pushPermission !== "unsupported"
+    && pushPermission !== "denied"
+    && !(pushPermission === "granted" && typeof localStorage !== "undefined" && localStorage.getItem("aura-push-enabled") === "true");
   const [saving, setSaving] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(() => localStorage.getItem("aura-push-enabled") === "true");
   const trackedViews = useRef(new Set<string>());
@@ -251,9 +260,22 @@ export function SessoesTab({
   const manageSession = async (action: "schedule" | "reschedule" | "cancel") => {
     if (action !== "cancel" && (!date || !time)) return;
     if (action !== "schedule" && !selectedSession?.id) return;
+    // Pedido de permissão precisa nascer no mesmo toque do usuário (exigência do navegador),
+    // por isso dispara antes de qualquer espera; o agendamento nunca depende do resultado.
+    let pushRequest: Promise<PushActivationResult> | null = null;
+    if (action !== "cancel" && showPushOptIn) {
+      void supabasePortal.functions.invoke("register-push-device", { body: { action: "event", eventType: pushOptIn ? "activation_started" : "invite_shown", source: "scheduling" } });
+      if (pushOptIn) pushRequest = enablePushNotifications();
+      track(pushOptIn ? "push_optin_accepted" : "push_optin_unchecked", { action });
+    }
     setSaving(true);
     try {
       await invoke({ action, scheduledAt: action === "cancel" ? null : new Date(brtIso(date, time)).toISOString(), sessionId: action === "schedule" ? null : selectedSession?.id });
+      if (pushRequest) void pushRequest.then((result) => {
+        track("push_optin_result", { status: result.status });
+        if (result.status === "registered") setPushEnabledNow(true);
+        if (result.status === "install-first") toast({ title: "Lembretes no iPhone", description: "Adicione o Olá Aura à Tela de Início e ative os lembretes pelo ícone." });
+      });
       setSchedulerOpen(false);
       setCancelOpen(false);
       setSelectedSession(null);
