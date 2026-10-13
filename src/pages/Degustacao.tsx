@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useNavigate } from "react-router-dom";
-import { Check, Headphones, HeartHandshake, Loader2, MessageCircleHeart, ShieldCheck } from "lucide-react";
+import { Check, Headphones, HeartHandshake, Loader2, Lock, MessageCircleHeart, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -87,7 +87,7 @@ export default function Degustacao() {
         <meta name="description" content="Faça grátis uma sessão guiada de 45 minutos com a AURA, uma oração e uma meditação. Sem cartão." />
       </Helmet>
       <header className="container mx-auto flex items-center justify-between px-6 py-5">
-        <img src={logoOlaAura} alt="Olá Aura" className="h-8 w-auto" />
+        <img src={logoOlaAura} alt="Olá Aura" className="h-14 w-auto md:h-16" />
         <Link to="/meu-espaco/entrar" className="text-sm text-muted-foreground underline-offset-4 hover:underline">Já tenho acesso</Link>
       </header>
 
@@ -167,6 +167,33 @@ export default function Degustacao() {
           ))}
         </div>
       </section>
+
+      <footer className="border-t border-border bg-card/60">
+        <div className="container mx-auto grid max-w-6xl gap-8 px-6 py-10 md:grid-cols-3">
+          <div>
+            <img src={logoOlaAura} alt="Olá Aura" className="h-12 w-auto" />
+            <p className="mt-3 max-w-xs text-sm text-muted-foreground">Acompanhamento emocional que transforma conversas em clareza e direção.</p>
+            <a href="mailto:suporte@olaaura.com.br" className="mt-3 inline-block text-sm font-medium text-primary">suporte@olaaura.com.br</a>
+          </div>
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Segurança</p>
+            <ul className="space-y-2 text-sm text-foreground/75">
+              <li className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" />Conforme LGPD</li>
+              <li className="flex items-center gap-2"><Lock className="h-4 w-4 text-primary" />Dados criptografados</li>
+              <li><Link to="/privacidade" className="hover:text-primary">Privacidade</Link></li>
+              <li><Link to="/termos" className="hover:text-primary">Termos de uso</Link></li>
+            </ul>
+          </div>
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Já é cliente?</p>
+            <Link to="/meu-espaco/entrar" className="text-sm font-medium text-primary hover:underline">Entrar no Meu Espaço</Link>
+          </div>
+        </div>
+        <div className="border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
+          <p>A AURA é acompanhamento emocional e não substitui atendimento psicológico ou médico. Em risco imediato, ligue 188 (CVV) ou 192.</p>
+          <p className="mt-2">© {new Date().getFullYear()} Olá AURA. Todos os direitos reservados.</p>
+        </div>
+      </footer>
     </div>
   );
 }
