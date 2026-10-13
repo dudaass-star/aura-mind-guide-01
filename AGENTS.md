@@ -22,7 +22,7 @@
 - Full-turn latency ends after processing and the last bubble renders, separately from first-bubble latency; this distinguishes delivery cadence from technical delay.
 - App processing skips the legacy WhatsApp instance; only WhatsApp uses it, avoiding unnecessary network waits.
 - Disputas PIX vinculam a cobrança pelo End-to-End ID tanto em campos diretos quanto no payload original, recusando associação ambígua; isso preserva a defesa automática sem atribuir evidência ao cliente errado.
-- Meta buyer sync is daily, additive and idempotent with normalized hashed identity and no demos; preserve history.
+- Meta buyer sync: daily, additive, idempotent, hashed identity, no demos.
 - Woovi reconciliation exhausts ascending pagination and links a different payer only through exact installment E2E, prioritizing prior payer relationships; this avoids heuristic attribution.
 - Chat thinking stays low except in session reframe and closure to reduce latency without losing reflection.
 - Parallelize independent chat reads after profile, quota and sessions; reduce waits without changing context.
@@ -37,4 +37,4 @@
 
 - Chat recovery is persisted on accepted turns, claimed with leases, bounded in time and attempts, and unscheduled after drain; this survives worker loss without replaying old topics.
 - Session inactivity closure checks unanswered App turns and pauses at the operational cap; this prevents technical silence from counting as therapeutic completion.
-- Free-trial (`profiles.status = 'degustacao'`) courtesy session is marked quota-exempt by a sessions trigger and later sessions cannot start without a plan; access rules live in the database so every scheduling path stays consistent.
+- Free trial (`status='degustacao'`): a DB trigger makes the courtesy session quota-exempt and blocks later starts without a plan, keeping all scheduling paths consistent.
