@@ -5307,6 +5307,42 @@ serve(async (req) => {
       }
     }
 
+    // ------------------------------------------------------------------
+    // DEGUSTAÇÃO GRATUITA: a 1ª sessão é cortesia e não pertence a plano.
+    // Depois dela, conversa livre e próxima sessão exigem plano — a parede é
+    // determinística aqui e no banco; a Aura nunca negocia acesso nem preço.
+    // ------------------------------------------------------------------
+    const isDegustacao = String(profile?.status || '').toLowerCase() === 'degustacao';
+    let degustacaoCourtesyDone = false;
+    if (isDegustacao && profile && message && !profile.current_session_id) {
+      const { data: degSessions } = await supabase
+        .from('sessions')
+        .select('id, status, quota_exempt_reason')
+        .eq('user_id', profile.user_id)
+        .eq('quota_exempt_reason', 'degustacao_gratuita')
+        .in('status', ['completed', 'paused', 'no_show'])
+        .limit(1);
+      degustacaoCourtesyDone = (degSessions || []).length > 0;
+      if (degustacaoCourtesyDone) {
+        const wall =
+          'Que bom te ver por aqui. 💛 O que você trouxe no nosso primeiro encontro continua guardado comigo. ' +
+          'Para a gente seguir conversando sempre que você precisar — e manter o próximo encontro — é só ativar seu plano no botão "Ativar meu plano", aqui no App.';
+        try {
+          await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: wall });
+        } catch (e) {
+          console.error('❌ [DEGUSTACAO] Falha ao registrar convite de plano:', e);
+        }
+        await supabase
+          .from('aura_response_state')
+          .update({ is_responding: false, pending_content: null, pending_context: null })
+          .eq('user_id', profile.user_id);
+        console.log('🚧 [DEGUSTACAO] Cortesia já usada — LLM não chamado');
+        return new Response(JSON.stringify({ degustacaoWall: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     console.log('📊 Plan mapping:', { rawPlan, normalizedPlan: userPlan, planTier: planTier || null });
 
     // Atualizar contador de mensagens diárias
@@ -6486,6 +6522,14 @@ ${meditationCatalogSection}
     }
 
     // Adicionar contextos condicionais ao bloco dinâmico
+    if (isDegustacao) {
+      dynamicContext += `\n\n🎁 PRIMEIRO ENCONTRO DE CORTESIA (DEGUSTAÇÃO):
+- Esta pessoa ainda NÃO tem plano. Este primeiro encontro de 45 minutos é uma cortesia e não pertence a nenhum plano.
+- NUNCA mencione preços, planos, nomes de planos, PIX, cartão, assinatura, cota ou "sessões restantes". Se perguntarem, diga apenas que as opções aparecem no próprio App, no botão "Ativar meu plano", e volte à conversa.
+- Conduza com a mesma profundidade de qualquer sessão. Não transforme o encontro em demonstração do produto.
+- Fora de sessão, antes do encontro: acolha brevemente e convide para começar o encontro agora ou escolher um horário.
+- No FECHAMENTO do encontro, depois da síntese: proponha naturalmente o próximo encontro na semana seguinte ("vamos guardar um horário pra darmos o próximo passo?"). Quando a pessoa disser dia e horário, confirme e emita [AGENDAR_SESSAO:YYYY-MM-DD HH:MM] no final. Não condicione o agendamento a pagamento nem fale em confirmar vaga.`;
+    }
     dynamicContext += continuityContext;
     
 
