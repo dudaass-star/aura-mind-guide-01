@@ -13,7 +13,7 @@ import { EmptyState, PortalLoadingInline } from "./shared";
 import { presentClosure } from "./whatsapp";
 import { sanitizePortalText } from "./sanitize";
 import type { Json } from "@/integrations/supabase/types";
-import { enablePushNotifications, getPushPermission, reportPushConversion, type PushActivationResult } from "@/lib/push-notifications";
+import { enablePushNotifications, getPushPermission, isIosPushInstallRequired, reportPushConversion, type PushActivationResult } from "@/lib/push-notifications";
 import { Checkbox } from "@/components/ui/checkbox";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 
@@ -144,7 +144,7 @@ export function SessoesTab({
   const pushPermission = typeof window === "undefined" ? "unsupported" : getPushPermission();
   // Só oferece quando ainda não está ativo neste aparelho e o navegador ainda permite pedir.
   const showPushOptIn = !pushEnabledNow
-    && pushPermission !== "unsupported"
+    && (pushPermission !== "unsupported" || isIosPushInstallRequired())
     && pushPermission !== "denied"
     && !(pushPermission === "granted" && typeof localStorage !== "undefined" && localStorage.getItem("aura-push-enabled") === "true");
   const [saving, setSaving] = useState(false);
@@ -273,9 +273,9 @@ export function SessoesTab({
       await invoke({ action, scheduledAt: action === "cancel" ? null : new Date(brtIso(date, time)).toISOString(), sessionId: action === "schedule" ? null : selectedSession?.id });
       if (pushRequest) void pushRequest.then((result) => {
         track("push_optin_result", { status: result.status });
-        if (result.status === "registered") setPushEnabledNow(true);
+        if (result.status === "registered") { setPushEnabledNow(true); setPushEnabled(true); }
         if (result.status === "install-first") toast({ title: "Lembretes no iPhone", description: "Adicione o Olá Aura à Tela de Início e ative os lembretes pelo ícone." });
-      });
+      }).catch(() => { track("push_optin_result", { status: "error" }); });
       setSchedulerOpen(false);
       setCancelOpen(false);
       setSelectedSession(null);

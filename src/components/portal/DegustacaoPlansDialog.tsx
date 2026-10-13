@@ -52,7 +52,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
   const [plan, setPlan] = useState<DegustacaoPlanId>("direcao");
   const [cpf, setCpf] = useState("");
   const [cycle, setCycle] = useState<Cycle>("monthly");
-  const cycleInfo = CYCLES.find((c) => c.id === cycle)!;
+  const cycleInfo = CYCLES.find((c) => c.id === cycle) ?? CYCLES[0];
   const priceOf = (id: DegustacaoPlanId) => CYCLE_PRICES[id][cycle];
   const monthlyOf = (id: DegustacaoPlanId) => priceOf(id) / cycleInfo.months;
   const discountOf = (id: DegustacaoPlanId) => Math.round((1 - monthlyOf(id) / CYCLE_PRICES[id].monthly) * 100);
@@ -65,7 +65,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
   const [copied, setCopied] = useState(false);
   const requestKey = useRef<string>("");
   const head = HEADLINES[reason] || HEADLINES.manual;
-  const selected = useMemo(() => DEGUSTACAO_PLANS.find((p) => p.id === plan)!, [plan]);
+  const selected = useMemo(() => DEGUSTACAO_PLANS.find((p) => p.id === plan) ?? DEGUSTACAO_PLANS[0], [plan]);
 
   useEffect(() => {
     if (!open) return;
@@ -78,7 +78,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
     if (!open || (step !== "pix" && step !== "card")) return;
     const timer = window.setInterval(async () => {
       const { data } = await supabasePortal.from("profiles").select("status").eq("user_id", userId).maybeSingle();
-      if (data?.status && data.status !== "degustacao") {
+      if (data?.status === "active") {
         window.clearInterval(timer);
         setStep("done");
         await queryClient.invalidateQueries({ queryKey: ["portal-profile", userId] });
@@ -140,9 +140,15 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
 
   const copy = async () => {
     if (!pix?.copyPaste) return;
-    await navigator.clipboard.writeText(pix.copyPaste).catch(() => {});
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2500);
+    try {
+      await navigator.clipboard.writeText(pix.copyPaste);
+      setError(null);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setCopied(false);
+      setError("Não foi possível copiar automaticamente. Selecione e copie o código abaixo.");
+    }
   };
 
   return (
@@ -249,6 +255,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
               {copied ? "Código copiado" : "Copiar código PIX"}
             </Button>
             <p className="text-center text-xs text-muted-foreground">Abra o app do seu banco, escolha PIX Copia e Cola e cole o código.</p>
+            {error && <div className="space-y-2"><p role="alert" className="text-sm text-destructive">{error}</p><Input aria-label="Código PIX para copiar manualmente" readOnly value={pix.copyPaste || ""} onFocus={(event) => event.target.select()} /></div>}
             <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Aguardando a confirmação do banco…</p>
             <Button variant="ghost" className="w-full" onClick={() => setStep("plans")}>Trocar de plano</Button>
           </>

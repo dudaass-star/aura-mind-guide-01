@@ -29,10 +29,10 @@ export function isIosPushInstallRequired() {
 }
 
 export async function enablePushNotifications(): Promise<PushActivationResult> {
+  if (isIosPushInstallRequired()) return { status: "install-first" };
   if (!firebaseConfig.apiKey || !firebaseConfig.projectId || !appId || !vapidKey || !firebaseConfig.messagingSenderId) {
     return { status: "not-configured" };
   }
-  if (isIosPushInstallRequired()) return { status: "install-first" };
   if (!("Notification" in window) || !(await isSupported())) return { status: "unsupported" };
   if (window.top !== window.self) return { status: "open-in-new-tab" };
 
