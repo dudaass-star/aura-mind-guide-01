@@ -24,7 +24,7 @@
 - Disputas PIX vinculam a cobrança pelo End-to-End ID tanto em campos diretos quanto no payload original, recusando associação ambígua; isso preserva a defesa automática sem atribuir evidência ao cliente errado.
 - Meta buyer sync: daily, additive, idempotent, hashed identity, no demos.
 - Woovi reconciliation exhausts ascending pagination and links a different payer only through exact installment E2E, prioritizing prior payer relationships; this avoids heuristic attribution.
-- Chat thinking stays low except in session reframe and closure to reduce latency without losing reflection.
+- Chat thinking stays low except in session reframe/closure, cutting latency.
 - Parallelize independent chat reads after profile, quota and sessions; reduce waits without changing context.
 - Movement is collective-first; local previews share live invite copy.
 - Home keeps tracking; practice dialogs stop audio on exit.
