@@ -53,6 +53,7 @@ const PortalAuthCallback = lazy(() => import("./pages/PortalAuthCallback"));
 const DemoInviteAccess = lazy(() => import("./pages/DemoInviteAccess"));
 const ReautorizarPix = lazy(() => import("./pages/ReautorizarPix"));
 const PixTaster = lazy(() => import("./pages/PixTaster"));
+const Degustacao = lazy(() => import("./pages/Degustacao"));
 const Blog = lazy(() => import("./pages/Blog"));
 const BlogPost = lazy(() => import("./pages/BlogPost"));
 const Pagamento = lazy(() => import("./pages/Pagamento"));
@@ -157,6 +158,8 @@ const App = () => (
             <Route path="/movimento/area" element={<PortalRoute><MovementArea /></PortalRoute>} />
             <Route path="/reautorizar-pix" element={<ReautorizarPix />} />
             <Route path="/pix/:token" element={<PixTaster />} />
+            <Route path="/degustacao" element={<Degustacao />} />
+            <Route path="/teste-gratis" element={<Degustacao />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
