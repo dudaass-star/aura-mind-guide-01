@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { requestDegustacaoContent } from "@/lib/degustacao";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
@@ -21,6 +22,7 @@ import { reportTodayDirectionProgress } from "@/lib/today-direction";
 interface MeditacoesTabProps {
   userId?: string;
   isActive?: boolean;
+  isDegustacao?: boolean;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -43,11 +45,15 @@ const MEDITATION_COVERS: Record<string, string> = {
   "med-sono-relaxamento": restImage,
 };
 
-export function MeditacoesTab({ userId, isActive = true }: MeditacoesTabProps) {
+export function MeditacoesTab({ userId, isActive = true, isDegustacao = false }: MeditacoesTabProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
   const [duration, setDuration] = useState<string>("all");
-  const [selected, setSelected] = useState<MeditationTrack | null>(null);
+  const [selected, setSelectedState] = useState<MeditationTrack | null>(null);
+  const setSelected = (track: MeditationTrack | null) => {
+    if (!track) { setSelectedState(null); return; }
+    void requestDegustacaoContent("meditation", track.id, isDegustacao).then((ok) => { if (ok) setSelectedState(track); });
+  };
   useEffect(() => { if (!isActive) setSelected(null); }, [isActive]);
   const trackedAudios = useRef(new Set<string>());
 

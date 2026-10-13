@@ -36,6 +36,13 @@
       "when": 1791571333597,
       "tag": "0004_session_quota_compensation",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791919491591,
+      "tag": "0005_degustacao_gratuita",
+      "breakpoints": true
     }
   ]
 }

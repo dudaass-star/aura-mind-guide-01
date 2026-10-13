@@ -2593,6 +2593,11 @@ export type Database = {
           current_episode: number | null
           current_journey_id: string | null
           current_session_id: string | null
+          degustacao_converted_at: string | null
+          degustacao_meditation_id: string | null
+          degustacao_prayer_id: string | null
+          degustacao_source: string | null
+          degustacao_started_at: string | null
           do_not_disturb_until: string | null
           email: string | null
           expectations: string | null
@@ -2686,6 +2691,11 @@ export type Database = {
           current_episode?: number | null
           current_journey_id?: string | null
           current_session_id?: string | null
+          degustacao_converted_at?: string | null
+          degustacao_meditation_id?: string | null
+          degustacao_prayer_id?: string | null
+          degustacao_source?: string | null
+          degustacao_started_at?: string | null
           do_not_disturb_until?: string | null
           email?: string | null
           expectations?: string | null
@@ -2779,6 +2789,11 @@ export type Database = {
           current_episode?: number | null
           current_journey_id?: string | null
           current_session_id?: string | null
+          degustacao_converted_at?: string | null
+          degustacao_meditation_id?: string | null
+          degustacao_prayer_id?: string | null
+          degustacao_source?: string | null
+          degustacao_started_at?: string | null
           do_not_disturb_until?: string | null
           email?: string | null
           expectations?: string | null
@@ -5345,6 +5360,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_degustacao_content: {
+        Args: { _content_id: string; _kind: string }
+        Returns: Json
       }
       claim_movement_referral: {
         Args: { _visitor_key: string }

@@ -13,6 +13,8 @@ import { PhoneLinkPrompt } from "@/components/portal/PhoneLinkPrompt";
 import { ConversarTab } from "@/components/portal/ConversarTab";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
+import { DegustacaoPlansDialog } from "@/components/portal/DegustacaoPlansDialog";
+import { DEGUSTACAO_EVENT, openDegustacaoPlans, type DegustacaoReason } from "@/lib/degustacao";
 import { rememberPushAttribution, reportPushPresence } from "@/lib/push-notifications";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { isAppStandalone } from "@/components/portal/InstallAppMenuItem";
@@ -76,6 +78,7 @@ const UserPortal = () => {
   const [changePlanOpen, setChangePlanOpen] = useState(false);
   const [minimumSessionLimit, setMinimumSessionLimit] = useState<number | undefined>();
   const [conversationDraftRequest, setConversationDraftRequest] = useState<string>();
+  const [degustacaoPlans, setDegustacaoPlans] = useState<{ open: boolean; reason: DegustacaoReason }>({ open: false, reason: "manual" });
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
@@ -271,6 +274,50 @@ const UserPortal = () => {
     initialData: profileCache?.value,
     initialDataUpdatedAt: profileCache?.savedAt,
   });
+
+  // Degustação gratuita: estado da cortesia e do próximo encontro.
+  const isDegustacao = profile?.status === "degustacao";
+  const { data: degustacaoState } = useQuery({
+    queryKey: ["degustacao-state", userId],
+    enabled: !!userId && isDegustacao,
+    refetchInterval: 30000,
+    queryFn: async () => {
+      const { data } = await supabasePortal
+        .from("sessions")
+        .select("id, status, scheduled_at, quota_exempt_reason")
+        .eq("user_id", userId!)
+        .in("status", ["scheduled", "in_progress", "completed"])
+        .order("scheduled_at", { ascending: true });
+      const rows = data || [];
+      const courtesy = rows.find((r: any) => r.quota_exempt_reason === "degustacao_gratuita");
+      const next = rows.find((r: any) => r.quota_exempt_reason !== "degustacao_gratuita" && r.status === "scheduled");
+      return { courtesyStatus: courtesy?.status ?? null, nextAt: next?.scheduled_at ?? null };
+    },
+  });
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const reason = ((event as CustomEvent).detail?.reason || "manual") as DegustacaoReason;
+      setDegustacaoPlans({ open: true, reason });
+    };
+    window.addEventListener(DEGUSTACAO_EVENT, handler);
+    return () => window.removeEventListener(DEGUSTACAO_EVENT, handler);
+  }, []);
+  // Momento 1 de conversão: assim que a cortesia termina, abre os planos uma vez.
+  useEffect(() => {
+    if (!isDegustacao || degustacaoState?.courtesyStatus !== "completed" || !userId) return;
+    const key = `aura-degustacao-end-shown:${userId}`;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+    const t = window.setTimeout(() => openDegustacaoPlans("session_end"), 2500);
+    return () => window.clearTimeout(t);
+  }, [isDegustacao, degustacaoState?.courtesyStatus, userId]);
+  // Troca de plano genérica vira o modal da degustação para quem ainda não tem plano.
+  useEffect(() => {
+    if (isDegustacao && changePlanOpen) {
+      setChangePlanOpen(false);
+      openDegustacaoPlans("manual");
+    }
+  }, [isDegustacao, changePlanOpen]);
 
   const { data: movementMember, refetch: refetchMovementMember } = useQuery({
     queryKey: ["portal-movement-member", userId],
@@ -523,8 +570,8 @@ const UserPortal = () => {
           {visitedTabs.has("jornadas") && <div className={activeTab === "jornadas" ? "block" : "hidden"} aria-hidden={activeTab !== "jornadas"}><JornadasTab userId={userId} profile={profile} onJourneyChanged={() => void refetchProfile()} /></div>}
           {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
-          {visitedTabs.has("oracoes") && <div className={activeTab === "oracoes" ? "block" : "hidden"} aria-hidden={activeTab !== "oracoes"}><OracoesTab isActive={activeTab === "oracoes"} /></div>}
-          {visitedTabs.has("meditacoes") && <div className={activeTab === "meditacoes" ? "block" : "hidden"} aria-hidden={activeTab !== "meditacoes"}><MeditacoesTab userId={userId} isActive={activeTab === "meditacoes"} /></div>}
+          {visitedTabs.has("oracoes") && <div className={activeTab === "oracoes" ? "block" : "hidden"} aria-hidden={activeTab !== "oracoes"}><OracoesTab isActive={activeTab === "oracoes"} isDegustacao={isDegustacao} /></div>}
+          {visitedTabs.has("meditacoes") && <div className={activeTab === "meditacoes" ? "block" : "hidden"} aria-hidden={activeTab !== "meditacoes"}><MeditacoesTab userId={userId} isActive={activeTab === "meditacoes"} isDegustacao={isDegustacao} /></div>}
           {visitedTabs.has("movimento") && <div className={activeTab === "movimento" ? "block" : "hidden"} aria-hidden={activeTab !== "movimento"}><MovementDashboard isActive={activeTab === "movimento"} userId={userId} suggestedName={profile?.name || ""} embedded onJoined={() => void refetchMovementMember()} /></div>}
           </Suspense>
         </div>
@@ -543,6 +590,32 @@ const UserPortal = () => {
         </footer>}
       </div>
 
+      {userId && isDegustacao && (
+        <>
+          {degustacaoState?.courtesyStatus === "completed" && !degustacaoPlans.open && (
+            <div className={`fixed inset-x-0 z-40 border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur ${activeTab === "conversar" ? "top-0 border-b" : "bottom-0 border-t"}`} style={activeTab === "conversar" ? { paddingTop: "max(0.75rem, env(safe-area-inset-top))" } : { paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+              <div className="mx-auto flex max-w-2xl items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {degustacaoState.nextAt
+                      ? `Próximo encontro: ${new Date(degustacaoState.nextAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+                      : "Seu primeiro encontro foi concluído"}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">Ative seu plano para seguir com a AURA</p>
+                </div>
+                <Button size="sm" onClick={() => openDegustacaoPlans(degustacaoState.nextAt ? "session_end" : "manual")}>Ativar meu plano</Button>
+              </div>
+            </div>
+          )}
+          <DegustacaoPlansDialog
+            open={degustacaoPlans.open}
+            onOpenChange={(open) => setDegustacaoPlans((prev) => ({ ...prev, open }))}
+            reason={degustacaoPlans.reason}
+            userId={userId}
+            onActivated={() => { void refetchProfile(); }}
+          />
+        </>
+      )}
       {userId && !isDemo && (
         <ChangePlanDialog
           open={changePlanOpen}
