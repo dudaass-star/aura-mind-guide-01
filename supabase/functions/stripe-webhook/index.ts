@@ -1034,7 +1034,7 @@ Deno.serve(async (req) => {
           }
         } else {
           profileUserId = existingProfile.user_id;
-          const isConverting = !isTrial && ['trial', 'trial_expired'].includes(existingProfile.status);
+          const isConverting = !isTrial && ['trial', 'trial_expired', 'degustacao'].includes(existingProfile.status);
           const { error: updateError } = await supabase
             .from('profiles')
             .update({
@@ -1117,7 +1117,8 @@ Deno.serve(async (req) => {
             }
             // Limpa sessões órfãs do plano anterior (scheduled sem started_at)
             // para evitar que o agente reative fantasmas após a troca de plano.
-            try {
+            // Degustação preserva o próximo encontro já combinado na sessão grátis.
+            if (existingProfile.status !== 'degustacao') try {
               const { data: cleanedSessions } = await supabase
                 .from('sessions')
                 .update({ status: 'cancelled', session_summary: 'plan_change_cleanup' })
