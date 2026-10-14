@@ -356,6 +356,7 @@ export function ConversarTab({
   );
   const [messages, setMessages] = useState<ChatMessage[]>(cachedMessages);
   const [draft, setDraft] = useState("");
+  const autoSendRef = useRef<string | null>(null);
   const [responseNotice, setResponseNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(cachedMessages.length === 0);
   const [sending, setSending] = useState(false);
@@ -524,6 +525,12 @@ export function ConversarTab({
     if (!initialDraft || appliedInitialDraftRef.current === initialDraft) return;
     appliedInitialDraftRef.current = initialDraft;
     setActiveDiscussionEpisodeId(discussionEpisodeId);
+    // Pedido de início de encontro é enviado automaticamente, sem rascunho.
+    if (initialDraft === "Quero começar meu encontro agora") {
+      autoSendRef.current = initialDraft;
+      setChatOpen(true);
+      return;
+    }
     setDraft((current) => {
       if (!current.trim()) return initialDraft;
       if (current.includes(initialDraft)) return current;
@@ -1090,9 +1097,9 @@ export function ConversarTab({
     recordConversationEvent(userId, "failed_message_deleted", { kind: message.is_audio ? "audio" : "text" });
   };
 
-  const send = async (event?: FormEvent) => {
+  const send = async (event?: FormEvent, overrideText?: string) => {
     event?.preventDefault();
-    const text = draft.trim();
+    const text = (overrideText ?? draft).trim();
     if (!text || sending) return;
     setResponseNotice(null);
 
@@ -1150,6 +1157,13 @@ export function ConversarTab({
     window.addEventListener("online", flushOutbox);
     return () => window.removeEventListener("online", flushOutbox);
   }, [outboxKey]);
+
+  useEffect(() => {
+    if (!autoSendRef.current || sending) return;
+    const text = autoSendRef.current;
+    autoSendRef.current = null;
+    void send(undefined, text);
+  });
 
   const blobToBase64 = (blob: Blob) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -1381,7 +1395,7 @@ export function ConversarTab({
         <div className="shrink-0 border-b border-border/70 bg-primary/5 px-4 py-3">
           <p className="text-sm text-foreground">Seu primeiro encontro gratuito de 45 minutos está liberado. A conversa com a AURA acontece dentro dele.</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Button type="button" size="sm" onClick={() => setDraft("Quero começar meu encontro agora")}>Iniciar encontro agora</Button>
+            <Button type="button" size="sm" onClick={() => void send(undefined, "Quero começar meu encontro agora")}>Iniciar encontro agora</Button>
             <Button type="button" size="sm" variant="outline" onClick={() => { setChatOpen(false); onNavigate?.("sessoes"); }}>Agendar horário</Button>
           </div>
         </div>
