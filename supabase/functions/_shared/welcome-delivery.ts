@@ -34,9 +34,8 @@ export async function sendWelcomeWhatsApp(
   supabase: Supa,
   args: { phone: string; name: string; userId: string; functionName: string; templateCategory?: string },
 ): Promise<boolean> {
-  const templateText = args.functionName === "degustacao-signup"
-    ? `Olá, ${args.name}! Seu primeiro encontro de 45 minutos foi liberado no app Olá Aura. Salve esta mensagem: você sempre pode voltar ao app, sem senha, por olaaura.com.br/meu-espaco`
-    : `Olá, ${args.name}. Seu acesso ao app Olá Aura foi liberado. Abra o app para conversar com a AURA e começar.`;
+  // Texto do template aprovado no WhatsApp — não alterar sem novo template aprovado.
+  const templateText = `Olá, ${args.name}. Seu acesso ao app Olá Aura foi liberado. Abra o app para conversar com a AURA e começar.`;
   const category = args.templateCategory || "welcome";
   let error: string | null = null;
 
