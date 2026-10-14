@@ -67,11 +67,11 @@ export default function Degustacao() {
     setLoading(true);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("degustacao-signup", {
-        body: { name, email, phone, source: new URLSearchParams(window.location.search).get("utm_campaign") || "degustacao", fbp: getFbp(), fbc: getFbc() },
+        body: { name, email, phone, source: new URLSearchParams(window.location.search).get("utm_campaign") || "degustacao", fbp: getFbp(), fbc: getFbc(), page_url: window.location.href },
       });
       if (fnError || data?.error) throw new Error(data?.error || "Não foi possível liberar seu acesso agora.");
       if (data?.existing) { setExisting(data.message); return; }
-      try { (window as any).fbq?.("track", "Lead", { content_name: "degustacao_gratuita" }); } catch { /* opcional */ }
+      try { (window as any).fbq?.("track", "Lead", { content_name: "degustacao_gratuita" }, data?.lead_event_id ? { eventID: data.lead_event_id } : undefined); } catch { /* opcional */ }
       if (!data?.token_hash) { setExisting("Seu cadastro foi criado, mas a entrada automática não foi concluída. Entre pelo App com seu WhatsApp ou e-mail."); return; }
       const { error: verifyError } = await supabasePortal.auth.verifyOtp({ token_hash: data.token_hash, type: data.type === "signup" ? "signup" : "magiclink" });
       if (verifyError) { setExisting("Seu cadastro foi criado, mas a entrada automática não foi concluída. Entre pelo App com seu WhatsApp ou e-mail."); return; }
