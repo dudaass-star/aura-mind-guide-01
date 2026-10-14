@@ -328,6 +328,7 @@ export function ConversarTab({
   initialDraft,
   discussionEpisodeId,
   entryContext = "regular",
+  degustacaoAwaitingSession = false,
 }: {
   userId: string;
   firstName: string;
@@ -345,6 +346,7 @@ export function ConversarTab({
   initialDraft?: string;
   discussionEpisodeId?: string;
   entryContext?: "new" | "migration" | "regular";
+  degustacaoAwaitingSession?: boolean;
 }) {
   const navigate = useNavigate();
   const messageCacheKey = `aura-chat-messages:${userId}`;
@@ -1374,6 +1376,15 @@ export function ConversarTab({
           </div>
         )}
       </header>
+      {degustacaoAwaitingSession && !activeSession && (
+        <div className="shrink-0 border-b border-border/70 bg-primary/5 px-4 py-3">
+          <p className="text-sm text-foreground">Seu primeiro encontro gratuito de 45 minutos está liberado. A conversa com a AURA acontece dentro dele.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button type="button" size="sm" onClick={() => setDraft("Quero começar meu encontro agora")}>Iniciar encontro agora</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => { setChatOpen(false); onNavigate?.("sessoes"); }}>Agendar horário</Button>
+          </div>
+        </div>
+      )}
 
       <div
         ref={scrollRef}

@@ -5341,6 +5341,57 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
+      // Antes do encontro gratuito: a degustação NÃO libera conversa livre.
+      // Só passa (a) pedido explícito de começar o encontro, que inicia a
+      // sessão aqui mesmo, ou (b) sessão cortesia agendada cuja hora chegou.
+      const nowMs = Date.now();
+      const { data: dueSessions } = await supabase
+        .from('sessions')
+        .select('id, scheduled_at')
+        .eq('user_id', profile.user_id)
+        .eq('status', 'scheduled')
+        .gte('scheduled_at', new Date(nowMs - 60 * 60 * 1000).toISOString())
+        .lte('scheduled_at', new Date(nowMs + 15 * 60 * 1000).toISOString())
+        .limit(1);
+      const hasDueSession = (dueSessions || []).length > 0;
+      const startIntent = /\b(come[çc]ar|iniciar|inicia|come[çc]a|abrir)\b.{0,40}\b(encontro|sess[ãa]o)\b|^(sim|bora|vamos|quero|pode\s+come[çc]ar|come[çc]ar)\b/i
+        .test(String(message).trim().slice(0, 120));
+
+      if (!hasDueSession && startIntent) {
+        try {
+          const { data: startRes } = await supabase.rpc('manage_portal_session_internal', {
+            _user_id: profile.user_id, _action: 'start_now', _scheduled_at: null, _session_id: null,
+          });
+          const sid = typeof startRes?.session_id === 'string' ? startRes.session_id : null;
+          if (sid) {
+            (profile as any).current_session_id = sid;
+            (profile as any).pending_first_session_invite = false;
+            console.log(`✅ [DEGUSTACAO] Encontro gratuito iniciado: ${sid}`);
+          }
+        } catch (e) {
+          console.error('❌ [DEGUSTACAO] Falha ao iniciar encontro gratuito:', e);
+        }
+      }
+
+      if (!hasDueSession && !(profile as any).current_session_id) {
+        const invite =
+          'Seu espaço comigo está pronto. 💛 O primeiro encontro é um momento guiado de 45 minutos, com começo, meio e fim. ' +
+          'Quando quiser, toque em "Iniciar encontro agora" ou agende um horário na aba Sessões.';
+        try {
+          await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: invite });
+        } catch (e) {
+          console.error('❌ [DEGUSTACAO] Falha ao registrar convite do encontro:', e);
+        }
+        await supabase
+          .from('aura_response_state')
+          .update({ is_responding: false, pending_content: null, pending_context: null })
+          .eq('user_id', profile.user_id);
+        console.log('🚧 [DEGUSTACAO] Conversa livre antes do encontro bloqueada — LLM não chamado');
+        return new Response(JSON.stringify({ degustacaoWall: true, reason: 'session_required' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     console.log('📊 Plan mapping:', { rawPlan, normalizedPlan: userPlan, planTier: planTier || null });
