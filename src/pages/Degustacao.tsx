@@ -75,7 +75,7 @@ export default function Degustacao() {
       if (!data?.token_hash) { setExisting("Seu cadastro foi criado, mas a entrada automática não foi concluída. Entre pelo App com seu WhatsApp ou e-mail."); return; }
       const { error: verifyError } = await supabasePortal.auth.verifyOtp({ token_hash: data.token_hash, type: data.type === "signup" ? "signup" : "magiclink" });
       if (verifyError) { setExisting("Seu cadastro foi criado, mas a entrada automática não foi concluída. Entre pelo App com seu WhatsApp ou e-mail."); return; }
-      navigate("/meu-espaco?tab=conversar&open=1&onboarding=new", { replace: true });
+      navigate("/meu-espaco?onboarding=degustacao", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível liberar seu acesso agora.");
     } finally {

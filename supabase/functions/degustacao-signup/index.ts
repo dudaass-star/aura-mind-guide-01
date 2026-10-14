@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       if (o && /^(https?:\/\/localhost(?::\d+)?|https:\/\/([a-z0-9-]+\.)*(olaaura\.com\.br|lovable\.app))$/i.test(o)) return o;
       return (Deno.env.get("PORTAL_SITE_URL") || "https://olaaura.com.br").replace(/\/$/, "");
     })();
-    const redirectTo = `${origin}/meu-espaco?tab=conversar&open=1&onboarding=degustacao`;
+    const redirectTo = `${origin}/meu-espaco?onboarding=degustacao`;
 
     let { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
       type: "magiclink", email, options: { redirectTo },
