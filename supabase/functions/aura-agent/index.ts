@@ -5327,17 +5327,12 @@ serve(async (req) => {
         const wall =
           'Que bom te ver por aqui. 💛 O que você trouxe no nosso primeiro encontro continua guardado comigo. ' +
           'Para a gente seguir conversando sempre que você precisar — e manter o próximo encontro — é só tocar em "Ativar meu plano", no topo da tela.';
-        try {
-          await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: wall });
-        } catch (e) {
-          console.error('❌ [DEGUSTACAO] Falha ao registrar convite de plano:', e);
-        }
         await supabase
           .from('aura_response_state')
           .update({ is_responding: false, pending_content: null, pending_context: null })
           .eq('user_id', profile.user_id);
         console.log('🚧 [DEGUSTACAO] Cortesia já usada — LLM não chamado');
-        return new Response(JSON.stringify({ degustacaoWall: true }), {
+        return new Response(JSON.stringify({ messages: [{ text: wall, delay: 0, isAudio: false }], degustacaoWall: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -5378,17 +5373,12 @@ serve(async (req) => {
         const invite =
           'Seu espaço comigo está pronto. 💛 O primeiro encontro é um momento guiado de 45 minutos, com começo, meio e fim. ' +
           'Quando quiser, toque em "Iniciar encontro agora" ou agende um horário na aba Sessões.';
-        try {
-          await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: invite });
-        } catch (e) {
-          console.error('❌ [DEGUSTACAO] Falha ao registrar convite do encontro:', e);
-        }
         await supabase
           .from('aura_response_state')
           .update({ is_responding: false, pending_content: null, pending_context: null })
           .eq('user_id', profile.user_id);
         console.log('🚧 [DEGUSTACAO] Conversa livre antes do encontro bloqueada — LLM não chamado');
-        return new Response(JSON.stringify({ degustacaoWall: true, reason: 'session_required' }), {
+        return new Response(JSON.stringify({ messages: [{ text: invite, delay: 0, isAudio: false }], degustacaoWall: true, reason: 'session_required' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
