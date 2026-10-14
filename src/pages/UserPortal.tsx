@@ -554,6 +554,7 @@ const UserPortal = () => {
               initialChatOpen={shouldOpenConversation}
               initialDraft={conversationDraftRequest ?? discussionPrompt}
               discussionEpisodeId={discussionEpisode?.id}
+              degustacaoAwaitingSession={profile?.status === "degustacao"}
               entryContext={searchParams.get("migracao") === "whatsapp" ? "migration" : searchParams.get("onboarding") === "new" ? "new" : "regular"}
             />
           </div>
