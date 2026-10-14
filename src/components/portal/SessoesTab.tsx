@@ -354,6 +354,7 @@ export function SessoesTab({
         <section className="border-y border-border py-6 text-center animate-fade-in">
           <CalendarDays className="mx-auto h-7 w-7 text-primary" />
           <p className="mt-3 text-sm text-muted-foreground">Nenhuma sessão marcada em {monthLabel(selectedMonth)}.</p>
+          {isDegustacao && monthUsed < planLimit && <p className="mt-1 text-sm font-semibold text-primary">1 sessão gratuita disponível</p>}
           <Button type="button" className="mt-4" onClick={() => openScheduler()} disabled={planLimit === 0 || monthUsed >= planLimit}><Calendar /> Agendar sessão</Button>
         </section>
       ) : (
