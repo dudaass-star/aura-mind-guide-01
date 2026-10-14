@@ -726,6 +726,7 @@ export function ConversarTab({
               if (!awaiting || !replyTargetId(hydratedIncoming) || replyTargetId(hydratedIncoming) === awaiting.messageId) {
                 awaitingResponseRef.current = null;
                 if (responseTimerRef.current) window.clearTimeout(responseTimerRef.current);
+                setResponding(false);
                 recordConversationEvent(userId, "response_received", {
                   response_seconds: awaiting ? Math.round((Date.now() - awaiting.createdAt) / 100) / 10 : null,
                 });
