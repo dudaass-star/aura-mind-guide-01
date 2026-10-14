@@ -80,6 +80,21 @@ Deno.serve(async (req) => {
       throw insErr;
     }
 
+    // Lead server-side (CAPI), deduplicado com o Pixel pelo mesmo event_id.
+    const leadEventId = `lead_degustacao_${userId}`;
+    admin.functions.invoke("meta-capi", { body: {
+      event_name: "Lead",
+      event_id: leadEventId,
+      event_source_url: String(body?.page_url || "https://olaaura.com.br/degustacao").slice(0, 500),
+      user_data: {
+        email, phone, first_name: name.split(" ")[0], external_id: userId,
+        client_ip_address: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || undefined,
+        client_user_agent: req.headers.get("user-agent") || undefined,
+        fbp: body?.fbp || undefined, fbc: body?.fbc || undefined,
+      },
+      custom_data: { content_name: "degustacao_gratuita" },
+    } }).catch((e) => console.warn("[degustacao-signup] CAPI Lead falhou:", (e as Error)?.message));
+
     const origin = (() => {
       const o = req.headers.get("origin");
       if (o && /^(https?:\/\/localhost(?::\d+)?|https:\/\/([a-z0-9-]+\.)*(olaaura\.com\.br|lovable\.app))$/i.test(o)) return o;
@@ -100,7 +115,7 @@ Deno.serve(async (req) => {
     const properties = linkData?.properties;
     if (linkError || !properties?.hashed_token) {
       console.error("[degustacao-signup] falha gerando entrada:", linkError?.message);
-      return json({ created: true, token_hash: null, message: "Cadastro feito. Enviamos o acesso pelo WhatsApp." });
+      return json({ created: true, lead_event_id: leadEventId, token_hash: null, message: "Cadastro feito. Enviamos o acesso pelo WhatsApp." });
     }
 
     // Aviso no WhatsApp é rede de segurança para voltar ao App; não bloqueia a entrada.
@@ -112,6 +127,7 @@ Deno.serve(async (req) => {
 
     return json({
       created: true,
+      lead_event_id: leadEventId,
       token_hash: properties.hashed_token,
       type: properties.verification_type || "magiclink",
     });
