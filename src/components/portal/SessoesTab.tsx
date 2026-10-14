@@ -90,6 +90,8 @@ function monthLabel(key: string) {
 }
 
 function sessionLimit(profile: SessionProfile) {
+  // Degustação: 1 encontro gratuito, espelhando manage_portal_session_internal.
+  if (String(profile?.status || "").toLowerCase() === "degustacao") return 1;
   const tier = String(profile?.plan_tier || "").toLowerCase();
   if (tier === "base") return 0;
   if (tier === "lite" || tier === "taster") return 1;
@@ -176,7 +178,9 @@ export function SessoesTab({
   const upcomingSessions = monthSessions.filter((session) => ["scheduled", "in_progress"].includes(session.status)).sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
   const completedSessions = allSessions.filter((session) => session.status === "completed").sort((a, b) => new Date(b.ended_at || b.scheduled_at).getTime() - new Date(a.ended_at || a.scheduled_at).getTime());
   const lastThread = completedSessions[0]?.continuity_thread;
-  const monthUsed = monthSessions.filter((session) => !session.quota_exempt && ["scheduled", "in_progress", "completed", "no_show"].includes(session.status)).length;
+  const isDegustacao = String(profile?.status || "").toLowerCase() === "degustacao";
+  // Na degustação o backend conta também a sessão cortesia; mantemos a mesma regra aqui.
+  const monthUsed = monthSessions.filter((session) => (isDegustacao || !session.quota_exempt) && ["scheduled", "in_progress", "completed", "no_show"].includes(session.status)).length;
   const activeSessions = allSessions.filter((session) => ["scheduled", "in_progress"].includes(session.status));
   const ratingMap = new Map(ratings.map((rating) => [rating.session_id, rating.rating]));
   const planLimit = sessionLimit(profile);
@@ -350,6 +354,7 @@ export function SessoesTab({
         <section className="border-y border-border py-6 text-center animate-fade-in">
           <CalendarDays className="mx-auto h-7 w-7 text-primary" />
           <p className="mt-3 text-sm text-muted-foreground">Nenhuma sessão marcada em {monthLabel(selectedMonth)}.</p>
+          {isDegustacao && monthUsed < planLimit && <p className="mt-1 text-sm font-semibold text-primary">1 sessão gratuita disponível</p>}
           <Button type="button" className="mt-4" onClick={() => openScheduler()} disabled={planLimit === 0 || monthUsed >= planLimit}><Calendar /> Agendar sessão</Button>
         </section>
       ) : (
