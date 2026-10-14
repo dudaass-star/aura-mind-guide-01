@@ -595,7 +595,7 @@ const UserPortal = () => {
       {userId && (
         <DegustacaoWelcomeDialog
           open={degustacaoWelcomeOpen}
-          firstName={firstName}
+          firstName={profile?.name?.split(" ")[0]}
           onStartNow={() => { setDegustacaoWelcomeOpen(false); handleOpenConversation("Quero começar meu encontro agora"); }}
           onSchedule={() => { setDegustacaoWelcomeOpen(false); handleTabClick("sessoes"); }}
           onExplore={() => setDegustacaoWelcomeOpen(false)}
