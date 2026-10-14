@@ -184,6 +184,11 @@ export function SessoesTab({
   const activeSessions = allSessions.filter((session) => ["scheduled", "in_progress"].includes(session.status));
   const ratingMap = new Map(ratings.map((rating) => [rating.session_id, rating.rating]));
   const planLimit = sessionLimit(profile);
+  // Degustação: 1º encontro cortesia + 1 próximo encontro agendável (entrada exige plano).
+  const courtesySession = allSessions.find((session) => session.quota_exempt && session.status !== "cancelled");
+  const nextPaidSession = activeSessions.find((session) => !session.quota_exempt);
+  const canSchedule = isDegustacao ? !nextPaidSession : planLimit > 0 && monthUsed < planLimit;
+  const degustacaoStatus = !courtesySession ? "1 sessão gratuita disponível" : courtesySession.status === "completed" ? (nextPaidSession ? "1º encontro de cortesia concluído • Próximo encontro agendado" : "1º encontro de cortesia concluído • Marque seu próximo encontro") : (nextPaidSession ? "1º encontro de cortesia marcado • Próximo encontro agendado" : "1º encontro de cortesia marcado");
   const bounds = monthBounds(selectedMonth);
 
   const minDate = selectedMonth === currentMonth ? today : `${selectedMonth}-01`;
@@ -354,12 +359,12 @@ export function SessoesTab({
         <section className="border-y border-border py-6 text-center animate-fade-in">
           <CalendarDays className="mx-auto h-7 w-7 text-primary" />
           <p className="mt-3 text-sm text-muted-foreground">Nenhuma sessão marcada em {monthLabel(selectedMonth)}.</p>
-          {isDegustacao && monthUsed < planLimit && <p className="mt-1 text-sm font-semibold text-primary">1 sessão gratuita disponível</p>}
-          <Button type="button" className="mt-4" onClick={() => openScheduler()} disabled={planLimit === 0 || monthUsed >= planLimit}><Calendar /> Agendar sessão</Button>
+          {isDegustacao && <p className="mt-1 text-sm font-semibold text-primary">{degustacaoStatus}</p>}
+          <Button type="button" className="mt-4" onClick={() => openScheduler()} disabled={!canSchedule}><Calendar /> {isDegustacao && courtesySession ? "Agendar próximo encontro" : "Agendar sessão"}</Button>
         </section>
       ) : (
         <section className="space-y-3 animate-fade-up">
-          <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold">Sessões marcadas</h2>{monthUsed < planLimit && <Button type="button" size="sm" onClick={() => openScheduler()}><Plus /> Agendar</Button>}</div>
+          <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold">Sessões marcadas</h2>{canSchedule && <Button type="button" size="sm" onClick={() => openScheduler()}><Plus /> {isDegustacao ? "Agendar próximo encontro" : "Agendar"}</Button>}</div>
           {upcomingSessions.map((session, index) => {
             const diff = new Date(session.scheduled_at).getTime() - Date.now();
             const canEnter = session.status === "in_progress" || (diff <= 15 * 60_000 && diff >= -60 * 60_000);
@@ -367,7 +372,14 @@ export function SessoesTab({
               <article key={session.id} className={index === 0 ? "rounded-lg bg-foreground p-5 text-background shadow-card" : "rounded-lg border border-border bg-card p-4 shadow-sm"}>
                 <div className="flex items-center justify-between gap-3"><p className={`text-xs font-bold uppercase ${index === 0 ? "text-accent" : "text-primary"}`}>{session.status === "in_progress" ? "Sessão em andamento" : index === 0 ? "Próxima sessão" : "Sessão agendada"}</p><span className={`text-xs ${index === 0 ? "text-background/70" : "text-muted-foreground"}`}>{countdown(session.scheduled_at)}</span></div>
                 <p className={`mt-2 font-semibold leading-snug ${index === 0 ? "text-xl" : "text-base"}`}>{formatSessionDate(session.scheduled_at)}</p>
-                {canEnter ? (
+                {isDegustacao && !session.quota_exempt && (
+                  <div className={`mt-4 rounded-md p-3 ${index === 0 ? "bg-background/10" : "bg-primary/5"}`}>
+                    <p className="text-sm font-semibold">Garanta seu horário ativando seu plano</p>
+                    <p className={`mt-1 text-xs ${index === 0 ? "text-background/70" : "text-muted-foreground"}`}>Seu próximo encontro está marcado. Para entrar nele, ative seu plano.</p>
+                    <Button type="button" size="sm" className="mt-3 w-full" variant={index === 0 ? "secondary" : "default"} onClick={() => openDegustacaoPlans("session")}><ArrowUpRight /> Ativar meu plano</Button>
+                  </div>
+                )}
+                {canEnter && isDegustacao && !session.quota_exempt ? null : canEnter ? (
                   <Button type="button" className="mt-4 w-full" variant={index === 0 ? "secondary" : "default"} onClick={() => void enterSession(session)} disabled={saving}><MessageCircle />{session.status === "in_progress" ? "Continuar sessão" : "Entrar na sessão"}</Button>
                 ) : (
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -397,7 +409,8 @@ export function SessoesTab({
         </section>
       )}
 
-      {planLimit > 0 && (
+      {isDegustacao && upcomingSessions.length > 0 && <p className="text-sm font-semibold text-primary">{degustacaoStatus}</p>}
+      {planLimit > 0 && !isDegustacao && (
         <section>
           <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground"><span>{monthUsed} de {planLimit} {planLimit > 1 ? "sessões" : "sessão"} em {monthLabel(selectedMonth)}</span><span>{Math.max(0, planLimit - monthUsed)} {planLimit - monthUsed === 1 ? "disponível" : "disponíveis"}</span></div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${Math.min(100, (monthUsed / planLimit) * 100)}%` }} /></div>
@@ -410,7 +423,7 @@ export function SessoesTab({
         {!pushEnabled && <Button type="button" variant="outline" size="sm" onClick={() => { onOpenNotifications(); setTimeout(() => setPushEnabled(localStorage.getItem("aura-push-enabled") === "true"), 1500); }}>Ativar</Button>}
       </section>
 
-      {profile?.status !== "demo" && monthUsed >= planLimit && planLimit > 0 && planLimit < 8 && (
+      {profile?.status !== "demo" && !isDegustacao && monthUsed >= planLimit && planLimit > 0 && planLimit < 8 && (
         <section className="border-y border-border py-5"><p className="text-sm font-semibold">Sua agenda de {monthLabel(selectedMonth)} está completa.</p><p className="mt-1 text-sm text-muted-foreground">Se quiser uma frequência maior, veja apenas os planos que liberam mais encontros.</p><Button type="button" className="mt-4" onClick={() => { track("upgrade_opened", { current_limit: planLimit }); onChangePlan(planLimit); }}><ArrowUpRight /> Quero mais sessões</Button></section>
       )}
 
