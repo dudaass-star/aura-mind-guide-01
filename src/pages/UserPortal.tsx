@@ -14,6 +14,7 @@ import { ConversarTab } from "@/components/portal/ConversarTab";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 import { DegustacaoPlansDialog } from "@/components/portal/DegustacaoPlansDialog";
+import { DegustacaoWelcomeDialog } from "@/components/portal/DegustacaoWelcomeDialog";
 import { DEGUSTACAO_EVENT, openDegustacaoPlans, type DegustacaoReason } from "@/lib/degustacao";
 import { rememberPushAttribution, reportPushPresence } from "@/lib/push-notifications";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
@@ -80,6 +81,7 @@ const UserPortal = () => {
   const [conversationDraftRequest, setConversationDraftRequest] = useState<string>();
   const [degustacaoPlans, setDegustacaoPlans] = useState<{ open: boolean; reason: DegustacaoReason }>({ open: false, reason: "manual" });
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
+  const [degustacaoWelcomeOpen, setDegustacaoWelcomeOpen] = useState(() => searchParams.get("onboarding") === "degustacao");
 
   const userId = session?.user?.id;
   const profileCache = useMemo(
@@ -589,6 +591,16 @@ const UserPortal = () => {
           </a>
         </footer>}
       </div>
+
+      {userId && (
+        <DegustacaoWelcomeDialog
+          open={degustacaoWelcomeOpen}
+          firstName={profile?.name?.split(" ")[0]}
+          onStartNow={() => { setDegustacaoWelcomeOpen(false); handleOpenConversation("Quero começar meu encontro agora"); }}
+          onSchedule={() => { setDegustacaoWelcomeOpen(false); handleTabClick("sessoes"); }}
+          onExplore={() => setDegustacaoWelcomeOpen(false)}
+        />
+      )}
 
       {userId && isDegustacao && (
         <>
