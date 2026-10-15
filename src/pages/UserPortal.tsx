@@ -19,6 +19,7 @@ import { DEGUSTACAO_EVENT, openDegustacaoPlans, type DegustacaoReason } from "@/
 import { rememberPushAttribution, reportPushPresence } from "@/lib/push-notifications";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { isAppStandalone } from "@/components/portal/InstallAppMenuItem";
+import { PixRenewalBanner } from "@/components/portal/PixRenewalBanner";
 
 type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "oracoes" | "movimento";
 
@@ -560,6 +561,7 @@ const UserPortal = () => {
           </div>
           <Suspense fallback={<PortalLoadingInline />}>
           {visitedTabs.has("hoje") && <div className={activeTab === "hoje" ? "block" : "hidden"} aria-hidden={activeTab !== "hoje"}>
+            {isWooviPix && userId && <PixRenewalBanner userId={userId} />}
             <HojeTab
               userId={userId}
               firstName={firstName}
