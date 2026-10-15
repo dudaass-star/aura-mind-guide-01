@@ -41,6 +41,19 @@ Deno.serve(async (req) => {
         .eq("user_id", retentionOffer.profile_user_id).maybeSingle();
       token = portal?.token;
     }
+    // Dentro do App: a pessoa já está logada; resolvemos o token dela pela sessão.
+    if (!token) {
+      const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      if (jwt) {
+        const { data: claims } = await supabase.auth.getClaims(jwt);
+        const sub = claims?.claims?.sub;
+        if (sub) {
+          const { data: portal } = await supabase.from("user_portal_tokens").select("token")
+            .eq("user_id", sub).maybeSingle();
+          token = portal?.token;
+        }
+      }
+    }
     if (!token) return json({ error: "Token ausente" }, 400);
 
     const { data: tokenRow } = await supabase
@@ -48,9 +61,24 @@ Deno.serve(async (req) => {
     if (!tokenRow?.user_id) return json({ error: "Link inválido ou expirado" }, 400);
 
     const { data: profile } = await supabase
-      .from("profiles").select("id, user_id, card_gateway")
+      .from("profiles").select("id, user_id, card_gateway, status, plan_expires_at")
       .eq("user_id", tokenRow.user_id).maybeSingle();
     if (!profile) return json({ error: "Cadastro não encontrado" }, 404);
+
+    // Renovação pelo App: PIX Woovi sem débito automático ativo e ciclo
+    // terminando em até 7 dias (ou já vencido) → mostra botão de renovar.
+    if (action === "renewal_check") {
+      if (profile.card_gateway !== "woovi") return json({ needsRenewal: false });
+      const { data: sub } = await supabase
+        .from("woovi_subscriptions").select("status")
+        .eq("user_id", profile.id).is("replaced_by_subscription_id", null)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const mandateLive = ["APROVADA", "ATIVA"].includes(String(sub?.status || "").toUpperCase());
+      const expiresAt = profile.plan_expires_at ? new Date(profile.plan_expires_at) : null;
+      const soon = !!expiresAt && expiresAt.getTime() - Date.now() <= 7 * 86400000;
+      const needsRenewal = !mandateLive && soon && profile.status !== "canceled";
+      return json({ needsRenewal, token: needsRenewal ? token : null, expiresAt: profile.plan_expires_at });
+    }
 
     const gateway = profile.card_gateway === "inter"
       ? "inter"
