@@ -329,6 +329,7 @@ export function ConversarTab({
   discussionEpisodeId,
   entryContext = "regular",
   degustacaoAwaitingSession = false,
+  degustacaoInterrupted = false,
 }: {
   userId: string;
   firstName: string;
@@ -347,6 +348,7 @@ export function ConversarTab({
   discussionEpisodeId?: string;
   entryContext?: "new" | "migration" | "regular";
   degustacaoAwaitingSession?: boolean;
+  degustacaoInterrupted?: boolean;
 }) {
   const navigate = useNavigate();
   const messageCacheKey = `aura-chat-messages:${userId}`;
@@ -1393,9 +1395,11 @@ export function ConversarTab({
       </header>
       {degustacaoAwaitingSession && !activeSession && (
         <div className="shrink-0 border-b border-border/70 bg-primary/5 px-4 py-3">
-          <p className="text-sm text-foreground">Seu primeiro encontro gratuito de 45 minutos está liberado. A conversa com a AURA acontece dentro dele.</p>
+          <p className="text-sm text-foreground">{degustacaoInterrupted
+            ? "Seu primeiro encontro foi interrompido antes do fim. Você pode começar de novo, com os 45 minutos completos."
+            : "Seu primeiro encontro gratuito de 45 minutos está liberado. A conversa com a AURA acontece dentro dele."}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Button type="button" size="sm" onClick={() => void send(undefined, "Quero começar meu encontro agora")}>Iniciar encontro agora</Button>
+            <Button type="button" size="sm" onClick={() => void send(undefined, degustacaoInterrupted ? "Quero recomeçar meu encontro agora" : "Quero começar meu encontro agora")}>{degustacaoInterrupted ? "Recomeçar encontro agora" : "Iniciar encontro agora"}</Button>
             <Button type="button" size="sm" variant="outline" onClick={() => { setChatOpen(false); onNavigate?.("sessoes"); }}>Agendar horário</Button>
           </div>
         </div>
