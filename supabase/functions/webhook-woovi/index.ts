@@ -878,6 +878,16 @@ Deno.serve(async (req) => {
                 .eq("id", sub.user_id);
             }
 
+            // Aprovação/recusa do mandato chegou, mas a entrada ainda não consta
+            // como paga: a Woovi às vezes não manda CHARGE_COMPLETED da parcela
+            // inicial. Disparamos a auditoria agora — ela só ativa o plano se
+            // achar o pagamento real (E2E) no extrato; mandato sozinho não ativa.
+            // A recusa do mandato NUNCA desfaz um ciclo já pago.
+            if ((approvedNow || REJECTED_STATUSES.includes(mandateStatus)) && !sub.entry_paid_at) {
+              supabase.functions.invoke("woovi-pix-audit", { body: { extrato_days: 2, trigger: "mandate_event" } })
+                .catch((e: Error) => console.warn("[webhook-woovi] auditoria pós-mandato falhou:", e?.message));
+            }
+
             // Mandato RECUSADO pelo banco com entrada já paga: o cliente tem
             // acesso de 7 dias mas nenhuma renovação vai acontecer. Antes esse
             // caso esperava a varredura genérica de "mandato pendente"; agora

@@ -310,11 +310,11 @@ Deno.serve(async (req) => {
   try {
     // Inspeção retorna ANTES de quaisquer replays, avisos ou atualizações.
     if (debugExtrato) {
-      const transactions = await listTransactions();
-      const known = await allKnownChargeIds();
-      const ids = new Set(known.map(r => String(r.installment_id)));
       const days = Math.min(Math.max(Number(body.extrato_days) || 30, 1), 90);
       const since = new Date(Date.now() - days * 86400000).toISOString();
+      const transactions = await listTransactions({ start: since, end: new Date().toISOString() });
+      const known = await allKnownChargeIds();
+      const ids = new Set(known.map(r => String(r.installment_id)));
       const entries = transactions.filter(t => String(t.time || t.createdAt || '') >= since && String(t.type || 'PAYMENT').toUpperCase() === 'PAYMENT' && Number(t.value) > 0);
       return new Response(JSON.stringify({ debugExtrato: true, completeness: 'complete', resumo: {
         janela_dias: days, lancamentos_consultados: transactions.length, identificadores_locais: known.length,
@@ -1352,11 +1352,10 @@ Deno.serve(async (req) => {
         : 30;
     const extratoSince = new Date(now.getTime() - extratoDays * 86400000).toISOString();
     const onlyDigits = (v: unknown) => String(v || "").replace(/\D/g, "");
-    // A Woovi devolve no máximo 100 lançamentos por página (ela ignora limites
-    // maiores) e pagina por `skip`, DO MAIS ANTIGO PARA O MAIS RECENTE. Portanto,
-    // uma primeira página anterior à janela NÃO permite interromper a busca: é
-    // necessário avançar até o fim para alcançar os pagamentos atuais.
-    const transactions = await listTransactions();
+    // A Woovi pagina do mais antigo para o mais recente; por isso filtramos a
+    // janela na própria API (`start`/`end`), senão o cron estoura o tempo
+    // antes de alcançar os pagamentos atuais.
+    const transactions = await listTransactions({ start: extratoSince, end: now.toISOString() });
 
     // Modo inspeção: devolve o extrato cru da janela (usado para vincular
     // pagamento órfão à mão, quando o pagador não é o titular).
