@@ -5315,14 +5315,19 @@ serve(async (req) => {
     const isDegustacao = String(profile?.status || '').toLowerCase() === 'degustacao';
     let degustacaoCourtesyDone = false;
     if (isDegustacao && profile && message && !profile.current_session_id) {
+      // Cortesia só conta como usada quando o encontro terminou com diálogo;
+      // interrupção (unilateral/no_show) libera recomeço — até 2 vezes (trava no banco).
       const { data: degSessions } = await supabase
         .from('sessions')
-        .select('id, status, quota_exempt_reason')
+        .select('id, status, closure_mode')
         .eq('user_id', profile.user_id)
         .eq('quota_exempt_reason', 'degustacao_gratuita')
-        .eq('status', 'completed')
-        .limit(1);
-      degustacaoCourtesyDone = (degSessions || []).length > 0;
+        .in('status', ['completed', 'no_show']);
+      const degRows = degSessions || [];
+      const interruptedCount = degRows.filter((s: any) => s.status === 'no_show' || ['unilateral', 'no_show'].includes(String(s.closure_mode || ''))).length;
+      degustacaoCourtesyDone = degRows.some((s: any) => s.status === 'completed' && !['unilateral', 'no_show'].includes(String(s.closure_mode || '')))
+        || interruptedCount >= 3;
+      (profile as any).__degInterrupted = interruptedCount > 0;
       if (degustacaoCourtesyDone) {
         const wall =
           'Que bom te ver por aqui. 💛 O que você trouxe no nosso primeiro encontro continua guardado comigo. ' +
@@ -5350,7 +5355,7 @@ serve(async (req) => {
         .lte('scheduled_at', new Date(nowMs + 15 * 60 * 1000).toISOString())
         .limit(1);
       const hasDueSession = (dueSessions || []).length > 0;
-      const startIntent = /\b(come[çc]ar|iniciar|inicia|come[çc]a|abrir)\b.{0,40}\b(encontro|sess[ãa]o)\b|^(sim|bora|vamos|quero|pode\s+come[çc]ar|come[çc]ar)\b/i
+      const startIntent = /\b(come[çc]ar|iniciar|inicia|come[çc]a|abrir|recome[çc]ar|recome[çc]a)\b.{0,40}\b(encontro|sess[ãa]o)\b|^(sim|bora|vamos|quero|pode\s+come[çc]ar|come[çc]ar|recome[çc]ar)\b/i
         .test(String(message).trim().slice(0, 120));
 
       if (!hasDueSession && startIntent) {
@@ -5370,9 +5375,11 @@ serve(async (req) => {
       }
 
       if (!hasDueSession && !(profile as any).current_session_id) {
-        const invite =
-          'Seu espaço comigo está pronto. 💛 O primeiro encontro é um momento guiado de 45 minutos, com começo, meio e fim. ' +
-          'Quando quiser, toque em "Iniciar encontro agora" ou agende um horário na aba Sessões.';
+        const invite = (profile as any).__degInterrupted
+          ? 'Oi! 💛 Nosso primeiro encontro acabou sendo interrompido antes do fim. ' +
+            'Quer começar de novo agora para termos o encontro completo de 45 minutos? Toque em "Recomeçar encontro agora" ou agende um horário na aba Sessões.'
+          : 'Seu espaço comigo está pronto. 💛 O primeiro encontro é um momento guiado de 45 minutos, com começo, meio e fim. ' +
+            'Quando quiser, toque em "Iniciar encontro agora" ou agende um horário na aba Sessões.';
         await supabase
           .from('aura_response_state')
           .update({ is_responding: false, pending_content: null, pending_context: null })

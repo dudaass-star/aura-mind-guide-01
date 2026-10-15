@@ -18,8 +18,8 @@
 - Participante e Embaixador são papéis distintos; link, divulgação, impacto e conquistas de indicação exigem adesão voluntária registrada em `movement_members.ambassador_since`.
 - Movement onboarding presents the cause and role choice before the form; launch highlights remain until joining, and demo Mural/Kit content stays admin-only to protect public data.
 - Chat latency uses `chat_turn_metrics.performance_breakdown`: `preparation_stages_ms` separates profile, quota, agenda, session and context; audio download/transcription, provider, handling and persistence remain separate to locate bottlenecks.
-- Chat reconciliation reads messages independently from response state, with bounded waits and an overlap window; this prevents stalled state reads and sequence gaps from hiding persisted replies.
-- Full-turn latency ends after processing and the last bubble renders, separately from first-bubble latency; this distinguishes delivery cadence from technical delay.
+- Chat reconciliation reads messages independently from response state, with bounded waits and an overlap window; prevents hidden persisted replies.
+- Full-turn latency ends after processing and the last bubble renders, separate from first-bubble latency.
 - App processing skips the legacy WhatsApp instance; only WhatsApp uses it, avoiding unnecessary network waits.
 - Disputas PIX vinculam a cobrança pelo End-to-End ID tanto em campos diretos quanto no payload original, recusando associação ambígua; isso preserva a defesa automática sem atribuir evidência ao cliente errado.
 - Meta buyer sync: daily, additive, idempotent, hashed, no demos.
@@ -37,5 +37,4 @@
 
 - Chat recovery is persisted on accepted turns, claimed with leases, bounded in time and attempts, and unscheduled after drain; this survives worker loss without replaying old topics.
 - Session inactivity closure checks unanswered App turns and pauses at the operational cap; this prevents technical silence from counting as therapeutic completion.
-- Free trial (`status='degustacao'`): a DB trigger makes the courtesy session quota-exempt and blocks later starts without a plan, keeping all scheduling paths consistent.
-- Free-trial chat is blocked deterministically outside a session (only start intent or a due courtesy session passes); this keeps the trial a guided session, not open chat.
+- Free trial (`status='degustacao'`): a DB trigger makes the courtesy quota-exempt, consumed only by an active or dialogued session (interrupted: up to 2 fresh restarts), and blocks later plan-less starts; chat outside a session is blocked deterministically.

@@ -43,6 +43,13 @@
       "when": 1791919491591,
       "tag": "0005_degustacao_gratuita",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792092041429,
+      "tag": "0006_degustacao_restart_interrupted",
+      "breakpoints": true
     }
   ]
 }
