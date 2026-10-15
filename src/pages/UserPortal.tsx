@@ -287,14 +287,22 @@ const UserPortal = () => {
     queryFn: async () => {
       const { data } = await supabasePortal
         .from("sessions")
-        .select("id, status, scheduled_at, quota_exempt_reason")
+        .select("id, status, scheduled_at, quota_exempt_reason, closure_mode")
         .eq("user_id", userId!)
-        .in("status", ["scheduled", "in_progress", "completed"])
+        .in("status", ["scheduled", "in_progress", "completed", "no_show"])
         .order("scheduled_at", { ascending: true });
       const rows = data || [];
-      const courtesy = rows.find((r: any) => r.quota_exempt_reason === "degustacao_gratuita");
+      // Encontro interrompido (usuário sumiu) não consome a cortesia: permite recomeçar.
+      const isInterrupted = (r: any) => r.status === "no_show" || ["unilateral", "no_show"].includes(String(r.closure_mode || ""));
+      const courtesyRows = rows.filter((r: any) => r.quota_exempt_reason === "degustacao_gratuita");
+      const courtesy = courtesyRows.find((r: any) => !isInterrupted(r));
+      const interruptedCount = courtesyRows.filter(isInterrupted).length;
       const next = rows.find((r: any) => r.quota_exempt_reason !== "degustacao_gratuita" && r.status === "scheduled");
-      return { courtesyStatus: courtesy?.status ?? null, nextAt: next?.scheduled_at ?? null };
+      return {
+        courtesyStatus: courtesy?.status ?? (interruptedCount >= 3 ? "completed" : null),
+        interrupted: !courtesy && interruptedCount > 0 && interruptedCount < 3,
+        nextAt: next?.scheduled_at ?? null,
+      };
     },
   });
   useEffect(() => {
