@@ -24,6 +24,7 @@ interface SessionRow {
   duration_minutes: number | null;
   focus_topic: string | null;
   theme_label: string | null;
+  closure_mode?: string | null;
   profiles?: { name: string | null; phone: string | null; plan: string | null } | null;
 }
 
@@ -93,7 +94,7 @@ export default function AdminSessions() {
 
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      const SELECT = "id, user_id, status, scheduled_at, started_at, ended_at, duration_minutes, focus_topic, theme_label";
+      const SELECT = "id, user_id, status, scheduled_at, started_at, ended_at, duration_minutes, focus_topic, theme_label, closure_mode";
       const [upcomingRes, completedRes] = await Promise.all([
         supabase
           .from("sessions")
@@ -234,6 +235,11 @@ export default function AdminSessions() {
                           <CardTitle className="text-base flex items-center gap-2 flex-wrap">
                             {s.profiles?.name || "Sem nome"}
                             <PlanBadge plan={s.profiles?.plan} />
+                            {s.closure_mode === "unilateral" ? (
+                              <Badge variant="outline" className="border-destructive/50 text-destructive">Interrompida pelo usuário</Badge>
+                            ) : s.closure_mode === "dialogada" ? (
+                              <Badge variant="secondary">Concluída com o usuário</Badge>
+                            ) : null}
                             {ana && (
                               <Badge variant={ana.overall_score && ana.overall_score >= 4 ? "default" : ana.overall_score && ana.overall_score <= 2 ? "destructive" : "secondary"}>
                                 Nota {ana.overall_score ?? "?"}/5
