@@ -258,7 +258,15 @@ interface AnalysisResult extends Coverage {
   diagnosis: string;
 }
 
-async function callAuditor(transcript: string, apiKey: string): Promise<AnalysisResult | null> {
+// Aviso injetado quando a sessão caiu por inatividade do usuário (closure_mode='unilateral').
+const UNILATERAL_NOTICE = `CONTEXTO DETERMINÍSTICO: esta sessão foi ENCERRADA POR INATIVIDADE DO USUÁRIO
+(ele parou de responder antes do término). Não penalize a AURA pela ausência de sentido,
+reframe, movimento ou fechamento que dependiam de respostas que nunca vieram. Avalie a nota
+apenas pela qualidade da condução no trecho em que o usuário esteve presente. Não marque
+"fechamento_forcado_sem_material" nem trate a falta de fechamento como falha. No diagnóstico,
+diga explicitamente que a sessão foi interrompida pelo usuário.`;
+
+async function callAuditor(transcript: string, apiKey: string, unilateral = false): Promise<AnalysisResult | null> {
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -269,6 +277,7 @@ async function callAuditor(transcript: string, apiKey: string): Promise<Analysis
       model: MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
+        ...(unilateral ? [{ role: "system", content: UNILATERAL_NOTICE }] : []),
         { role: "user", content: `Transcrição completa da sessão para auditoria:\n\n${transcript}` },
       ],
       tools: [ANALYSIS_TOOL],
@@ -376,7 +385,7 @@ Deno.serve(async (req) => {
     // 4) Carrega sessão + mensagens
     const { data: session, error: sessErr } = await supabase
       .from("sessions")
-      .select("id, user_id, started_at, ended_at, status, focus_topic, duration_minutes")
+      .select("id, user_id, started_at, ended_at, status, focus_topic, duration_minutes, closure_mode")
       .eq("id", sessionId)
       .maybeSingle();
     if (sessErr || !session) {
@@ -414,7 +423,7 @@ Deno.serve(async (req) => {
 
     // 5) Auditor
     console.log(`🔍 analyze-session-coverage: sessão=${sessionId} msgs=${messages.length} chars=${transcript.length}`);
-    const result = await callAuditor(transcript, lovableApiKey);
+    const result = await callAuditor(transcript, lovableApiKey, session.closure_mode === "unilateral");
     if (!result) {
       return new Response(JSON.stringify({ error: "falha na auditoria via LLM" }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
