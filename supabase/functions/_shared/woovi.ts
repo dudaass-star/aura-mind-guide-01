@@ -82,6 +82,8 @@ export async function wooviFetch<T = unknown>(
       headers: {
         Authorization: appId,
         "Content-Type": "application/json",
+        // Sem User-Agent a Woovi pode responder 403 no extrato.
+        "User-Agent": "OlaAura/1.0",
         ...(headers as Record<string, string> | undefined),
       },
       ...(body !== undefined
@@ -421,10 +423,20 @@ export async function listInstallments(
   }, i => String(i.globalID || i.id || i.cobr?.installmentId || i.correlationID || ''));
 }
 
-/** Extrato completo, sem interromper nas páginas antigas. */
-export async function listTransactions(): Promise<Record<string, any>[]> {
+/**
+ * Extrato da Woovi. Com `start`/`end` a própria API filtra a janela — sem
+ * isso a paginação começa em agosto e estoura o tempo antes de chegar aos
+ * pagamentos recentes (caso Maria da Glória, out/2026).
+ */
+export async function listTransactions(
+  window?: { start?: string; end?: string },
+): Promise<Record<string, any>[]> {
+  const range = [
+    window?.start ? `&start=${encodeURIComponent(window.start)}` : '',
+    window?.end ? `&end=${encodeURIComponent(window.end)}` : '',
+  ].join('');
   return collectProviderPages<Record<string, any>>(async (offset, limit) => {
-    const path = `/api/v1/transaction?limit=${limit}&skip=${offset}`;
+    const path = `/api/v1/transaction?limit=${limit}&skip=${offset}${range}`;
     const r = await wooviFetch<Record<string, any>>(path);
     if (!r.ok) throw new WooviUnavailable(r.status, path, r.raw);
     const raw = r.data;
