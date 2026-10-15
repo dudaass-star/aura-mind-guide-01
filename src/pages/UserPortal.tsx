@@ -563,7 +563,8 @@ const UserPortal = () => {
               initialChatOpen={shouldOpenConversation}
               initialDraft={conversationDraftRequest ?? discussionPrompt}
               discussionEpisodeId={discussionEpisode?.id}
-              degustacaoAwaitingSession={profile?.status === "degustacao"}
+              degustacaoAwaitingSession={profile?.status === "degustacao" && degustacaoState?.courtesyStatus !== "completed"}
+              degustacaoInterrupted={Boolean(degustacaoState?.interrupted)}
               entryContext={searchParams.get("migracao") === "whatsapp" ? "migration" : searchParams.get("onboarding") === "new" ? "new" : "regular"}
             />
           </div>
