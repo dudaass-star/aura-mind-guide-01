@@ -39,3 +39,4 @@
 - Session inactivity closure checks unanswered App turns and pauses at the operational cap; this prevents technical silence from counting as therapeutic completion.
 - Free trial (`status='degustacao'`): a DB trigger makes the courtesy session quota-exempt and blocks later starts without a plan, keeping all scheduling paths consistent.
 - Free-trial chat is blocked deterministically outside a session (only start intent or a due courtesy session passes); this keeps the trial a guided session, not open chat.
+- Free-trial courtesy is consumed only by an active or dialogued session; interrupted ones (unilateral/no_show) allow up to two restarts with a fresh clock, avoiding time-warp resumes.
