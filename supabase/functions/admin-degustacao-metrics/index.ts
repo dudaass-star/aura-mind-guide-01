@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
 
     const sessions: any[] = []; const charges: any[] = []; const msgCount = new Map<string, number>();
     await Promise.all([
-      ...chunk(uids).map(async (ids) => { const { data } = await db.from('sessions').select('user_id,status,closure_mode,started_at,ended_at,quota_exempt').in('user_id', ids); sessions.push(...(data || [])); }),
+      ...chunk(uids).map(async (ids) => { const { data } = await db.from('sessions').select('user_id,status,closure_mode,started_at,ended_at,quota_exempt,scheduled_at,created_at').in('user_id', ids); sessions.push(...(data || [])); }),
       ...chunk(uids).map(async (ids) => { const { data } = await db.from('woovi_charges').select('user_id,status,paid_at').in('user_id', ids); charges.push(...(data || [])); }),
       ...uids.map(async (id) => {
         const { count } = await db.from('messages').select('id', { count: 'exact', head: true }).eq('user_id', id).eq('role', 'user').gte('created_at', start);
@@ -66,11 +66,17 @@ Deno.serve(async (req) => {
       const outcome = done ? 'concluido' : live ? 'em_andamento' : started.length ? 'interrompido' : 'sem_inicio';
       const minutes = Math.max(0, ...started.map((s) => (s.ended_at ? (Date.parse(s.ended_at) - Date.parse(s.started_at)) / 6e4 : (Date.now() - Date.parse(s.started_at)) / 6e4)));
       const converted = !!p.degustacao_converted_at || p.status === 'active';
+      // Próxima sessão: marcada depois do primeiro encontro iniciado (não conta o agendamento da própria cortesia).
+      const firstStart = started.length ? Math.min(...started.map((s) => Date.parse(s.started_at))) : null;
+      const next = firstStart === null ? null : sessions
+        .filter((s) => s.user_id === p.user_id && s.status !== 'cancelled' && Date.parse(s.created_at) > firstStart && !started.includes(s))
+        .sort((a, b) => Date.parse(a.scheduled_at) - Date.parse(b.scheduled_at))[0];
       const paidPix = charges.some((c) => c.user_id === p.user_id && (c.paid_at || c.status === 'COMPLETED'));
       const ph = normPhone(p.phone); const em = (p.email || '').toLowerCase();
       return {
         id: p.id, name: p.name || 'Sem nome', phone: p.phone, email: p.email, createdAt: p.degustacao_started_at,
         status: p.status, plan: converted ? p.plan : null, convertedAt: converted ? p.degustacao_converted_at : null,
+        nextAt: next?.scheduled_at || null,
         sessions: started.length, restarted: started.length > 1, outcome, minutes: Math.round(Math.min(minutes, 120)),
         userMsgs: msgCount.get(p.user_id) || 0, prayer: !!p.degustacao_prayer_id, meditation: !!p.degustacao_meditation_id,
         checkout: converted || (!!ph && ckPhones.has(ph)) || (!!em && ckEmails.has(em)),
