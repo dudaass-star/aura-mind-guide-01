@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, subDays } from 'date-fns';
-import { RefreshCw, Users, PlayCircle, MessageCircle, CheckCircle2, ShoppingCart, BadgeDollarSign, TrendingUp, Clock, Wallet } from 'lucide-react';
+import { RefreshCw, CalendarCheck, Users, PlayCircle, MessageCircle, CheckCircle2, ShoppingCart, BadgeDollarSign, TrendingUp, Clock, Wallet } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, PieChart, Pie, ComposedChart, Line, LabelList,
 } from 'recharts';
@@ -33,7 +33,7 @@ const C = (n: number) => `hsl(var(--chart-${n}))`;
 type Outcome = 'sem_inicio' | 'em_andamento' | 'interrompido' | 'concluido';
 type Lead = {
   id: string; name: string; phone: string | null; email: string | null; createdAt: string;
-  status: string; plan: string | null; convertedAt: string | null; sessions: number; restarted: boolean;
+  status: string; plan: string | null; convertedAt: string | null; nextAt: string | null; sessions: number; restarted: boolean;
   outcome: Outcome; minutes: number; userMsgs: number; prayer: boolean; meditation: boolean;
   checkout: boolean; method: 'PIX' | 'Cartão' | null; value: number;
 };
@@ -82,6 +82,7 @@ export default function AdminDegustacao() {
     const noStart = leads.filter(l => l.outcome === 'sem_inicio');
     const restarted = leads.filter(l => l.restarted);
     const checkout = leads.filter(l => l.checkout);
+    const booked = leads.filter(l => l.nextAt);
     const conv = leads.filter(l => l.plan);
     const convOf = (g: Lead[]) => g.filter(l => l.plan).length;
     const hours = conv.filter(l => l.convertedAt).map(l => (Date.parse(l.convertedAt!) - Date.parse(l.createdAt)) / 36e5);
@@ -94,7 +95,7 @@ export default function AdminDegustacao() {
     }
     const cohorts = [...days.values()].sort((a, b) => a.day.localeCompare(b.day)).map(c => ({ ...c, label: c.day.slice(8, 10) + '/' + c.day.slice(5, 7), taxa: pctN(c.conv, c.leads) }));
     return {
-      started, engaged, done, live, interrupted, noStart, restarted, checkout, conv, convOf, mrr, cohorts,
+      started, engaged, done, booked, live, interrupted, noStart, restarted, checkout, conv, convOf, mrr, cohorts,
       practice: leads.filter(l => l.prayer || l.meditation).length,
       avgMin: avg(started.map(l => l.minutes)), avgMsgs: avg(started.map(l => l.userMsgs)),
       avgHours: hours.length ? avg(hours) : null,
@@ -108,6 +109,7 @@ export default function AdminDegustacao() {
       outcomes: [
         { name: 'Concluíram', leads: done.length, pagos: convOf(done) },
         { name: 'Interrompidos', leads: interrupted.length, pagos: convOf(interrupted) },
+        { name: 'Agendaram a próxima', leads: booked.length, pagos: convOf(booked) },
         { name: 'Recomeçaram', leads: restarted.length, pagos: convOf(restarted) },
         { name: 'Em andamento', leads: live.length, pagos: convOf(live) },
         { name: 'Não iniciaram', leads: noStart.length, pagos: convOf(noStart) },
@@ -122,7 +124,7 @@ export default function AdminDegustacao() {
     };
   }, [leads]);
 
-  const status = (l: Lead) => l.plan ? 'Convertido' : l.checkout ? 'No checkout' : OUTCOME_LABEL[l.outcome];
+  const status = (l: Lead) => l.plan ? 'Convertido' : l.checkout ? 'No checkout' : l.nextAt ? 'Agendou próxima' : OUTCOME_LABEL[l.outcome];
   const list = leads.filter(l => (filter === 'all' || status(l) === filter) && (!search || `${l.name} ${l.phone} ${l.email}`.toLowerCase().includes(search.toLowerCase())));
   const maxMsgs = Math.max(1, ...leads.map(l => l.userMsgs));
 
@@ -134,6 +136,7 @@ export default function AdminDegustacao() {
     { name: 'Iniciaram', n: m.started.length },
     { name: 'Engajaram (4+)', n: m.engaged.length },
     { name: 'Concluíram', n: m.done.length },
+    { name: 'Agendaram a próxima', n: m.booked.length },
     { name: 'Checkout', n: m.checkout.length },
     { name: 'Pagaram', n: m.conv.length },
   ].map((s, i, a) => ({ ...s, rate: i === 0 ? '100%' : pct(s.n, a[0].n), step: i === 0 ? '' : pct(s.n, a[i - 1].n) }));
@@ -154,13 +157,14 @@ export default function AdminDegustacao() {
     {q.isLoading ? <div className="grid gap-3 md:grid-cols-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-28" />)}</div>
       : q.error ? <p className="text-sm text-destructive">Não foi possível carregar os dados.</p> : <>
 
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
         <Kpi icon={Users} label="Leads" value={leads.length} detail={`${m.started.length} iniciaram (${pct(m.started.length, leads.length)})`} tone={2} />
         <Kpi icon={MessageCircle} label="Engajaram de verdade" value={m.engaged.length} detail={`4+ mensagens · ${m.avgMsgs} msgs em média`} tone={4} />
         <Kpi icon={CheckCircle2} label="Concluíram o encontro" value={m.done.length} detail={`${pct(m.done.length, m.started.length)} dos que iniciaram`} tone={1} />
         <Kpi icon={BadgeDollarSign} label="Viraram clientes" value={m.conv.length} detail={`Conversão global ${pct(m.conv.length, leads.length)}`} tone={5} />
         <Kpi icon={Wallet} label="Receita mensal gerada" value={brl(m.mrr)} detail={`Ticket médio ${m.conv.length ? brl(m.mrr / m.conv.length) : '—'}`} tone={1} />
         <Kpi icon={ShoppingCart} label="Abriram o pagamento" value={m.checkout.length} detail={`${m.checkout.length - m.conv.length} sem concluir`} tone={3} />
+        <Kpi icon={CalendarCheck} label="Agendaram a próxima sessão" value={m.booked.length} detail={`${pct(m.booked.length, m.started.length)} dos que fizeram o encontro`} tone={3} />
         <Kpi icon={Clock} label="Tempo médio de encontro" value={`${m.avgMin} min`} detail={`${m.practice} usaram oração ou meditação`} tone={2} />
         <Kpi icon={TrendingUp} label="Tempo até pagar" value={m.avgHours === null ? '—' : `${m.avgHours} h`} detail={`Compras diretas no período: ${direct.length}`} tone={4} />
       </div>
@@ -253,17 +257,18 @@ export default function AdminDegustacao() {
           <div><CardTitle className="text-base">Leads ({list.length})</CardTitle><CardDescription>Situação individual de cada cadastro</CardDescription></div>
           <div className="flex flex-wrap gap-2"><Input placeholder="Buscar nome, telefone ou e-mail" value={search} onChange={e => setSearch(e.target.value)} className="w-[230px]" />
             <Select value={filter} onValueChange={setFilter}><SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger><SelectContent>
-              {['all', 'Não iniciou', 'Em andamento', 'Interrompido', 'Concluído', 'No checkout', 'Convertido'].map(s => <SelectItem key={s} value={s}>{s === 'all' ? 'Todos' : s}</SelectItem>)}
+              {['all', 'Não iniciou', 'Em andamento', 'Interrompido', 'Concluído', 'Agendou próxima', 'No checkout', 'Convertido'].map(s => <SelectItem key={s} value={s}>{s === 'all' ? 'Todos' : s}</SelectItem>)}
             </SelectContent></Select></div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          <Table><TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Cadastro</TableHead><TableHead>Situação</TableHead><TableHead className="w-[180px]">Mensagens</TableHead><TableHead className="text-right">Min</TableHead><TableHead>Práticas</TableHead><TableHead>Plano</TableHead></TableRow></TableHeader><TableBody>
+          <Table><TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Cadastro</TableHead><TableHead>Situação</TableHead><TableHead className="w-[180px]">Mensagens</TableHead><TableHead className="text-right">Min</TableHead><TableHead>Próxima sessão</TableHead><TableHead>Práticas</TableHead><TableHead>Plano</TableHead></TableRow></TableHeader><TableBody>
             {list.map(l => <TableRow key={l.id}>
               <TableCell><div className="font-medium">{l.name}</div><div className="text-xs text-muted-foreground">{l.phone || 'Sem telefone'}</div></TableCell>
               <TableCell className="whitespace-nowrap text-sm">{format(new Date(l.createdAt), 'dd/MM HH:mm')}</TableCell>
               <TableCell><Badge variant={l.plan ? 'default' : l.outcome === 'interrompido' ? 'destructive' : l.checkout ? 'secondary' : 'outline'}>{status(l)}</Badge>{l.restarted && <Badge variant="secondary" className="ml-1">Recomeçou</Badge>}</TableCell>
               <TableCell><div className="flex items-center gap-2"><Progress value={(l.userMsgs / maxMsgs) * 100} className="h-1.5" /><span className="w-8 text-right text-sm tabular-nums">{l.userMsgs}</span></div></TableCell>
               <TableCell className="text-right tabular-nums">{l.minutes || '—'}</TableCell>
+              <TableCell className="whitespace-nowrap text-xs">{l.nextAt ? format(new Date(l.nextAt), 'dd/MM HH:mm') : '—'}</TableCell>
               <TableCell className="text-xs">{[l.prayer && 'Oração', l.meditation && 'Meditação'].filter(Boolean).join(' · ') || '—'}</TableCell>
               <TableCell className="text-xs">{l.plan ? `${PLAN_LABEL[planKey(l.plan)] || l.plan} · ${l.method}` : '—'}</TableCell>
             </TableRow>)}
