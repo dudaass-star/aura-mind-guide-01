@@ -17,6 +17,7 @@ import {
   Server,
   Settings,
   HeartHandshake,
+  Sparkles,
 } from "lucide-react";
 
 import {
@@ -39,6 +40,7 @@ const groups: { label: string; items: Item[] }[] = [
     items: [
       { title: "Indicadores", url: "/admin/engajamento", icon: LayoutDashboard },
       { title: "Usuários", url: "/admin/usuarios", icon: Users },
+      { title: "Degustação", url: "/admin/degustacao", icon: Sparkles },
       { title: "Sessões", url: "/admin/sessoes", icon: CalendarDays },
       { title: "Movimento", url: "/admin/movimento", icon: HeartHandshake },
     ],

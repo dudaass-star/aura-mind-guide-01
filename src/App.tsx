@@ -38,6 +38,7 @@ const AdminSupportKnowledge = lazy(() => import("./pages/AdminSupportKnowledge")
 const AdminSupportGaps = lazy(() => import("./pages/AdminSupportGaps"));
 const AdminWhatsappRecovery = lazy(() => import("./pages/AdminWhatsappRecovery"));
 const AdminSessions = lazy(() => import("./pages/AdminSessions"));
+const AdminDegustacao = lazy(() => import("./pages/AdminDegustacao"));
 const AdminLayout = lazy(() => import("./components/admin/AdminLayout"));
 const UserGuide = lazy(() => import("./pages/UserGuide"));
 const Episode = lazy(() => import("./pages/Episode"));
@@ -141,6 +142,7 @@ const App = () => (
               <Route path="/admin/suporte/gaps" element={<AdminSupportGaps />} />
               <Route path="/admin/whatsapp-inbox" element={<AdminWhatsappRecovery />} />
               <Route path="/admin/sessoes" element={<AdminSessions />} />
+              <Route path="/admin/degustacao" element={<AdminDegustacao />} />
               <Route path="/admin/movimento" element={<AdminMovement />} />
             </Route>
             <Route path="/guia" element={<UserGuide />} />
