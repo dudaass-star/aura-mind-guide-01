@@ -637,11 +637,22 @@ const UserPortal = () => {
               </div>
             </div>
           )}
+          <DegustacaoScheduleNextDialog
+            open={scheduleNextOpen}
+            userId={userId}
+            onDone={(scheduled) => {
+              setScheduleNextOpen(false);
+              void queryClient.invalidateQueries({ queryKey: ["degustacao-state", userId] });
+              void queryClient.invalidateQueries({ queryKey: ["portal-sessions", userId] });
+              window.setTimeout(() => openDegustacaoPlans(scheduled ? "session_end" : "manual"), 400);
+            }}
+          />
           <DegustacaoPlansDialog
             open={degustacaoPlans.open}
             onOpenChange={(open) => setDegustacaoPlans((prev) => ({ ...prev, open }))}
             reason={degustacaoPlans.reason}
             userId={userId}
+            nextAt={degustacaoState?.nextAt ?? null}
             onActivated={() => { void refetchProfile(); }}
           />
         </>
