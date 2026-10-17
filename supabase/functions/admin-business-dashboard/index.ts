@@ -70,6 +70,8 @@ Deno.serve(async (req) => {
       const snap = snapshotMap.get(s.subscription_id);
       if (snap) official.set(s.subscription_id, snap.installments);
       else issues.push({ provider: 'woovi', reason: 'Histórico aguardando atualização automática', count: 1, cents: 0 });
+      // Cópia antiga de mandato vigente pode esconder débitos e retentativas recentes.
+      if (snap && ['ATIVA', 'APROVADA'].includes(s.status) && Date.now() - Date.parse(snap.fetched_at) > 36 * 3600e3) issues.push({ provider: 'woovi', reason: 'Mandatos com histórico desatualizado há mais de 36h', count: 1, cents: 0 });
     }
     const providerTimes = snapshots.map(s => s.fetched_at);
     function add(e: any) {
@@ -99,8 +101,13 @@ Deno.serve(async (req) => {
         if (!validDate(due) || (s.is_trial && cents === s.trial_value_cents)) continue;
         if (['CANCELED', 'CANCELLED', 'DELETED'].includes(String(i.status).toUpperCase())) continue;
         const charge = charges.find(c => c.subscription_id === s.subscription_id && (exactInstallment(c, i) || (c.due_date === due && !String(c.installment_id).startsWith('E'))) && c.paid_at);
-        add({ id: `woovi:${s.subscription_id}:${due}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due, paid: ['PAID', 'COMPLETED', 'CONFIRMED', 'CONCLUDED'].includes(String(i.status).toUpperCase()) && i.cobr?.paymentDate ? day(i.cobr.paymentDate) : charge?.status === 'COMPLETED' ? day(charge.paid_at) : null, cents, source: 'parcela oficial Woovi' });
-        if (due >= dateFrom && due <= dateTo && ['PAID', 'COMPLETED', 'CONFIRMED', 'CONCLUDED'].includes(String(i.status).toUpperCase()) && !charge && !i.cobr?.paymentDate) issues.push({ provider: 'woovi', reason: 'Parcela oficial paga sem pagamento conciliado', count: 1, cents });
+        // Pago = parcela, cobrança ou alguma tentativa concluída; a data é a do crédito (inclusive retentativas).
+        const PAID = ['PAID', 'COMPLETED', 'CONFIRMED', 'CONCLUDED'];
+        const paidTry = (Array.isArray(i.cobr?.tries) ? i.cobr.tries : []).find((t: any) => PAID.includes(String(t?.tryStatus || t?.status || '').toUpperCase()));
+        const officialPaid = PAID.includes(String(i.status).toUpperCase()) || PAID.includes(String(i.cobr?.status).toUpperCase()) || !!paidTry;
+        const paidAt = i.cobr?.paymentDate || paidTry?.updatedAt || paidTry?.createdAt || null;
+        add({ id: `woovi:${s.subscription_id}:${due}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due, paid: officialPaid && paidAt ? day(paidAt) : charge?.status === 'COMPLETED' ? day(charge.paid_at) : null, cents, source: 'parcela oficial Woovi' });
+        if (due >= dateFrom && due <= dateTo && officialPaid && !charge && !paidAt) issues.push({ provider: 'woovi', reason: 'Parcela oficial paga sem data de pagamento', count: 1, cents });
       }
     }
     for (const s of subs.filter(s => s.billing_period === 'monthly' && s.entry_paid_at && !s.replaced_by_subscription_id && ['ATIVA', 'APROVADA'].includes(s.status))) {
