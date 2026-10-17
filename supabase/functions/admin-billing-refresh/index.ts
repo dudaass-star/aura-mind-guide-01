@@ -58,7 +58,7 @@ Deno.serve(async req => {
   };
   // Cobertura total: todo mandato mensal com histórico em aberto é relido, do mais antigo para o mais recente,
   // dentro de um orçamento de tempo; a próxima rodada continua de onde esta parou.
-  const pending = subs.filter(s => s.billing_period === 'monthly' && s.subscription_id && !settled(s))
+  const pending = subs.filter(s => s.billing_period === 'monthly' && s.subscription_id && !settled(s) && !(Date.now() - Date.parse(known.get(s.subscription_id)?.fetched_at || '') < 2 * 3600e3))
    .sort((a,b) => String(known.get(a.subscription_id)?.fetched_at || '').localeCompare(String(known.get(b.subscription_id)?.fetched_at || '')));
   let refreshed = 0, cursor = 0;
   const deadline = startedAt + 125_000;
