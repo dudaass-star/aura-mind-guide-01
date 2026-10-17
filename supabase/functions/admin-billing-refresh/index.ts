@@ -6,6 +6,7 @@ import { asaasGetJson } from '../_shared/asaas-reconcile.ts';
 const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 Deno.serve(async req => {
  if (req.method === 'OPTIONS') return reply({});
+ const startedAt = Date.now();
  try {
   const url = Deno.env.get('SUPABASE_URL'), key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'), anon = Deno.env.get('SUPABASE_ANON_KEY');
   if (!url || !key || !anon) throw new Error('Configuração ausente');
@@ -47,16 +48,30 @@ Deno.serve(async req => {
     // Só substitui depois de percorrer todas as páginas com sucesso.
     await store('stripe:billing', 'stripe', [{ prices, invoices, subscriptions, weeklyPayments, weeklyCharges }]);
   } catch { errors.push('Cartão: última cópia preservada'); }
-  const [subs, snapshots, payments] = await Promise.all([all('woovi_subscriptions', 'id,subscription_id,billing_period'), all('admin_billing_provider_snapshots', 'id,fetched_at,provider'), all('asaas_payments', 'id,asaas_payment_id,billing_period,raw_payload,paid_at')]);
+  const [subs, snapshots, payments] = await Promise.all([all('woovi_subscriptions', 'id,subscription_id,billing_period,status,entry_paid_at'), all('admin_billing_provider_snapshots', 'id,fetched_at,provider,installments'), all('asaas_payments', 'id,asaas_payment_id,billing_period,raw_payload,paid_at')]);
   const known = new Map(snapshots.map(s => [s.id, s]));
-  const pending = subs.filter(s => s.billing_period === 'monthly' && s.subscription_id).sort((a,b) => String(known.get(a.subscription_id)?.fetched_at || '').localeCompare(String(known.get(b.subscription_id)?.fetched_at || '')));
-  let refreshed = 0;
-  for (const s of pending.slice(0,8)) {
-   try { await store(s.subscription_id, 'woovi', await listInstallments(s.subscription_id)); refreshed++; } catch { errors.push('Woovi: última cópia preservada'); }
-  }
+  // Histórico encerrado (todas as parcelas pagas/canceladas e mandato fora de vigência) não muda mais.
+  const settled = (s: any) => {
+   const snap = known.get(s.subscription_id);
+   if (!snap || ['ATIVA', 'APROVADA', 'AGUARDANDO'].includes(s.status)) return false;
+   return (snap.installments || []).every((i: any) => ['COMPLETED', 'CANCELED', 'CANCELLED'].includes(String(i.status).toUpperCase()));
+  };
+  // Cobertura total: todo mandato mensal com histórico em aberto é relido, do mais antigo para o mais recente,
+  // dentro de um orçamento de tempo; a próxima rodada continua de onde esta parou.
+  const pending = subs.filter(s => s.billing_period === 'monthly' && s.subscription_id && !settled(s))
+   .sort((a,b) => String(known.get(a.subscription_id)?.fetched_at || '').localeCompare(String(known.get(b.subscription_id)?.fetched_at || '')));
+  let refreshed = 0, cursor = 0;
+  const deadline = startedAt + 125_000;
+  await Promise.all(Array.from({ length: 6 }, async () => {
+   while (cursor < pending.length && Date.now() < deadline) {
+    const s = pending[cursor++];
+    try { await store(s.subscription_id, 'woovi', await listInstallments(s.subscription_id)); refreshed++; } catch { errors.push('Woovi: última cópia preservada'); }
+   }
+  }));
+  const remaining = pending.length - refreshed;
   for (const p of payments.filter(p => p.billing_period === 'monthly' && p.paid_at && !p.raw_payload?.dueDate && !p.raw_payload?.payment?.dueDate && !known.has(p.asaas_payment_id)).slice(0,8)) {
    try { const payment = await asaasGetJson(`/payments/${encodeURIComponent(p.asaas_payment_id)}`); if (!payment?.dueDate) throw new Error('Vencimento indisponível'); await store(p.asaas_payment_id, 'asaas', [payment]); } catch { errors.push('Asaas: vencimento indisponível'); }
   }
-  return reply({ refreshed, errors });
+  return reply({ refreshed, remaining, errors: [...new Set(errors)] });
  } catch { return reply({ error: 'Atualização não concluída; dados anteriores preservados.' }, 500); }
 });
