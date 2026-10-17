@@ -83,6 +83,7 @@ const UserPortal = () => {
   const [conversationDraftRequest, setConversationDraftRequest] = useState<string>();
   const [degustacaoPlans, setDegustacaoPlans] = useState<{ open: boolean; reason: DegustacaoReason }>({ open: false, reason: "manual" });
   const [scheduleNextOpen, setScheduleNextOpen] = useState(false);
+  const [justScheduledAt, setJustScheduledAt] = useState<string | null>(null);
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
   const [degustacaoWelcomeOpen, setDegustacaoWelcomeOpen] = useState(() => searchParams.get("onboarding") === "degustacao");
 
@@ -640,8 +641,9 @@ const UserPortal = () => {
           <DegustacaoScheduleNextDialog
             open={scheduleNextOpen}
             userId={userId}
-            onDone={(scheduled) => {
+            onDone={(scheduled, scheduledAt) => {
               setScheduleNextOpen(false);
+              if (scheduledAt) setJustScheduledAt(scheduledAt);
               void queryClient.invalidateQueries({ queryKey: ["degustacao-state", userId] });
               void queryClient.invalidateQueries({ queryKey: ["portal-sessions", userId] });
               window.setTimeout(() => openDegustacaoPlans(scheduled ? "session_end" : "manual"), 400);
@@ -652,7 +654,7 @@ const UserPortal = () => {
             onOpenChange={(open) => setDegustacaoPlans((prev) => ({ ...prev, open }))}
             reason={degustacaoPlans.reason}
             userId={userId}
-            nextAt={degustacaoState?.nextAt ?? null}
+            nextAt={degustacaoState?.nextAt ?? justScheduledAt}
             onActivated={() => { void refetchProfile(); }}
           />
         </>

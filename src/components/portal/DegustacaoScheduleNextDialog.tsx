@@ -18,7 +18,7 @@ const addDays = (iso: string, days: number) => {
 export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
   open: boolean;
   userId: string;
-  onDone: (scheduled: boolean) => void;
+  onDone: (scheduled: boolean, scheduledAt?: string) => void;
 }) {
   const today = brtToday();
   const [date, setDate] = useState(addDays(today, 7));
@@ -52,7 +52,7 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
       return;
     }
     track("degustacao_next_scheduled", { date, time });
-    onDone(true);
+    onDone(true, new Date(`${date}T${time}:00-03:00`).toISOString());
   };
 
   return (
