@@ -809,7 +809,19 @@ Deno.serve(async (req) => {
         ? await wooviFetch(`/api/v1/charge/${encodeURIComponent(oldEntryId)}`, { method: "DELETE" })
         : { ok: true, status: 204, data: null, raw: "" };
 
-      if (!cancelOld.ok || (!deleteOldEntry.ok && deleteOldEntry.status !== 404)) {
+      // A Woovi responde 400 ao apagar cobrança já expirada/encerrada. Nesse caso
+      // conferimos o status real: se não foi paga, a entrada antiga já está morta
+      // e a substituição é segura. Cobrança paga continua bloqueando.
+      let oldEntryClosed = deleteOldEntry.ok || deleteOldEntry.status === 404;
+      if (!oldEntryClosed && deleteOldEntry.status === 400 && oldEntryId) {
+        const check = await wooviFetch(`/api/v1/charge/${encodeURIComponent(oldEntryId)}`, { method: "GET" });
+        // deno-lint-ignore no-explicit-any
+        const st = String((check.data as any)?.charge?.status || "").toUpperCase();
+        oldEntryClosed = check.status === 404 || (!!st && st !== "COMPLETED" && st !== "ACTIVE");
+        console.log(`[criar-pix-recorrente-woovi] entrada antiga ${oldEntryId} status=${st || check.status} encerrada=${oldEntryClosed}`);
+      }
+
+      if (!cancelOld.ok || !oldEntryClosed) {
         await wooviFetch(`/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, { method: "PUT" }).catch(() => {});
         if (cobCorrelationId) {
           await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});

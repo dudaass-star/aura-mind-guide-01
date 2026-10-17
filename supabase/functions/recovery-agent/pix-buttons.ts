@@ -207,6 +207,29 @@ export async function handlePixButton(
   }
 
   const sub = await findLatestSubscription(supabase, phone, email);
+
+  // Se o último produto negociado foi o encontro avulso de R$ 6,90 (oferta mais
+  // nova que a última tentativa de PIX Automático), "gerar novo código" renova o
+  // avulso — nunca empurra o mandato mensal que a pessoa já recusou.
+  if (intent === "replace_code" || intent === "resend_code") {
+    const { data: lastTaster } = await supabase
+      .from("taster_offers")
+      .select("created_at, paid_at")
+      .in("phone_normalized", phoneMatchList(phone))
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const tasterAt = lastTaster?.created_at ? new Date(String(lastTaster.created_at)).getTime() : 0;
+    // Tentativa de mandato morta (rejeitada, cancelada ou compensada) não conta
+    // como "produto mais recente": só um mandato ainda vivo vence a oferta avulsa.
+    const subDead = !sub || ["REJEITADA", "CANCELADA", "FALHA_SUBSTITUICAO"].includes(String(sub.status || "")) ||
+      String(sub.creation_status || "") === "compensated";
+    const subAt = !subDead && sub?.created_at ? new Date(String(sub.created_at)).getTime() : 0;
+    if (lastTaster && !lastTaster.paid_at && tasterAt > subAt) {
+      const t = await handleTasterAccept(supabase, phone, checkout, "regenerar_codigo");
+      if (t.handled) return t;
+    }
+  }
   const valid = qrStillValid(sub);
   if (intent === "resend_code" && valid) {
     return {
