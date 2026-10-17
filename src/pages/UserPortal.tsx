@@ -14,6 +14,7 @@ import { ConversarTab } from "@/components/portal/ConversarTab";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 import { DegustacaoPlansDialog } from "@/components/portal/DegustacaoPlansDialog";
+import { DegustacaoScheduleNextDialog } from "@/components/portal/DegustacaoScheduleNextDialog";
 import { DegustacaoWelcomeDialog } from "@/components/portal/DegustacaoWelcomeDialog";
 import { DEGUSTACAO_EVENT, openDegustacaoPlans, type DegustacaoReason } from "@/lib/degustacao";
 import { rememberPushAttribution, reportPushPresence } from "@/lib/push-notifications";
@@ -81,6 +82,7 @@ const UserPortal = () => {
   const [minimumSessionLimit, setMinimumSessionLimit] = useState<number | undefined>();
   const [conversationDraftRequest, setConversationDraftRequest] = useState<string>();
   const [degustacaoPlans, setDegustacaoPlans] = useState<{ open: boolean; reason: DegustacaoReason }>({ open: false, reason: "manual" });
+  const [scheduleNextOpen, setScheduleNextOpen] = useState(false);
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
   const [degustacaoWelcomeOpen, setDegustacaoWelcomeOpen] = useState(() => searchParams.get("onboarding") === "degustacao");
 
@@ -319,9 +321,13 @@ const UserPortal = () => {
     const key = `aura-degustacao-end-shown:${userId}`;
     if (localStorage.getItem(key)) return;
     localStorage.setItem(key, "1");
-    const t = window.setTimeout(() => openDegustacaoPlans("session_end"), 2500);
+    // Primeiro convida a marcar o 2º encontro; os planos vêm depois, ancorados na data.
+    const t = window.setTimeout(() => {
+      if (degustacaoState?.nextAt) openDegustacaoPlans("session_end");
+      else setScheduleNextOpen(true);
+    }, 2500);
     return () => window.clearTimeout(t);
-  }, [isDegustacao, degustacaoState?.courtesyStatus, userId]);
+  }, [isDegustacao, degustacaoState?.courtesyStatus, userId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Troca de plano genérica vira o modal da degustação para quem ainda não tem plano.
   useEffect(() => {
     if (isDegustacao && changePlanOpen) {
@@ -631,11 +637,22 @@ const UserPortal = () => {
               </div>
             </div>
           )}
+          <DegustacaoScheduleNextDialog
+            open={scheduleNextOpen}
+            userId={userId}
+            onDone={(scheduled) => {
+              setScheduleNextOpen(false);
+              void queryClient.invalidateQueries({ queryKey: ["degustacao-state", userId] });
+              void queryClient.invalidateQueries({ queryKey: ["portal-sessions", userId] });
+              window.setTimeout(() => openDegustacaoPlans(scheduled ? "session_end" : "manual"), 400);
+            }}
+          />
           <DegustacaoPlansDialog
             open={degustacaoPlans.open}
             onOpenChange={(open) => setDegustacaoPlans((prev) => ({ ...prev, open }))}
             reason={degustacaoPlans.reason}
             userId={userId}
+            nextAt={degustacaoState?.nextAt ?? null}
             onActivated={() => { void refetchProfile(); }}
           />
         </>

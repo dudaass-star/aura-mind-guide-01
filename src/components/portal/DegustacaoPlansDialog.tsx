@@ -41,12 +41,13 @@ const maskCpf = (s: string) => onlyDigits(s).slice(0, 11)
 
 type Pix = { qrCodeImage?: string; copyPaste?: string; amount?: number };
 
-export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onActivated }: {
+export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onActivated, nextAt }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   reason: DegustacaoReason;
   userId: string;
   onActivated: () => void;
+  nextAt?: string | null;
 }) {
   const queryClient = useQueryClient();
   const [plan, setPlan] = useState<DegustacaoPlanId>("direcao");
@@ -64,7 +65,10 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const requestKey = useRef<string>("");
-  const head = HEADLINES[reason] || HEADLINES.manual;
+  const nextLabel = nextAt ? new Date(nextAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
+  const head = reason === "session_end" && nextLabel
+    ? { title: "Seu próximo encontro está reservado", body: `${nextLabel.charAt(0).toUpperCase() + nextLabel.slice(1)}. Ative seu plano para garantir esse encontro e seguir conversando com a AURA.` }
+    : HEADLINES[reason] || HEADLINES.manual;
   const selected = useMemo(() => DEGUSTACAO_PLANS.find((p) => p.id === plan) ?? DEGUSTACAO_PLANS[0], [plan]);
 
   useEffect(() => {
