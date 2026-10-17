@@ -220,7 +220,11 @@ export async function handlePixButton(
       .limit(1)
       .maybeSingle();
     const tasterAt = lastTaster?.created_at ? new Date(String(lastTaster.created_at)).getTime() : 0;
-    const subAt = sub?.created_at ? new Date(String(sub.created_at)).getTime() : 0;
+    // Tentativa de mandato morta (rejeitada, cancelada ou compensada) não conta
+    // como "produto mais recente": só um mandato ainda vivo vence a oferta avulsa.
+    const subDead = !sub || ["REJEITADA", "CANCELADA", "FALHA_SUBSTITUICAO"].includes(String(sub.status || "")) ||
+      String(sub.creation_status || "") === "compensated";
+    const subAt = !subDead && sub?.created_at ? new Date(String(sub.created_at)).getTime() : 0;
     if (lastTaster && !lastTaster.paid_at && tasterAt > subAt) {
       const t = await handleTasterAccept(supabase, phone, checkout, "regenerar_codigo");
       if (t.handled) return t;
