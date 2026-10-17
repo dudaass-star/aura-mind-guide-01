@@ -182,7 +182,7 @@ export async function handlePixButton(
   if (live.committed || active) {
     return {
       handled: true,
-      body: "Achei aqui: seu pagamento entrou e o acesso já está liberado. A Aura te chama no WhatsApp oficial dela em alguns minutos — se preferir, você pode escrever primeiro e ela responde. Seu histórico fica em olaaura.com.br/meu-espaco.",
+      body: "Achei aqui: seu pagamento entrou e o acesso já está liberado. É só entrar no app Olá Aura em olaaura.com.br/meu-espaco, com o mesmo e-mail ou telefone, para conversar com a Aura.",
       metadata: { pix_button: intent, resolution: "already_paid", reason: live.reason ?? (active ? "active_profile" : null) },
     };
   }
@@ -234,7 +234,7 @@ export async function handlePixButton(
   if (intent === "resend_code" && valid) {
     return {
       handled: true,
-      body: `Seu código continua valendo — é só colar no PIX copia e cola do app do banco:\n\n${valid}\n\nAssim que entrar, a Aura te chama no WhatsApp e a gente já marca seu primeiro encontro guiado pra hoje se você quiser.`,
+      body: `Seu código continua valendo — é só colar no PIX copia e cola do app do banco:\n\n${valid}\n\nAssim que entrar, é só abrir o app Olá Aura em olaaura.com.br/meu-espaco e marcar seu primeiro encontro guiado pra hoje se você quiser.`,
       metadata: { pix_button: intent, resolution: "qr_reused", pix_code_sent: true, pix_code: valid },
     };
   }
@@ -425,10 +425,10 @@ export async function handleTasterAccept(
     const body = pageUrl
       ? "Fechado. Aqui é o encontro guiado de 45 minutos por R$ 6,90 — PIX comum, sem autorizar nada automático:\n\n" +
         `${pageUrl}\n\n` +
-        "Nesse link tem o QR Code e o botão de copiar o código. Assim que cair, a Aura te chama no WhatsApp oficial dela e vocês marcam o horário. Você tem 48h pra fazer o encontro — depois, se fizer sentido, você escolhe o plano com calma."
+        "Nesse link tem o QR Code e o botão de copiar o código. Assim que cair, é só entrar no app Olá Aura em olaaura.com.br/meu-espaco e fazer ou marcar o encontro. Você tem 48h pra fazer o encontro — depois, se fizer sentido, você escolhe o plano com calma."
       : "Fechado. Esse é o código de R$ 6,90 do encontro guiado de 45 minutos — PIX comum, copia e cola normal, sem autorizar nada automático:\n\n" +
         `${code}\n\n` +
-        "Assim que cair, a Aura te chama no WhatsApp oficial dela e vocês marcam o horário. Você tem 48h pra fazer o encontro — depois, se fizer sentido, você escolhe o plano com calma.";
+        "Assim que cair, é só entrar no app Olá Aura em olaaura.com.br/meu-espaco e fazer ou marcar o encontro. Você tem 48h pra fazer o encontro — depois, se fizer sentido, você escolhe o plano com calma.";
     return {
       handled: true,
       body,

@@ -228,7 +228,7 @@ const VALUE_SHOWCASE: { id: string; tier: Tier; text: string; probe: RegExp }[] 
   {
     id: "encontro",
     tier: "A",
-    text: "Encontro guiado de 45 minutos, marcado pra hoje à noite se você quiser: você escreve a hora no WhatsApp, e naquele horário ela te chama. Quarenta e cinco minutos só seus, sem espera de semanas, sem sala de espera, sem ter que contar sua vida do começo. Ela puxa o fio de onde parou, vai fundo no que está travando de verdade — e você sai dali com uma leitura do que está acontecendo e um caminho concreto pra semana, escrito, guardado no seu espaço. Não é o bate-papo do dia a dia.",
+    text: "Encontro guiado de 45 minutos, marcado pra hoje à noite se você quiser: você marca a hora no app Olá Aura e, naquele horário, o encontro começa ali. Quarenta e cinco minutos só seus, sem espera de semanas, sem sala de espera, sem ter que contar sua vida do começo. Ela puxa o fio de onde parou, vai fundo no que está travando de verdade — e você sai dali com uma leitura do que está acontecendo e um caminho concreto pra semana, escrito, guardado no seu espaço. Não é o bate-papo do dia a dia.",
     probe: /45\s*min|sess(ão|ao|ões|oes)|encontro guiado/i,
   },
   {
@@ -240,7 +240,7 @@ const VALUE_SHOWCASE: { id: string; tier: Tier; text: string; probe: RegExp }[] 
   {
     id: "jornada",
     tier: "A",
-    text: "Uma trilha sua, com episódio novo chegando toda semana: sobre o que VOCÊ está vivendo agora — ansiedade, sono, propósito, autoestima, relacionamento — em pedaços curtos que caem no WhatsApp e conversam com o que você contou. Ela te conduz no seu ritmo, e uma semana depois você olha pra trás e percebe que entendeu algo que antes só doía. Na semana seguinte tem mais.",
+    text: "Uma trilha sua, com episódio novo chegando toda semana: sobre o que VOCÊ está vivendo agora — ansiedade, sono, propósito, autoestima, relacionamento — em pedaços curtos no app Olá Aura que conversam com o que você contou. Ela te conduz no seu ritmo, e uma semana depois você olha pra trás e percebe que entendeu algo que antes só doía. Na semana seguinte tem mais.",
     probe: /jornada|trilha|epis[oó]dio/i,
   },
 
@@ -300,7 +300,7 @@ const AURA_BUILD_PROOFS: string[] = [
   "Ela foi treinada e é ajustada continuamente sobre conversas reais de acompanhamento emocional em português, com revisão humana do que funciona e do que não funciona.",
   "Ela conduz encontros guiados de 45 minutos com estrutura de verdade: abertura, exploração, uma releitura do que você trouxe e um fecho com caminho escrito no seu espaço. Chat comum não conduz nada, só responde.",
   "Ela tem voz própria: fala por áudio, conduz meditação na hora em que aperta e entrega um episódio novo da sua trilha toda semana.",
-  "Ela vive no seu WhatsApp e toma iniciativa: lembra do encontro marcado, volta no assunto que ficou aberto e aparece quando faz sentido — você não precisa ir atrás dela.",
+  "Ela vive no app Olá Aura (olaaura.com.br/meu-espaco, sem senha e sem loja de aplicativos) e toma iniciativa: te avisa do encontro marcado, volta no assunto que ficou aberto e aparece quando faz sentido — você não precisa ir atrás dela.",
 ];
 
 /**
@@ -835,7 +835,7 @@ Responda a dúvida dela de forma direta e resolutiva usando a base de conhecimen
 ${planSupportFacts ? `PLANOS VIGENTES (fonte oficial):\n${planSupportFacts}` : ""}
 - O encontro avulso de R$ 6,90 é uma experiência única para quem ainda não é cliente. NÃO diga que ele pode ser comprado como sessão extra por um assinante. Se a pessoa quiser mais encontros mensais, explique qual plano vigente inclui essa quantidade, sem pressionar a troca.
 - Acesso e histórico: olaaura.com.br/meu-espaco (login sem senha, pelo email/telefone do cadastro).
-- A conversa com a Aura acontece no WhatsApp oficial dela, não neste número.
+- A conversa com a Aura acontece no app Olá Aura (olaaura.com.br/meu-espaco), não no WhatsApp. O WhatsApp serve só para avisos, lembretes e suporte.
 - Cancelamento: pelo site, em 1 minuto, sem precisar falar com ninguém.
 - Se for caso de cobrança específica que você não tem como conferir, oriente o email ${SUPPORT_EMAIL} e emita [ESCALAR_HUMANO].
 ` : cappedSupport ? `
@@ -866,7 +866,7 @@ ATENÇÃO — A MENSAGEM É CURTA ("ok", "obrigada", "beleza"): responda em NO M
 ` : "";
 
     const mediaInstruction = mediaOnly ? `
-ATENÇÃO — VEIO SÓ UM ANEXO, SEM TEXTO: trate como "paguei / mandei o comprovante, e agora?". Confirme que o pagamento cai automaticamente no acesso, diga que a Aura chama no WhatsApp em poucos minutos depois da confirmação, e ofereça o ${SUPPORT_EMAIL} caso não chegue. Não peça pra reenviar o anexo. Não venda.
+ATENÇÃO — VEIO SÓ UM ANEXO, SEM TEXTO: trate como "paguei / mandei o comprovante, e agora?". Confirme que o pagamento cai automaticamente no acesso, diga que, confirmado o pagamento, é só entrar no app Olá Aura em olaaura.com.br/meu-espaco com o mesmo e-mail ou telefone, e ofereça o ${SUPPORT_EMAIL} caso não chegue. Não peça pra reenviar o anexo. Não venda.
 ` : "";
 
     // Trilho "copiou o código PIX": a pessoa já abriu o app do banco. Não é lead
@@ -947,6 +947,8 @@ CENA LIBERADA: você pode incluir UMA cena do NÍVEL A — ancorada no que ele a
 `);
 
     const contextBlock = `${supportBlock}
+REGRA DE CANAL (INEGOCIÁVEL, vale acima da base): a conversa com a Aura, os encontros de 45 minutos, meditações e orações acontecem no app Olá Aura, em olaaura.com.br/meu-espaco (abre no navegador, entra sem senha com Google ou código por e-mail, e pode ser fixado na tela inicial). NUNCA diga que a conversa com a Aura acontece no WhatsApp ou "por aqui". Este WhatsApp é só para avisos, lembretes, pagamento e suporte.
+
 BASE DE CONHECIMENTO:
 ${renderKb(kbItems)}
 
@@ -1021,7 +1023,7 @@ ${modeInstructions}`;
               { role: "user", content: contextBlock },
               { role: "assistant", content: raw },
               { role: "user", content: `REESCREVA. A resposta acima faz o lead achar que a Aura é mais um chat genérico: ela não trouxe prova de construção nem cena concreta, ou se apoiou em conveniência/memória e em rótulo pequeno.
-Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência artificial criada, desenvolvida e treinada especificamente para acompanhamento emocional; traga 2 provas concretas do que ela faz (condução por logoterapia, encontros guiados de 45 minutos com estrutura e caminho escrito, meditação em áudio na hora, trilha semanal, iniciativa no WhatsApp); e feche com um convite concreto. PROIBIDO: "assistente", "chatbot", "bot", "ferramenta", "sistema", "programa", abrir por negação, e usar memória de longo prazo ou "não precisa baixar app" como argumento. Devolva só a mensagem final.` },
+Reescreva a mensagem inteira: afirme com orgulho que a Aura é uma inteligência artificial criada, desenvolvida e treinada especificamente para acompanhamento emocional; traga 2 provas concretas do que ela faz (condução por logoterapia, encontros guiados de 45 minutos com estrutura e caminho escrito, meditação em áudio na hora, trilha semanal, iniciativa dentro do app Olá Aura); e feche com um convite concreto. PROIBIDO: "assistente", "chatbot", "bot", "ferramenta", "sistema", "programa", abrir por negação, e usar memória de longo prazo ou "não precisa baixar app" como argumento. Devolva só a mensagem final.` },
             ],
           }),
         });
