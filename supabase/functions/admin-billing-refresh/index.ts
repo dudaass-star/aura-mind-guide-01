@@ -58,8 +58,14 @@ Deno.serve(async req => {
   };
   // Cobertura total: todo mandato mensal com histórico em aberto é relido, do mais antigo para o mais recente,
   // dentro de um orçamento de tempo; a próxima rodada continua de onde esta parou.
-  const pending = subs.filter(s => s.billing_period === 'monthly' && s.subscription_id && !settled(s) && !(Date.now() - Date.parse(known.get(s.subscription_id)?.fetched_at || '') < 2 * 3600e3))
-   .sort((a,b) => String(known.get(a.subscription_id)?.fetched_at || '').localeCompare(String(known.get(b.subscription_id)?.fetched_at || '')));
+  // Mandato "quente": parcela em aberto vencendo entre D-10 (retentativas) e D+1; relido a cada 15 min e primeiro da fila.
+  const hot = (s: any) => (known.get(s.subscription_id)?.installments || []).some((i: any) => {
+   const due = Date.parse(String(i.dueDate || i.dateGenerateCharge || i.cobr?.dueDate || ''));
+   return Number.isFinite(due) && !['COMPLETED', 'CANCELED', 'CANCELLED'].includes(String(i.status).toUpperCase()) && due > Date.now() - 10 * 864e5 && due < Date.now() + 864e5;
+  });
+  const age = (s: any) => Date.now() - Date.parse(known.get(s.subscription_id)?.fetched_at || '');
+  const pending = subs.filter(s => s.billing_period === 'monthly' && s.subscription_id && !settled(s) && !(age(s) < (hot(s) ? 15 * 60e3 : 2 * 3600e3)))
+   .sort((a,b) => (Number(hot(b)) - Number(hot(a))) || String(known.get(a.subscription_id)?.fetched_at || '').localeCompare(String(known.get(b.subscription_id)?.fetched_at || '')));
   let refreshed = 0, cursor = 0;
   const deadline = startedAt + 125_000;
   await Promise.all(Array.from({ length: 6 }, async () => {
