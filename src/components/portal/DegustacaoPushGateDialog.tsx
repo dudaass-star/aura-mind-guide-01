@@ -89,9 +89,9 @@ export function DegustacaoPushGateDialog({ open, onOpenChange, onReady }: Props)
           {technicalBlock && (
             <Button className="h-12 w-full text-base" onClick={() => { onOpenChange(false); onReady(); }}>Começar meu encontro</Button>
           )}
-          {status === "install-first" && (
+          {(status === "install-first" || status === "denied") && (
             <button type="button" onClick={() => { onOpenChange(false); onReady(); }} className="w-full py-1 text-xs text-muted-foreground underline-offset-4 hover:underline">
-              Não consigo instalar agora, começar assim mesmo
+              {status === "denied" ? "Começar sem avisos" : "Não consigo instalar agora, começar assim mesmo"}
             </button>
           )}
           <Button variant="ghost" className="h-10 w-full text-muted-foreground" onClick={() => onOpenChange(false)}>Voltar</Button>

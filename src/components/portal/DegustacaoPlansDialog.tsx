@@ -66,15 +66,22 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
   const [copied, setCopied] = useState(false);
   const requestKey = useRef<string>("");
   const nextLabel = nextAt ? new Date(nextAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
-  const head = reason === "session_end" && nextLabel
-    ? { title: "Seu próximo encontro está reservado", body: `${nextLabel.charAt(0).toUpperCase() + nextLabel.slice(1)}. Ative seu plano para garantir esse encontro e seguir conversando com a AURA.` }
-    : HEADLINES[reason] || HEADLINES.manual;
+  const timeLabel = nextAt ? new Date(nextAt).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }) : null;
+  // Pré-reserva: o horário só fica confirmado com o plano ativo (sem dar a vaga como garantida).
+  const head = reason === "session_soon"
+    ? { title: "Nosso encontro começa em instantes", body: `${timeLabel ? `Às ${timeLabel}. ` : ""}Falta só ativar seu plano para liberarmos a nossa sala agora. Leva menos de 1 minuto no PIX ou cartão.` }
+    : reason === "session_end" && nextLabel
+      ? { title: "Horário pré-selecionado na agenda", body: `${nextLabel.charAt(0).toUpperCase() + nextLabel.slice(1)}. Para confirmar esse horário com a AURA e liberar seus próximos encontros, escolha seu plano abaixo.` }
+      : HEADLINES[reason as keyof typeof HEADLINES] || HEADLINES.manual;
   const selected = useMemo(() => DEGUSTACAO_PLANS.find((p) => p.id === plan) ?? DEGUSTACAO_PLANS[0], [plan]);
 
   useEffect(() => {
     if (!open) return;
     setError(null);
     if (step === "done") setStep("plans");
+    if (userId && userId !== "preview") {
+      void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type: "degustacao_plans_viewed", source: "app", metadata: { reason, has_next: Boolean(nextAt) } });
+    }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Confirmação em tempo real: o webhook do PIX ativa o perfil; aqui só observamos.

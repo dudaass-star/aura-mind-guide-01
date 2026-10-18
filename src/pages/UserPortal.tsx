@@ -329,7 +329,7 @@ const UserPortal = () => {
   // Toque no aviso de 5 minutos: abre direto a ativação do plano.
   useEffect(() => {
     if (!isDegustacao || searchParams.get("open_plans") !== "true") return;
-    openDegustacaoPlans("session_end");
+    openDegustacaoPlans("session_soon");
   }, [isDegustacao, searchParams]);
   // Momento 1 de conversão: assim que a cortesia termina, abre os planos uma vez.
   useEffect(() => {

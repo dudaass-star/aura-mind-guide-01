@@ -1,7 +1,7 @@
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 
 // Degustação gratuita: 1 sessão cortesia + 1 oração + 1 meditação, sem plano.
-export type DegustacaoReason = "session_end" | "session" | "chat" | "prayer" | "meditation" | "manual";
+export type DegustacaoReason = "session_end" | "session_soon" | "session" | "chat" | "prayer" | "meditation" | "manual";
 
 export const DEGUSTACAO_EVENT = "aura:open-degustacao-plans";
 
