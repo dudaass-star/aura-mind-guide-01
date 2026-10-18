@@ -32,6 +32,7 @@ type NotificationRequest = {
 const SAFE_PUSH_COPY = {
   session_reminder_24h: (name?: string) => ({ title: `${name || "Oi"}, sua sessão está chegando`, body: "Abra a AURA para conferir e se preparar." }),
   session_reminder_5m: (name?: string) => ({ title: `${name || "Oi"}, sua sessão começa em instantes`, body: "A AURA já está pronta para receber você." }),
+  session_reminder_degustacao_5m: (name?: string) => ({ title: `${name || "Oi"}, seu encontro começa em 5 minutos 💜`, body: "Falta só confirmar seu plano para liberarmos a nossa sala agora." }),
   monthly_schedule_available: (name?: string) => ({ title: `${name || "Oi"}, suas sessões do mês estão disponíveis`, body: "Escolha seus melhores dias e horários no aplicativo." }),
   journey_available: () => ({ title: "Uma nova parte da sua jornada chegou", body: "Abra a AURA quando tiver um momento para você." }),
   report_available: (name?: string) => ({ title: `${name || "Oi"}, seu resumo está pronto`, body: "Veja os movimentos e avanços que marcaram este período." }),
