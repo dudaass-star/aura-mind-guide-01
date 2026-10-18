@@ -81,7 +81,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
     setError(null);
     if (step === "done") setStep("plans");
     if (userId && userId !== "preview") {
-      void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type: "degustacao_plans_viewed", source: "app", metadata: { reason, has_next: Boolean(nextAt) } });
+      void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type: "degustacao_plans_viewed", source: "app", metadata: { reason, has_next: Boolean(nextAt) } }).then(() => undefined);
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
