@@ -280,9 +280,15 @@ Deno.serve(async (req) => {
       for (const session of sessions24h) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone, whatsapp_instance_id, last_message_date, last_user_message_at')
+          .select('name, phone, whatsapp_instance_id, last_message_date, last_user_message_at, status')
           .eq('user_id', session.user_id)
           .maybeSingle();
+
+        // Degustação: silêncio na véspera; a conversão acontece no aviso de 5 minutos.
+        if (profile?.status === 'degustacao') {
+          await supabase.from('sessions').update({ reminder_24h_sent: true }).eq('id', session.id);
+          continue;
+        }
 
         const userName = profile?.name || 'você';
         const sessionDate = new Date(session.scheduled_at);
