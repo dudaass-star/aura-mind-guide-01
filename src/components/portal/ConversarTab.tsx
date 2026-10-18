@@ -11,6 +11,7 @@ import avatarAura from "@/assets/avatar-aura.jpg";
 import { InstallAppMenuItem, useInstallApp } from "@/components/portal/InstallAppMenuItem";
 import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDialog";
 import { reportPushConversion } from "@/lib/push-notifications";
+import { isPushReady, requestDegustacaoStart } from "@/lib/degustacao";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
 import type { Json } from "@/integrations/supabase/types";
@@ -528,7 +529,7 @@ export function ConversarTab({
     appliedInitialDraftRef.current = initialDraft;
     setActiveDiscussionEpisodeId(discussionEpisodeId);
     // Pedido de início de encontro é enviado automaticamente, sem rascunho.
-    if (initialDraft === "Quero começar meu encontro agora") {
+    if (initialDraft === "Quero começar meu encontro agora" || initialDraft === "Quero recomeçar meu encontro agora") {
       autoSendRef.current = initialDraft;
       setChatOpen(true);
       return;
@@ -1399,7 +1400,11 @@ export function ConversarTab({
             ? "Seu primeiro encontro foi interrompido antes do fim. Você pode começar de novo, com os 45 minutos completos."
             : "Seu primeiro encontro gratuito de 45 minutos está liberado. A conversa com a AURA acontece dentro dele."}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Button type="button" size="sm" onClick={() => void send(undefined, degustacaoInterrupted ? "Quero recomeçar meu encontro agora" : "Quero começar meu encontro agora")}>{degustacaoInterrupted ? "Recomeçar encontro agora" : "Iniciar encontro agora"}</Button>
+            <Button type="button" size="sm" onClick={() => {
+              const startMessage = degustacaoInterrupted ? "Quero recomeçar meu encontro agora" : "Quero começar meu encontro agora";
+              if (isPushReady()) void send(undefined, startMessage);
+              else requestDegustacaoStart(startMessage);
+            }}>{degustacaoInterrupted ? "Recomeçar encontro agora" : "Iniciar encontro agora"}</Button>
             <Button type="button" size="sm" variant="outline" onClick={() => { setChatOpen(false); onNavigate?.("sessoes"); }}>Agendar horário</Button>
           </div>
         </div>

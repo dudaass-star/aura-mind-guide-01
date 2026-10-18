@@ -16,7 +16,8 @@ import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 import { DegustacaoPlansDialog } from "@/components/portal/DegustacaoPlansDialog";
 import { DegustacaoScheduleNextDialog } from "@/components/portal/DegustacaoScheduleNextDialog";
 import { DegustacaoWelcomeDialog } from "@/components/portal/DegustacaoWelcomeDialog";
-import { DEGUSTACAO_EVENT, openDegustacaoPlans, type DegustacaoReason } from "@/lib/degustacao";
+import { DegustacaoPushGateDialog } from "@/components/portal/DegustacaoPushGateDialog";
+import { DEGUSTACAO_EVENT, DEGUSTACAO_START_EVENT, isPushReady, openDegustacaoPlans, type DegustacaoReason } from "@/lib/degustacao";
 import { rememberPushAttribution, reportPushPresence } from "@/lib/push-notifications";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { isAppStandalone } from "@/components/portal/InstallAppMenuItem";
@@ -83,6 +84,7 @@ const UserPortal = () => {
   const [conversationDraftRequest, setConversationDraftRequest] = useState<string>();
   const [degustacaoPlans, setDegustacaoPlans] = useState<{ open: boolean; reason: DegustacaoReason }>({ open: false, reason: "manual" });
   const [scheduleNextOpen, setScheduleNextOpen] = useState(false);
+  const [pushGate, setPushGate] = useState<{ open: boolean; message: string }>({ open: false, message: "Quero começar meu encontro agora" });
   const [justScheduledAt, setJustScheduledAt] = useState<string | null>(null);
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
   const [degustacaoWelcomeOpen, setDegustacaoWelcomeOpen] = useState(() => searchParams.get("onboarding") === "degustacao");
@@ -313,9 +315,22 @@ const UserPortal = () => {
       const reason = ((event as CustomEvent).detail?.reason || "manual") as DegustacaoReason;
       setDegustacaoPlans({ open: true, reason });
     };
+    const startHandler = (event: Event) => {
+      const message = String((event as CustomEvent).detail?.message || "Quero começar meu encontro agora");
+      setPushGate({ open: true, message });
+    };
     window.addEventListener(DEGUSTACAO_EVENT, handler);
-    return () => window.removeEventListener(DEGUSTACAO_EVENT, handler);
+    window.addEventListener(DEGUSTACAO_START_EVENT, startHandler);
+    return () => {
+      window.removeEventListener(DEGUSTACAO_EVENT, handler);
+      window.removeEventListener(DEGUSTACAO_START_EVENT, startHandler);
+    };
   }, []);
+  // Toque no aviso de 5 minutos: abre direto a ativação do plano.
+  useEffect(() => {
+    if (!isDegustacao || searchParams.get("open_plans") !== "true") return;
+    openDegustacaoPlans("session_end");
+  }, [isDegustacao, searchParams]);
   // Momento 1 de conversão: assim que a cortesia termina, abre os planos uma vez.
   useEffect(() => {
     if (!isDegustacao || degustacaoState?.courtesyStatus !== "completed" || !userId) return;
@@ -615,9 +630,20 @@ const UserPortal = () => {
         <DegustacaoWelcomeDialog
           open={degustacaoWelcomeOpen}
           firstName={profile?.name?.split(" ")[0]}
-          onStartNow={() => { setDegustacaoWelcomeOpen(false); handleOpenConversation("Quero começar meu encontro agora"); }}
+          onStartNow={() => {
+            setDegustacaoWelcomeOpen(false);
+            if (isPushReady()) handleOpenConversation("Quero começar meu encontro agora");
+            else setPushGate({ open: true, message: "Quero começar meu encontro agora" });
+          }}
           onSchedule={() => { setDegustacaoWelcomeOpen(false); handleTabClick("sessoes"); }}
           onExplore={() => setDegustacaoWelcomeOpen(false)}
+        />
+      )}
+      {userId && (
+        <DegustacaoPushGateDialog
+          open={pushGate.open}
+          onOpenChange={(open) => setPushGate((current) => ({ ...current, open }))}
+          onReady={() => handleOpenConversation(pushGate.message)}
         />
       )}
 

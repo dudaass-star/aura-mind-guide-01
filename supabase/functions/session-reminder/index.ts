@@ -280,9 +280,15 @@ Deno.serve(async (req) => {
       for (const session of sessions24h) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone, whatsapp_instance_id, last_message_date, last_user_message_at')
+          .select('name, phone, whatsapp_instance_id, last_message_date, last_user_message_at, status')
           .eq('user_id', session.user_id)
           .maybeSingle();
+
+        // Degustação: silêncio na véspera; a conversão acontece no aviso de 5 minutos.
+        if (profile?.status === 'degustacao') {
+          await supabase.from('sessions').update({ reminder_24h_sent: true }).eq('id', session.id);
+          continue;
+        }
 
         const userName = profile?.name || 'você';
         const sessionDate = new Date(session.scheduled_at);
@@ -394,11 +400,39 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone, whatsapp_instance_id, last_message_date')
+          .select('name, phone, whatsapp_instance_id, last_message_date, status')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
         const userName = profile?.name || 'você';
+
+        // Degustação sem plano: aviso de urgência para ativar antes da sala abrir.
+        if (profile?.status === 'degustacao') {
+          try {
+            const firstName = userName.split(' ')[0];
+            const result = await routeNotification(supabase, {
+              userId: session.user_id,
+              phone: profile?.phone ? cleanPhoneNumber(profile.phone) : '',
+              idempotencyKey: `session:5m-degustacao:${session.id}:${session.scheduled_at}`,
+              category: 'session',
+              type: 'session_reminder_degustacao_5m',
+              firstName,
+              path: '/meu-espaco?tab=sessoes&open_plans=true',
+              whatsappText: `Oi, ${firstName}! 💜 Nosso encontro começa em 5 minutos. Falta só ativar seu plano para liberarmos a nossa sala: https://olaaura.com.br/meu-espaco?tab=sessoes&open_plans=true`,
+              whatsappCategory: 'session_reminder',
+              priority: 'high',
+              expiresAt: new Date(new Date(session.scheduled_at).getTime() + 30 * 60 * 1000).toISOString(),
+            });
+            if (result.success) {
+              await supabase.from('sessions').update({ reminder_5m_sent: true }).eq('id', session.id);
+              reminders5mSent++;
+            }
+          } catch (err) {
+            console.error(`❌ Erro no aviso de degustação ${session.id}:`, err);
+          }
+          continue;
+        }
+
         const message = `Faltam 5 minutinhos pra nossa sessão, ${userName}! ✨\n\nJá estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensagem que a gente começa. 💜`;
 
         try {
