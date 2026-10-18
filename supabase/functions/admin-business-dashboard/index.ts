@@ -110,7 +110,9 @@ Deno.serve(async (req) => {
         if (due >= dateFrom && due <= dateTo && officialPaid && !charge && !paidAt) issues.push({ provider: 'woovi', reason: 'Parcela oficial paga sem data de pagamento', count: 1, cents });
       }
     }
+    // O cronograma oficial é a única fonte de vencimentos; o campo local só cobre mandato ainda sem parcelas lidas.
     for (const s of subs.filter(s => s.billing_period === 'monthly' && s.entry_paid_at && !s.replaced_by_subscription_id && ['ATIVA', 'APROVADA'].includes(s.status))) {
+      if ((official.get(s.subscription_id) || []).length) continue;
       const p = profileMap.get(s.user_id);
       if (p?.canceled_at && s.next_charge_date > day(p.canceled_at)) continue;
       add({ id: `woovi:${s.subscription_id}:${s.next_charge_date}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due: s.next_charge_date, paid: null, cents: s.value_cents });
