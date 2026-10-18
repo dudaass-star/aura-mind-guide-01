@@ -337,6 +337,8 @@ const UserPortal = () => {
     const key = `aura-degustacao-end-shown:${userId}`;
     if (localStorage.getItem(key)) return;
     localStorage.setItem(key, "1");
+    // Chegada pelo aviso de 5 minutos: a oferta urgente já abre, sem sobrepor outra.
+    if (searchParams.get("open_plans") === "true") return;
     // Primeiro convida a marcar o 2º encontro; os planos vêm depois, ancorados na data.
     const t = window.setTimeout(() => {
       if (degustacaoState?.nextAt) openDegustacaoPlans("session_end");
