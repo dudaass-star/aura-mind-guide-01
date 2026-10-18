@@ -9,6 +9,21 @@ export function openDegustacaoPlans(reason: DegustacaoReason) {
   window.dispatchEvent(new CustomEvent(DEGUSTACAO_EVENT, { detail: { reason } }));
 }
 
+export const DEGUSTACAO_START_EVENT = "aura:degustacao-start-request";
+
+/** Avisos do aparelho ativos e registrados. */
+export function isPushReady() {
+  return typeof window !== "undefined"
+    && "Notification" in window
+    && Notification.permission === "granted"
+    && localStorage.getItem("aura-push-enabled") === "true";
+}
+
+/** Pede para iniciar o encontro gratuito passando antes pela ativação dos avisos. */
+export function requestDegustacaoStart(message: string) {
+  window.dispatchEvent(new CustomEvent(DEGUSTACAO_START_EVENT, { detail: { message } }));
+}
+
 /**
  * Libera o conteúdo se a pessoa não estiver em degustação ou se ainda não usou
  * a cortesia daquele tipo. Caso contrário abre os planos e devolve false.
