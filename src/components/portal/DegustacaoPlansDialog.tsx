@@ -14,6 +14,7 @@ const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 
 const HEADLINES: Record<DegustacaoReason, { title: string; body: string }> = {
   session_end: { title: "Seu próximo passo já tem lugar", body: "Escolha seu plano para manter o próximo encontro e seguir conversando com a AURA sempre que precisar." },
+  session_soon: { title: "Nosso encontro começa em instantes", body: "Falta só ativar seu plano para liberarmos a nossa sala agora." },
   session: { title: "A AURA está pronta para te receber", body: "Ative seu plano para entrar no seu encontro agora mesmo." },
   chat: { title: "Converse sempre que precisar", body: "Com um plano ativo, a conversa com a AURA fica aberta todos os dias, junto com seus encontros." },
   prayer: { title: "Todas as orações, sempre com você", body: "Sua oração de cortesia já foi usada. Ative um plano para ouvir todas, quando quiser." },
