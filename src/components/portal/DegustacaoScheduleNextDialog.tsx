@@ -36,7 +36,7 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
   }, [date]);
 
   const track = (event_type: string, metadata: Record<string, unknown> = {}) => {
-    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type, source: "degustacao_post_session", metadata: metadata as Json });
+    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type, source: "degustacao_post_session", metadata: metadata as Json }).then(() => undefined);
   };
 
   const confirm = async () => {
