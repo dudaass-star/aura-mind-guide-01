@@ -1,9 +1,10 @@
+// Convite do Movimento: tom pessoal de presente, sem preço nem propaganda
 const openings = {
-  user: "Oi! Olha só o que eu descobri: a Olá Aura! Estou usando e está me fazendo muito bem. Acho que você vai adorar também.",
-  supporter: "Oi! Olha só o que eu descobri: a Olá Aura! Conheci a proposta e achei fantástica. Acho que vale conhecer também!",
+  user: "Oi! Lembrei muito de você. Estou usando a Olá Aura nos meus dias difíceis e tem me feito um bem enorme.",
+  supporter: "Oi! Lembrei muito de você. Conheci a Olá Aura e achei um cuidado lindo com quem está passando por um momento difícil.",
 };
 
-const body = "É um app pra conversar sobre o que você está vivendo e encontrar compreensão, apoio e direção — inclusive quando é difícil explicar o que está acontecendo.\n\nE tem uma coisa que me fez gostar ainda mais: o Movimento Olá Aura, pra que mais pessoas encontrem apoio e não precisem enfrentar tudo sozinhas. Estou fazendo parte e lembrei de você. 💚\n\nDá pra experimentar pelo valor de um cafezinho. ☕\n\nVem conhecer também! Depois me conta o que achou 👇";
+const body = "Consegui um convite para você fazer um encontro gratuito de 45 minutos com a Aura, sem pagar nada e sem cartão. É um espaço seguro pra desabafar, organizar os pensamentos e encontrar direção.\n\nSe você estiver precisando de um momento de paz, entra por aqui 💚👇";
 
 export const MOVEMENT_INVITE_MESSAGES = {
   user: `${openings.user}\n\n${body}`,

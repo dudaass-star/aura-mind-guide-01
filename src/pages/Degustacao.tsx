@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useNavigate } from "react-router-dom";
 import { Check, Headphones, HeartHandshake, Loader2, Lock, MessageCircleHeart, ShieldCheck } from "lucide-react";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { getFbc, getFbp } from "@/lib/meta-pixel";
+import { recordMovementReach } from "@/lib/movement";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import prayerImage from "@/assets/prayer-closeness.jpg";
@@ -57,6 +58,16 @@ export default function Degustacao() {
   const [error, setError] = useState<string | null>(null);
   const [existing, setExisting] = useState<string | null>(null);
 
+  // Convite do Movimento: registra o alcance e guarda o código para atribuir na autenticação
+  const [giftFrom, setGiftFrom] = useState<string | null>(null);
+  const [isGift, setIsGift] = useState(false);
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("por");
+    if (!code) return;
+    setIsGift(true);
+    void recordMovementReach(code).then((r) => setGiftFrom(r?.shared_by?.split(" ")[0] || null));
+  }, []);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -67,7 +78,7 @@ export default function Degustacao() {
     setLoading(true);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("degustacao-signup", {
-        body: { name, email, phone, source: new URLSearchParams(window.location.search).get("utm_campaign") || "degustacao", fbp: getFbp(), fbc: getFbc(), page_url: window.location.href },
+        body: { name, email, phone, source: new URLSearchParams(window.location.search).get("utm_campaign") || (new URLSearchParams(window.location.search).get("por") ? "movimento" : "degustacao"), fbp: getFbp(), fbc: getFbc(), page_url: window.location.href },
       });
       if (fnError || data?.error) throw new Error(data?.error || "Não foi possível liberar seu acesso agora.");
       if (data?.existing) { setExisting(data.message); return; }
@@ -96,12 +107,14 @@ export default function Degustacao() {
 
       <main className="container mx-auto grid max-w-6xl gap-10 px-6 pb-12 pt-6 md:grid-cols-[1.1fr_1fr] md:items-center md:pt-12">
         <section>
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Degustação gratuita · Sem cartão de crédito</p>
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-primary">{isGift ? "Um presente para você · Sem cartão" : "Degustação gratuita · Sem cartão de crédito"}</p>
           <h1 className="font-display text-4xl font-medium leading-[1.08] tracking-tight md:text-6xl">
-            O que você está sentindo não precisa esperar.
+            {isGift ? `${giftFrom || "Alguém que gosta de você"} lembrou de você.` : "O que você está sentindo não precisa esperar."}
           </h1>
           <p className="mt-5 max-w-xl text-lg text-foreground/75">
-            Experimente um encontro guiado com a AURA — ela escuta, conecta o que você conta e ajuda você a enxergar o próximo passo.
+            {isGift
+              ? "Você ganhou um primeiro encontro gratuito de 45 minutos com a AURA. Um espaço seguro para desabafar, organizar os pensamentos e encontrar direção."
+              : "Experimente um encontro guiado com a AURA — ela escuta, conecta o que você conta e ajuda você a enxergar o próximo passo."}
           </p>
         </section>
 
