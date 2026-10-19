@@ -105,6 +105,30 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
     toast({ title: "Agora você faz parte", description: "Sua conquista “Eu Faço Parte” já está liberada." });
   };
 
+  // Entrada em 1 toque no App: usa o nome do cadastro e registra a escolha explícita do papel.
+  const quickJoin = async (role: "participant" | "ambassador") => {
+    if (previewIntroduction || saving) return;
+    const publicName = (suggestedName.trim().split(/\s+/)[0] || "").trim();
+    if (!publicName) { setSelectedRole(role); return; }
+    recordEvent("role_selected", { role, mode: "quick" });
+    recordEvent("join_started", { mode: "quick" });
+    setSaving(true);
+    const ambassadorSince = role === "ambassador" ? new Date().toISOString() : null;
+    const { data, error } = await supabasePortal.from("movement_members").insert({ user_id: userId, public_name: suggestedName.trim(), display_mode: "first_name", receive_updates: false, ambassador_since: ambassadorSince }).select("*").single();
+    setSaving(false);
+    if (error) { recordEvent("join_failed"); return toast({ title: "Não conseguimos concluir agora", description: "Tente novamente em instantes.", variant: "destructive" }); }
+    setMember(data);
+    recordEvent("member_joined", { role, mode: "quick" });
+    onJoined?.();
+    if (role === "ambassador") {
+      recordEvent("ambassador_joined");
+      toast({ title: `${publicName}, você faz parte 💚`, description: "Seu convite pessoal está pronto. É só enviar para quem veio à sua mente." });
+      window.setTimeout(() => document.getElementById("movement-ambassador-kit")?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+      return;
+    }
+    toast({ title: `${publicName}, você faz parte 💚`, description: "Sua conquista “Eu Faço Parte” já está liberada." });
+  };
+
   const updatePreference = async (field: "show_achievements" | "receive_updates", value: boolean) => {
     if (!member) return;
     setMember({ ...member, [field]: value });
@@ -175,27 +199,14 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
       </section>
 
       <section id="app-escolha-movimento" className="scroll-mt-4">
-        <p className="text-xs font-bold uppercase text-primary">Escolha como participar</p>
-        <h3 className="mt-2 font-display text-2xl font-semibold">Você decide o seu lugar no Movimento.</h3>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Os dois caminhos fazem parte da mesma causa. Você pode mudar de ideia depois.</p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <div className="relative rounded-xl bg-primary p-5 text-primary-foreground shadow-lg">
-            <span className="absolute right-4 top-4 rounded-full bg-primary-foreground px-2.5 py-0.5 text-[11px] font-bold uppercase text-primary">Destaque</span>
-            <MessageCircle className="h-7 w-7" />
-            <p className="mt-4 text-xs font-bold uppercase opacity-80">Embaixador</p>
-            <h4 className="mt-1 font-display text-xl font-semibold">Eu quero multiplicar</h4>
-            <p className="mt-2 text-sm leading-relaxed text-primary-foreground/85">Tudo de Participante, mais um link pessoal, materiais para compartilhar e acompanhamento do impacto.</p>
-            <Button type="button" variant="secondary" className="mt-5 w-full" onClick={() => chooseRole("ambassador")}>Escolher Embaixador <ArrowRight /></Button>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <HeartHandshake className="h-7 w-7 text-primary" />
-            <p className="mt-4 text-xs font-bold uppercase text-primary">Participante</p>
-            <h4 className="mt-1 font-display text-xl font-semibold">Eu faço parte</h4>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Acompanhe o Movimento, o Mural e suas conquistas de pertencimento. Não precisa divulgar.</p>
-            <Button type="button" variant="outline" className="mt-5 w-full" onClick={() => chooseRole("participant")}>Escolher Participante <ArrowRight /></Button>
-          </div>
+        <p className="text-xs font-bold uppercase text-primary">Um toque e você faz parte</p>
+        <h3 className="mt-2 font-display text-2xl font-semibold">Sabe aquela amiga, mãe ou irmã que está passando por um momento difícil?</h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Você pode levar até ela o mesmo apoio que encontrou aqui. Sem formulário: entramos com o seu nome, {suggestedName.trim().split(/\s+/)[0] || "e você ajusta depois"}.</p>
+        <div className="mt-5 grid gap-3">
+          <Button type="button" size="lg" className="h-auto min-h-14 justify-between whitespace-normal py-3 text-left" disabled={saving} onClick={() => quickJoin("ambassador")}><span className="flex items-center gap-2"><MessageCircle className="shrink-0" /> {saving ? "Entrando…" : "Quero convidar alguém que eu amo"}</span><ArrowRight className="shrink-0" /></Button>
+          <Button type="button" size="lg" variant="outline" className="h-auto min-h-12 whitespace-normal py-3" disabled={saving} onClick={() => quickJoin("participant")}><HeartHandshake className="shrink-0" /> Só quero fazer parte</Button>
         </div>
-        <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">Participar é gratuito. Não há comissão, meta ou obrigação de compartilhar.</p>
+        <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">Participar é gratuito. Não há comissão, meta ou obrigação de compartilhar. Você aparece no Mural só pelo primeiro nome e pode mudar quando quiser.</p>
       </section>
     </div>
   );

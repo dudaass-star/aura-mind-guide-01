@@ -1,6 +1,7 @@
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, HeartHandshake, Loader2, LogOut, Mic, Moon, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Trash2, UserRound, X } from "lucide-react";
+import { trackMovement } from "@/lib/movement-analytics";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -1310,6 +1311,7 @@ export function ConversarTab({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </header>
 
