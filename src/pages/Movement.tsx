@@ -16,7 +16,13 @@ export default function Movement() {
   const [sharedBy, setSharedBy] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<{ members: number; started: number; continued: number; mural: Array<{ id: string; title: string; body: string; member_name: string }> } | null>(null);
   const code = params.get("por");
-  const giftHref = "/movimento/area?papel=embaixador";
+  // Visitante sem conta vive primeiro o encontro gratuito; quem já tem conta vai direto ao convite.
+  const [hasSession, setHasSession] = useState(false);
+  const giftHref = hasSession ? "/movimento/area?papel=embaixador" : code ? `/degustacao?por=${code}` : "/degustacao";
+
+  useEffect(() => {
+    void supabasePortal.auth.getSession().then(({ data }) => setHasSession(Boolean(data.session)));
+  }, []);
 
   useEffect(() => {
     if (code) void recordMovementReach(code).then((result) => setSharedBy(result?.shared_by || null));

@@ -245,14 +245,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
 
   const shareUrl = `${window.location.origin}/degustacao?por=${member.referral_code}`;
   const shareText = `${shareMessage.trim()}\n${shareUrl}`;
-  const selectMessage = (kind: keyof typeof messages) => { setMessageKind(kind); setShareMessage(messages[kind]); recordEvent("message_selected", { message_kind: kind }); };
   const copy = async () => { await navigator.clipboard.writeText(shareText); recordEvent("invite_copied", { message_kind: messageKind }); toast({ title: "Convite copiado", description: "Agora é só enviar para quem veio à sua mente." }); };
-  const share = async () => {
-    if (!navigator.share) { await copy(); return; }
-    recordEvent("share_started", { message_kind: messageKind });
-    try { await navigator.share({ title: "Movimento Olá Aura", text: shareMessage.trim(), url: shareUrl }); recordEvent("share_completed"); }
-    catch (error) { recordEvent(error instanceof Error && error.name === "AbortError" ? "share_cancelled" : "share_failed"); }
-  };
   const pendingRecognitions = recognitions.filter((recognition) => recognition.consent_decision === "pending");
   const decidedRecognitions = recognitions.filter((recognition) => recognition.consent_decision !== "pending");
   const recentImpact = referrals.filter((referral) => referral.is_valid).slice(0, 4);
