@@ -263,7 +263,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
           <p className="mt-2 text-sm leading-relaxed text-primary-foreground/90">Você pode presentear uma pessoa querida com um primeiro encontro gratuito de 45 minutos com a Aura. Sem pagar nada e sem cartão.</p>
           <div className="mt-5 grid gap-2 sm:flex sm:flex-wrap">
             <Button size="lg" variant="secondary" asChild><a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" onClick={() => recordEvent("whatsapp_share_started", { message_kind: messageKind })}><MessageCircle /> Presentear no WhatsApp</a></Button>
-            <Button size="lg" variant="ghost" className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={copy}><Copy /> Copiar convite</Button>
+            <Button size="lg" variant="ghost" className="border border-primary-foreground/60 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={copy}><Copy /> Copiar convite</Button>
           </div>
         </div>
         <div className="mt-6 grid grid-cols-3 gap-2 px-4 sm:gap-3 sm:px-8">
