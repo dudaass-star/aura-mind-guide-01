@@ -1,6 +1,7 @@
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, HeartHandshake, Loader2, LogOut, Mic, Moon, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Trash2, UserRound, X } from "lucide-react";
+import { trackMovement } from "@/lib/movement-analytics";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -1274,6 +1275,10 @@ export function ConversarTab({
             <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Olá, {firstName}</p>
             <h1 className="font-display text-[2rem] font-semibold leading-none text-foreground">Seu espaço</h1>
           </div>
+          <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" onClick={() => { trackMovement("card_clicked", "app", { origin: "header" }); navigateFromConversation("movimento"); }} className="h-11 gap-1.5 rounded-full border-primary/40 px-3.5 text-[13px] font-semibold text-primary" aria-label="Abrir o Movimento Olá Aura">
+            <HeartHandshake className="h-4 w-4" /> Movimento
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 rounded-full border border-border bg-card shadow-sm" aria-label="Abrir menu da conta">
@@ -1306,6 +1311,7 @@ export function ConversarTab({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </header>
 

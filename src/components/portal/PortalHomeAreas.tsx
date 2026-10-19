@@ -55,19 +55,19 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
           ))}
         </div>
       </section>
-      {renderGroup(groups[1])}
       <section aria-label="Faça parte de algo maior">
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Faça parte de algo maior</h2>
         <article data-movement-event="card_viewed" className="overflow-hidden rounded-lg portal-area-journey">
           <img src={movementImage} alt="Pessoas abraçadas com camisetas do Movimento Olá Aura" className="aspect-[2.8/1] w-full object-cover" loading="lazy" />
           <div className="p-4">
             <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase"><HeartHandshake className="h-4 w-4" /><span>Movimento Olá Aura</span>{movementIsNew && !hasJoinedMovement && <span className="rounded-full bg-primary px-2 py-0.5 text-[9px] text-primary-foreground">Novo</span>}</div>
-            <h3 className="text-xl font-medium leading-tight text-foreground">Mais gente. Mais apoio.<br />Um movimento de todos nós.</h3>
-            <p className="mt-2 text-[13px] leading-relaxed text-secondary-foreground">Para que mais pessoas encontrem apoio e não precisem enfrentar tudo sozinhas.</p>
-            <Button type="button" {...access("movimento")} className="mt-4 h-auto min-h-10 w-full justify-between gap-3 rounded-md py-2.5 text-[13px] whitespace-normal">{hasJoinedMovement ? "Meu lugar no Movimento" : "Conhecer o Movimento"}<ArrowRight className="h-4 w-4 shrink-0" /></Button>
+            <h3 className="text-xl font-medium leading-tight text-foreground">Lembrou de alguém que está passando por um momento difícil?</h3>
+            <p className="mt-2 text-[13px] leading-relaxed text-secondary-foreground">Faça parte do Movimento e leve esse apoio para quem você ama. Ninguém deveria enfrentar tudo sozinho.</p>
+            <Button type="button" {...access("movimento")} className="mt-4 h-auto min-h-10 w-full justify-between gap-3 rounded-md py-2.5 text-[13px] whitespace-normal">{hasJoinedMovement ? "Meu lugar no Movimento" : "Fazer parte do Movimento"}<ArrowRight className="h-4 w-4 shrink-0" /></Button>
           </div>
         </article>
       </section>
+      {renderGroup(groups[1])}
     </div>
   );
 }
