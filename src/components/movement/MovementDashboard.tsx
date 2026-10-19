@@ -166,35 +166,13 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
 
   if (!member && embedded && !selectedRole) return (
     <div ref={trackingRef} data-movement-event="introduction_viewed" className="space-y-10 pb-6">
-      {/* Abertura com a foto do Movimento, como no site */}
       <section className="relative overflow-hidden rounded-2xl shadow-xl">
-        <img src={movementGroupImage} alt="Pessoas se abraçando com camisetas da Olá Aura" className="h-[440px] w-full object-cover sm:h-[480px]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-foreground via-foreground/60 to-transparent" />
+        <img src={movementGroupImage} alt="Pessoas se abraçando com camisetas da Olá Aura" className="h-[300px] w-full object-cover sm:h-[360px]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-foreground via-foreground/55 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-6 text-primary-foreground sm:p-8">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-bold uppercase tracking-wide"><Sparkles className="h-3.5 w-3.5" /> Movimento Olá Aura</span>
-          <h2 className="mt-4 max-w-xl font-display text-3xl font-semibold leading-tight sm:text-4xl">Compreender a si mesmo não deveria ser privilégio de poucos.</h2>
-          <p className="mt-3 max-w-xl leading-relaxed text-primary-foreground/85">Pessoas que acreditam que apoio, compreensão e direção precisam chegar a mais gente — com respeito e sem pressão.</p>
-          <Button type="button" size="lg" className="mt-5 w-full sm:w-auto" onClick={() => { recordEvent("join_cta_clicked"); document.getElementById("app-escolha-movimento")?.scrollIntoView({ behavior: "smooth" }); }}>Quero fazer parte <ArrowRight /></Button>
-        </div>
-      </section>
-
-      {snapshot && snapshot.members >= 10 && (
-        <section className="grid grid-cols-3 gap-3 text-center">
-          {[{ v: snapshot.members, l: "pessoas no Movimento" }, { v: snapshot.started, l: "primeiras conversas" }, { v: snapshot.continued, l: "seguiram conversando" }].map(({ v, l }) => <div key={l} className="rounded-xl bg-secondary p-4"><p className="font-display text-3xl font-semibold text-primary">{v}</p><p className="mt-1 text-xs leading-snug text-muted-foreground">{l}</p></div>)}
-        </section>
-      )}
-
-      <section className="grid gap-3 sm:grid-cols-3">
-        {[{ icon: HeartHandshake, title: "Pertencer", text: "Faça parte gratuitamente e acompanhe o impacto coletivo." }, { icon: Quote, title: "Reconhecer", text: "Conheça histórias reais, publicadas somente com autorização." }, { icon: Share2, title: "Multiplicar", text: "Se quiser, compartilhe a Olá Aura com seu link pessoal." }].map(({ icon: Icon, title, text }) => <div key={title} className="rounded-xl border border-border bg-card p-5 shadow-sm"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground"><Icon className="h-5 w-5" /></span><h3 className="mt-4 font-display text-xl font-semibold">{title}</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p></div>)}
-      </section>
-
-      <section className="relative overflow-hidden rounded-2xl">
-        <img src={movementImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-primary/85" />
-        <div className="relative p-6 text-primary-foreground sm:p-8">
-          <Quote className="h-7 w-7 opacity-80" />
-          <p className="mt-3 font-display text-2xl font-semibold leading-snug">Ninguém deveria precisar enfrentar tudo sozinho.</p>
-          <p className="mt-2 text-sm text-primary-foreground/85">Uma conversa com direção pode mudar o começo de uma história.</p>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-bold uppercase tracking-wide"><HeartHandshake className="h-3.5 w-3.5" /> Movimento Olá Aura</span>
+          <h2 className="mt-3 max-w-xl font-display text-2xl font-semibold leading-tight sm:text-3xl">Ninguém deveria enfrentar tudo sozinho.</h2>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-primary-foreground/85">Aqui você presenteia quem você ama com um primeiro encontro gratuito de 45 minutos com a Aura.</p>
         </div>
       </section>
 
