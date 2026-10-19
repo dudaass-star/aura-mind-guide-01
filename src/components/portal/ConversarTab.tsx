@@ -1,3 +1,5 @@
+import { MovementGiftPrompt } from "@/components/movement/MovementGiftPrompt";
+import { canOfferGift, readGiftState } from "@/lib/movement-gift-cadence";
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, HeartHandshake, Loader2, LogOut, Mic, Moon, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Trash2, UserRound, X } from "lucide-react";
@@ -332,9 +334,13 @@ export function ConversarTab({
   entryContext = "regular",
   degustacaoAwaitingSession = false,
   degustacaoInterrupted = false,
+  profileStatus,
+  fullName = "",
 }: {
   userId: string;
   firstName: string;
+  profileStatus?: string | null;
+  fullName?: string;
   onNavigate?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "oracoes" | "movimento") => void;
   onPrefetch?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "oracoes" | "movimento") => void;
   onOpenBilling: () => void;
@@ -374,6 +380,7 @@ export function ConversarTab({
   const [pendingRating, setPendingRating] = useState<PendingSessionRating | null>(null);
   const [ratingSaving, setRatingSaving] = useState(false);
   const [ratingError, setRatingError] = useState("");
+  const [showGiftPrompt, setShowGiftPrompt] = useState(false);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [sessionClock, setSessionClock] = useState(Date.now());
   const [activeDiscussionEpisodeId, setActiveDiscussionEpisodeId] = useState(discussionEpisodeId);
@@ -489,6 +496,7 @@ export function ConversarTab({
     recordConversationEvent(userId, "rated", { session_id: pendingRating.id, rating, source: "conversation" });
     setPendingRating(null);
     setRatingSaving(false);
+    if (canOfferGift({ status: profileStatus, isDemo, state: readGiftState(userId), now: Date.now(), trigger: "session", rating })) setShowGiftPrompt(true);
   };
 
   useEffect(() => {
@@ -1486,6 +1494,9 @@ export function ConversarTab({
               </div>
               {ratingError && <p className="mt-2 text-xs text-destructive">{ratingError}</p>}
             </section>
+          )}
+          {showGiftPrompt && !responding && (
+            <div className="mt-4 max-w-[86%]"><MovementGiftPrompt userId={userId} fullName={fullName} trigger="session" onClose={() => setShowGiftPrompt(false)} /></div>
           )}
       </div>
 

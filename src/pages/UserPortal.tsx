@@ -589,6 +589,8 @@ const UserPortal = () => {
               discussionEpisodeId={discussionEpisode?.id}
               degustacaoAwaitingSession={profile?.status === "degustacao" && degustacaoState?.courtesyStatus !== "completed"}
               degustacaoInterrupted={Boolean(degustacaoState?.interrupted)}
+              profileStatus={profile?.status}
+              fullName={profile?.name || ""}
               entryContext={searchParams.get("migracao") === "whatsapp" ? "migration" : searchParams.get("onboarding") === "new" ? "new" : "regular"}
             />
           </div>
@@ -608,7 +610,7 @@ const UserPortal = () => {
           {visitedTabs.has("jornadas") && <div className={activeTab === "jornadas" ? "block" : "hidden"} aria-hidden={activeTab !== "jornadas"}><JornadasTab userId={userId} profile={profile} onJourneyChanged={() => void refetchProfile()} /></div>}
           {visitedTabs.has("insights") && <div className={activeTab === "insights" ? "block" : "hidden"} aria-hidden={activeTab !== "insights"}><InsightsTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
           {visitedTabs.has("sobre") && <div className={activeTab === "sobre" ? "block" : "hidden"} aria-hidden={activeTab !== "sobre"}><SobreVoceTab userId={userId} profile={profile} onOpenConversation={handleOpenConversation} /></div>}
-          {visitedTabs.has("oracoes") && <div className={activeTab === "oracoes" ? "block" : "hidden"} aria-hidden={activeTab !== "oracoes"}><OracoesTab isActive={activeTab === "oracoes"} isDegustacao={isDegustacao} /></div>}
+          {visitedTabs.has("oracoes") && <div className={activeTab === "oracoes" ? "block" : "hidden"} aria-hidden={activeTab !== "oracoes"}><OracoesTab isActive={activeTab === "oracoes"} isDegustacao={isDegustacao} userId={userId} profileStatus={profile?.status} fullName={profile?.name || ""} isDemo={isDemo} /></div>}
           {visitedTabs.has("meditacoes") && <div className={activeTab === "meditacoes" ? "block" : "hidden"} aria-hidden={activeTab !== "meditacoes"}><MeditacoesTab userId={userId} isActive={activeTab === "meditacoes"} isDegustacao={isDegustacao} /></div>}
           {visitedTabs.has("movimento") && <div className={activeTab === "movimento" ? "block" : "hidden"} aria-hidden={activeTab !== "movimento"}><MovementDashboard isActive={activeTab === "movimento"} userId={userId} suggestedName={profile?.name || ""} embedded onJoined={() => void refetchMovementMember()} /></div>}
           </Suspense>

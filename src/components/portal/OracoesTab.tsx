@@ -4,12 +4,23 @@ import { ChevronDown, CloudMoon, Compass, Heart, Headphones, Loader2, Moon, Paus
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { requestDegustacaoContent } from "@/lib/degustacao";
+import { MovementGiftPrompt } from "@/components/movement/MovementGiftPrompt";
+import { canOfferGift, readGiftState, writeGiftState } from "@/lib/movement-gift-cadence";
 import { getPrayerHighlight, PRAYERS, PRAYER_CATEGORIES, type PrayerCategory, type PrayerTrack } from "@/lib/prayers";
 
 const formatTime = (time: number) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
 const iconForPrayer = (id: string) => id === "prayer-morning-presence" || id === "prayer-morning-guidance" ? Sunrise : id === "prayer-night" ? Moon : id === "prayer-restless-mind" ? CloudMoon : id === "prayer-loved-ones" || id === "prayer-gratitude" || id === "prayer-life-companions" || id === "prayer-closeness" ? Heart : id === "prayer-strength" || id === "prayer-steps" || id === "prayer-hope" || id === "prayer-flourish" ? Sprout : Compass;
 
-export function OracoesTab({ isActive = true, isDegustacao = false }: { isActive?: boolean; isDegustacao?: boolean }) {
+export function OracoesTab({ isActive = true, isDegustacao = false, userId, profileStatus, fullName = "", isDemo = false }: { isActive?: boolean; isDegustacao?: boolean; userId?: string; profileStatus?: string | null; fullName?: string; isDemo?: boolean }) {
+  const [showGift, setShowGift] = useState(false);
+  // Conta orações ouvidas até o fim; o convite só surge depois, na biblioteca, sem pop-up.
+  const handlePrayerEnded = () => {
+    if (!userId) return;
+    const state = readGiftState(userId);
+    const prayersCompleted = (state.prayersCompleted || 0) + 1;
+    writeGiftState(userId, { prayersCompleted });
+    if (canOfferGift({ status: profileStatus, isDemo, state: { ...state, prayersCompleted }, now: Date.now(), trigger: "prayer" })) setShowGift(true);
+  };
   const [selectedPrayer, setSelectedPrayerState] = useState<PrayerTrack | null>(null);
   const setSelectedPrayer = (prayer: PrayerTrack | null) => {
     if (!prayer) { setSelectedPrayerState(null); return; }
@@ -30,6 +41,7 @@ export function OracoesTab({ isActive = true, isDegustacao = false }: { isActive
   useEffect(() => { if (!isActive) setSelectedPrayer(null); }, [isActive]);
   return <section className="prayer-library space-y-7">
     <div className="space-y-1.5"><p className="text-xs font-semibold text-primary">Sua fé, no seu tempo</p><h2 className="font-display text-3xl leading-tight text-foreground">Um momento com Deus</h2></div>
+    {showGift && userId && !selectedPrayer && <MovementGiftPrompt userId={userId} fullName={fullName} trigger="prayer" onClose={() => setShowGift(false)} />}
     {featuredPrayer && <div className="prayer-feature relative isolate -mx-5 overflow-hidden sm:mx-0 sm:rounded-lg">
       <img src={featuredPrayer.image} alt={featuredPrayer.imageAlt} width={1536} height={1024} fetchPriority="high" className="absolute inset-0 h-full w-full object-cover" />
       <div className="prayer-feature-shade absolute inset-0" aria-hidden="true" />
@@ -55,11 +67,11 @@ export function OracoesTab({ isActive = true, isDegustacao = false }: { isActive
         </Button>
       </article>;
     })}</div></div>
-    {selectedPrayer && <PrayerPlayer key={selectedPrayer.id} prayer={selectedPrayer} open onOpenChange={(value) => { if (!value) setSelectedPrayer(null); }} />}
+    {selectedPrayer && <PrayerPlayer key={selectedPrayer.id} prayer={selectedPrayer} onEnded={handlePrayerEnded} open onOpenChange={(value) => { if (!value) setSelectedPrayer(null); }} />}
   </section>;
 }
 
-function PrayerPlayer({ prayer, open, onOpenChange }: { prayer: PrayerTrack; open: boolean; onOpenChange: (value: boolean) => void }) {
+function PrayerPlayer({ prayer, open, onOpenChange, onEnded }: { prayer: PrayerTrack; open: boolean; onEnded?: () => void; onOpenChange: (value: boolean) => void }) {
   const cues = prayer.cues;
   const Icon = iconForPrayer(prayer.id);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -156,7 +168,7 @@ function PrayerPlayer({ prayer, open, onOpenChange }: { prayer: PrayerTrack; ope
         </div>
         <div className="flex justify-center"><Button variant="ghost" size="sm" className="gap-2 text-xs text-muted-foreground" onClick={() => setShowText((value) => !value)}>{showText ? <Headphones /> : <Text />}{showText ? "Só ouvir" : "Acompanhar oração"}</Button></div>
       </footer>
-      <audio ref={audioRef} src={prayer.audioUrl} preload="metadata" onLoadedMetadata={(event) => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onPlaying={() => setWaiting(false)} onWaiting={() => setWaiting(true)} onCanPlay={() => setWaiting(false)} onEnded={() => { setPlaying(false); setWaiting(false); }} onError={() => { setPlaying(false); setWaiting(false); setError("Não foi possível carregar a oração. Tente novamente."); }} />
+      <audio ref={audioRef} src={prayer.audioUrl} preload="metadata" onLoadedMetadata={(event) => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onPlaying={() => setWaiting(false)} onWaiting={() => setWaiting(true)} onCanPlay={() => setWaiting(false)} onEnded={() => { setPlaying(false); setWaiting(false); onEnded?.(); }} onError={() => { setPlaying(false); setWaiting(false); setError("Não foi possível carregar a oração. Tente novamente."); }} />
     </Dialog.Content>
   </Dialog.Portal></Dialog.Root>;
 }
