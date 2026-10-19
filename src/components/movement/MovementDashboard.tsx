@@ -166,35 +166,13 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
 
   if (!member && embedded && !selectedRole) return (
     <div ref={trackingRef} data-movement-event="introduction_viewed" className="space-y-10 pb-6">
-      {/* Abertura com a foto do Movimento, como no site */}
       <section className="relative overflow-hidden rounded-2xl shadow-xl">
-        <img src={movementGroupImage} alt="Pessoas se abraçando com camisetas da Olá Aura" className="h-[440px] w-full object-cover sm:h-[480px]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-foreground via-foreground/60 to-transparent" />
+        <img src={movementGroupImage} alt="Pessoas se abraçando com camisetas da Olá Aura" className="h-[300px] w-full object-cover sm:h-[360px]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-foreground via-foreground/55 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-6 text-primary-foreground sm:p-8">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-bold uppercase tracking-wide"><Sparkles className="h-3.5 w-3.5" /> Movimento Olá Aura</span>
-          <h2 className="mt-4 max-w-xl font-display text-3xl font-semibold leading-tight sm:text-4xl">Compreender a si mesmo não deveria ser privilégio de poucos.</h2>
-          <p className="mt-3 max-w-xl leading-relaxed text-primary-foreground/85">Pessoas que acreditam que apoio, compreensão e direção precisam chegar a mais gente — com respeito e sem pressão.</p>
-          <Button type="button" size="lg" className="mt-5 w-full sm:w-auto" onClick={() => { recordEvent("join_cta_clicked"); document.getElementById("app-escolha-movimento")?.scrollIntoView({ behavior: "smooth" }); }}>Quero fazer parte <ArrowRight /></Button>
-        </div>
-      </section>
-
-      {snapshot && snapshot.members >= 10 && (
-        <section className="grid grid-cols-3 gap-3 text-center">
-          {[{ v: snapshot.members, l: "pessoas no Movimento" }, { v: snapshot.started, l: "primeiras conversas" }, { v: snapshot.continued, l: "seguiram conversando" }].map(({ v, l }) => <div key={l} className="rounded-xl bg-secondary p-4"><p className="font-display text-3xl font-semibold text-primary">{v}</p><p className="mt-1 text-xs leading-snug text-muted-foreground">{l}</p></div>)}
-        </section>
-      )}
-
-      <section className="grid gap-3 sm:grid-cols-3">
-        {[{ icon: HeartHandshake, title: "Pertencer", text: "Faça parte gratuitamente e acompanhe o impacto coletivo." }, { icon: Quote, title: "Reconhecer", text: "Conheça histórias reais, publicadas somente com autorização." }, { icon: Share2, title: "Multiplicar", text: "Se quiser, compartilhe a Olá Aura com seu link pessoal." }].map(({ icon: Icon, title, text }) => <div key={title} className="rounded-xl border border-border bg-card p-5 shadow-sm"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground"><Icon className="h-5 w-5" /></span><h3 className="mt-4 font-display text-xl font-semibold">{title}</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p></div>)}
-      </section>
-
-      <section className="relative overflow-hidden rounded-2xl">
-        <img src={movementImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-primary/85" />
-        <div className="relative p-6 text-primary-foreground sm:p-8">
-          <Quote className="h-7 w-7 opacity-80" />
-          <p className="mt-3 font-display text-2xl font-semibold leading-snug">Ninguém deveria precisar enfrentar tudo sozinho.</p>
-          <p className="mt-2 text-sm text-primary-foreground/85">Uma conversa com direção pode mudar o começo de uma história.</p>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-bold uppercase tracking-wide"><HeartHandshake className="h-3.5 w-3.5" /> Movimento Olá Aura</span>
+          <h2 className="mt-3 max-w-xl font-display text-2xl font-semibold leading-tight sm:text-3xl">Ninguém deveria enfrentar tudo sozinho.</h2>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-primary-foreground/85">Aqui você presenteia quem você ama com um primeiro encontro gratuito de 45 minutos com a Aura.</p>
         </div>
       </section>
 
@@ -246,14 +224,14 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
 
   if (!member.ambassador_since) return (
     <div ref={trackingRef} className={embedded ? "space-y-8" : "mx-auto max-w-4xl space-y-10 px-5 py-10"}>
-      <MovementMemberOpening ambassador={false} />
+      <section className="rounded-2xl bg-primary px-5 py-6 text-primary-foreground shadow-xl sm:px-8">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground px-3 py-1 text-[11px] font-bold uppercase text-primary"><HeartHandshake className="h-3.5 w-3.5" /> {member.public_name}, você faz parte</span>
+        <h2 className="mt-4 font-display text-3xl font-semibold leading-tight">Lembrou de alguém que está passando por um momento difícil?</h2>
+        <p className="mt-2 text-sm leading-relaxed text-primary-foreground/90">Você pode presentear essa pessoa com um primeiro encontro gratuito de 45 minutos com a Aura. Sem pagar nada e sem cartão.</p>
+        <Button size="lg" variant="secondary" className="mt-5 w-full sm:w-auto" onClick={becomeAmbassador} disabled={activatingAmbassador}><MessageCircle /> {activatingAmbassador ? "Preparando…" : "Quero presentear alguém"}</Button>
+      </section>
       <MovementCollectiveProgress snapshot={snapshot} />
       <div data-movement-event="mural_viewed"><MovementCommunityMural stories={snapshot?.mural || []} /></div>
-      <section className="border-l-4 border-primary bg-[hsl(var(--portal-journey))] px-5 py-6 text-[hsl(var(--portal-journey-foreground))] sm:px-8">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground px-3 py-1 text-[11px] font-bold uppercase text-primary"><Sparkles className="h-3.5 w-3.5" /> Seu lugar nessa história · Participante</span>
-        <h2 className="mt-4 font-display text-3xl font-semibold leading-tight">{member.public_name}, você faz parte.</h2>
-        <p className="mt-2 text-sm">Seu apoio faz parte dessa construção coletiva. Você não precisa indicar ninguém para pertencer.</p>
-      </section>
       <section><div className="flex items-center gap-3"><Award className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Suas conquistas</h3></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{PARTICIPANT_ACHIEVEMENTS.map((achievement, index) => { const isUnlocked = achievement.id === "member" || (achievement.id === "cause" && Boolean(causeMessage)) || (achievement.id === "connected" && member.receive_updates); return <div key={achievement.id} className={`flex flex-col items-start gap-3 rounded-lg border bg-card p-4 ${isUnlocked ? "border-primary/35" : "border-border"}`}><MovementAchievementSymbol id={achievement.id} index={index} /><div><p className="font-semibold">{achievement.name}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{achievement.description}</p><p className="mt-2 text-xs font-semibold text-primary">{isUnlocked ? "Conquistado" : "Ainda por construir"}</p></div></div>; })}</div></section>
       <section>
         <div className="flex items-center gap-3"><Quote className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">O que representa seu apoio?</h3></div>
@@ -261,10 +239,6 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
         <div className="mt-5 grid gap-3">{causeMessages.map((message) => <Button key={message} type="button" variant={causeMessage === message ? "secondary" : "outline"} className="h-auto min-h-14 justify-start whitespace-normal px-4 py-3 text-left leading-relaxed" onClick={() => selectCauseMessage(message)}>{causeMessage === message && <Check className="shrink-0" />}<span>{message}</span></Button>)}</div>
       </section>
       <section className="border-t border-border pt-7"><h3 className="font-display text-xl font-semibold">Sua privacidade</h3><div className="mt-4 space-y-4"><label className="flex items-center justify-between gap-4"><span><b className="block text-sm">Mostrar sua participação no Mural</b><span className="text-xs text-muted-foreground">Seu modo de exibição continua sendo respeitado.</span></span><Switch checked={member.show_achievements} onCheckedChange={(v) => updatePreference("show_achievements", v)} /></label><label className="flex items-center justify-between gap-4"><span><b className="block text-sm">Receber novidades do Movimento</b><span className="text-xs text-muted-foreground">Somente atualizações relevantes.</span></span><Switch checked={member.receive_updates} onCheckedChange={(v) => updatePreference("receive_updates", v)} /></label></div></section>
-      <section className={`grid gap-6 border-y border-border py-7 md:grid-cols-[1fr_auto] md:items-center ${initialAmbassadorIntent ? "border-l-2 border-l-primary pl-5" : ""}`}>
-        <div><p className="text-xs font-bold uppercase text-primary">{initialAmbassadorIntent ? "Você veio para este passo" : "Se um dia fizer sentido"}</p><h3 className="mt-2 font-display text-2xl font-semibold">Quer também ser Embaixador?</h3><p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Embaixadores escolhem apresentar a Olá Aura a outras pessoas, recebem um link pessoal e acompanham o impacto sem ver a identidade de ninguém. Não há meta, comissão ou obrigação de compartilhar.</p></div>
-        <Button size="lg" variant={initialAmbassadorIntent ? "default" : "outline"} onClick={becomeAmbassador} disabled={activatingAmbassador}><HeartHandshake /> {activatingAmbassador ? "Confirmando…" : "Quero ser Embaixador"}</Button>
-      </section>
     </div>
   );
 
@@ -284,34 +258,24 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
 
   return (
     <div ref={trackingRef} className={embedded ? "space-y-8" : "mx-auto max-w-5xl space-y-10 px-5 py-10"}>
-      <MovementMemberOpening ambassador />
-      <MovementCollectiveProgress snapshot={snapshot} />
-      <div data-movement-event="mural_viewed"><MovementCommunityMural stories={snapshot?.mural || []} /></div>
-      <section aria-label="Seu impacto no Movimento" className="overflow-hidden border-l-4 border-primary bg-primary text-primary-foreground">
+      <section aria-label="Presentear alguém" className="overflow-hidden rounded-2xl bg-primary text-primary-foreground shadow-xl">
         <div className="px-5 pt-6 sm:px-8 sm:pt-8">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground px-3 py-1 text-[11px] font-bold uppercase text-primary"><Sparkles className="h-3.5 w-3.5" /> Seu lugar nessa história · Embaixador</span>
-          <h2 className="mt-4 font-display text-3xl font-semibold leading-tight">{member.public_name}, este é o seu impacto.</h2>
-          <p className="mt-2 text-sm text-primary-foreground/85">Seu gesto se soma ao de outras pessoas. Aqui está a sua contribuição para essa história coletiva.</p>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground px-3 py-1 text-[11px] font-bold uppercase text-primary"><HeartHandshake className="h-3.5 w-3.5" /> Seu presente</span>
+          <h2 className="mt-4 font-display text-3xl font-semibold leading-tight">{member.public_name}, quem veio ao seu coração agora?</h2>
+          <p className="mt-2 text-sm leading-relaxed text-primary-foreground/90">Você pode presentear uma pessoa querida com um primeiro encontro gratuito de 45 minutos com a Aura. Sem pagar nada e sem cartão.</p>
+          <div className="mt-5 grid gap-2 sm:flex sm:flex-wrap">
+            <Button size="lg" variant="secondary" asChild><a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" onClick={() => recordEvent("whatsapp_share_started", { message_kind: messageKind })}><MessageCircle /> Presentear no WhatsApp</a></Button>
+            <Button size="lg" variant="ghost" className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={copy}><Copy /> Copiar convite</Button>
+          </div>
         </div>
         <div className="mt-6 grid grid-cols-3 gap-2 px-4 sm:gap-3 sm:px-8">
-          {[{ v: counts.reached, l: "Alcançadas", icon: Share2 }, { v: counts.started, l: "Começaram", icon: MessageCircle }, { v: counts.continued, l: "Continuaram", icon: Sprout }].map(({ v, l, icon: Icon }) => <div key={l} className="rounded-xl bg-card p-3 text-center text-card-foreground shadow-md sm:p-4"><Icon className="mx-auto h-5 w-5 text-primary" /><p className="mt-2 font-display text-3xl font-semibold text-primary sm:text-4xl">{v}</p><p className="mt-1 text-[11px] font-semibold leading-tight text-muted-foreground sm:text-xs">{l}</p></div>)}
+          {[{ v: counts.reached, l: "Abriram seu convite", icon: Share2 }, { v: counts.started, l: "Começaram a conversar", icon: MessageCircle }, { v: counts.continued, l: "Seguiram cuidando de si", icon: Sprout }].map(({ v, l, icon: Icon }) => <div key={l} className="rounded-xl bg-card p-3 text-center text-card-foreground shadow-md sm:p-4"><Icon className="mx-auto h-5 w-5 text-primary" /><p className="mt-2 font-display text-3xl font-semibold text-primary sm:text-4xl">{v}</p><p className="mt-1 text-[11px] font-semibold leading-tight text-muted-foreground sm:text-xs">{l}</p></div>)}
         </div>
-        <div className="px-5 pb-6 pt-5 sm:px-8 sm:pb-8">
-          <p className="text-sm font-semibold">{counts.reached === 0 ? "Você já faz parte, mesmo sem indicações. Se fizer sentido, seu convite pode abrir um novo começo." : `${counts.reached} ${counts.reached === 1 ? "pessoa conheceu" : "pessoas conheceram"} a Olá Aura por você.`}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button variant="secondary" asChild><a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" onClick={() => recordEvent("whatsapp_share_started", { message_kind: messageKind })}><MessageCircle /> Enviar no WhatsApp</a></Button>
-            <Button variant="secondary" onClick={copy}><Copy /> Copiar convite</Button>
-          </div>
-          <p className="mt-3 text-[11px] text-primary-foreground/75">Ninguém que recebeu é identificado. Alcançadas abriram o convite; Começaram conversaram; Continuaram seguiram com o acompanhamento.</p>
-        </div>
-      </section>
+        <p className="px-5 pb-6 pt-4 text-[11px] text-primary-foreground/75 sm:px-8 sm:pb-8">{counts.reached === 0 ? "Ainda ninguém abriu seu convite. Um gesto simples pode chegar na hora certa." : `${counts.reached} ${counts.reached === 1 ? "pessoa recebeu" : "pessoas receberam"} esse cuidado por você.`} Ninguém é identificado.</p>
+      </section
+      ><MovementCollectiveProgress snapshot={snapshot} />
+      <div data-movement-event="mural_viewed"><MovementCommunityMural stories={snapshot?.mural || []} /></div>
       {nextAchievement && <section className="rounded-xl border border-primary/30 bg-card p-5"><div className="flex items-start gap-4"><MovementAchievementSymbol id={nextAchievement.id} index={0} /><div className="w-full"><p className="text-xs font-bold uppercase text-primary">Seu próximo marco</p><div className="mt-1 flex flex-wrap items-baseline justify-between gap-2"><h3 className="font-display text-xl font-semibold">{nextAchievement.name}</h3><p className="text-sm font-semibold">{nextCurrent} de {nextAchievement.threshold}</p></div><Progress value={nextProgress} className="mt-3 h-2" /><p className="mt-3 text-sm text-muted-foreground">{nextAchievement.description}</p></div></div></section>}
-      <section className="bg-primary px-5 py-7 text-primary-foreground sm:px-8">
-        <p className="text-xs font-bold uppercase">Um próximo gesto, do seu jeito</p>
-        <h3 className="mt-3 font-display text-2xl font-semibold sm:text-3xl">Se fizer sentido, abra um caminho.</h3>
-        <p className="mt-3 text-sm text-primary-foreground/90">Seu convite, com suas palavras. Sem metas.</p>
-        <Button variant="secondary" className="mt-5 h-auto min-h-11 whitespace-normal text-left" onClick={() => document.getElementById("movement-ambassador-kit")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Escrever meu convite <ArrowRight className="shrink-0" /></Button>
-      </section>
       {pendingRecognitions.length > 0 && <section className="space-y-3"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Você foi reconhecido</h3></div>{pendingRecognitions.map((recognition) => <article key={recognition.id} className="rounded-lg border border-primary/30 bg-secondary/50 p-5"><p className="text-xs font-bold uppercase text-primary">Voz do Movimento</p><h4 className="mt-2 font-display text-xl font-semibold">{recognition.title}</h4><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{recognition.body}</p><p className="mt-4 text-xs text-muted-foreground">Você decide se este reconhecimento pode aparecer no Mural público.</p><div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => decideRecognition(recognition, "accepted")}><CheckCircle2 /> Autorizar publicação</Button><Button variant="outline" onClick={() => decideRecognition(recognition, "declined")}>Manter privado</Button></div></article>)}</section>}
       {decidedRecognitions.length > 0 && <section><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Seus reconhecimentos</h3></div><div className="mt-4 space-y-3">{decidedRecognitions.map((recognition) => <article key={recognition.id} className="border-l-2 border-primary bg-secondary/30 p-5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-primary">{recognition.kind === "voice" ? "Voz do Movimento" : "Reconhecimento"}</p><p className="text-xs text-muted-foreground">{recognition.consent_decision === "accepted" ? "Autorizado para o Mural" : "Visível somente para você"}</p></div><h4 className="mt-2 font-display text-xl font-semibold">{recognition.title}</h4><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{recognition.body}</p></article>)}</div></section>}
       <section data-movement-event="kit_viewed" id="movement-ambassador-kit" className="scroll-mt-5">
