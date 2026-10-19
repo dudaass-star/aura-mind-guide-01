@@ -268,7 +268,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
     </div>
   );
 
-  const shareUrl = `${window.location.origin}/movimento?por=${member.referral_code}`;
+  const shareUrl = `${window.location.origin}/degustacao?por=${member.referral_code}`;
   const shareText = `${shareMessage.trim()}\n${shareUrl}`;
   const selectMessage = (kind: keyof typeof messages) => { setMessageKind(kind); setShareMessage(messages[kind]); recordEvent("message_selected", { message_kind: kind }); };
   const copy = async () => { await navigator.clipboard.writeText(shareText); recordEvent("invite_copied", { message_kind: messageKind }); toast({ title: "Convite copiado", description: "Agora é só enviar para quem veio à sua mente." }); };
