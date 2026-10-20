@@ -336,9 +336,11 @@ export function ConversarTab({
   degustacaoInterrupted = false,
   profileStatus,
   fullName = "",
+  degustacaoCard,
 }: {
   userId: string;
   firstName: string;
+  degustacaoCard?: React.ReactNode;
   profileStatus?: string | null;
   fullName?: string;
   onNavigate?: (tab: "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "oracoes" | "movimento") => void;
@@ -1353,6 +1355,7 @@ export function ConversarTab({
       )}
 
       <div className="shrink-0 px-4 pb-7">
+        {degustacaoCard && <div className="mb-3">{degustacaoCard}</div>}
         <Button
           type="button"
           variant="ghost"
@@ -1505,6 +1508,7 @@ export function ConversarTab({
           {showGiftPrompt && !responding && (
             <div className="mt-4 max-w-[86%]"><MovementGiftPrompt userId={userId} fullName={fullName} trigger="session" onClose={() => setShowGiftPrompt(false)} /></div>
           )}
+          {degustacaoCard && !responding && <div className="mt-4">{degustacaoCard}</div>}
       </div>
 
       {showNew && (
