@@ -55,6 +55,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
   const [showAll, setShowAll] = useState(false);
   const [showCycles, setShowCycles] = useState(false);
   const [cpf, setCpf] = useState("");
+  const [askCpf, setAskCpf] = useState(false);
   const [cycle, setCycle] = useState<Cycle>("monthly");
   const cycleInfo = CYCLES.find((c) => c.id === cycle) ?? CYCLES[0];
   const priceOf = (id: DegustacaoPlanId) => CYCLE_PRICES[id][cycle];
@@ -231,14 +232,14 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
                 </button>
               ))}
             </div>
-            {method === "pix" && <div className="space-y-1.5">
+            {method === "pix" && askCpf && <div className="space-y-1.5">
               <Label htmlFor="deg-cpf">CPF para o PIX Automático</Label>
-              <Input id="deg-cpf" inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(maskCpf(e.target.value))} />
+              <Input id="deg-cpf" autoFocus inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(maskCpf(e.target.value))} />
             </div>}
             {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-            <Button size="lg" className="h-auto min-h-11 w-full whitespace-normal gap-2 bg-gradient-to-r from-primary to-primary/80 py-2.5 shadow-lg" onClick={() => void (method === "pix" ? generatePix() : startCard())} disabled={loading}>
+            <Button size="lg" className="h-auto min-h-11 w-full whitespace-normal gap-2 bg-gradient-to-r from-primary to-primary/80 py-2.5 shadow-lg" onClick={() => { if (method === "pix" && !askCpf) { setAskCpf(true); return; } void (method === "pix" ? generatePix() : startCard()); }} disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : method === "pix" ? <QrCode className="h-4 w-4 shrink-0" /> : <CreditCard className="h-4 w-4 shrink-0" />}
-              <span>Ativar {selected.name} · {fmt(priceOf(plan))}</span>
+              <span>{method === "pix" && askCpf ? "Gerar PIX" : "Ativar"} {selected.name} · {fmt(priceOf(plan))}</span>
             </Button>
             <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />{method === "pix" ? "PIX Automático" : "Cartão"} · cancele quando quiser, sem fidelidade</p>
           </>

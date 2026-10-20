@@ -76,9 +76,10 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
               {times.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
+          <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">A AURA guarda esse horário por 24 horas. Para confirmar o encontro, é preciso ativar um plano logo em seguida.</p>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button onClick={() => void confirm()} disabled={saving || !time}>
-            {saving && <Loader2 className="animate-spin" />}Reservar este horário na agenda
+            {saving && <Loader2 className="animate-spin" />}Pré-reservar e ativar meu plano
           </Button>
           <Button variant="ghost" size="sm" onClick={() => { track("degustacao_next_skipped"); onDone(false); }}>Escolher depois</Button>
         </div>
