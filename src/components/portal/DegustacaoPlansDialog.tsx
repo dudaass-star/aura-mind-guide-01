@@ -51,7 +51,9 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
   nextAt?: string | null;
 }) {
   const queryClient = useQueryClient();
-  const [plan, setPlan] = useState<DegustacaoPlanId>("direcao");
+  const [plan, setPlan] = useState<DegustacaoPlanId>("essencial");
+  const [showAll, setShowAll] = useState(false);
+  const [showCycles, setShowCycles] = useState(false);
   const [cpf, setCpf] = useState("");
   const [cycle, setCycle] = useState<Cycle>("monthly");
   const cycleInfo = CYCLES.find((c) => c.id === cycle) ?? CYCLES[0];
@@ -72,7 +74,7 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
   const head = reason === "session_soon"
     ? { title: "Nosso encontro começa em instantes", body: `${timeLabel ? `Às ${timeLabel}. ` : ""}Falta só ativar seu plano para liberarmos a nossa sala agora. Leva menos de 1 minuto no PIX ou cartão.` }
     : reason === "session_end" && nextLabel
-      ? { title: "Horário pré-selecionado na agenda", body: `${nextLabel.charAt(0).toUpperCase() + nextLabel.slice(1)}. Para confirmar esse horário com a AURA e liberar seus próximos encontros, escolha seu plano abaixo.` }
+      ? { title: "Horário pré-selecionado na agenda", body: `${nextLabel.charAt(0).toUpperCase() + nextLabel.slice(1)}. A AURA guardou esse horário para você pelas próximas 24 horas. Ative seu plano para confirmar a reserva.` }
       : HEADLINES[reason as keyof typeof HEADLINES] || HEADLINES.manual;
   const selected = useMemo(() => DEGUSTACAO_PLANS.find((p) => p.id === plan) ?? DEGUSTACAO_PLANS[0], [plan]);
 
@@ -173,21 +175,8 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
               <DialogTitle className="font-display text-2xl leading-tight">{head.title}</DialogTitle>
               <DialogDescription>{head.body}</DialogDescription>
             </DialogHeader>
-            <div className="grid grid-cols-4 gap-1 rounded-xl border border-border bg-muted/50 p-1" role="radiogroup" aria-label="Escolha o ciclo">
-              {CYCLES.map((c) => {
-                const on = c.id === cycle;
-                const off = c.months > 1 ? Math.round((1 - CYCLE_PRICES.essencial[c.id] / c.months / CYCLE_PRICES.essencial.monthly) * 100) : 0;
-                return (
-                  <button key={c.id} type="button" role="radio" aria-checked={on} onClick={() => { setCycle(c.id); setError(null); }}
-                    className={`flex flex-col items-center gap-0.5 rounded-lg px-1 py-2 text-xs font-medium transition-all ${on ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:bg-background"}`}>
-                    {c.label}
-                    {off > 0 ? <span className={`rounded px-1 text-[10px] font-bold ${on ? "bg-primary-foreground/20" : "bg-accent/25 text-accent-foreground"}`}>-{off}%</span> : <span className="text-[10px] opacity-70">sem desconto</span>}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="space-y-3" role="radiogroup" aria-label="Escolha seu plano">
-              {DEGUSTACAO_PLANS.map((p) => {
+            <div className="space-y-2" role="radiogroup" aria-label="Escolha seu plano">
+              {DEGUSTACAO_PLANS.filter((p) => showAll || p.id !== "transformacao" || plan === "transformacao").map((p) => {
                 const active = p.id === plan;
                 return (
                   <button
@@ -196,27 +185,44 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
                     role="radio"
                     aria-checked={active}
                     onClick={() => setPlan(p.id)}
-                    className={`w-full rounded-lg border p-4 text-left transition-colors ${active ? "border-primary bg-gradient-to-br from-primary/15 to-accent/10 shadow-lg ring-1 ring-primary" : "border-border bg-card hover:border-primary/40"}`}
+                    className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors ${active ? "border-primary bg-gradient-to-br from-primary/15 to-accent/10 shadow-md ring-1 ring-primary" : "border-border bg-card hover:border-primary/40"}`}
                   >
-                    <div className="flex min-w-0 items-center justify-between gap-2">
-                      <p className="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-foreground">
-                        {p.name}
-                        {p.highlight && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground">Mais escolhido</span>}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-3">
                       <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${active ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{active && <Check className="h-3 w-3" />}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="flex min-w-0 flex-wrap items-center gap-1.5 font-semibold text-foreground">
+                          {p.name}
+                          {p.highlight && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground">Mais escolhido</span>}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{p.sessions} · {p.features[0]}</p>
+                      </div>
+                      <p className="shrink-0 text-right font-display text-lg font-semibold text-primary">{fmt(monthlyOf(p.id))}<span className="block font-sans text-[10px] font-normal text-muted-foreground">/mês</span></p>
                     </div>
-                    <p className="mt-0.5 text-sm text-muted-foreground">{p.sessions}</p>
-                    <div className="mt-3 rounded-md bg-background/60 px-3 py-2">
-                      <p className="font-display text-xl font-semibold text-primary">{fmt(monthlyOf(p.id))}<span className="ml-1 font-sans text-xs font-normal text-muted-foreground">/mês</span></p>
-                      {cycle !== "monthly" && <p className="text-xs leading-snug text-muted-foreground">{fmt(priceOf(p.id))} cobrado por {cycleInfo.period}{discountOf(p.id) > 0 && <span className="font-semibold text-primary"> · economize {fmt(CYCLE_PRICES[p.id].monthly * cycleInfo.months - priceOf(p.id))}</span>}</p>}
-                    </div>
-                    <ul className="mt-3 space-y-1.5">
-                      {p.features.map((f) => <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />{f}</li>)}
-                    </ul>
+                    {cycle !== "monthly" && active && <p className="mt-1 pl-8 text-xs text-muted-foreground">{fmt(priceOf(p.id))} por {cycleInfo.period}{discountOf(p.id) > 0 && <span className="font-semibold text-primary"> · economize {fmt(CYCLE_PRICES[p.id].monthly * cycleInfo.months - priceOf(p.id))}</span>}</p>}
                   </button>
                 );
               })}
+              {!showAll && plan !== "transformacao" && (
+                <button type="button" onClick={() => setShowAll(true)} className="w-full text-center text-xs font-medium text-primary underline-offset-2 hover:underline">Ver plano intensivo (2 encontros por semana)</button>
+              )}
             </div>
+            {showCycles ? (
+              <div className="grid grid-cols-4 gap-1 rounded-xl border border-border bg-muted/50 p-1" role="radiogroup" aria-label="Escolha o ciclo">
+                {CYCLES.map((c) => {
+                  const on = c.id === cycle;
+                  const off = c.months > 1 ? Math.round((1 - CYCLE_PRICES.essencial[c.id] / c.months / CYCLE_PRICES.essencial.monthly) * 100) : 0;
+                  return (
+                    <button key={c.id} type="button" role="radio" aria-checked={on} onClick={() => { setCycle(c.id); setError(null); }}
+                      className={`flex flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-xs font-medium transition-all ${on ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:bg-background"}`}>
+                      {c.label}
+                      {off > 0 ? <span className={`rounded px-1 text-[10px] font-bold ${on ? "bg-primary-foreground/20" : "bg-accent/25 text-accent-foreground"}`}>-{off}%</span> : <span className="text-[10px] opacity-70">sem desconto</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <button type="button" onClick={() => setShowCycles(true)} className="-mt-1 w-full text-center text-xs text-muted-foreground underline-offset-2 hover:underline">Prefere pagar por trimestre ou ano com desconto?</button>
+            )}
             <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Forma de pagamento">
               {([["pix", "PIX Automático", QrCode], ["card", "Cartão", CreditCard]] as const).map(([id, label, Icon]) => (
                 <button key={id} type="button" role="radio" aria-checked={method === id} onClick={() => { setMethod(id); setError(null); }}

@@ -41,8 +41,8 @@ export async function requestDegustacaoContent(kind: "prayer" | "meditation", co
 }
 
 export const DEGUSTACAO_PLANS = [
-  { id: "essencial", name: "Essencial", price: 29.9, sessions: "1 sessão guiada por mês", features: ["Conversas ilimitadas com a AURA", "Todas as orações e meditações"], highlight: false },
-  { id: "direcao", name: "Direção", price: 49.9, sessions: "4 sessões guiadas por mês", features: ["Um encontro por semana", "Resumo escrito após cada sessão", "Tudo do Essencial"], highlight: true },
+  { id: "essencial", name: "Essencial", price: 29.9, sessions: "1 sessão guiada por mês", features: ["Conversas ilimitadas com a AURA", "Todas as orações e meditações"], highlight: true },
+  { id: "direcao", name: "Direção", price: 49.9, sessions: "4 sessões guiadas por mês", features: ["Um encontro por semana", "Tudo do Essencial"], highlight: false },
   { id: "transformacao", name: "Transformação", price: 79.9, sessions: "8 sessões guiadas por mês", features: ["Dois encontros por semana", "Prioridade em momentos difíceis", "Tudo do Direção"], highlight: false },
 ] as const;
 
