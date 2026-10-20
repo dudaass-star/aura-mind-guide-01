@@ -1113,6 +1113,13 @@ export function ConversarTab({
     event?.preventDefault();
     const text = (overrideText ?? draft).trim();
     if (!text || sending) return;
+    // Degustação: qualquer mensagem antes do encontro pode iniciá-lo no servidor
+    // ("sim", "quero", horário agendado chegando). Sem avisos ativos, passa pelo gate.
+    if (degustacaoAwaitingSession && !activeSession && !isPushReady()) {
+      requestDegustacaoStart(text);
+      if (!overrideText) setDraft("");
+      return;
+    }
     setResponseNotice(null);
 
     const clientId = crypto.randomUUID();

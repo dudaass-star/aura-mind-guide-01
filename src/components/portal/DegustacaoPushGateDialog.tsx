@@ -11,8 +11,9 @@ interface Props {
   onReady: () => void;
 }
 
-// Situações em que o aparelho não consegue receber avisos: não travamos a pessoa.
-const TECHNICAL_BLOCKS: PushActivationResult["status"][] = ["unsupported", "not-configured", "error"];
+// Só falha nossa (configuração/erro de registro) libera sem avisos; navegador
+// sem suporte, iPhone fora da Tela de Início e bloqueio exigem ação da pessoa.
+const TECHNICAL_BLOCKS: PushActivationResult["status"][] = ["not-configured", "error"];
 
 /**
  * Etapa obrigatória da degustação: o encontro gratuito só começa depois de
