@@ -11,8 +11,9 @@ interface Props {
   onReady: () => void;
 }
 
-// Situações em que o aparelho não consegue receber avisos: não travamos a pessoa.
-const TECHNICAL_BLOCKS: PushActivationResult["status"][] = ["unsupported", "not-configured", "error"];
+// Só falha nossa (configuração/erro de registro) libera sem avisos; navegador
+// sem suporte, iPhone fora da Tela de Início e bloqueio exigem ação da pessoa.
+const TECHNICAL_BLOCKS: PushActivationResult["status"][] = ["not-configured", "error"];
 
 /**
  * Etapa obrigatória da degustação: o encontro gratuito só começa depois de
@@ -75,24 +76,22 @@ export function DegustacaoPushGateDialog({ open, onOpenChange, onReady }: Props)
         {status === "open-in-new-tab" && (
           <p className="rounded-xl bg-secondary/60 p-3 text-sm text-foreground/85" role="status">Abra o Olá Aura em uma aba própria para ativar.</p>
         )}
+        {status === "unsupported" && (
+          <p className="rounded-xl bg-secondary/60 p-3 text-sm text-foreground/85" role="status">Este navegador não recebe avisos. Abra olaaura.com.br no Chrome (Android) ou no Safari (iPhone) e entre com seu e-mail.</p>
+        )}
         {technicalBlock && (
-          <p className="rounded-xl bg-secondary/60 p-3 text-sm text-foreground/85" role="status">Este navegador não consegue receber avisos agora. Você pode começar mesmo assim.</p>
+          <p className="rounded-xl bg-secondary/60 p-3 text-sm text-foreground/85" role="status">Não conseguimos ativar os avisos agora. Você pode começar mesmo assim.</p>
         )}
 
         <div className="mt-2 space-y-2">
-          {status !== "install-first" && !technicalBlock && (
+          {status !== "install-first" && status !== "unsupported" && !technicalBlock && (
             <Button className="h-12 w-full gap-2 text-base" onClick={() => void activate()} disabled={loading}>
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : window.top !== window.self ? <ExternalLink className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
-              Ativar avisos e começar
+              {status === "denied" ? "Já permiti, tentar de novo" : "Ativar avisos e começar"}
             </Button>
           )}
           {technicalBlock && (
             <Button className="h-12 w-full text-base" onClick={() => { onOpenChange(false); onReady(); }}>Começar meu encontro</Button>
-          )}
-          {(status === "install-first" || status === "denied") && (
-            <button type="button" onClick={() => { onOpenChange(false); onReady(); }} className="w-full py-1 text-xs text-muted-foreground underline-offset-4 hover:underline">
-              {status === "denied" ? "Começar sem avisos" : "Não consigo instalar agora, começar assim mesmo"}
-            </button>
           )}
           <Button variant="ghost" className="h-10 w-full text-muted-foreground" onClick={() => onOpenChange(false)}>Voltar</Button>
         </div>
