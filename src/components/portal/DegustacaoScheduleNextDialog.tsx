@@ -36,7 +36,8 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
   }, [date]);
 
   const track = (event_type: string, metadata: Record<string, unknown> = {}) => {
-    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type, source: "degustacao_post_session", metadata: metadata as Json }).then(() => undefined);
+    // source precisa estar na lista permitida (app/push/whatsapp/system); origem vai no metadata.
+    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type, source: "app", metadata: { ...metadata, origin: "degustacao_post_session" } as Json }).then(({ error }) => { if (error) console.warn("Falha ao registrar evento", error); });
   };
 
   const confirm = async () => {
@@ -77,7 +78,7 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button onClick={() => void confirm()} disabled={saving || !time}>
-            {saving && <Loader2 className="animate-spin" />}Confirmar dia e horário
+            {saving && <Loader2 className="animate-spin" />}Reservar este horário na agenda
           </Button>
           <Button variant="ghost" size="sm" onClick={() => { track("degustacao_next_skipped"); onDone(false); }}>Escolher depois</Button>
         </div>
