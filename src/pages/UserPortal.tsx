@@ -532,6 +532,27 @@ const UserPortal = () => {
     }
   };
 
+  // Card de pré-reserva: integrado à conversa/início; nunca cobre o cabeçalho.
+  const degustacaoCardNode = userId && isDegustacao && degustacaoState?.courtesyStatus === "completed" && !degustacaoPlans.open ? (
+    <div className="flex items-center gap-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-foreground">
+          {degustacaoState.nextAt
+            ? `Pré-reservado: ${new Date(degustacaoState.nextAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+            : "Seu primeiro encontro foi concluído"}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {degustacaoState.nextAt ? "Guardado por 24h · confirme ativando seu plano" : "Ative seu plano para seguir com a AURA"}
+        </p>
+      </div>
+      <Button size="sm" className="shrink-0" onClick={() => {
+        // Mede quantas pessoas voltam pelo card de pré-reserva.
+        void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type: "degustacao_card_clicked", source: "app", metadata: { has_next: Boolean(degustacaoState.nextAt), tab: activeTab } }).then(() => undefined);
+        openDegustacaoPlans(degustacaoState.nextAt ? "session_end" : "manual");
+      }}>{degustacaoState.nextAt ? "Confirmar horário" : "Ativar meu plano"}</Button>
+    </div>
+  ) : null;
+
   return (
     <>
       <Helmet>
@@ -572,6 +593,7 @@ const UserPortal = () => {
           {activeTab !== "conversar" && !isDemo && <PlanTierBanner profile={profile} onChangePlan={() => { setMinimumSessionLimit(undefined); setChangePlanOpen(true); }} />}
           <div className={activeTab === "conversar" ? "block" : "hidden"} aria-hidden={activeTab !== "conversar"}>
             <ConversarTab
+              degustacaoCard={degustacaoCardNode}
               userId={userId}
               firstName={firstName}
               onNavigate={handleTabClick}
@@ -653,25 +675,9 @@ const UserPortal = () => {
 
       {userId && isDegustacao && (
         <>
-          {degustacaoState?.courtesyStatus === "completed" && !degustacaoPlans.open && (
-            <div className={`fixed inset-x-0 z-40 border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur ${activeTab === "conversar" ? "top-0 border-b" : "bottom-0 border-t"}`} style={activeTab === "conversar" ? { paddingTop: "max(0.75rem, env(safe-area-inset-top))" } : { paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
-              <div className="mx-auto flex max-w-2xl items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {degustacaoState.nextAt
-                      ? `Pré-reservado: ${new Date(degustacaoState.nextAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
-                      : "Seu primeiro encontro foi concluído"}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {degustacaoState.nextAt ? "Guardado por 24h · confirme ativando seu plano" : "Ative seu plano para seguir com a AURA"}
-                  </p>
-                </div>
-                <Button size="sm" onClick={() => {
-                  // Mede quantas pessoas voltam pelo card de pré-reserva.
-                  void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type: "degustacao_card_clicked", source: "app", metadata: { has_next: Boolean(degustacaoState.nextAt), tab: activeTab } }).then(() => undefined);
-                  openDegustacaoPlans(degustacaoState.nextAt ? "session_end" : "manual");
-                }}>{degustacaoState.nextAt ? "Confirmar horário" : "Ativar meu plano"}</Button>
-              </div>
+          {degustacaoCardNode && activeTab !== "conversar" && (
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+              <div className="mx-auto max-w-2xl">{degustacaoCardNode}</div>
             </div>
           )}
           <DegustacaoScheduleNextDialog
