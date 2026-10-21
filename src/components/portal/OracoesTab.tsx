@@ -6,6 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { requestDegustacaoContent } from "@/lib/degustacao";
 import { MovementGiftPrompt } from "@/components/movement/MovementGiftPrompt";
 import { canOfferGift, readGiftState, writeGiftState } from "@/lib/movement-gift-cadence";
+import { recordPracticeAudio } from "@/lib/practice-analytics";
 import { getPrayerHighlight, PRAYERS, PRAYER_CATEGORIES, type PrayerCategory, type PrayerTrack } from "@/lib/prayers";
 
 const formatTime = (time: number) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
@@ -14,7 +15,8 @@ const iconForPrayer = (id: string) => id === "prayer-morning-presence" || id ===
 export function OracoesTab({ isActive = true, isDegustacao = false, userId, profileStatus, fullName = "", isDemo = false }: { isActive?: boolean; isDegustacao?: boolean; userId?: string; profileStatus?: string | null; fullName?: string; isDemo?: boolean }) {
   const [showGift, setShowGift] = useState(false);
   // Conta orações ouvidas até o fim; o convite só surge depois, na biblioteca, sem pop-up.
-  const handlePrayerEnded = () => {
+  const handlePrayerEnded = (prayer: PrayerTrack) => {
+    recordPracticeAudio(userId, "prayer", "audio_completed", prayer);
     if (!userId) return;
     const state = readGiftState(userId);
     const prayersCompleted = (state.prayersCompleted || 0) + 1;
@@ -67,11 +69,11 @@ export function OracoesTab({ isActive = true, isDegustacao = false, userId, prof
         </Button>
       </article>;
     })}</div></div>
-    {selectedPrayer && <PrayerPlayer key={selectedPrayer.id} prayer={selectedPrayer} onEnded={handlePrayerEnded} open onOpenChange={(value) => { if (!value) setSelectedPrayer(null); }} />}
+    {selectedPrayer && <PrayerPlayer key={selectedPrayer.id} prayer={selectedPrayer} onStarted={() => recordPracticeAudio(userId, "prayer", "audio_started", selectedPrayer)} onEnded={() => handlePrayerEnded(selectedPrayer)} open onOpenChange={(value) => { if (!value) setSelectedPrayer(null); }} />}
   </section>;
 }
 
-function PrayerPlayer({ prayer, open, onOpenChange, onEnded }: { prayer: PrayerTrack; open: boolean; onEnded?: () => void; onOpenChange: (value: boolean) => void }) {
+function PrayerPlayer({ prayer, open, onOpenChange, onEnded, onStarted }: { prayer: PrayerTrack; open: boolean; onEnded?: () => void; onStarted?: () => void; onOpenChange: (value: boolean) => void }) {
   const cues = prayer.cues;
   const Icon = iconForPrayer(prayer.id);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -168,7 +170,7 @@ function PrayerPlayer({ prayer, open, onOpenChange, onEnded }: { prayer: PrayerT
         </div>
         <div className="flex justify-center"><Button variant="ghost" size="sm" className="gap-2 text-xs text-muted-foreground" onClick={() => setShowText((value) => !value)}>{showText ? <Headphones /> : <Text />}{showText ? "Só ouvir" : "Acompanhar oração"}</Button></div>
       </footer>
-      <audio ref={audioRef} src={prayer.audioUrl} preload="metadata" onLoadedMetadata={(event) => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onPlaying={() => setWaiting(false)} onWaiting={() => setWaiting(true)} onCanPlay={() => setWaiting(false)} onEnded={() => { setPlaying(false); setWaiting(false); onEnded?.(); }} onError={() => { setPlaying(false); setWaiting(false); setError("Não foi possível carregar a oração. Tente novamente."); }} />
+      <audio ref={audioRef} src={prayer.audioUrl} preload="metadata" onLoadedMetadata={(event) => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => { setPlaying(true); if (!startedRef.current) { startedRef.current = true; onStarted?.(); } }} onPause={() => setPlaying(false)} onPlaying={() => setWaiting(false)} onWaiting={() => setWaiting(true)} onCanPlay={() => setWaiting(false)} onEnded={() => { setPlaying(false); setWaiting(false); onEnded?.(); }} onError={() => { setPlaying(false); setWaiting(false); setError("Não foi possível carregar a oração. Tente novamente."); }} />
     </Dialog.Content>
   </Dialog.Portal></Dialog.Root>;
 }
