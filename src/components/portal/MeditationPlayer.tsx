@@ -17,12 +17,13 @@ const formatTime = (value: number) => {
   return `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
 };
 
-export function MeditationPlayer({ track, src, image, onClose, onPlay }: {
+export function MeditationPlayer({ track, src, image, onClose, onPlay, onEnded }: {
   track: MeditationTrack;
   src: string;
   image: string;
   onClose: () => void;
   onPlay: () => void;
+  onEnded?: () => void;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -68,7 +69,7 @@ export function MeditationPlayer({ track, src, image, onClose, onPlay }: {
           <Button size="icon" variant="ghost" className="h-12 w-12" onClick={() => seek(time + 10)} aria-label="Avançar 10 segundos" title="Avançar 10 segundos"><RotateCw /></Button>
         </div>
       </footer>
-      <audio ref={audioRef} src={src} preload="metadata" onLoadedMetadata={(event) => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }} onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)} onPlay={() => { setPlaying(true); onPlay(); }} onPause={() => setPlaying(false)} onWaiting={() => setWaiting(true)} onPlaying={() => setWaiting(false)} onCanPlay={() => setWaiting(false)} onEnded={() => { setPlaying(false); setWaiting(false); }} onError={() => { setPlaying(false); setWaiting(false); setError("Não foi possível carregar a meditação. Tente novamente."); }} />
+      <audio ref={audioRef} src={src} preload="metadata" onLoadedMetadata={(event) => { const value = event.currentTarget.duration; if (Number.isFinite(value)) setDuration(value); }} onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)} onPlay={() => { setPlaying(true); onPlay(); }} onPause={() => setPlaying(false)} onWaiting={() => setWaiting(true)} onPlaying={() => setWaiting(false)} onCanPlay={() => setWaiting(false)} onEnded={() => { setPlaying(false); setWaiting(false); onEnded?.(); }} onError={() => { setPlaying(false); setWaiting(false); setError("Não foi possível carregar a meditação. Tente novamente."); }} />
     </Dialog.Content>
   </Dialog.Portal></Dialog.Root>;
 }

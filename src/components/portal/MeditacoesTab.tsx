@@ -18,6 +18,7 @@ import gratitudeImage from "@/assets/meditation-gratitude.jpg";
 import breathImage from "@/assets/meditation-breath.jpg";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
+import { recordPracticeAudio } from "@/lib/practice-analytics";
 
 interface MeditacoesTabProps {
   userId?: string;
@@ -57,10 +58,11 @@ export function MeditacoesTab({ userId, isActive = true, isDegustacao = false }:
   useEffect(() => { if (!isActive) setSelected(null); }, [isActive]);
   const trackedAudios = useRef(new Set<string>());
 
-  const recordAudioStarted = (meditationId: string) => {
+  const recordAudioStarted = (track: MeditationTrack) => {
+    const meditationId = track.id;
     if (!userId || trackedAudios.current.has(meditationId)) return;
     trackedAudios.current.add(meditationId);
-    void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "practice", event_type: "audio_started", source: "app", metadata: { meditation_id: meditationId } });
+    recordPracticeAudio(userId, "meditation", "audio_started", track);
     void reportPushConversion("/meu-espaco?tab=meditacoes", "first14_practice");
     reportTodayDirectionProgress(userId, "completed", "practice");
   };
@@ -205,6 +207,6 @@ export function MeditacoesTab({ userId, isActive = true, isDegustacao = false }:
       </div>
       {filtered.length ? <div className="grid gap-2 sm:grid-cols-2">{filtered.map(card)}</div> : <p className="py-6 text-center text-sm text-muted-foreground">Nenhuma meditação corresponde aos filtros.</p>}
     </section>
-    {selected && isActive && audioMap.get(selected.id) && <MeditationPlayer key={selected.id} track={selected} src={audioMap.get(selected.id)} image={imageFor(selected)} onClose={() => setSelected(null)} onPlay={() => recordAudioStarted(selected.id)} />}
+    {selected && isActive && audioMap.get(selected.id) && <MeditationPlayer key={selected.id} track={selected} src={audioMap.get(selected.id)} image={imageFor(selected)} onClose={() => setSelected(null)} onPlay={() => recordAudioStarted(selected)} onEnded={() => recordPracticeAudio(userId, "meditation", "audio_completed", selected)} />}
   </section>;
 }

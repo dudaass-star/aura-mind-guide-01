@@ -121,7 +121,7 @@ const UserPortal = () => {
       event_type: "whatsapp_migration_opened",
       source: "whatsapp",
       metadata: { destination: initialTab },
-    });
+    }).then(() => undefined);
   }, [initialTab, searchParams, userId]);
 
   useEffect(() => {
@@ -185,7 +185,7 @@ const UserPortal = () => {
             event_type: "first14_push_opened",
             source: "push",
             metadata: { delivery_id: deliveryId },
-          });
+          }).then(() => undefined);
         }
       }
     });

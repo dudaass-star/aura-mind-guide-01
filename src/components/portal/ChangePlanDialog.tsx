@@ -134,7 +134,7 @@ export function ChangePlanDialog({
         event_type: authorizationPending ? "upgrade_authorization_started" : "upgrade_completed",
         source: "app",
         metadata: { target_plan: selected, billing, gateway: paymentGateway },
-      });
+      }).then(() => undefined);
 
       if (showsNextCharge) {
         // Asaas: mostra tela de sucesso com data + valor da próxima cobrança
