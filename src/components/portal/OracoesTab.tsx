@@ -74,6 +74,7 @@ export function OracoesTab({ isActive = true, isDegustacao = false, userId, prof
 }
 
 function PrayerPlayer({ prayer, open, onOpenChange, onEnded, onStarted }: { prayer: PrayerTrack; open: boolean; onEnded?: () => void; onStarted?: () => void; onOpenChange: (value: boolean) => void }) {
+  const startedRef = useRef(false);
   const cues = prayer.cues;
   const Icon = iconForPrayer(prayer.id);
   const audioRef = useRef<HTMLAudioElement>(null);
