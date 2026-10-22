@@ -113,7 +113,7 @@ export default function Degustacao() {
           </h1>
           <p className="mt-5 max-w-xl text-lg text-foreground/75">
             {isGift
-              ? "Você ganhou um primeiro encontro gratuito de 45 minutos com a AURA. Um espaço seguro para desabafar, organizar os pensamentos e encontrar direção."
+              ? "Você ganhou um primeiro encontro de 45 minutos com a AURA, além de oração e meditação para o seu dia. Um espaço acolhedor para acalmar a mente e encontrar direção."
               : "Experimente um encontro guiado com a AURA — ela escuta, conecta o que você conta e ajuda você a enxergar o próximo passo."}
           </p>
         </section>

@@ -4,7 +4,7 @@ const openings = {
   supporter: "Oi! Lembrei de você. Conheci a Olá Aura e achei um cuidado lindo, pensei que você ia gostar.",
 };
 
-const body = "Consegui um convite para você experimentar um primeiro encontro de 45 minutos com a Aura. É um espaço para conversar, clarear os pensamentos e encontrar direção com calma.\n\nSe quiser experimentar, entra por aqui 💚👇";
+const body = "Consegui um convite para você experimentar: tem um primeiro encontro de 45 minutos de conversa com a Aura, além de orações e meditações guiadas. É um espaço muito especial para desacelerar a mente, rezar e encontrar direção com calma.\n\nSe quiser experimentar, entra por aqui 💚👇";
 
 // Link do convite sempre no domínio oficial, nunca no endereço de prévia
 export const movementInviteUrl = (code: string) => `https://olaaura.com.br/degustacao?por=${code}`;
