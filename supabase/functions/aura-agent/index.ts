@@ -5329,9 +5329,21 @@ serve(async (req) => {
         || interruptedCount >= 3;
       (profile as any).__degInterrupted = interruptedCount > 0;
       if (degustacaoCourtesyDone) {
-        const wall =
-          'Que bom te ver por aqui. 💛 O que você trouxe no nosso primeiro encontro continua guardado comigo. ' +
-          'Para a gente seguir conversando sempre que você precisar — e manter o próximo encontro — é só tocar em "Ativar meu plano", no topo da tela.';
+        // Chegou para o encontro marcado: acolhe pelo horário e aponta a tela de ativação já aberta.
+        const { data: dueNext } = await supabase
+          .from('sessions').select('scheduled_at').eq('user_id', profile.user_id).eq('status', 'scheduled')
+          .gte('scheduled_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+          .lte('scheduled_at', new Date(Date.now() + 15 * 60 * 1000).toISOString())
+          .order('scheduled_at').limit(1).maybeSingle();
+        const firstName = String(profile.name || '').trim().split(/\s+/)[0];
+        const hora = dueNext?.scheduled_at
+          ? new Date(dueNext.scheduled_at).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+          : null;
+        const wall = hora
+          ? `Que bom te ver aqui${firstName ? `, ${firstName}` : ''}! 💛 Nosso encontro das ${hora} já está pronto para começar. ` +
+            'Abri na sua tela a ativação do plano — no PIX ou cartão leva menos de 1 minuto, e assim que confirmar a gente começa.'
+          : 'Que bom te ver por aqui. 💛 O que você trouxe no nosso primeiro encontro continua guardado comigo. ' +
+            'Para a gente seguir conversando sempre que você precisar — e manter o próximo encontro — é só tocar em "Ativar meu plano", no topo da tela.';
         await supabase
           .from('aura_response_state')
           .update({ is_responding: false, pending_content: null, pending_context: null })
