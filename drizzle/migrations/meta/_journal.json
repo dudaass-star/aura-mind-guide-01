@@ -50,6 +50,13 @@
       "when": 1792092041429,
       "tag": "0006_degustacao_restart_interrupted",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792689771850,
+      "tag": "0007_movement_single_membership",
+      "breakpoints": true
     }
   ]
 }

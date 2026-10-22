@@ -15,8 +15,8 @@
 - PIX: sonda só diagnostica; o checkout bloqueia apenas com `pix_gateway=off` e reconcilia pela mesma identidade.
 - O Movimento Olá Aura separa alcance, primeira conversa e continuidade; participação pública é opcional e reconhecimento não usa ranking comercial.
 - Movement attribution is claimed at global App authentication; Mural requires individual consent, preserving impact and privacy.
-- Participante e Embaixador são papéis distintos; link, divulgação, impacto e conquistas de indicação exigem adesão voluntária registrada em `movement_members.ambassador_since`.
-- Movement onboarding presents the cause and role choice before the form; launch highlights remain until joining, and demo Mural/Kit content stays admin-only to protect public data.
+- Movement has a single membership: joining (`movement_members`) unlocks the personal invite; `ambassador_since` is legacy and auto-filled by trigger so attribution keeps working.
+- Movement onboarding is a single one-tap join before any form; launch highlights remain until joining, and demo Mural/Kit content stays admin-only to protect public data.
 - Chat latency uses `chat_turn_metrics.performance_breakdown`: `preparation_stages_ms` separates profile, quota, agenda, session and context; audio download/transcription, provider, handling and persistence remain separate to locate bottlenecks.
 - Chat reconciliation reads messages independently from response state, with bounded waits and an overlap window; prevents hidden persisted replies.
 - Full-turn latency ends after processing and the last bubble renders, separate from first-bubble latency.
