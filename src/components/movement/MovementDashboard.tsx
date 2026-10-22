@@ -222,7 +222,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
       <section className="rounded-2xl bg-primary px-5 py-6 text-primary-foreground shadow-xl sm:px-8">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground px-3 py-1 text-[11px] font-bold uppercase text-primary"><HeartHandshake className="h-3.5 w-3.5" /> {member.public_name}, você faz parte</span>
         <h2 className="mt-4 font-display text-3xl font-semibold leading-tight">Lembrou de alguém que está passando por um momento difícil?</h2>
-        <p className="mt-2 text-sm leading-relaxed text-primary-foreground/90">Você pode presentear essa pessoa com um primeiro encontro gratuito de 45 minutos com a Aura. Sem pagar nada e sem cartão.</p>
+        <p className="mt-2 text-sm leading-relaxed text-primary-foreground/90">Você pode presentear essa pessoa com um primeiro encontro gratuito de 45 minutos com a Aura.</p>
         <Button size="lg" variant="secondary" className="mt-5 w-full sm:w-auto" onClick={becomeAmbassador} disabled={activatingAmbassador}><MessageCircle /> {activatingAmbassador ? "Preparando…" : "Quero presentear alguém"}</Button>
       </section>
       <MovementCollectiveProgress snapshot={snapshot} />
@@ -254,7 +254,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
         <div className="-mt-10 relative px-5 sm:px-8">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground px-3 py-1 text-[11px] font-bold uppercase text-primary"><HeartHandshake className="h-3.5 w-3.5" /> Seu presente</span>
           <h2 className="mt-4 font-display text-3xl font-semibold leading-tight">{member.public_name}, quem veio ao seu coração agora?</h2>
-          <p className="mt-2 text-sm leading-relaxed text-primary-foreground/90">Você pode presentear uma pessoa querida com um primeiro encontro gratuito de 45 minutos com a Aura. Sem pagar nada e sem cartão.</p>
+          <p className="mt-2 text-sm leading-relaxed text-primary-foreground/90">Você pode presentear uma pessoa querida com um primeiro encontro gratuito de 45 minutos com a Aura.</p>
           <div className="mt-5 grid gap-2 sm:flex sm:flex-wrap">
             <Button size="lg" variant="secondary" asChild><a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" onClick={() => recordEvent("whatsapp_share_started", { message_kind: messageKind })}><MessageCircle /> Presentear no WhatsApp</a></Button>
             <Button size="lg" variant="ghost" className="border border-primary-foreground/60 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={copy}><Copy /> Copiar convite</Button>
