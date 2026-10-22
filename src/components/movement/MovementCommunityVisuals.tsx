@@ -21,16 +21,19 @@ export function MovementMemberOpening({ ambassador }: { ambassador: boolean }) {
 
 // Manifesto de propósito no lugar de números: o Movimento não exibe contadores coletivos.
 export const MOVEMENT_PURPOSE_PILLARS = [
-  { icon: HeartHandshake, title: "Ninguém deveria carregar tudo em silêncio", text: "Este espaço nasceu para que ninguém precise enfrentar sozinho seus medos, dores e escolhas." },
-  { icon: Leaf, title: "Cuidado que acalma a mente e a alma", text: "Um primeiro encontro de 45 minutos com a Aura, com orações e meditações que acolhem e devolvem a paz." },
-  { icon: Sprout, title: "Um gesto simples, na hora certa", text: "Sem metas, sem comissão, sem ranking. O Movimento cresce quando alguém lembra de uma pessoa querida e estende a mão." },
+  { icon: HeartHandshake, title: "Ninguém deveria carregar tudo em silêncio.", text: "Muitas vezes a gente sorri por fora e dá conta do dia a dia, mas carrega um turbilhão de pensamentos por dentro. Este espaço existe para que ninguém precise atravessar suas dúvidas, dores ou decisões na solidão." },
+  { icon: Leaf, title: "Um encontro que acolhe a mente e a alma.", text: "Um primeiro encontro de 45 minutos de escuta verdadeira e direção com a Aura, somado a orações e meditações que trazem paz ao coração e clareza para o próximo passo." },
+  { icon: Sprout, title: "Um gesto que nasce de quem se sentiu bem.", text: "O Movimento cresce do jeito mais puro que existe: quando alguém vive algo que lhe faz bem e, espontaneamente, lembra de outra pessoa querida que também merece esse cuidado." },
 ] as const;
 
+export const MOVEMENT_PURPOSE_CLOSING = "Você faz parte de algo que está tocando vidas.";
+
 export function MovementCollectiveProgress(_props: { snapshot?: unknown }) {
-  return <section aria-label="O que nos move juntos">
-    <p className="text-xs font-bold uppercase text-primary">Uma causa compartilhada</p>
-    <h3 className="mt-2 font-display text-2xl font-semibold sm:text-3xl">O que nos move juntos</h3>
-    <div className="mt-5 grid gap-4 border-y border-border py-5 sm:grid-cols-3">{MOVEMENT_PURPOSE_PILLARS.map(({ icon: Icon, title, text }) => <div key={title} className="flex items-start gap-3 sm:block"><Icon className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" /><div><p className="text-sm font-semibold sm:mt-3">{title}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{text}</p></div></div>)}</div>
+  return <section aria-label="O que nos move juntos" className="overflow-hidden rounded-2xl bg-foreground px-6 py-10 text-background sm:px-10">
+    <p className="text-xs font-bold uppercase text-background/60">Uma causa compartilhada</p>
+    <h3 className="mt-2 font-display text-3xl font-semibold sm:text-4xl">O que nos move juntos</h3>
+    <div className="mt-8 space-y-10">{MOVEMENT_PURPOSE_PILLARS.map(({ icon: Icon, title, text }, i) => <div key={title} className="animate-fade-in" style={{ animationDelay: `${i * 150}ms` }}><Icon className="h-7 w-7 text-primary" aria-hidden="true" /><p className="mt-3 font-display text-2xl font-semibold leading-tight sm:text-3xl">{title}</p><p className="mt-3 text-sm leading-relaxed text-background/75 sm:text-base">{text}</p></div>)}</div>
+    <p className="mt-10 border-t border-background/20 pt-8 font-display text-2xl font-semibold leading-tight text-primary sm:text-3xl">{MOVEMENT_PURPOSE_CLOSING}</p>
   </section>;
 }
 
