@@ -31,7 +31,7 @@ export function MovementGiftPrompt({ userId, fullName, trigger, onClose }: { use
       setBusy(false);
       if (error || !data) { popup?.close(); trackMovement("gift_prompt_failed", "app", { trigger }); return; }
       referral = data.referral_code;
-      trackMovement("member_joined", "app", { role: "ambassador", mode: "gift_prompt" });
+      trackMovement("member_joined", "app", { mode: "gift_prompt" });
     } else {
       // Já é membro: registra a escolha voluntária de indicar, se ainda não houver.
       void supabasePortal.from("movement_members").update({ ambassador_since: new Date().toISOString() }).eq("user_id", userId).is("ambassador_since", null).then(() => undefined);
