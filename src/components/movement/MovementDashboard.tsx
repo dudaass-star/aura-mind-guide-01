@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { claimMovementReferral, decideMovementRecognition, MOVEMENT_ACHIEVEMENTS, PARTICIPANT_ACHIEVEMENTS } from "@/lib/movement";
@@ -128,13 +127,6 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
     toast({ title: `${publicName}, você faz parte 💚`, description: "Sua conquista “Eu Faço Parte” já está liberada." });
   };
 
-  const updatePreference = async (field: "show_achievements" | "receive_updates", value: boolean) => {
-    if (!member) return;
-    setMember({ ...member, [field]: value });
-    const preference = field === "show_achievements" ? { show_achievements: value } : { receive_updates: value };
-    const { error } = await supabasePortal.from("movement_members").update(preference).eq("id", member.id);
-    if (!error && field === "receive_updates") recordEvent(value ? "updates_enabled" : "updates_disabled");
-  };
 
   const recordEvent = (eventType: string, metadata: Record<string, string> = {}) => {
     if (previewIntroduction || !isActive) return;
@@ -180,7 +172,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
         <h3 className="mt-2 font-display text-2xl font-semibold">Sabe aquela amiga, mãe ou irmã que está passando por um momento difícil?</h3>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Ao fazer parte, você já pode enviar a ela um primeiro encontro gratuito com a Aura. Sem formulário: entramos com o seu nome, {suggestedName.trim().split(/\s+/)[0] || "e você ajusta depois"}.</p>
         <Button type="button" size="lg" className="mt-5 h-auto min-h-14 w-full justify-between whitespace-normal py-3 text-left" disabled={saving} onClick={() => quickJoin("ambassador")}><span className="flex items-center gap-2"><HeartHandshake className="shrink-0" /> {saving ? "Entrando…" : "Fazer parte do Movimento"}</span><ArrowRight className="shrink-0" /></Button>
-        <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">Participar é gratuito. Não há comissão, meta ou obrigação de compartilhar. Você aparece no Mural só pelo primeiro nome e pode mudar quando quiser.</p>
+        <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">Participar é gratuito. Aqui você aparece só pelo primeiro nome.</p>
       </section>
     </div>
   );
@@ -233,7 +225,6 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Escolha a mensagem da causa que mais conversa com você. Ela fica na sua área e pode ser alterada depois.</p>
         <div className="mt-5 grid gap-3">{causeMessages.map((message) => <Button key={message} type="button" variant={causeMessage === message ? "secondary" : "outline"} className="h-auto min-h-14 justify-start whitespace-normal px-4 py-3 text-left leading-relaxed" onClick={() => selectCauseMessage(message)}>{causeMessage === message && <Check className="shrink-0" />}<span>{message}</span></Button>)}</div>
       </section>
-      <section className="border-t border-border pt-7"><h3 className="font-display text-xl font-semibold">Sua privacidade</h3><div className="mt-4 space-y-4"><label className="flex items-center justify-between gap-4"><span><b className="block text-sm">Mostrar sua participação no Mural</b><span className="text-xs text-muted-foreground">Seu modo de exibição continua sendo respeitado.</span></span><Switch checked={member.show_achievements} onCheckedChange={(v) => updatePreference("show_achievements", v)} /></label><label className="flex items-center justify-between gap-4"><span><b className="block text-sm">Receber novidades do Movimento</b><span className="text-xs text-muted-foreground">Somente atualizações relevantes.</span></span><Switch checked={member.receive_updates} onCheckedChange={(v) => updatePreference("receive_updates", v)} /></label></div></section>
     </div>
   );
 
@@ -288,7 +279,6 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
         <div className="flex items-center gap-3"><Award className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Marcos do seu cuidado</h3></div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">{MOVEMENT_ACHIEVEMENTS.filter(unlocked).map((achievement, index) => <div key={achievement.id} className="flex items-start gap-3 rounded-lg border border-primary/35 bg-card p-4"><MovementAchievementSymbol id={achievement.id} index={index} /><div><p className="font-semibold">{achievement.name}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{achievement.description}</p></div></div>)}</div>
       </section>}
-      <section className="border-t border-border pt-7"><h3 className="font-display text-xl font-semibold">Sua privacidade</h3><div className="mt-4 space-y-4"><label className="flex items-center justify-between gap-4"><span><b className="block text-sm">Mostrar conquistas no Mural</b><span className="text-xs text-muted-foreground">Seu modo de exibição continua sendo respeitado.</span></span><Switch checked={member.show_achievements} onCheckedChange={(v) => updatePreference("show_achievements", v)} /></label><label className="flex items-center justify-between gap-4"><span><b className="block text-sm">Receber novidades do Movimento</b><span className="text-xs text-muted-foreground">Somente atualizações relevantes.</span></span><Switch checked={member.receive_updates} onCheckedChange={(v) => updatePreference("receive_updates", v)} /></label></div></section>
     </div>
   );
 }
