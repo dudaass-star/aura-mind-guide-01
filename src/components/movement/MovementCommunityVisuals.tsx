@@ -37,21 +37,32 @@ export function MovementCollectiveProgress(_props: { snapshot?: unknown }) {
   </section>;
 }
 
+// Prévia do presente: mostra a quem compartilha exatamente o que a pessoa querida vai receber.
+export function MovementGiftPreview() {
+  const items = [
+    { icon: MessageCircle, title: "Um encontro de 45 minutos", text: "Uma conversa guiada com a Aura, com escuta de verdade e direção para o próximo passo." },
+    { icon: Heart, title: "Orações narradas", text: "Momentos de fé e acolhimento na voz da Aura, para o começo ou o fim do dia." },
+    { icon: Leaf, title: "Meditações guiadas", text: "Pausas que acalmam a mente e devolvem a paz, no tempo de cada pessoa." },
+  ];
+  return <section aria-label="O que a pessoa querida vai receber">
+    <p className="text-xs font-bold uppercase text-primary">O presente que você envia</p>
+    <h3 className="mt-2 font-display text-2xl font-semibold sm:text-3xl">O que ela vai receber</h3>
+    <div className="mt-5 grid gap-3 sm:grid-cols-3">{items.map(({ icon: Icon, title, text }, index) => <div key={title} className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 sm:flex-col"><MovementAchievementSymbol id={["first", "cause", "member"][index]} index={index} /><div><p className="font-semibold">{title}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{text}</p></div><Icon className="hidden" aria-hidden="true" /></div>)}</div>
+  </section>;
+}
+
 export function MovementCommunityMural({ stories }: { stories: MuralStory[] }) {
+  // Sem histórias autorizadas, o Mural não aparece: nada de "em construção".
+  if (stories.length === 0) return null;
   return <section aria-label="Mural do Movimento">
     <p className="text-xs font-bold uppercase text-primary">Mural do Movimento</p>
     <h3 className="mt-2 font-display text-2xl font-semibold sm:text-3xl">Histórias que nos conectam</h3>
-    <p className="mt-2 text-sm text-muted-foreground">Uma causa em comum. Diferentes formas de fazer parte.</p>
-    {stories.length > 0 ? <div className="mt-5 grid gap-4 sm:grid-cols-2">{stories.slice(0, 4).map((story, index) => <article key={story.id} className={`rounded-lg border border-border border-l-4 border-l-primary bg-card p-5 ${index === 0 ? "sm:col-span-2 sm:p-7" : ""}`}>
+    <div className="mt-5 grid gap-4 sm:grid-cols-2">{stories.slice(0, 4).map((story, index) => <article key={story.id} className={`rounded-lg border border-border border-l-4 border-l-primary bg-card p-5 ${index === 0 ? "sm:col-span-2 sm:p-7" : ""}`}>
       <p className="text-xs font-bold uppercase text-primary">{story.member_name}</p>
       <Quote className="mt-4 h-6 w-6 text-primary" aria-hidden="true" />
       <h4 className="mt-2 font-[Outfit] text-xl font-semibold sm:text-2xl">{story.title}</h4>
       <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{story.body}</p>
-    </article>)}</div> : <div className="mt-5 flex gap-4 border-l-4 border-primary bg-card px-5 py-6">
-      <Sprout className="mt-1 h-7 w-7 shrink-0 text-primary" />
-      <div><p className="font-[Outfit] text-xl font-semibold">Este espaço também está começando.</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">As primeiras histórias ainda estão sendo construídas. Quando forem autorizadas, terão lugar aqui.</p></div>
-    </div>}
-    <p className="mt-3 text-xs text-muted-foreground">No Mural, só histórias autorizadas por quem foi reconhecido.</p>
+    </article>)}</div>
   </section>;
 }
 
