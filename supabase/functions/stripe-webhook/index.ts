@@ -1528,6 +1528,17 @@ Me conta: como você está hoje?`;
         }
       }
 
+      // Fim do período pago desta fatura: maior period.end entre as linhas.
+      // Só estende a validade para frente; nunca encurta.
+      const paidPeriodEndSec = Math.max(0, ...((invoice.lines?.data || []) as Array<{ period?: { end?: number } }>).map((l) => Number(l.period?.end || 0)));
+      const paidPeriodEndIso = Number(invoice.amount_paid || 0) > 0 && paidPeriodEndSec > Date.now() / 1000
+        ? new Date(paidPeriodEndSec * 1000).toISOString()
+        : null;
+      const extendExpiry = (current: string | null | undefined) =>
+        paidPeriodEndIso && (!current || new Date(current).getTime() < new Date(paidPeriodEndIso).getTime())
+          ? { plan_expires_at: paidPeriodEndIso }
+          : {};
+
       if (paidSubscriptionId) {
         let retentionOfferIdsPaid: string[] = [];
         try {
