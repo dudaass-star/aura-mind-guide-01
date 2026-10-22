@@ -1528,6 +1528,17 @@ Me conta: como você está hoje?`;
         }
       }
 
+      // Fim do período pago desta fatura: maior period.end entre as linhas.
+      // Só estende a validade para frente; nunca encurta.
+      const paidPeriodEndSec = Math.max(0, ...((invoice.lines?.data || []) as Array<{ period?: { end?: number } }>).map((l) => Number(l.period?.end || 0)));
+      const paidPeriodEndIso = Number(invoice.amount_paid || 0) > 0 && paidPeriodEndSec > Date.now() / 1000
+        ? new Date(paidPeriodEndSec * 1000).toISOString()
+        : null;
+      const extendExpiry = (current: string | null | undefined) =>
+        paidPeriodEndIso && (!current || new Date(current).getTime() < new Date(paidPeriodEndIso).getTime())
+          ? { plan_expires_at: paidPeriodEndIso }
+          : {};
+
       if (paidSubscriptionId) {
         let retentionOfferIdsPaid: string[] = [];
         try {
@@ -1542,6 +1553,11 @@ Me conta: como você está hoje?`;
           const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
+            let expiryPatch: Record<string, string> = {};
+            if (profile) {
+              const { data: expRow } = await supabase.from('profiles').select('plan_expires_at').eq('id', profile.id).maybeSingle();
+              expiryPatch = extendExpiry(expRow?.plan_expires_at);
+            }
 
             if (profile && ['trial', 'trial_expired'].includes(profile.status) && profile.trial_started_at) {
               const { error: updateError } = await supabase
@@ -1550,6 +1566,7 @@ Me conta: como você está hoje?`;
                   status: 'active',
                   converted_at: new Date().toISOString(),
                   payment_failed_at: null,
+                  ...expiryPatch,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', profile.id);
@@ -1575,6 +1592,7 @@ Me conta: como você está hoje?`;
                 .update({
                   status: normalizedStatus,
                   payment_failed_at: null,
+                  ...expiryPatch,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', profile.id);
