@@ -19,14 +19,18 @@ export function MovementMemberOpening({ ambassador }: { ambassador: boolean }) {
   </section>;
 }
 
-export function MovementCollectiveProgress({ snapshot }: { snapshot: { members: number; started: number; continued: number } | null }) {
-  return <section aria-label="Construção coletiva">
+// Manifesto de propósito no lugar de números: o Movimento não exibe contadores coletivos.
+export const MOVEMENT_PURPOSE_PILLARS = [
+  { icon: HeartHandshake, title: "Ninguém deveria carregar tudo em silêncio", text: "Este espaço nasceu para que ninguém precise enfrentar sozinho seus medos, dores e escolhas." },
+  { icon: Leaf, title: "Cuidado que acalma a mente e a alma", text: "Um primeiro encontro de 45 minutos com a Aura, com orações e meditações que acolhem e devolvem a paz." },
+  { icon: Sprout, title: "Um gesto simples, na hora certa", text: "Sem metas, sem comissão, sem ranking. O Movimento cresce quando alguém lembra de uma pessoa querida e estende a mão." },
+] as const;
+
+export function MovementCollectiveProgress(_props: { snapshot?: unknown }) {
+  return <section aria-label="O que nos move juntos">
     <p className="text-xs font-bold uppercase text-primary">Uma causa compartilhada</p>
-    <h3 className="mt-2 font-display text-2xl font-semibold sm:text-3xl">O que estamos construindo juntos</h3>
-    {snapshot && snapshot.members >= 10 ? <>
-      <div className="mt-5 grid gap-4 border-y border-border py-5 sm:grid-cols-3">{[{ value: snapshot.members, title: "Pessoas no Movimento", text: "Gente que acredita nessa mesma causa." }, { value: snapshot.started, title: "Primeiras conversas", text: "Convites que se tornaram um começo de conversa." }, { value: snapshot.continued, title: "Pessoas que continuaram", text: "Começos que seguiram com acompanhamento." }].map(({ value, title, text }) => <div key={title}><p className="font-display text-3xl font-semibold text-primary">{value}</p><p className="mt-2 text-sm font-semibold">{title}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{text}</p></div>)}</div>
-      <p className="mt-3 text-xs text-muted-foreground">Nosso impacto coletivo, sem expor a identidade de ninguém.</p>
-    </> : <div className="mt-5 flex items-start gap-4 border-y border-border py-6"><Sprout className="mt-1 h-7 w-7 shrink-0 text-primary" aria-hidden="true" /><div><p className="font-display text-xl font-semibold">As primeiras pessoas abrem caminho.</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">O Movimento está começando. Cada presença ajuda a dar forma a essa causa, mesmo sem compartilhar convites.</p><p className="mt-3 text-xs leading-relaxed text-muted-foreground">Os números coletivos aparecem a partir de 10 participantes, preservando a privacidade de todos.</p></div></div>}
+    <h3 className="mt-2 font-display text-2xl font-semibold sm:text-3xl">O que nos move juntos</h3>
+    <div className="mt-5 grid gap-4 border-y border-border py-5 sm:grid-cols-3">{MOVEMENT_PURPOSE_PILLARS.map(({ icon: Icon, title, text }) => <div key={title} className="flex items-start gap-3 sm:block"><Icon className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" /><div><p className="text-sm font-semibold sm:mt-3">{title}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{text}</p></div></div>)}</div>
   </section>;
 }
 
