@@ -55,7 +55,8 @@ export function DegustacaoPlansDialog({ open, onOpenChange, reason, userId, onAc
   const [showAll, setShowAll] = useState(false);
   const [showCycles, setShowCycles] = useState(false);
   const [cpf, setCpf] = useState("");
-  const [askCpf, setAskCpf] = useState(false);
+  // PIX já vem selecionado: o CPF aparece junto, para gerar o código em 1 toque.
+  const [askCpf, setAskCpf] = useState(true);
   const [cycle, setCycle] = useState<Cycle>("monthly");
   const cycleInfo = CYCLES.find((c) => c.id === cycle) ?? CYCLES[0];
   const priceOf = (id: DegustacaoPlanId) => CYCLE_PRICES[id][cycle];
