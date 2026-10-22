@@ -3,7 +3,7 @@ import { Gift, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { trackMovement } from "@/lib/movement-analytics";
-import { MOVEMENT_INVITE_MESSAGES } from "@/lib/movement-invite";
+import { MOVEMENT_INVITE_MESSAGES, movementInviteUrl } from "@/lib/movement-invite";
 import { writeGiftState } from "@/lib/movement-gift-cadence";
 
 // Card sutil de presente: aparece raramente; o envio confirma a adesão como embaixadora.
@@ -17,7 +17,7 @@ export function MovementGiftPrompt({ userId, fullName, trigger, onClose }: { use
     void supabasePortal.from("movement_members").select("referral_code").eq("user_id", userId).maybeSingle().then(({ data }) => setCode(data?.referral_code || null));
   }, [userId, trigger]);
 
-  const shareFor = (referral: string) => `${MOVEMENT_INVITE_MESSAGES.user}\n${window.location.origin}/degustacao?por=${referral}`;
+  const shareFor = (referral: string) => `${MOVEMENT_INVITE_MESSAGES.user}\n${movementInviteUrl(referral)}`;
 
   const send = async () => {
     if (busy) return;
