@@ -10,7 +10,7 @@ export function MovementMemberOpening({ ambassador }: { ambassador: boolean }) {
       <p className="text-xs font-bold uppercase">Nosso Movimento</p>
       <h2 className="mt-3 font-display text-3xl font-semibold leading-tight sm:text-4xl">Você faz parte de algo que vai além de você.</h2>
       <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/90 sm:text-base">Estamos juntos para que apoio, compreensão e direção cheguem a mais pessoas.</p>
-      <p className="mt-5 text-xs font-semibold text-primary-foreground/90">Seu lugar aqui: {ambassador ? "Embaixador" : "Participante"}. Seu pertencimento não depende de indicações.</p>
+      <p className="mt-5 text-xs font-semibold text-primary-foreground/90">Seu lugar aqui: integrante do Movimento. Seu pertencimento não depende de indicações.</p>
     </div>
     <div className="grid sm:grid-cols-2">
       <div className="bg-[hsl(var(--portal-journey))] p-5 text-[hsl(var(--portal-journey-foreground))] sm:p-7"><HeartHandshake className="h-6 w-6" aria-hidden="true" /><h3 className="mt-3 font-display text-xl font-semibold">Eu faço parte</h3><p className="mt-2 text-sm leading-relaxed">Apoiar essa causa, acompanhar e se reconhecer nela já é ter um lugar aqui.</p></div>

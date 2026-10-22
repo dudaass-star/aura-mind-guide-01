@@ -220,13 +220,13 @@ export default function PortalLogin() {
                 {isMovementEntry ? "Movimento Olá Aura" : "Olá Aura, sempre por perto"}
               </p>
               <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">
-                {isAmbassadorEntry ? "Entre como Embaixador" : isMovementEntry ? "Entre para fazer parte" : "Entre na Olá Aura"}
+                {isMovementEntry ? "Entre para fazer parte" : "Entre na Olá Aura"}
               </h1>
               <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground font-body">
                 {isAmbassadorEntry
                   ? "Receba seu link pessoal, compartilhe do seu jeito e acompanhe o impacto."
                   : isMovementEntry
-                  ? "Participe gratuitamente, acompanhe o Movimento e receba conquistas de pertencimento."
+                  ? "Participe gratuitamente e presenteie quem você ama com um primeiro encontro com a Aura."
                   : "Continue suas conversas e acesse tudo o que acompanha você."}
               </p>
             </div>
