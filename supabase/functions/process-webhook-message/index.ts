@@ -794,7 +794,11 @@ Deno.serve(async (req) => {
       const lastRedirectAt = (profile as any).whatsapp_app_redirect_last_sent_at
         ? new Date((profile as any).whatsapp_app_redirect_last_sent_at).getTime()
         : 0;
-      const withinRedirectLimit = lastRedirectAt > 0 && now - lastRedirectAt < 24 * 60 * 60 * 1000;
+      // Degustação nunca fica no silêncio: quem responde no WhatsApp quer continuar.
+      // Recebe o link direto para a ativação do plano (limite curto só contra repetição em rajada).
+      const isDegustacaoLead = String(profile.status || '').toLowerCase() === 'degustacao';
+      const redirectWindowMs = isDegustacaoLead ? 10 * 60 * 1000 : 24 * 60 * 60 * 1000;
+      const withinRedirectLimit = lastRedirectAt > 0 && now - lastRedirectAt < redirectWindowMs;
       if (withinRedirectLimit) {
         return new Response(JSON.stringify({ success: true, action: 'app_redirect_rate_limited', message_id: persisted.mensagem.id }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -802,7 +806,7 @@ Deno.serve(async (req) => {
       }
 
       const firstMigration = !(profile as any).whatsapp_app_migration_sent_at;
-      const destination = wantsSessionArea(messageText || '') ? 'sessoes' : 'conversar';
+      const destination = isDegustacaoLead && !firstMigration ? 'planos' : wantsSessionArea(messageText || '') ? 'sessoes' : 'conversar';
       const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
       if (!internalSecret) throw new Error('INTERNAL_WEBHOOK_SECRET ausente');
       const accessResponse = await fetch(`${supabaseUrl}/functions/v1/portal-whatsapp-access`, {
@@ -816,7 +820,7 @@ Deno.serve(async (req) => {
           action: 'request',
           phone: cleanPhone,
           destination,
-          message_variant: firstMigration ? 'app_migration' : 'app_redirect',
+          message_variant: destination === 'planos' ? 'degustacao_plans' : firstMigration ? 'app_migration' : 'app_redirect',
         }),
       });
       const accessResult = await accessResponse.json().catch(() => ({}));

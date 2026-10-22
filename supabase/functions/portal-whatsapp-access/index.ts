@@ -9,7 +9,7 @@ const corsHeaders = {
 
 const GENERIC_MESSAGE = "Se o WhatsApp informado estiver ligado a um acesso válido, a Aura enviará o link por lá.";
 const BLOCKED_STATUSES = new Set(["canceled", "inactive", "paused", "trial_expired"]);
-const VALID_DESTINATIONS = new Set(["conversar", "sessoes", "hoje"]);
+const VALID_DESTINATIONS = new Set(["conversar", "sessoes", "hoje", "planos"]);
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
       if (!profile?.email || !hasValidAccess(profile)) return json({ error: "access_unavailable" }, 403);
 
       const destination = VALID_DESTINATIONS.has(String(request.destination)) ? String(request.destination) : "conversar";
-      const destinationQuery = destination === "conversar" ? "?tab=conversar&open=1&migracao=whatsapp" : `?tab=${destination}&migracao=whatsapp`;
+      const destinationQuery = destination === "conversar" ? "?tab=conversar&open=1&migracao=whatsapp" : destination === "planos" ? "?tab=sessoes&open_plans=true&migracao=whatsapp" : `?tab=${destination}&migracao=whatsapp`;
       const redirectTo = `${siteOrigin(req)}/meu-espaco${destinationQuery}`;
       let { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
         type: "magiclink",
@@ -140,7 +140,10 @@ Deno.serve(async (req) => {
     const firstName = profile.name?.trim().split(/\s+/)[0] || "";
     const isAppMigration = body?.message_variant === "app_migration";
     const isAppRedirect = body?.message_variant === "app_redirect";
-    const text = isAppMigration
+    const isDegustacaoPlans = body?.message_variant === "degustacao_plans";
+    const text = isDegustacaoPlans
+      ? `${firstName ? `Oi, ${firstName}!` : "Oi!"} 💛 Que bom que você quer continuar. Toque aqui que eu já abro a ativação do seu plano no App — leva menos de 1 minuto no PIX ou cartão, e a gente segue com o nosso encontro:\n${link}\n\nSe tiver qualquer dificuldade para pagar, me conta aqui que eu te ajudo.`
+      : isAppMigration
       ? `${firstName ? `Oi, ${firstName}.` : "Oi."} A AURA ganhou um espaço próprio para acompanhar você com mais continuidade.\n\nNo app Olá Aura, suas conversas não ficam soltas: você pode falar por texto ou áudio, retomar de onde parou e ver suas sessões, jornadas e descobertas reunidas na mesma história.\n\nA partir de agora, nossas conversas e sessões acontecem por lá. O WhatsApp continua disponível para avisos e ajuda com acesso, pagamento ou conta.\n\nSua mensagem já está no App — é só tocar e continuar:\n${link}\n\nTe encontro lá. 💛`
       : isAppRedirect
         ? `Nossa conversa continua no app Olá Aura, junto com todo o seu histórico. Sua mensagem já está lá:\n${link}\n\nPor aqui, sigo ajudando com acesso, pagamento ou conta.`

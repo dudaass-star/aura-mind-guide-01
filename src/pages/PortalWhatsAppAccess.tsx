@@ -30,7 +30,7 @@ export default function PortalWhatsAppAccess() {
         setError(true);
         return;
       }
-      setDestination(data.destination === "sessoes" || data.destination === "hoje" ? data.destination : "conversar");
+      setDestination(data.destination === "sessoes" || data.destination === "hoje" || data.destination === "planos" ? data.destination : "conversar");
       const { error: verifyError } = await supabasePortal.auth.verifyOtp({
         token_hash: data.token_hash,
         type: data.type === "signup" ? "signup" : "magiclink",
@@ -46,7 +46,9 @@ export default function PortalWhatsAppAccess() {
   if (session) {
     const query = destination === "conversar"
       ? "?tab=conversar&open=1&migracao=whatsapp"
-      : `?tab=${destination}&migracao=whatsapp`;
+      : destination === "planos"
+        ? "?tab=sessoes&open_plans=true&migracao=whatsapp"
+        : `?tab=${destination}&migracao=whatsapp`;
     return <Navigate to={`/meu-espaco${query}`} replace />;
   }
 
