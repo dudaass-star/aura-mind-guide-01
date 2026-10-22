@@ -11,7 +11,7 @@ import { claimMovementReferral, decideMovementRecognition, MOVEMENT_ACHIEVEMENTS
 import { toast } from "@/hooks/use-toast";
 import movementGroupImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
 import movementImage from "@/assets/movimento-ola-aura.jpg";
-import { MovementAchievementSymbol, MovementCollectiveProgress, MovementCommunityMural, MovementGiftPreview, MovementMemberOpening } from "./MovementCommunityVisuals";
+import { MovementAchievementSymbol, MovementBelonging, MovementCollectiveProgress, MovementCommunityMural, MovementGiftPreview, MovementInviteJourney, MovementMemberOpening } from "./MovementCommunityVisuals";
 import { trackMovement, useMovementVisibility } from "@/lib/movement-analytics";
 import { MOVEMENT_INVITE_MESSAGES, movementInviteUrl } from "@/lib/movement-invite";
 
@@ -270,6 +270,17 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
       ><MovementGiftPreview />
       <MovementCollectiveProgress snapshot={snapshot} />
       <div data-movement-event="mural_viewed"><MovementCommunityMural stories={snapshot?.mural || []} /></div>
+      <MovementInviteJourney />
+      <MovementBelonging name={member.public_name} since={member.created_at} />
+      <section className="overflow-hidden rounded-2xl bg-primary px-6 py-10 text-center text-primary-foreground sm:px-10">
+        <HeartHandshake className="mx-auto h-8 w-8" aria-hidden="true" />
+        <p className="mx-auto mt-4 max-w-xl font-display text-2xl font-semibold leading-tight sm:text-3xl">Talvez alguém esteja esperando, sem saber, por uma mensagem sua hoje.</p>
+        <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-primary-foreground/85">Pense em uma pessoa. Não precisa ser alguém em crise, basta ser alguém que você quer bem.</p>
+        <div className="mt-6 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+          <Button size="lg" variant="secondary" asChild><a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer" onClick={() => recordEvent("whatsapp_share_started", { message_kind: messageKind, place: "closing" })}><MessageCircle /> Presentear no WhatsApp</a></Button>
+          <Button size="lg" variant="ghost" className="border border-primary-foreground/60 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" onClick={copy}><Copy /> Copiar convite</Button>
+        </div>
+      </section>
       {pendingRecognitions.length > 0 && <section className="space-y-3"><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Você foi reconhecido</h3></div>{pendingRecognitions.map((recognition) => <article key={recognition.id} className="rounded-lg border border-primary/30 bg-secondary/50 p-5"><p className="text-xs font-bold uppercase text-primary">Voz do Movimento</p><h4 className="mt-2 font-display text-xl font-semibold">{recognition.title}</h4><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{recognition.body}</p><p className="mt-4 text-xs text-muted-foreground">Você decide se este reconhecimento pode aparecer no Mural público.</p><div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => decideRecognition(recognition, "accepted")}><CheckCircle2 /> Autorizar publicação</Button><Button variant="outline" onClick={() => decideRecognition(recognition, "declined")}>Manter privado</Button></div></article>)}</section>}
       {decidedRecognitions.length > 0 && <section><div className="flex items-center gap-3"><Sparkles className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Seus reconhecimentos</h3></div><div className="mt-4 space-y-3">{decidedRecognitions.map((recognition) => <article key={recognition.id} className="border-l-2 border-primary bg-secondary/30 p-5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase text-primary">{recognition.kind === "voice" ? "Voz do Movimento" : "Reconhecimento"}</p><p className="text-xs text-muted-foreground">{recognition.consent_decision === "accepted" ? "Autorizado para o Mural" : "Visível somente para você"}</p></div><h4 className="mt-2 font-display text-xl font-semibold">{recognition.title}</h4><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{recognition.body}</p></article>)}</div></section>}
       {recentImpact.length > 0 && <section><div className="flex items-center gap-3"><History className="h-5 w-5 text-primary" /><h3 className="font-display text-2xl font-semibold">Seu cuidado no mundo</h3></div><div className="mt-4 divide-y divide-border border-y border-border">{recentImpact.map((item, index) => <div key={`${item.reached_at}-${index}`} className="flex items-center justify-between gap-4 py-4"><div><p className="text-sm font-semibold">{item.continued_at ? "Uma pessoa decidiu continuar" : item.started_at ? "Uma pessoa começou uma conversa" : "Seu convite foi conhecido"}</p><p className="mt-1 text-xs text-muted-foreground">Sem expor a identidade de quem recebeu.</p></div><CheckCircle2 className="h-5 w-5 shrink-0 text-primary" /></div>)}</div></section>}

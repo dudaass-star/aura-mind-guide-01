@@ -73,3 +73,34 @@ export function MovementAchievementSymbol({ id, index }: { id: string; index: nu
   const Icon = achievementIcons[id as keyof typeof achievementIcons] || Star;
   return <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${achievementTones[index % achievementTones.length]}`}><Icon className="h-6 w-6" aria-hidden="true" /></span>;
 }
+// Jornada de um convite: mostra o caminho que um gesto percorre, sem números.
+export function MovementInviteJourney() {
+  const steps = [
+    { icon: Heart, title: "Você lembra de alguém", text: "Uma amiga, sua mãe, uma irmã, um colega. Alguém que merece um espaço só para si." },
+    { icon: MessageCircle, title: "Ela recebe seu presente", text: "Uma mensagem sua, com carinho, e um convite pessoal para conhecer a Aura." },
+    { icon: Leaf, title: "Ela é acolhida", text: "Um encontro de 45 minutos para ser ouvida, organizar o que sente e encontrar direção." },
+    { icon: Sprout, title: "O cuidado continua", text: "Orações e meditações acompanham os dias dela. E, quem sabe, ela também lembra de alguém." },
+  ];
+  return <section aria-label="A jornada de um convite">
+    <p className="text-xs font-bold uppercase text-primary">A jornada de um convite</p>
+    <h3 className="mt-2 font-display text-2xl font-semibold sm:text-3xl">Um gesto seu pode ir muito longe</h3>
+    <ol className="mt-6 space-y-0">{steps.map(({ icon: Icon, title, text }, i) => <li key={title} className="relative flex gap-4 pb-7 last:pb-0">
+      {i < steps.length - 1 && <span className="absolute left-6 top-12 h-[calc(100%-3rem)] w-px bg-primary/30" aria-hidden="true" />}
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"><Icon className="h-5 w-5" aria-hidden="true" /></span>
+      <div className="pt-1"><p className="text-xs font-bold text-primary">{i + 1}</p><p className="font-display text-lg font-semibold">{title}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{text}</p></div>
+    </li>)}</ol>
+  </section>;
+}
+
+// Pertencimento: lembra à integrante o lugar dela, sem depender de indicações.
+export function MovementBelonging({ name, since }: { name: string; since: string }) {
+  const date = new Date(since).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Sao_Paulo" });
+  return <section aria-label="Seu lugar no Movimento" className="overflow-hidden rounded-2xl border border-primary/30 bg-card">
+    <img src={movementGroupImage} alt="Pessoas abraçadas com camisetas da Olá Aura" className="h-40 w-full object-cover sm:h-56" />
+    <div className="p-6 sm:p-8">
+      <p className="text-xs font-bold uppercase text-primary">Seu lugar no Movimento</p>
+      <h3 className="mt-2 font-display text-2xl font-semibold sm:text-3xl">{name}, você faz parte desde {date}.</h3>
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Seu lugar aqui não depende de quantas pessoas você convida. Ele existe porque você acredita que cuidar da mente e da alma deveria estar ao alcance de mais gente. Cada vez que você abre a Aura, ora ou medita, esse Movimento também vive em você.</p>
+    </div>
+  </section>;
+}
