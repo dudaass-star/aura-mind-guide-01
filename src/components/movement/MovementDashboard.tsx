@@ -180,11 +180,8 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
       <section id="app-escolha-movimento" className="scroll-mt-4">
         <p className="text-xs font-bold uppercase text-primary">Um toque e você faz parte</p>
         <h3 className="mt-2 font-display text-2xl font-semibold">Sabe aquela amiga, mãe ou irmã que está passando por um momento difícil?</h3>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Você pode levar até ela o mesmo apoio que encontrou aqui. Sem formulário: entramos com o seu nome, {suggestedName.trim().split(/\s+/)[0] || "e você ajusta depois"}.</p>
-        <div className="mt-5 grid gap-3">
-          <Button type="button" size="lg" className="h-auto min-h-14 justify-between whitespace-normal py-3 text-left" disabled={saving} onClick={() => quickJoin("ambassador")}><span className="flex items-center gap-2"><MessageCircle className="shrink-0" /> {saving ? "Entrando…" : "Quero convidar alguém que eu amo"}</span><ArrowRight className="shrink-0" /></Button>
-          <Button type="button" size="lg" variant="outline" className="h-auto min-h-12 whitespace-normal py-3" disabled={saving} onClick={() => quickJoin("participant")}><HeartHandshake className="shrink-0" /> Só quero fazer parte</Button>
-        </div>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Ao fazer parte, você já pode enviar a ela um primeiro encontro gratuito com a Aura. Sem formulário: entramos com o seu nome, {suggestedName.trim().split(/\s+/)[0] || "e você ajusta depois"}.</p>
+        <Button type="button" size="lg" className="mt-5 h-auto min-h-14 w-full justify-between whitespace-normal py-3 text-left" disabled={saving} onClick={() => quickJoin("ambassador")}><span className="flex items-center gap-2"><HeartHandshake className="shrink-0" /> {saving ? "Entrando…" : "Fazer parte do Movimento"}</span><ArrowRight className="shrink-0" /></Button>
         <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">Participar é gratuito. Não há comissão, meta ou obrigação de compartilhar. Você aparece no Mural só pelo primeiro nome e pode mudar quando quiser.</p>
       </section>
     </div>
