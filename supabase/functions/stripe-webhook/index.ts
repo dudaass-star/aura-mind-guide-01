@@ -1553,6 +1553,11 @@ Me conta: como você está hoje?`;
           const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
+            let expiryPatch: Record<string, string> = {};
+            if (profile) {
+              const { data: expRow } = await supabase.from('profiles').select('plan_expires_at').eq('id', profile.id).maybeSingle();
+              expiryPatch = extendExpiry(expRow?.plan_expires_at);
+            }
 
             if (profile && ['trial', 'trial_expired'].includes(profile.status) && profile.trial_started_at) {
               const { error: updateError } = await supabase
@@ -1561,6 +1566,7 @@ Me conta: como você está hoje?`;
                   status: 'active',
                   converted_at: new Date().toISOString(),
                   payment_failed_at: null,
+                  ...expiryPatch,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', profile.id);
@@ -1586,6 +1592,7 @@ Me conta: como você está hoje?`;
                 .update({
                   status: normalizedStatus,
                   payment_failed_at: null,
+                  ...expiryPatch,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', profile.id);
