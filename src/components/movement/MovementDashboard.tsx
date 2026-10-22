@@ -13,7 +13,7 @@ import movementGroupImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
 import movementImage from "@/assets/movimento-ola-aura.jpg";
 import { MovementAchievementSymbol, MovementCollectiveProgress, MovementCommunityMural, MovementMemberOpening } from "./MovementCommunityVisuals";
 import { trackMovement, useMovementVisibility } from "@/lib/movement-analytics";
-import { MOVEMENT_INVITE_MESSAGES } from "@/lib/movement-invite";
+import { MOVEMENT_INVITE_MESSAGES, movementInviteUrl } from "@/lib/movement-invite";
 
 const messages = MOVEMENT_INVITE_MESSAGES;
 
@@ -237,7 +237,7 @@ export function MovementDashboard({ userId, suggestedName = "", embedded = false
     </div>
   );
 
-  const shareUrl = `${window.location.origin}/degustacao?por=${member.referral_code}`;
+  const shareUrl = movementInviteUrl(member.referral_code);
   const shareText = `${shareMessage.trim()}\n${shareUrl}`;
   const copy = async () => { await navigator.clipboard.writeText(shareText); recordEvent("invite_copied", { message_kind: messageKind }); toast({ title: "Convite copiado", description: "Agora é só enviar para quem veio à sua mente." }); };
   const pendingRecognitions = recognitions.filter((recognition) => recognition.consent_decision === "pending");
