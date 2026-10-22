@@ -331,6 +331,17 @@ const UserPortal = () => {
     if (!isDegustacao || searchParams.get("open_plans") !== "true") return;
     openDegustacaoPlans("session_soon");
   }, [isDegustacao, searchParams]);
+  // Chegou na hora do encontro marcado: abre a ativação sozinha, sem caçar botão.
+  useEffect(() => {
+    const nextAt = degustacaoState?.nextAt;
+    if (!isDegustacao || !nextAt || !userId || searchParams.get("open_plans") === "true") return;
+    const diff = new Date(nextAt).getTime() - Date.now();
+    if (diff > 15 * 60 * 1000 || diff < -60 * 60 * 1000) return;
+    const key = `aura-degustacao-due-shown:${userId}:${nextAt}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    openDegustacaoPlans("session_soon");
+  }, [isDegustacao, degustacaoState?.nextAt, userId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Momento 1 de conversão: assim que a cortesia termina, abre os planos uma vez.
   useEffect(() => {
     if (!isDegustacao || degustacaoState?.courtesyStatus !== "completed" || !userId) return;
