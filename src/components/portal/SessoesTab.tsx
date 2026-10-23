@@ -180,7 +180,7 @@ export function SessoesTab({
   const lastThread = completedSessions[0]?.continuity_thread;
   const isDegustacao = String(profile?.status || "").toLowerCase() === "degustacao";
   // Na degustação o backend conta também a sessão cortesia; mantemos a mesma regra aqui.
-  const monthUsed = monthSessions.filter((session) => (isDegustacao || !session.quota_exempt) && ["scheduled", "in_progress", "completed", "no_show"].includes(session.status)).length;
+  const monthUsed = monthSessions.filter((session) => (isDegustacao || !session.quota_exempt) && ["scheduled", "in_progress", "completed"].includes(session.status)).length;
   const activeSessions = allSessions.filter((session) => ["scheduled", "in_progress"].includes(session.status));
   const ratingMap = new Map(ratings.map((rating) => [rating.session_id, rating.rating]));
   const planLimit = sessionLimit(profile);

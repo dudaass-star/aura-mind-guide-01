@@ -798,11 +798,32 @@ Deno.serve(async (req) => {
       // Recebe o link direto para a ativação do plano (limite curto só contra repetição em rajada).
       const isDegustacaoLead = String(profile.status || '').toLowerCase() === 'degustacao';
       const redirectWindowMs = isDegustacaoLead ? 10 * 60 * 1000 : 24 * 60 * 60 * 1000;
+      // Pedido de ajuda/desabafo nunca fica sem resposta: acolhe antes do link, mesmo dentro da trava.
+      const asksForSupport = /\b(precis(o|ando|ava)|ajuda|socorro|conversar|falar com (vc|voc[eê])|n[aã]o (estou|t[oô]) bem|t[oô] mal|estou mal|ansios|triste|sozinh)/i.test(messageText || '');
+      let recentAck = false;
+      if (asksForSupport) {
+        const { data: ackRows } = await supabase.from('messages').select('id')
+          .eq('user_id', profile.user_id).eq('role', 'assistant').eq('channel', 'whatsapp')
+          .contains('metadata', { kind: 'support_acknowledgement' })
+          .gte('created_at', new Date(now - 10 * 60 * 1000).toISOString()).limit(1);
+        recentAck = !!ackRows?.length;
+      }
       const withinRedirectLimit = lastRedirectAt > 0 && now - lastRedirectAt < redirectWindowMs;
-      if (withinRedirectLimit) {
+      if (withinRedirectLimit && (!asksForSupport || recentAck)) {
         return new Response(JSON.stringify({ success: true, action: 'app_redirect_rate_limited', message_id: persisted.mensagem.id }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
+      }
+      if (asksForSupport && !recentAck) {
+        const firstName = String(profile.name || '').trim().split(/\s+/)[0];
+        const ack = `${firstName ? firstName + ', ' : ''}eu tô aqui com você. 💛 Que bom que você me chamou.\nVamos conversar com calma no App — lá eu consigo te acompanhar de verdade. Vou te mandar o acesso agora.`;
+        const ackResult = await sendMessage(cleanPhone, ack, undefined, profile.user_id);
+        if (ackResult.success) {
+          await supabase.from('messages').insert({
+            user_id: profile.user_id, role: 'assistant', content: ack, channel: 'whatsapp',
+            metadata: { kind: 'support_acknowledgement' },
+          });
+        }
       }
 
       const firstMigration = !(profile as any).whatsapp_app_migration_sent_at;
