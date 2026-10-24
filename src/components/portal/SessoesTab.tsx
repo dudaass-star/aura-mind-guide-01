@@ -370,13 +370,13 @@ export function SessoesTab({
             const canEnter = session.status === "in_progress" || (diff <= 15 * 60_000 && diff >= -60 * 60_000);
             return (
               <article key={session.id} className={index === 0 ? "rounded-lg bg-foreground p-5 text-background shadow-card" : "rounded-lg border border-border bg-card p-4 shadow-sm"}>
-                <div className="flex items-center justify-between gap-3"><p className={`text-xs font-bold uppercase ${index === 0 ? "text-accent" : "text-primary"}`}>{session.status === "in_progress" ? "Sessão em andamento" : index === 0 ? "Próxima sessão" : "Sessão agendada"}</p><span className={`text-xs ${index === 0 ? "text-background/70" : "text-muted-foreground"}`}>{countdown(session.scheduled_at)}</span></div>
+                <div className="flex items-center justify-between gap-3"><p className={`text-xs font-bold uppercase ${index === 0 ? "text-accent" : "text-primary"}`}>{session.status === "in_progress" ? "Sessão em andamento" : isDegustacao && !session.quota_exempt ? "Pré-reserva · Aguardando confirmação" : index === 0 ? "Próxima sessão" : "Sessão agendada"}</p><span className={`text-xs ${index === 0 ? "text-background/70" : "text-muted-foreground"}`}>{countdown(session.scheduled_at)}</span></div>
                 <p className={`mt-2 font-semibold leading-snug ${index === 0 ? "text-xl" : "text-base"}`}>{formatSessionDate(session.scheduled_at)}</p>
                 {isDegustacao && !session.quota_exempt && (
                   <div className={`mt-4 rounded-md p-3 ${index === 0 ? "bg-background/10" : "bg-primary/5"}`}>
-                    <p className="text-sm font-semibold">Garanta seu horário ativando seu plano</p>
-                    <p className={`mt-1 text-xs ${index === 0 ? "text-background/70" : "text-muted-foreground"}`}>Seu próximo encontro está marcado. Para entrar nele, ative seu plano.</p>
-                    <Button type="button" size="sm" className="mt-3 w-full" variant={index === 0 ? "secondary" : "default"} onClick={() => openDegustacaoPlans("session")}><ArrowUpRight /> Ativar meu plano</Button>
+                    <p className="text-sm font-semibold">Confirme sua vaga para liberar a sala</p>
+                    <p className={`mt-1 text-xs ${index === 0 ? "text-background/70" : "text-muted-foreground"}`}>Seu primeiro encontro foi cortesia. Este horário está pré-agendado e só fica garantido com o plano ativo.</p>
+                    <Button type="button" size="sm" className="mt-3 w-full" variant={index === 0 ? "secondary" : "default"} onClick={() => openDegustacaoPlans("session_end")}><ArrowUpRight /> Confirmar no Essencial · R$ 29,90</Button>
                   </div>
                 )}
                 {canEnter && isDegustacao && !session.quota_exempt ? null : canEnter ? (
