@@ -545,22 +545,26 @@ const UserPortal = () => {
 
   // Card de pré-reserva: integrado à conversa/início; nunca cobre o cabeçalho.
   const degustacaoCardNode = userId && isDegustacao && degustacaoState?.courtesyStatus === "completed" && !degustacaoPlans.open ? (
-    <div className="flex items-center gap-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-foreground">
-          {degustacaoState.nextAt
-            ? `Pré-reservado: ${new Date(degustacaoState.nextAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
-            : "Seu primeiro encontro foi concluído"}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {degustacaoState.nextAt ? "Guardado por 24h · confirme ativando seu plano" : "Ative seu plano para seguir com a AURA"}
-        </p>
-      </div>
-      <Button size="sm" className="shrink-0" onClick={() => {
+    <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-primary">
+        {degustacaoState.nextAt ? "Pré-reserva · Aguardando confirmação" : "Seu 1º encontro foi concluído 💜"}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-foreground">
+        {degustacaoState.nextAt
+          ? `Próximo encontro: ${new Date(degustacaoState.nextAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+          : "O que começamos hoje não precisa parar por aqui"}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {degustacaoState.nextAt
+          ? "Seu primeiro encontro foi cortesia. Confirme sua vaga para garantir a sala e seguir seu acompanhamento com a AURA."
+          : "Escolha seu plano para manter seus encontros e conversar com a AURA sempre que precisar."}
+      </p>
+      <p className="mt-2 text-xs font-medium text-foreground">Essencial · R$ 29,90/mês · sem fidelidade, cancele quando quiser</p>
+      <Button size="sm" className="mt-3 w-full" onClick={() => {
         // Mede quantas pessoas voltam pelo card de pré-reserva.
         void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type: "degustacao_card_clicked", source: "app", metadata: { has_next: Boolean(degustacaoState.nextAt), tab: activeTab } }).then(() => undefined);
         openDegustacaoPlans(degustacaoState.nextAt ? "session_end" : "manual");
-      }}>{degustacaoState.nextAt ? "Confirmar horário" : "Ativar meu plano"}</Button>
+      }}>{degustacaoState.nextAt ? "Confirmar meu horário →" : "Continuar com a AURA →"}</Button>
     </div>
   ) : null;
 
