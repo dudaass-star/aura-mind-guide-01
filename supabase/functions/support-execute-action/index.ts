@@ -272,7 +272,7 @@ serve(async (req) => {
               .select("id, subscription_id, status")
               .is("replaced_by_subscription_id", null)
               .not("subscription_id", "is", null)
-              .in("status", ["ATIVA", "ACTIVE", "PENDENTE", "AGUARDANDO_AUTORIZACAO"])
+              .in("status", ["ATIVA", "APROVADA", "AGUARDANDO"])
               .order("created_at", { ascending: false })
               .limit(1);
             wq = profileRow ? wq.eq("user_id", profileRow.id) : wq.ilike("customer_email", ticket.customer_email || "");
