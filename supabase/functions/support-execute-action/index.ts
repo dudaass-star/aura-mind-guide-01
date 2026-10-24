@@ -254,7 +254,48 @@ serve(async (req) => {
 
         case "cancel_subscription": {
           const subId = params.subscription_id;
-          if (!subId) throw new Error("subscription_id required");
+          if (!subId) {
+            // Sem assinatura no cartão: tenta o mandato PIX Automático da Woovi
+            // do mesmo cliente (por perfil ou e-mail do ticket).
+            let profileRow: { id: string; user_id: string } | null = null;
+            if (ticket.profile_user_id) {
+              const { data } = await supabase.from("profiles").select("id, user_id")
+                .eq("user_id", ticket.profile_user_id).maybeSingle();
+              profileRow = data as typeof profileRow;
+            }
+            if (!profileRow && ticket.customer_email) {
+              const { data } = await supabase.from("profiles").select("id, user_id")
+                .ilike("email", ticket.customer_email).limit(1).maybeSingle();
+              profileRow = data as typeof profileRow;
+            }
+            let wq = supabase.from("woovi_subscriptions")
+              .select("id, subscription_id, status")
+              .is("replaced_by_subscription_id", null)
+              .not("subscription_id", "is", null)
+              .in("status", ["ATIVA", "ACTIVE", "PENDENTE", "AGUARDANDO_AUTORIZACAO"])
+              .order("created_at", { ascending: false })
+              .limit(1);
+            wq = profileRow ? wq.eq("user_id", profileRow.id) : wq.ilike("customer_email", ticket.customer_email || "");
+            const { data: wooviSub } = await wq.maybeSingle();
+            if (!wooviSub?.subscription_id) {
+              throw new Error("Nenhuma assinatura ativa encontrada no cartão nem no PIX Automático");
+            }
+            const resp = await fetch(
+              `https://api.woovi.com/api/v1/subscriptions/${encodeURIComponent(wooviSub.subscription_id)}/cancel`,
+              // A Woovi só aceita PUT nessa rota.
+              { method: "PUT", headers: { Authorization: Deno.env.get("WOOVI_APP_ID") || "", "Content-Type": "application/json" } },
+            );
+            const wjson = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(`Woovi recusou o cancelamento (${resp.status}): ${JSON.stringify(wjson)}`);
+            await supabase.from("woovi_subscriptions").update({ status: "CANCELADA" }).eq("id", wooviSub.id);
+            // Acesso segue até o fim do período já pago.
+            const uid = profileRow?.user_id || ticket.profile_user_id;
+            if (uid) await supabase.from("profiles").update({ status: "canceling" }).eq("user_id", uid);
+            params.woovi_subscription_id = wooviSub.subscription_id;
+            stripeResponse = { gateway: "woovi", subscription_id: wooviSub.subscription_id, status: "CANCELADA" };
+            success = true;
+            break;
+          }
           // Idempotente: se já está cancelada no provedor, trata como sucesso.
           const current = await stripe.subscriptions.retrieve(subId);
           const sub = current.status === "canceled" ? current : await stripe.subscriptions.cancel(subId);
