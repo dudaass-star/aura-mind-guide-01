@@ -24,7 +24,7 @@ import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
 import { markCheckoutAccessPaidByReference } from "../_shared/checkout-access.ts";
 import { localizarEndToEndId } from "../_shared/woovi-dispute-matcher.ts";
 import {
-  wooviFetch, brtDate,
+  wooviFetch, brtDate, listTransactions,
   WOOVI_APPROVED_STATUSES as APPROVED_STATUSES,
   WOOVI_REJECTED_STATUSES as REJECTED_STATUSES,
   WOOVI_CANCELED_STATUSES as CANCELED_STATUSES,
@@ -618,6 +618,64 @@ async function activateAccess(
   }
 }
 
+/**
+ * Checagem pontual do débito de aprovação (Jornada 3 nativa). Lê só a janela
+ * recente do extrato, casa por CPF + valor exato e, achando um E2E ainda não
+ * registrado, faz replay de CHARGE_COMPLETED para este mesmo webhook — a trava
+ * `access_activated_at` impede ativação dupla se a auditoria chegar depois.
+ */
+async function findApprovalDebitAndReplay(supabase: any, sub: Record<string, any>): Promise<void> {
+  const cpf = String(sub.customer_cpf || "").replace(/\D/g, "");
+  const value = Number(sub.value_cents || 0);
+  if (!cpf || !value) return;
+  const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const delays = [3000, 8000, 15000, 30000];
+  for (const wait of delays) {
+    await new Promise((r) => setTimeout(r, wait));
+    const { data: paid } = await supabase.from("woovi_charges").select("id")
+      .eq("subscription_id", sub.subscription_id).not("paid_at", "is", null).limit(1);
+    if (Array.isArray(paid) && paid.length > 0) return; // outro caminho já registrou
+    let txs: Record<string, any>[] = [];
+    try {
+      txs = await listTransactions({ start: since, end: new Date().toISOString() });
+    } catch (e) {
+      console.warn("[webhook-woovi] extrato indisponível na checagem pontual:", (e as Error)?.message);
+      continue;
+    }
+    const hit = txs.find((t) => {
+      const payerCpf = String(t?.payer?.taxID?.taxID || t?.debitParty?.holder?.taxID?.taxID || "").replace(/\D/g, "");
+      return String(t?.type || "PAYMENT").toUpperCase() === "PAYMENT"
+        && Number(t?.value || 0) === value && payerCpf === cpf && !!t?.endToEndId;
+    });
+    if (!hit) continue;
+    const e2e = String(hit.endToEndId);
+    const { data: known } = await supabase.from("woovi_charges").select("id")
+      .eq("installment_id", e2e).maybeSingle();
+    if (known?.id) return;
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    await fetch(`${url}/functions/v1/webhook-woovi`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        event: "OPENPIX:CHARGE_COMPLETED",
+        charge: {
+          value, status: "COMPLETED", correlationID: e2e,
+          paidAt: hit.time || hit.createdAt || new Date().toISOString(),
+          comment: "checagem pontual do extrato pós-aprovação",
+        },
+        pix: { subType: "PIX_AUTOMATIC", endToEndId: e2e },
+        subscription: {
+          globalID: sub.global_id, correlationID: sub.correlation_id, subscriptionId: sub.subscription_id,
+        },
+      }),
+    });
+    console.log(`[webhook-woovi] ✅ débito de aprovação ${e2e} achado no extrato (${sub.subscription_id})`);
+    return;
+  }
+  console.log(`[webhook-woovi] débito de aprovação ainda não está no extrato (${sub.subscription_id}) — fica com a auditoria`);
+}
+
 /** Localiza o mandato por qualquer um dos identificadores que a Woovi manda. */
 async function findSubscription(
   supabase: any, ids: (string | null | undefined)[],
@@ -883,6 +941,16 @@ Deno.serve(async (req) => {
             // inicial. Disparamos a auditoria agora — ela só ativa o plano se
             // achar o pagamento real (E2E) no extrato; mandato sozinho não ativa.
             // A recusa do mandato NUNCA desfaz um ciclo já pago.
+            // Jornada 3 nativa: o débito de aprovação só aparece no extrato. Em vez
+            // de esperar a varredura geral (que levou horas), procuramos AGORA o
+            // pagamento deste CPF/valor nos últimos minutos. Só libera se o dinheiro
+            // estiver no extrato; a ativação continua passando pelo replay da cobrança.
+            if (approvedNow && sub.creation_mode !== "composed" && !sub.replaced_by_subscription_id) {
+              const job = findApprovalDebitAndReplay(supabase, sub)
+                .catch((e: Error) => console.warn("[webhook-woovi] checagem pontual de extrato falhou:", e?.message));
+              // deno-lint-ignore no-explicit-any
+              (globalThis as any).EdgeRuntime?.waitUntil?.(job);
+            }
             if ((approvedNow || REJECTED_STATUSES.includes(mandateStatus)) && !sub.entry_paid_at) {
               supabase.functions.invoke("woovi-pix-audit", { body: { extrato_days: 2, trigger: "mandate_event" } })
                 .catch((e: Error) => console.warn("[webhook-woovi] auditoria pós-mandato falhou:", e?.message));
