@@ -365,6 +365,20 @@ async function activateTaster(
 
   await supabase.from("taster_offers").update({ profile_user_id: userId }).eq("id", offer.id);
 
+  // Purchase no Meta CAPI: o encontro avulso de R$ 6,90 também é aquisição.
+  // Cliente vivo já saiu acima; fbp/fbc vêm do cache de identidade do lead.
+  await fireMetaCapiPurchase(supabase, {
+    eventId: `woovi-taster-${args.correlationId}-purchase`,
+    email,
+    phone: phone || undefined,
+    firstName: name.split(" ")[0] || undefined,
+    fbp: null,
+    fbc: null,
+    value: args.valueCents / 100,
+    plan: String(offer.plan || "essencial"),
+    isFirstPurchase: true,
+  });
+
   try {
     await supabase.from("user_portal_tokens").upsert({ user_id: userId }, { onConflict: "user_id" });
   } catch (_) { /* non-blocking */ }
