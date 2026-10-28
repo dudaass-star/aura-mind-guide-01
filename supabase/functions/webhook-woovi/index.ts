@@ -942,12 +942,47 @@ Deno.serve(async (req) => {
               }
             }
 
-            // Mandato revogado no app do banco = churn silencioso: marca falha de
-            // pagamento para o fluxo de reautorização/dunning agir.
+            // Mandato revogado no app do banco = churn silencioso. Antes só
+            // gravávamos payment_failed_at e nada disparava; agora abrimos na
+            // hora a oferta de reautorização (número de recuperação), desde
+            // que o cliente siga no trilho Woovi — quem já migrou para outro
+            // meio de pagamento não é abordado.
             if (CANCELED_STATUSES.includes(mandateStatus) && sub.user_id && !sub.replaced_by_subscription_id) {
-              await supabase.from("profiles")
-                .update({ payment_failed_at: new Date().toISOString() })
-                .eq("id", sub.user_id);
+              const { data: prof } = await supabase.from("profiles")
+                .select("user_id, status, card_gateway")
+                .eq("id", sub.user_id).maybeSingle();
+              const noTrilhoWoovi = !prof?.card_gateway || prof.card_gateway === "woovi";
+              if (prof && noTrilhoWoovi) {
+                await supabase.from("profiles")
+                  .update({ payment_failed_at: new Date().toISOString() })
+                  .eq("id", sub.user_id);
+                const vivo = ["active", "trial", "past_due"].includes(String(prof.status));
+                if (vivo && prof.user_id && sub.subscription_id) {
+                  const { data: pend } = await supabase.from("scheduled_tasks")
+                    .select("id")
+                    .in("task_type", ["woovi_recovery_offer", "woovi_recovery_final"])
+                    .in("status", ["pending", "executing"])
+                    .contains("payload", { subscription_id: sub.subscription_id })
+                    .limit(1);
+                  if (!pend?.length) {
+                    await supabase.from("scheduled_tasks").insert({
+                      user_id: prof.user_id,
+                      task_type: "woovi_recovery_offer",
+                      execute_at: new Date(Date.now() + 60 * 1000).toISOString(),
+                      status: "pending",
+                      payload: {
+                        provider: "woovi",
+                        subscription_id: sub.subscription_id,
+                        offer_step: 1,
+                        source: "mandate_revoked_webhook",
+                      },
+                    });
+                    await supabase.from("woovi_subscriptions")
+                      .update({ reauth_notified_at: new Date().toISOString() })
+                      .eq("id", sub.id);
+                  }
+                }
+              }
             }
 
             // Aprovação/recusa do mandato chegou, mas a entrada ainda não consta

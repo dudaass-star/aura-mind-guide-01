@@ -93,15 +93,47 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Busca cancelados nos últimos 35 dias
+  const nowIso = new Date().toISOString();
+
+  // 1) Fecha quem pediu cancelamento e já chegou ao fim do período pago.
+  //    Sem isso o perfil ficava em `canceling` para sempre e nunca entrava aqui.
+  if (!dryRun) {
+    const { data: vencidos } = await supabase
+      .from('profiles')
+      .select('id,canceled_at,plan_expires_at')
+      .eq('status', 'canceling')
+      .lte('plan_expires_at', nowIso)
+      .limit(500);
+    for (const v of vencidos || []) {
+      await supabase.from('profiles')
+        .update({ status: 'canceled', canceled_at: v.canceled_at || v.plan_expires_at })
+        .eq('id', v.id)
+        .eq('status', 'canceling');
+    }
+  }
+
+  // 2) Candidatos: cancelados cujo ACESSO terminou nos últimos 35 dias.
+  //    A data de referência é a mais recente entre o pedido de cancelamento,
+  //    a falha de pagamento e o fim do acesso — assim ninguém recebe "senti
+  //    sua falta" enquanto ainda usa o app.
   const cutoff = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: candidates, error: candErr } = await supabase
+  const { data: rawCandidates, error: candErr } = await supabase
     .from('profiles')
-    .select('id,user_id,phone,name,canceled_at,payment_failed_at,last_user_message_at,winback_d3_sent_at,winback_d14_sent_at,winback_d30_sent_at')
+    .select('id,user_id,phone,name,canceled_at,payment_failed_at,plan_expires_at,last_user_message_at,winback_d3_sent_at,winback_d14_sent_at,winback_d30_sent_at')
     .eq('status', 'canceled')
-    .not('canceled_at', 'is', null)
-    .gte('canceled_at', cutoff)
+    .or(`canceled_at.gte.${cutoff},payment_failed_at.gte.${cutoff},plan_expires_at.gte.${cutoff}`)
     .not('phone', 'is', null);
+
+  const candidates = (rawCandidates || [])
+    .filter((c: any) => !c.plan_expires_at || Date.parse(c.plan_expires_at) <= Date.now())
+    .map((c: any) => {
+      const ref = [c.canceled_at, c.payment_failed_at, c.plan_expires_at]
+        .filter(Boolean)
+        .map((d: string) => Date.parse(d))
+        .filter((t: number) => Number.isFinite(t) && t <= Date.now());
+      return ref.length ? { ...c, canceled_at: new Date(Math.max(...ref)).toISOString() } : null;
+    })
+    .filter((c: any) => c && Date.parse(c.canceled_at) >= Date.parse(cutoff));
 
   if (candErr) {
     console.error('❌ Failed to fetch candidates:', candErr);

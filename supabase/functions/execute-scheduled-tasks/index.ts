@@ -1256,7 +1256,8 @@ Deno.serve(async (req) => {
               .eq('subscription_id', subscriptionId);
             await supabase
               .from('profiles')
-              .update({ payment_failed_at: new Date().toISOString(), status: 'canceled' })
+              // canceled_at é o que libera o winback (D+3/D+14/D+30).
+              .update({ payment_failed_at: new Date().toISOString(), status: 'canceled', canceled_at: new Date().toISOString() })
               .eq('user_id', task.user_id);
             console.log(`🛑 woovi ${subscriptionId} encerrado após recuperação silenciosa`);
             break;
