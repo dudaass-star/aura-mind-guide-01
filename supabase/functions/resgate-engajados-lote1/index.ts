@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       }
       const msg = `Oi${nome ? `, ${nome}` : ""}. 💜 Faz um tempo que a gente não conversa, e lembrei de você e dos nossos encontros.|||Como você tá por aí? Se quiser retomar, tô aqui: 👉 https://olaaura.com.br/meu-espaco`;
       if (dryRun) { results.push({ ...r, would_send: true }); continue; }
-      const res = await sendProactive(cleanPhoneNumber(u.phone), msg, "checkin", u.user_id);
+      const res = await sendProactive(cleanPhoneNumber(u.phone), msg, "reconnect", u.user_id);
       if (res.success) {
         await sb.from("profiles").update({ last_reactivation_sent: new Date().toISOString() }).eq("user_id", u.user_id);
         await sb.from("messages").insert({ user_id: u.user_id, role: "assistant", content: msg });
