@@ -187,7 +187,7 @@ export default function Oracoes() {
             <button onClick={scrollToForm} className="text-sm font-semibold text-primary underline-offset-4 hover:underline">Começar por R$ 6,90</button>
           </div>
         </section>
-        <div id="ouvir" className="scroll-mt-6"><PrayerShowcase /></div>
+        <div id="ouvir" className="scroll-mt-6"><PrayerShowcase onSubscribe={() => { setOffer("weekly"); document.getElementById("assinar")?.scrollIntoView({ behavior: "smooth" }); }} /></div>
       </main>
 
       <section className="border-y border-border bg-card/60">

@@ -1,28 +1,29 @@
 import { useRef, useState } from "react";
-import { Loader2, Moon, Pause, Play, Sunrise, Feather, Flame } from "lucide-react";
+import { Loader2, Lock, Moon, Pause, Play, Sunrise, Feather, Flame } from "lucide-react";
 import { PRAYERS } from "@/lib/prayers";
 
-// Vitrine de amostras de orações reais por dor/momento, com legenda sincronizada.
+// Vitrine de orações: só "Sem forças" toca a prévia; as demais levam à assinatura.
 const PREVIEW_SECONDS = 60;
 
 const PICKS = [
-  { id: "prayer-restless-mind", label: "Mente que não desliga", icon: Moon },
-  { id: "prayer-night", label: "Entregar o dia", icon: Flame },
-  { id: "prayer-strength", label: "Sem forças", icon: Feather },
-  { id: "prayer-morning-guidance", label: "Começar o dia", icon: Sunrise },
+  { id: "prayer-strength", label: "Sem forças", icon: Feather, free: true },
+  { id: "prayer-restless-mind", label: "Mente que não desliga", icon: Moon, free: false },
+  { id: "prayer-night", label: "Entregar o dia", icon: Flame, free: false },
+  { id: "prayer-morning-guidance", label: "Começar o dia", icon: Sunrise, free: false },
 ];
 
 const items = PICKS.map((p) => ({ ...p, prayer: PRAYERS.find((x) => x.id === p.id)! })).filter((i) => i.prayer);
 
-export function PrayerShowcase() {
+export function PrayerShowcase({ onSubscribe }: { onSubscribe?: () => void }) {
   const [tab, setTab] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [time, setTime] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const { prayer } = items[tab];
+  const { prayer, free } = items[tab];
   const limit = Math.min(PREVIEW_SECONDS, prayer.duration);
-  const cue = prayer.cues.reduce<string | null>((acc, c) => (time >= c.start ? c.text : acc), null);
+  const ended = free && time >= limit;
+  const cue = free ? prayer.cues.reduce<string | null>((acc, c) => (time >= c.start ? c.text : acc), null) : null;
 
   const select = (i: number) => {
     audioRef.current?.pause();
@@ -51,7 +52,7 @@ export function PrayerShowcase() {
             {items.map((it, i) => (
               <button key={it.id} role="tab" aria-selected={tab === i} onClick={() => select(i)}
                 className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold backdrop-blur transition ${tab === i ? "bg-background text-foreground" : "bg-background/15 text-inherit opacity-85 hover:opacity-100"}`}>
-                <it.icon className="h-3.5 w-3.5" />{it.label}
+                <it.icon className="h-3.5 w-3.5" />{it.label}{!it.free && <Lock className="h-3 w-3 opacity-70" aria-label="exclusivo para assinantes" />}
               </button>
             ))}
           </div>
@@ -59,22 +60,30 @@ export function PrayerShowcase() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">{prayer.moment} · voz da AURA</p>
             <h3 className="font-display text-3xl font-medium leading-tight sm:text-4xl">{prayer.title}</h3>
             <p className="min-h-[4.5rem] font-display text-xl italic leading-snug opacity-95" aria-live="polite">
-              {cue ? `“${cue}”` : prayer.description}
+              {ended ? "Para ouvir a oração completa e o acervo diário, comece por R$ 6,90." : cue ? `“${cue}”` : prayer.description}
             </p>
-            <div className="flex items-center gap-4">
-              <button onClick={toggle} aria-label={playing ? "Pausar oração" : "Ouvir oração"}
-                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:scale-105">
-                {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : playing ? <Pause className="h-6 w-6" fill="currentColor" /> : <Play className="ml-1 h-6 w-6" fill="currentColor" />}
-              </button>
-              <div className="flex-1">
-                <div className="h-1 overflow-hidden rounded-full bg-background/25"><div className="h-full bg-primary transition-[width]" style={{ width: `${Math.min(100, (time / limit) * 100)}%` }} /></div>
-                <p className="mt-1.5 text-xs opacity-80">{Math.floor(time)}s de {Math.floor(limit)}s · use fones, se puder</p>
+            {free && !ended ? (
+              <div className="flex items-center gap-4">
+                <button onClick={toggle} aria-label={playing ? "Pausar oração" : "Ouvir oração"}
+                  className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:scale-105">
+                  {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : playing ? <Pause className="h-6 w-6" fill="currentColor" /> : <Play className="ml-1 h-6 w-6" fill="currentColor" />}
+                </button>
+                <div className="flex-1">
+                  <div className="h-1 overflow-hidden rounded-full bg-background/25"><div className="h-full bg-primary transition-[width]" style={{ width: `${Math.min(100, (time / limit) * 100)}%` }} /></div>
+                  <p className="mt-1.5 text-xs opacity-80">{Math.floor(time)}s de {Math.floor(limit)}s · use fones, se puder</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <button onClick={onSubscribe}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground shadow-lg transition hover:scale-[1.02]">
+                {free ? <Play className="h-4 w-4" fill="currentColor" /> : <Lock className="h-4 w-4" />}
+                Ouvir oração completa · Começar por R$ 6,90
+              </button>
+            )}
           </div>
         </div>
       </div>
-      <audio ref={audioRef} key={prayer.audioUrl} src={prayer.audioUrl} preload="none" onTimeUpdate={onTime} onEnded={() => setPlaying(false)} />
+      {free && <audio ref={audioRef} key={prayer.audioUrl} src={prayer.audioUrl} preload="none" onTimeUpdate={onTime} onEnded={() => setPlaying(false)} />}
     </div>
   );
 }
