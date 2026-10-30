@@ -22,6 +22,7 @@ import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { sanitizePortalText } from "@/components/portal/sanitize";
 import { PortalHomeAreas, type HomeArea } from "@/components/portal/PortalHomeAreas";
+import { PrayerEntranceCard } from "@/components/portal/PrayerEntranceCard";
 
 type ChatMessage = {
   id: string;
@@ -1299,9 +1300,6 @@ export function ConversarTab({
             <h1 className="font-display text-[2rem] font-semibold leading-none text-foreground">Seu espaço</h1>
           </div>
           <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => { trackMovement("card_clicked", "app", { origin: "header" }); navigateFromConversation("movimento"); }} className="h-11 gap-1.5 rounded-full border-primary/40 px-3.5 text-[13px] font-semibold text-primary" aria-label="Abrir o Movimento Olá Aura">
-            <HeartHandshake className="h-4 w-4" /> Movimento
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 rounded-full border border-border bg-card shadow-sm" aria-label="Abrir menu da conta">
@@ -1362,6 +1360,7 @@ export function ConversarTab({
 
       <div className="shrink-0 px-4 pb-7">
         {degustacaoCard && <div className="mb-3">{degustacaoCard}</div>}
+        {!isDemo && !chatOpen && <PrayerEntranceCard userId={userId} onOpen={() => navigateFromConversation("oracoes")} onEvent={(event) => recordConversationEvent(userId, event, { origin: "home" })} />}
         <Button
           type="button"
           variant="ghost"
