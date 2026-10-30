@@ -22,6 +22,7 @@ const PLAN_NAMES: Record<string, string> = {
   essencial: "Essencial",
   direcao: "Direção",
   transformacao: "Transformação",
+  oracoes: "Orações e Meditações",
 };
 
 // Mapa reverso priceId → {plan, billing_cycle}. Mensal vem de env; Trim/Sem/Anual
@@ -52,6 +53,9 @@ const RECURRING_PRICES: Record<string, { plan: string; billing_cycle: string }> 
   // entitlements do Essencial mensal; o tier fica em profiles.plan_tier.
   "price_1TwR9yQU15XnZ7Vv59okBz23": { plan: "essencial", billing_cycle: "monthly" }, // Lite R$19,90
   "price_1TwRA2QU15XnZ7Vvt0zU4HNa": { plan: "essencial", billing_cycle: "monthly" }, // Base R$9,90
+  // Plano Orações e Meditações
+  "price_1UWHWdQU15XnZ7VvmhLlKnX2": { plan: "oracoes", billing_cycle: "monthly" },
+  "price_1UWHWdQU15XnZ7VvCo2LG5TE": { plan: "oracoes", billing_cycle: "yearly" },
 };
 
 // Preço → tier de retenção (profiles.plan_tier). Qualquer outro preço = null,
@@ -91,6 +95,7 @@ const PLAN_SESSIONS: Record<string, number> = {
   essencial: 0,
   direcao: 4,
   transformacao: 8,
+  oracoes: 0,
 };
 
 /**
@@ -641,6 +646,7 @@ Deno.serve(async (req) => {
             essencial: { monthly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || "", yearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY") || "" },
             direcao: { monthly: Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY") || "", yearly: Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY") || "" },
             transformacao: { monthly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || "", yearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || "" },
+            oracoes: { monthly: "price_1UWHWdQU15XnZ7VvmhLlKnX2", yearly: "price_1UWHWdQU15XnZ7VvCo2LG5TE" },
           };
 
           const subscriptionPriceId = PRICES[customerPlan]?.[customerBilling];
@@ -1619,6 +1625,7 @@ Me conta: como você está hoje?`;
                   const priceTransformacaoYearly = Deno.env.get('STRIPE_PRICE_TRANSFORMACAO_YEARLY') || '';
                   if (priceId === priceDirecao || priceId === priceDirecaoYearly) plan = 'direcao';
                   if (priceId === priceTransformacao || priceId === priceTransformacaoYearly) plan = 'transformacao';
+                  if (RECURRING_PRICES[priceId || '']?.plan === 'oracoes') plan = 'oracoes';
 
                   const newUserId = crypto.randomUUID();
                   // Este perfil é uma RECRIAÇÃO de um cliente antigo (a assinatura
