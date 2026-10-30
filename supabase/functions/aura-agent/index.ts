@@ -5312,7 +5312,9 @@ serve(async (req) => {
     // Depois dela, conversa livre e próxima sessão exigem plano — a parede é
     // determinística aqui e no banco; a Aura nunca negocia acesso nem preço.
     // ------------------------------------------------------------------
-    const isDegustacao = String(profile?.status || '').toLowerCase() === 'degustacao';
+    // Plano Orações e Meditações segue a mesma parede: 1 encontro cortesia, sem conversa contínua.
+    const isOracoesPlan = String((profile as any)?.plan || '').toLowerCase() === 'oracoes';
+    const isDegustacao = String(profile?.status || '').toLowerCase() === 'degustacao' || isOracoesPlan;
     let degustacaoCourtesyDone = false;
     if (isDegustacao && profile && message && !profile.current_session_id) {
       // Cortesia só conta como usada quando o encontro terminou com diálogo;
@@ -5321,7 +5323,7 @@ serve(async (req) => {
         .from('sessions')
         .select('id, status, closure_mode')
         .eq('user_id', profile.user_id)
-        .eq('quota_exempt_reason', 'degustacao_gratuita')
+        .in('quota_exempt_reason', ['degustacao_gratuita', 'oracoes_cortesia'])
         .in('status', ['completed', 'no_show']);
       const degRows = degSessions || [];
       const interruptedCount = degRows.filter((s: any) => s.status === 'no_show' || ['unilateral', 'no_show'].includes(String(s.closure_mode || ''))).length;
@@ -5339,7 +5341,10 @@ serve(async (req) => {
         const hora = dueNext?.scheduled_at
           ? new Date(dueNext.scheduled_at).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
           : null;
-        const wall = hora
+        const wall = isOracoesPlan
+          ? 'Que bom te ver por aqui. 💛 Seu plano de Orações e Meditações continua todo liberado. ' +
+            'Para a gente seguir conversando sempre que você precisar, com encontros guiados, é só tocar em "Meu plano" e escolher o acompanhamento com a AURA.'
+          : hora
           ? `Que bom te ver aqui${firstName ? `, ${firstName}` : ''}! 💛 Nosso encontro das ${hora} já está pronto para começar. ` +
             'Abri na sua tela a ativação do plano — no PIX ou cartão leva menos de 1 minuto, e assim que confirmar a gente começa.'
           : 'Que bom te ver por aqui. 💛 O que você trouxe no nosso primeiro encontro continua guardado comigo. ' +

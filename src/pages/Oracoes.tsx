@@ -1,0 +1,216 @@
+import { useState } from "react";
+import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
+import { Check, HandHeart, Headphones, HeartHandshake, Loader2, MessageCircleHeart, Moon, ShieldCheck, Sunrise } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { supabase } from "@/integrations/supabase/client";
+import { getFbc, getFbp } from "@/lib/meta-pixel";
+import { PreviewPlayer } from "@/components/degustacao/PreviewPlayer";
+import logoOlaAura from "@/assets/logo-ola-aura.png";
+import prayerImage from "@/assets/prayer-closeness.jpg";
+import "@/styles/v2-theme.css";
+
+// Página de venda do plano Orações e Meditações (sem acompanhamento contínuo com a AURA).
+type Offer = "weekly" | "monthly" | "yearly";
+
+const OFFERS: { id: Offer; label: string; price: string; unit: string; note: string; featured?: boolean }[] = [
+  { id: "weekly", label: "Experimente 7 dias", price: "6,90", unit: "por 7 dias", note: "Depois R$ 16,90/mês. Cancele quando quiser." },
+  { id: "yearly", label: "Anual", price: "11,90", unit: "/mês", note: "R$ 142,80 por ano, no cartão.", featured: true },
+  { id: "monthly", label: "Mensal", price: "16,90", unit: "/mês", note: "Renova todo mês. Sem fidelidade." },
+];
+
+const pillars = [
+  { icon: MessageCircleHeart, title: "Palavras para quando faltam palavras", body: "Você não precisa estar inspirada nem forte. Dê o play: a oração dá nome ao que está pesando — o cansaço, o medo, a culpa, a sensação de carregar tudo sozinha." },
+  { icon: HandHeart, title: "Venha como você está", body: "Sem performance de fé. Um espaço honesto para dizer “Deus, hoje estou sem forças” e ser acolhida assim mesmo." },
+  { icon: HeartHandshake, title: "A AURA ora com você", body: "Ela não prega nem fala em nome de Deus. Fica ao seu lado, com voz calma, e conduz você ao silêncio com Ele." },
+  { icon: Moon, title: "Descanso para a alma e para a mente", body: "Cuidado com as emoções reais do dia a dia unido à paz de entregar a Deus o que você não consegue resolver. “O dia terminou. O Teu cuidado, não.”" },
+];
+
+const maskPhone = (v: string) => {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+};
+
+const scrollToForm = () => document.getElementById("assinar")?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+export default function Oracoes() {
+  const [offer, setOffer] = useState<Offer>("weekly");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const digits = phone.replace(/\D/g, "");
+    if (name.trim().length < 2) return setError("Digite seu nome.");
+    if (digits.length < 10) return setError("Digite um WhatsApp válido com DDD.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Digite um e-mail válido.");
+    setLoading(true);
+    const { data, error: fnError } = await supabase.functions.invoke("create-checkout", {
+      body: {
+        plan: "oracoes",
+        billing: offer === "yearly" ? "yearly" : "monthly",
+        trial: offer === "weekly",
+        paymentMethod: "card",
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        phone: `55${digits}`,
+        fbp: getFbp(),
+        fbc: getFbc(),
+        source: "oracoes",
+      },
+    });
+    setLoading(false);
+    if (fnError || !data?.url) {
+      setError(data?.error || "Não conseguimos abrir o pagamento agora. Tente novamente em instantes.");
+      return;
+    }
+    window.location.href = data.url;
+  };
+
+  const selected = OFFERS.find((o) => o.id === offer)!;
+
+  return (
+    <div className="theme-v2 deg-hero-bg min-h-dvh bg-background text-foreground">
+      <Helmet>
+        <title>Orações guiadas e meditações | Olá Aura</title>
+        <meta name="description" content="Orações narradas com voz acolhedora e meditações guiadas para o seu dia. Experimente 7 dias por R$ 6,90." />
+      </Helmet>
+
+      <header className="container mx-auto flex items-center justify-between px-6 py-5">
+        <img src={logoOlaAura} alt="Olá Aura" className="h-14 w-auto md:h-16" />
+        <Link to="/meu-espaco/entrar" className="text-sm text-muted-foreground underline-offset-4 hover:underline">Já tenho acesso</Link>
+      </header>
+
+      <main className="container mx-auto grid max-w-6xl gap-10 px-6 pb-14 pt-6 md:grid-cols-[1.1fr_1fr] md:items-center md:pt-10">
+        <section>
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Orações e meditações · 7 dias por R$ 6,90</p>
+          <h1 className="font-display text-4xl font-medium leading-[1.08] tracking-tight md:text-6xl">
+            Quando faltam as palavras, você ainda pode orar.
+          </h1>
+          <p className="mt-5 max-w-xl text-lg text-foreground/75">
+            Orações narradas com voz acolhedora e meditações guiadas para o fim de um dia pesado, uma madrugada sem sono ou uma manhã que começa com o peito apertado.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-4">
+            <Button size="lg" onClick={scrollToForm}>Começar por R$ 6,90</Button>
+            <span className="text-sm text-muted-foreground">Inclui 1 encontro de 45 min com a AURA</span>
+          </div>
+        </section>
+        <div className="overflow-hidden rounded-2xl shadow-xl">
+          <img src={prayerImage} alt="Um momento de oração em silêncio" className="h-full max-h-[460px] w-full object-cover" />
+        </div>
+      </main>
+
+      <section className="container mx-auto max-w-3xl px-6 pb-16">
+        <h2 className="font-display text-2xl font-medium md:text-3xl">Ouça antes de decidir</h2>
+        <p className="mt-2 text-foreground/70">Um trecho real, do jeito que você vai ouvir no App.</p>
+        <div className="mt-6"><PreviewPlayer /></div>
+      </section>
+
+      <section className="container mx-auto max-w-6xl px-6 pb-16">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">Por que é diferente</span>
+        <h2 className="mt-1 font-display text-2xl font-medium md:text-3xl">Uma oração que fala a sua língua</h2>
+        <ul className="mt-6 grid gap-4 md:grid-cols-2">
+          {pillars.map((p) => (
+            <li key={p.title} className="rounded-xl border border-border bg-card p-6">
+              <p.icon className="h-5 w-5 text-primary" />
+              <p className="mt-3 font-display text-lg font-medium">{p.title}</p>
+              <p className="mt-2 text-sm leading-relaxed text-foreground/75">{p.body}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="container mx-auto max-w-6xl px-6 pb-16">
+        <h2 className="font-display text-2xl font-medium md:text-3xl">Para cada momento do seu dia</h2>
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          {[
+            { icon: Sunrise, t: "Ao acordar", b: "Para começar o dia entregando os passos a Deus." },
+            { icon: Moon, t: "Antes de dormir", b: "Para quando a mente não desliga e o coração pede descanso." },
+            { icon: Headphones, t: "No meio do caos", b: "Meditações para desacelerar o corpo e respirar de novo." },
+          ].map((m) => (
+            <div key={m.t} className="rounded-xl border border-border bg-card p-6">
+              <m.icon className="h-5 w-5 text-primary" />
+              <p className="mt-3 font-semibold">{m.t}</p>
+              <p className="mt-1 text-sm text-foreground/70">{m.b}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="assinar" className="container mx-auto max-w-3xl scroll-mt-6 px-6 pb-20">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-xl md:p-8">
+          <h2 className="font-display text-2xl font-medium md:text-3xl">Escolha como começar</h2>
+          <div role="radiogroup" aria-label="Escolha do plano" className="mt-6 grid gap-3 sm:grid-cols-3">
+            {OFFERS.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                role="radio"
+                aria-checked={offer === o.id}
+                onClick={() => setOffer(o.id)}
+                className={`relative rounded-xl border p-4 text-left transition-colors ${offer === o.id ? "border-primary bg-primary/5 ring-2 ring-primary" : "border-border hover:border-primary/50"}`}
+              >
+                {o.featured && <span className="absolute -top-3 left-4 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold text-primary-foreground">Mais vantajoso</span>}
+                <p className="text-sm font-semibold">{o.label}</p>
+                <p className="mt-1"><span className="text-sm text-foreground/60">R$ </span><span className="font-display text-2xl font-semibold">{o.price}</span><span className="text-sm text-foreground/60"> {o.unit}</span></p>
+                <p className="mt-1 text-xs text-muted-foreground">{o.note}</p>
+              </button>
+            ))}
+          </div>
+
+          <ul className="mt-6 space-y-2 text-sm text-foreground/80">
+            {["Todas as orações narradas liberadas", "Todas as meditações guiadas liberadas", "1 encontro de 45 minutos com a AURA para conversar, quando quiser", "Sem fidelidade · cancele quando quiser"].map((f) => (
+              <li key={f} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{f}</li>
+            ))}
+          </ul>
+
+          <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
+            <div className="space-y-1.5"><Label htmlFor="or-name">Seu nome</Label><Input id="or-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></div>
+            <div className="space-y-1.5"><Label htmlFor="or-phone">WhatsApp</Label><Input id="or-phone" inputMode="tel" autoComplete="tel" placeholder="(11) 99999-9999" value={phone} onChange={(e) => setPhone(maskPhone(e.target.value))} /></div>
+            <div className="space-y-1.5"><Label htmlFor="or-email">E-mail</Label><Input id="or-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={200} /></div>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" size="lg" className="w-full" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {offer === "weekly" ? "Começar 7 dias por R$ 6,90" : `Assinar por R$ ${selected.price}${selected.unit}`}
+            </Button>
+          </form>
+          <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="h-4 w-4 text-primary" />Pagamento seguro no cartão. {offer === "weekly" && "Após 7 dias, renova automaticamente por R$ 16,90/mês."}</p>
+          <p className="mt-2 text-xs text-muted-foreground">Quer conversar com a AURA sempre que precisar? Você pode mudar para um plano com acompanhamento a qualquer momento dentro do App.</p>
+        </div>
+      </section>
+
+      <section className="container mx-auto max-w-3xl px-6 pb-20">
+        <h2 className="font-display text-2xl font-medium md:text-3xl">Dúvidas comuns</h2>
+        <div className="mt-6 space-y-3">
+          {[
+            { q: "As orações são de alguma igreja?", a: "Não. São orações cristãs, simples e próximas, que qualquer pessoa que crê em Deus pode acompanhar." },
+            { q: "Posso conversar com a AURA?", a: "Seu plano inclui 1 encontro de 45 minutos com a AURA. Para conversar sempre que quiser, é só mudar para um plano com acompanhamento dentro do App." },
+            { q: "Como cancelo?", a: "Direto no App, em poucos toques. Sem fidelidade e sem multa." },
+            { q: "Preciso baixar algo?", a: "Não. O App abre direto no navegador do celular." },
+          ].map((f) => (
+            <details key={f.q} className="rounded-xl border border-border bg-card p-5">
+              <summary className="cursor-pointer list-none font-semibold">{f.q}</summary>
+              <p className="mt-2 text-sm leading-relaxed text-foreground/75">{f.a}</p>
+            </details>
+          ))}
+        </div>
+        <div className="mt-8 flex justify-center"><Button size="lg" onClick={scrollToForm}>Começar por R$ 6,90</Button></div>
+      </section>
+
+      <footer className="border-t border-border bg-card/60">
+        <div className="container mx-auto flex flex-wrap items-center justify-between gap-3 px-6 py-6 text-xs text-muted-foreground">
+          <span>© Olá Aura</span>
+          <span className="flex gap-4"><Link to="/termos" className="hover:underline">Termos</Link><Link to="/privacidade" className="hover:underline">Privacidade</Link></span>
+        </div>
+      </footer>
+    </div>
+  );
+}

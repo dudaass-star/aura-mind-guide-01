@@ -55,6 +55,7 @@ const DemoInviteAccess = lazy(() => import("./pages/DemoInviteAccess"));
 const ReautorizarPix = lazy(() => import("./pages/ReautorizarPix"));
 const PixTaster = lazy(() => import("./pages/PixTaster"));
 const Degustacao = lazy(() => import("./pages/Degustacao"));
+const Oracoes = lazy(() => import("./pages/Oracoes"));
 const Blog = lazy(() => import("./pages/Blog"));
 const BlogPost = lazy(() => import("./pages/BlogPost"));
 const Pagamento = lazy(() => import("./pages/Pagamento"));
@@ -162,6 +163,7 @@ const App = () => (
             <Route path="/pix/:token" element={<PixTaster />} />
             <Route path="/degustacao" element={<Degustacao />} />
             <Route path="/teste-gratis" element={<Degustacao />} />
+            <Route path="/oracoes" element={<Oracoes />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
