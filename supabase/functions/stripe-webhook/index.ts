@@ -785,7 +785,9 @@ Deno.serve(async (req) => {
 
           // Build full welcome message (to be delivered when user clicks "Começar")
           let welcomeMessage: string;
-          if (isReturning) {
+          if (customerPlan === 'oracoes') {
+            welcomeMessage = `Oi, ${customerName}! Seu acesso às Orações e Meditações da Olá Aura está liberado ✨\n\nPreparamos cada uma com muito carinho para trazer paz ao seu coração e renovar suas forças no dia a dia.\n\nAbra agora para ouvir: https://olaaura.com.br/meu-espaco?tab=oracoes`;
+          } else if (isReturning) {
             welcomeMessage = `Oi, ${customerName}! Que bom ter você de volta 💜\n\nSeu acesso ao app Olá Aura está liberado. É lá que você conversa comigo e retoma tudo de onde parou.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
           } else if (isUpgrade) {
             welcomeMessage = `Oi, ${customerName}! Seu novo plano já está ativo no app Olá Aura ✨\n\nAbra o app para continuar comigo e acessar tudo o que está disponível para você.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
@@ -1176,7 +1178,9 @@ Deno.serve(async (req) => {
       // Build full welcome message (delivered when user clicks "Começar")
       let welcomeMessage: string;
 
-      if (isReturning) {
+      if (customerPlan === 'oracoes') {
+        welcomeMessage = `Oi, ${customerName}! Seu acesso às Orações e Meditações da Olá Aura está liberado ✨\n\nPreparamos cada uma com muito carinho para trazer paz ao seu coração e renovar suas forças no dia a dia.\n\nAbra agora para ouvir: https://olaaura.com.br/meu-espaco?tab=oracoes`;
+      } else if (isReturning) {
         welcomeMessage = `Oi, ${customerName}! Que bom ter você de volta 💜\n\nSeu acesso ao app Olá Aura está liberado. É lá que você conversa comigo e retoma tudo de onde parou.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
       } else if (isUpgrade) {
         welcomeMessage = `Oi, ${customerName}! Seu novo plano já está ativo no app Olá Aura ✨\n\nAbra o app para continuar comigo e acessar tudo o que está disponível para você.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;

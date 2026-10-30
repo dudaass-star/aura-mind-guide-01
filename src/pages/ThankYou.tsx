@@ -105,7 +105,9 @@ const ThankYou = () => {
       });
       if (!verified.error) {
         localStorage.removeItem("aura_checkout_access");
-        navigate("/meu-espaco?tab=conversar&open=1&onboarding=new", { replace: true });
+        // Quem comprou pela página de Orações cai direto na aba de orações.
+        const isOracoes = new URLSearchParams(window.location.search).get("plano") === "oracoes";
+        navigate(isOracoes ? "/meu-espaco?tab=oracoes" : "/meu-espaco?tab=conversar&open=1&onboarding=new", { replace: true });
       } else {
         setAccessState("unavailable");
       }

@@ -405,7 +405,7 @@ serve(async (req) => {
       if (source === "degustacao") sessionConfig.redirect_on_completion = "never";
       else sessionConfig.return_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`;
     } else {
-      sessionConfig.success_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`;
+      sessionConfig.success_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}${plan === "oracoes" ? "&plano=oracoes" : ""}`;
       sessionConfig.cancel_url = `${origin}/v2/checkout?${cancelParams.toString()}`;
     }
 

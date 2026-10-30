@@ -602,7 +602,9 @@ async function activateAccess(
       console.warn("[webhook-woovi] token do portal não criado:", (e as Error)?.message);
     }
 
-    const welcome = `Oi, ${name}! Seu acesso ao app Olá Aura está liberado ✨\n\nÉ no app que você conversa comigo por texto ou áudio e encontra Sessões, Jornadas, Percurso e Meditações.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
+    const welcome = plan === "oracoes"
+      ? `Oi, ${name}! Seu acesso às Orações e Meditações da Olá Aura está liberado ✨\n\nPreparamos cada uma com muito carinho para trazer paz ao seu coração e renovar suas forças no dia a dia.\n\nAbra agora para ouvir: https://olaaura.com.br/meu-espaco?tab=oracoes`
+      : `Oi, ${name}! Seu acesso ao app Olá Aura está liberado ✨\n\nÉ no app que você conversa comigo por texto ou áudio e encontra Sessões, Jornadas, Percurso e Meditações.\n\nAbra agora: https://olaaura.com.br/meu-espaco`;
 
     await supabase.from("profiles")
       .update({ pending_insight: `[WELCOME]${welcome}` }).eq("user_id", userId);
