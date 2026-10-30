@@ -44,14 +44,6 @@ export function PrayerShowcase({ onSubscribe }: { onSubscribe?: () => void }) {
 
   return (
     <div>
-      <div role="tablist" aria-label="Escolha seu momento" className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
-        {items.map((it, i) => (
-          <button key={it.id} role="tab" aria-selected={tab === i} onClick={() => select(i)}
-            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-semibold transition ${tab === i ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground/75 hover:text-foreground"}`}>
-            <it.icon className="h-3.5 w-3.5" />{it.label}{!it.free && <Lock className="h-3 w-3 opacity-60" aria-label="exclusivo para assinantes" />}
-          </button>
-        ))}
-      </div>
       <div className="overflow-hidden rounded-3xl shadow-2xl">
         <div className="relative isolate min-h-[26rem]">
           <img key={prayer.image} src={prayer.image} alt={prayer.imageAlt} className={`absolute inset-0 -z-10 h-full w-full object-cover animate-fade-in ${free ? "" : "scale-105 blur-[2px]"}`} />
