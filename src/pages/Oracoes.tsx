@@ -298,10 +298,10 @@ export default function Oracoes() {
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <Button type="submit" size="lg" className="w-full" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {offer === "weekly" ? "Começar 7 dias por R$ 6,90" : method === "pix" ? "Assinar por R$ 142,80/ano" : "Assinar por 12x de R$ 11,90"}
+              {offer === "weekly" ? "Começar 7 dias por R$ 6,90" : "Assinar plano anual · R$ 142,80"}
             </Button>
           </form>
-          <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="h-4 w-4 text-primary" />{method === "pix" ? "PIX Automático seguro, autorizado no app do seu banco." : "Pagamento seguro no cartão."} {offer === "weekly" && "Após 7 dias, renova automaticamente por R$ 16,90/mês."}</p>
+          <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="h-4 w-4 shrink-0 text-primary" /><span>{method === "pix" ? "PIX Automático seguro, autorizado no app do seu banco." : "Pagamento seguro no cartão."} {offer === "weekly" ? "Após 7 dias, renova automaticamente por R$ 16,90/mês." : "Cobrança única de R$ 142,80 por 1 ano de acesso (equivale a R$ 11,90/mês)."}</span></p>
           </>
           )}
           <p className="mt-2 text-xs text-muted-foreground">Quer conversar com a AURA sempre que precisar? Você pode mudar para um plano com acompanhamento a qualquer momento dentro do App.</p>
