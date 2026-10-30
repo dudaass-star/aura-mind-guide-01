@@ -15,7 +15,7 @@ const PICKS = [
 const items = PICKS.map((p) => ({ ...p, prayer: PRAYERS.find((x) => x.id === p.id)! })).filter((i) => i.prayer);
 
 export function PrayerShowcase({ onSubscribe }: { onSubscribe?: () => void }) {
-  const [tab, setTab] = useState(0);
+  const tab = 0;
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [time, setTime] = useState(0);
@@ -25,10 +25,6 @@ export function PrayerShowcase({ onSubscribe }: { onSubscribe?: () => void }) {
   const ended = free && time >= limit;
   const cue = free ? prayer.cues.reduce<string | null>((acc, c) => (time >= c.start ? c.text : acc), null) : null;
 
-  const select = (i: number) => {
-    audioRef.current?.pause();
-    setPlaying(false); setTime(0); setTab(i);
-  };
   const toggle = async () => {
     const a = audioRef.current; if (!a) return;
     if (playing) { a.pause(); setPlaying(false); return; }
@@ -44,14 +40,6 @@ export function PrayerShowcase({ onSubscribe }: { onSubscribe?: () => void }) {
 
   return (
     <div>
-      <div role="tablist" aria-label="Escolha seu momento" className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
-        {items.map((it, i) => (
-          <button key={it.id} role="tab" aria-selected={tab === i} onClick={() => select(i)}
-            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-semibold transition ${tab === i ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground/75 hover:text-foreground"}`}>
-            <it.icon className="h-3.5 w-3.5" />{it.label}{!it.free && <Lock className="h-3 w-3 opacity-60" aria-label="exclusivo para assinantes" />}
-          </button>
-        ))}
-      </div>
       <div className="overflow-hidden rounded-3xl shadow-2xl">
         <div className="relative isolate min-h-[26rem]">
           <img key={prayer.image} src={prayer.image} alt={prayer.imageAlt} className={`absolute inset-0 -z-10 h-full w-full object-cover animate-fade-in ${free ? "" : "scale-105 blur-[2px]"}`} />
@@ -93,6 +81,23 @@ export function PrayerShowcase({ onSubscribe }: { onSubscribe?: () => void }) {
           </div>
         </div>
         {free && <audio ref={audioRef} key={prayer.audioUrl} src={prayer.audioUrl} preload="none" onTimeUpdate={onTime} onEnded={() => setPlaying(false)} />}
+      </div>
+      <div className="mt-4 rounded-2xl border border-border bg-card/70 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-primary">Outras orações que você desbloqueia no plano</p>
+        <ul className="mt-2 divide-y divide-border">
+          {items.filter((it) => !it.free).map((it) => (
+            <li key={it.id}>
+              <button onClick={onSubscribe} className="flex w-full items-center gap-3 py-3 text-left">
+                <img src={it.prayer.image} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold leading-tight">{it.label}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{it.prayer.title}</span>
+                </span>
+                <Lock className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="exclusivo para assinantes" />
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
