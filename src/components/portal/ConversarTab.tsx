@@ -372,6 +372,7 @@ export function ConversarTab({
   const [responseNotice, setResponseNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(cachedMessages.length === 0);
   const [sending, setSending] = useState(false);
+  const [accessBlocked, setAccessBlocked] = useState(false);
   const [responding, setResponding] = useState(false);
   const [connected, setConnected] = useState(true);
   const [hasOlder, setHasOlder] = useState(false);
@@ -1042,6 +1043,11 @@ export function ConversarTab({
         client_sent_at: pending.createdAt,
       },
     });
+    if ((error as { context?: { status?: number } } | null)?.context?.status === 403) {
+      // Acesso expirado: não adianta tentar novamente, mostramos a renovação.
+      setAccessBlocked(true);
+      removeFromOutbox(pending.clientId);
+    }
     if (error || !data?.accepted || !data?.message?.id) throw error || new Error(data?.error || "Falha no envio");
     if (responseTraceRef.current?.clientId === pending.clientId) responseTraceRef.current.messageId = data.message.id;
     void reportPushConversion("/meu-espaco?tab=conversar", "first14_conversation");
@@ -1517,6 +1523,12 @@ export function ConversarTab({
         </Button>
       )}
 
+         {accessBlocked && !isDemo ? (
+         <div className="shrink-0 border-t border-border/60 bg-card/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 text-center" role="alert">
+           <p className="font-body text-sm text-foreground">Seu período de acesso terminou. Para continuar conversando com a AURA, renove seu plano.</p>
+           <Button type="button" className="mt-3 w-full rounded-full" onClick={onOpenBilling}>Renovar meu plano</Button>
+         </div>
+         ) : (
          <form onSubmit={send} className={cn("shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl transition-colors duration-500", activeSession && "portal-session-composer")}>
          <div className="flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner focus-within:border-primary/50 focus-within:bg-card focus-within:ring-2 focus-within:ring-ring/20">
           {recording ? (
@@ -1564,6 +1576,7 @@ export function ConversarTab({
         {audioError && <p className="mt-1.5 text-center text-xs text-destructive">{audioError}</p>}
         {!connected && <p className="mt-1.5 text-center text-xs text-muted-foreground">Reconectando. Sua mensagem não será perdida.</p>}
       </form>
+         )}
      </section>
   );
 
