@@ -38,3 +38,4 @@
 - Chat recovery is persisted on accepted turns, claimed with leases, bounded in time and attempts, and unscheduled after drain; this survives worker loss without replaying old topics.
 - Session inactivity closure checks unanswered App turns and pauses at the operational cap; this prevents technical silence from counting as therapeutic completion.
 - Free trial (`status='degustacao'`): a DB trigger makes the courtesy quota-exempt, consumed only by an active or dialogued session (interrupted: up to 2 fresh restarts), and blocks later plan-less starts; chat outside a session is blocked deterministically.
+- The `oracoes` plan reuses the degustação wall (DB trigger + aura-agent) with reason `oracoes_cortesia`; one courtesy session then upgrade, so access rules live in one place.
