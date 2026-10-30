@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
-import { getFbc, getFbp } from "@/lib/meta-pixel";
+import { getExternalId, getFbc, getFbp, setAdvancedMatching, trackMetaViewContent } from "@/lib/meta-pixel";
 import { PrayerShowcase } from "@/components/oracoes/PrayerShowcase";
 import { PRAYERS } from "@/lib/prayers";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
@@ -100,6 +100,48 @@ export default function Oracoes() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [pix, navigate]);
 
+  // ViewContent da página de venda (navegador + CAPI, sem preço — mesma regra das landings).
+  useEffect(() => {
+    trackMetaViewContent({ content_name: "Landing Oracoes", content_category: "oracoes" });
+  }, []);
+
+  // InitiateCheckout com correspondência avançada, deduplicado por event_id (paridade com o CheckoutV2).
+  const fireInitiateCheckout = (digits: string) => {
+    try {
+      const value = offer === "yearly" ? 142.8 : 6.9;
+      const eventId = `ic_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const firstName = name.trim().split(" ")[0];
+      const customData = {
+        content_name: offer === "yearly" ? "Oracoes Anual" : "Oracoes 7 dias",
+        content_category: "oracoes",
+        value,
+        currency: "BRL",
+      };
+      setAdvancedMatching({ email: email.trim(), phone: digits, firstName });
+      (window as any).fbq?.("track", "InitiateCheckout", customData, { eventID: eventId });
+      const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+      const fbp = getFbp();
+      const fbc = getFbc() || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined);
+      void supabase.functions.invoke("meta-capi", {
+        body: {
+          event_name: "InitiateCheckout",
+          event_id: eventId,
+          event_source_url: window.location.href,
+          user_data: {
+            email: email.trim(),
+            phone: digits,
+            first_name: firstName,
+            external_id: [digits, getExternalId()].filter(Boolean),
+            client_user_agent: navigator.userAgent,
+            ...(fbp && { fbp }),
+            ...(fbc && { fbc }),
+          },
+          custom_data: customData,
+        },
+      }).catch(() => {});
+    } catch { /* rastreamento nunca bloqueia a compra */ }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -107,6 +149,7 @@ export default function Oracoes() {
     if (name.trim().length < 2) return setError("Digite seu nome.");
     if (digits.length < 10) return setError("Digite um WhatsApp válido com DDD.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Digite um e-mail válido.");
+    if (method === "card" || cpf.replace(/\D/g, "").length === 11) fireInitiateCheckout(digits);
     if (method === "pix") {
       const c = cpf.replace(/\D/g, "");
       if (c.length !== 11) return setError("Digite um CPF válido.");
