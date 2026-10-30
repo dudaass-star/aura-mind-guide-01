@@ -187,7 +187,9 @@ export function SessoesTab({
   // Degustação: 1º encontro cortesia + 1 próximo encontro agendável (entrada exige plano).
   const courtesySession = allSessions.find((session) => session.quota_exempt && session.status !== "cancelled");
   const nextPaidSession = activeSessions.find((session) => !session.quota_exempt);
-  const canSchedule = isDegustacao ? !nextPaidSession : planLimit > 0 && monthUsed < planLimit;
+  // Plano Orações: 1 encontro cortesia agendável pela aba enquanto ainda não foi usado.
+  const isOracoesPlan = String(profile?.plan || "").toLowerCase() === "oracoes" && !isDegustacao;
+  const canSchedule = isDegustacao ? !nextPaidSession : isOracoesPlan ? !courtesySession : planLimit > 0 && monthUsed < planLimit;
   const degustacaoStatus = !courtesySession ? "1 sessão gratuita disponível" : courtesySession.status === "completed" ? (nextPaidSession ? "1º encontro de cortesia concluído • Próximo encontro agendado" : "1º encontro de cortesia concluído • Marque seu próximo encontro") : (nextPaidSession ? "1º encontro de cortesia marcado • Próximo encontro agendado" : "1º encontro de cortesia marcado");
   const bounds = monthBounds(selectedMonth);
 
