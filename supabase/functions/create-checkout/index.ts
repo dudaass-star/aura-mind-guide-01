@@ -28,11 +28,17 @@ const corsHeaders = {
   }
 })();
 
+// Plano Orações e Meditações — IDs públicos do Stripe.
+const ORACOES_MONTHLY_PRICE = "price_1UWHWdQU15XnZ7VvmhLlKnX2"; // R$ 16,90/mês
+const ORACOES_YEARLY_PRICE = "price_1UWHWdQU15XnZ7VvCo2LG5TE"; // R$ 142,80/ano
+
 // Trial price IDs per plan (one-time, paid trial)
 const getTrialPrices = (): Record<string, string> => ({
   essencial: Deno.env.get("STRIPE_PRICE_ESSENCIAL_TRIAL") || "",
   direcao: Deno.env.get("STRIPE_PRICE_DIRECAO_TRIAL") || "",
   transformacao: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_TRIAL") || "",
+  // Plano Orações: 7 dias por R$ 6,90 com price_data inline (sem price fixo).
+  oracoes: "inline",
 });
 
 // Price IDs from environment variables
@@ -51,6 +57,12 @@ const getPrices = (): Record<string, { monthly: string; yearly: string; boletoYe
     monthly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || "",
     yearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || "",
     boletoYearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_PIX_YEARLY") || "",
+  },
+  // Plano Orações e Meditações (sem acompanhamento contínuo com a AURA).
+  oracoes: {
+    monthly: ORACOES_MONTHLY_PRICE,
+    yearly: ORACOES_YEARLY_PRICE,
+    boletoYearly: "",
   },
 });
 
@@ -72,6 +84,11 @@ const RECURRING_PRICES: Record<string, { quarterly: string; semestral: string; y
     quarterly: "price_1U0pa7QU15XnZ7VvEqEFDPWg",
     semestral: "price_1U0paYQU15XnZ7VvmTzRNyGG",
     yearly:    "price_1U0pavQU15XnZ7VvQErVkBV7",
+  },
+  oracoes: {
+    quarterly: "",
+    semestral: "",
+    yearly: ORACOES_YEARLY_PRICE,
   },
 };
 
@@ -354,6 +371,7 @@ serve(async (req) => {
       essencial:     { monthly: "29,90", quarterly: "59,70",  semestral: "89,40",  yearly: "118,80" },
       direcao:       { monthly: "49,90", quarterly: "101,70", semestral: "149,40", yearly: "202,80" },
       transformacao: { monthly: "79,90", quarterly: "161,70", semestral: "239,40", yearly: "322,80" },
+      oracoes:       { monthly: "16,90", yearly: "142,80" },
     };
     const displayPrice = planPrices[plan]?.[billingPeriod] || "";
     const periodLabelMap: Record<string, string> = {
@@ -391,7 +409,7 @@ serve(async (req) => {
       sessionConfig.cancel_url = `${origin}/v2/checkout?${cancelParams.toString()}`;
     }
 
-    const planNames: Record<string, string> = { essencial: "Essencial", direcao: "Direção", transformacao: "Transformação" };
+    const planNames: Record<string, string> = { essencial: "Essencial", direcao: "Direção", transformacao: "Transformação", oracoes: "Orações e Meditações" };
     const planDisplayName = planNames[plan] || plan;
 
     
@@ -469,7 +487,7 @@ serve(async (req) => {
 
       // Valores do Plano Semanal são fixos e conhecidos — não vale gastar um
       // round-trip `prices.retrieve` no caminho crítico do checkout.
-      const TRIAL_AMOUNTS: Record<string, number> = { essencial: 690, direcao: 990, transformacao: 1990 };
+      const TRIAL_AMOUNTS: Record<string, number> = { essencial: 690, direcao: 990, transformacao: 1990, oracoes: 690 };
       const trialUnitAmount = TRIAL_AMOUNTS[plan] ?? 0;
       if (!trialUnitAmount) {
         throw new Error("Valor do Plano Semanal não configurado para este plano.");
