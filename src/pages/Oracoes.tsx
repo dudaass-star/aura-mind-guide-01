@@ -173,8 +173,8 @@ export default function Oracoes() {
         <Link to="/meu-espaco/entrar" className="text-sm text-muted-foreground underline-offset-4 hover:underline">Já tenho acesso</Link>
       </header>
 
-      <main className="container mx-auto grid max-w-6xl gap-10 px-6 pb-16 pt-4 md:grid-cols-[1fr_1.05fr] md:items-center md:pt-10">
-        <section>
+      <main className="container mx-auto grid max-w-6xl grid-cols-1 gap-10 overflow-x-hidden px-6 pb-16 pt-4 md:grid-cols-[1fr_1.05fr] md:items-center md:pt-10">
+        <section className="min-w-0">
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Orações guiadas · 7 dias por R$ 6,90</p>
           <h1 className="font-display text-4xl font-medium leading-[1.08] tracking-tight md:text-6xl">
             Quando faltam as palavras, você ainda pode orar.
@@ -187,7 +187,7 @@ export default function Oracoes() {
             <button onClick={scrollToForm} className="text-sm font-semibold text-primary underline-offset-4 hover:underline">Começar por R$ 6,90</button>
           </div>
         </section>
-        <div id="ouvir" className="scroll-mt-6"><PrayerShowcase onSubscribe={() => { setOffer("weekly"); document.getElementById("assinar")?.scrollIntoView({ behavior: "smooth" }); }} /></div>
+        <div id="ouvir" className="min-w-0 scroll-mt-6"><PrayerShowcase onSubscribe={() => { setOffer("weekly"); document.getElementById("assinar")?.scrollIntoView({ behavior: "smooth" }); }} /></div>
       </main>
 
       <section className="border-y border-border bg-card/60">
