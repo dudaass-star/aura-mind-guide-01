@@ -15,7 +15,7 @@ const PICKS = [
 const items = PICKS.map((p) => ({ ...p, prayer: PRAYERS.find((x) => x.id === p.id)! })).filter((i) => i.prayer);
 
 export function PrayerShowcase({ onSubscribe }: { onSubscribe?: () => void }) {
-  const [tab, setTab] = useState(0);
+  const tab = 0;
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [time, setTime] = useState(0);
@@ -25,10 +25,6 @@ export function PrayerShowcase({ onSubscribe }: { onSubscribe?: () => void }) {
   const ended = free && time >= limit;
   const cue = free ? prayer.cues.reduce<string | null>((acc, c) => (time >= c.start ? c.text : acc), null) : null;
 
-  const select = (i: number) => {
-    audioRef.current?.pause();
-    setPlaying(false); setTime(0); setTab(i);
-  };
   const toggle = async () => {
     const a = audioRef.current; if (!a) return;
     if (playing) { a.pause(); setPlaying(false); return; }
@@ -85,6 +81,23 @@ export function PrayerShowcase({ onSubscribe }: { onSubscribe?: () => void }) {
           </div>
         </div>
         {free && <audio ref={audioRef} key={prayer.audioUrl} src={prayer.audioUrl} preload="none" onTimeUpdate={onTime} onEnded={() => setPlaying(false)} />}
+      </div>
+      <div className="mt-4 rounded-2xl border border-border bg-card/70 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-primary">Outras orações que você desbloqueia no plano</p>
+        <ul className="mt-2 divide-y divide-border">
+          {items.filter((it) => !it.free).map((it) => (
+            <li key={it.id}>
+              <button onClick={onSubscribe} className="flex w-full items-center gap-3 py-3 text-left">
+                <img src={it.prayer.image} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold leading-tight">{it.label}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{it.prayer.title}</span>
+                </span>
+                <Lock className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="exclusivo para assinantes" />
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
