@@ -34,10 +34,11 @@ const PRICES: Record<string, Record<string, number>> = {
   essencial:     { monthly: 2990, quarterly: 5970,  semestral: 8940,  yearly: 11880 },
   direcao:       { monthly: 4990, quarterly: 10170, semestral: 14940, yearly: 20280 },
   transformacao: { monthly: 7990, quarterly: 16170, semestral: 23940, yearly: 32280 },
+  oracoes:       { monthly: 1690, yearly: 14280 },
 };
 
 // Valor de entrada promocional: só no ciclo mensal e só na 1ª compra do cliente.
-const TRIAL_PRICES: Record<string, number> = { essencial: 690, direcao: 990, transformacao: 1990 };
+const TRIAL_PRICES: Record<string, number> = { essencial: 690, direcao: 990, transformacao: 1990, oracoes: 690 };
 
 // Ofertas de retenção (mode=offer). O mandato novo já nasce com o valor da
 // oferta: no PIX não existe cupom, o desconto É o valor da recorrência.
@@ -49,7 +50,7 @@ function offerValueCents(tier: string, fullCents: number): number {
 }
 
 const PLAN_NAMES: Record<string, string> = {
-  essencial: "Essencial", direcao: "Direção", transformacao: "Transformação",
+  essencial: "Essencial", direcao: "Direção", transformacao: "Transformação", oracoes: "Orações",
 };
 const PERIOD_LABELS: Record<string, string> = {
   monthly: "mês", quarterly: "trimestre", semestral: "semestre", yearly: "ano",
@@ -397,6 +398,7 @@ Deno.serve(async (req) => {
     }
 
     if (!plan || !PRICES[plan]) return json({ error: "Plano inválido" }, 400);
+    if (PRICES[plan][billing] == null) return json({ error: "Ciclo indisponível para este plano" }, 400);
     if (!billing || !WOOVI_FREQUENCY[billing]) return json({ error: "Ciclo inválido" }, 400);
     if (!name || !email) return json({ error: "Nome e email são obrigatórios" }, 400);
 
