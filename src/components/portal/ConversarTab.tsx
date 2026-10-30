@@ -1046,7 +1046,7 @@ export function ConversarTab({
     if ((error as { context?: { status?: number } } | null)?.context?.status === 403) {
       // Acesso expirado: não adianta tentar novamente, mostramos a renovação.
       setAccessBlocked(true);
-      writeOutbox(readOutbox(outboxKey).filter((item) => item.clientId !== pending.clientId));
+      removeFromOutbox(pending.clientId);
     }
     if (error || !data?.accepted || !data?.message?.id) throw error || new Error(data?.error || "Falha no envio");
     if (responseTraceRef.current?.clientId === pending.clientId) responseTraceRef.current.messageId = data.message.id;
@@ -1576,6 +1576,7 @@ export function ConversarTab({
         {audioError && <p className="mt-1.5 text-center text-xs text-destructive">{audioError}</p>}
         {!connected && <p className="mt-1.5 text-center text-xs text-muted-foreground">Reconectando. Sua mensagem não será perdida.</p>}
       </form>
+         )}
      </section>
   );
 
