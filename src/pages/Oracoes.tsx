@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { Check, HandHeart, Headphones, HeartHandshake, Loader2, MessageCircleHeart, Moon, ShieldCheck, Sunrise } from "lucide-react";
+import { Check, HandHeart, HeartHandshake, Loader2, MessageCircleHeart, Moon, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { getFbc, getFbp } from "@/lib/meta-pixel";
-import { PreviewPlayer } from "@/components/degustacao/PreviewPlayer";
+import { PrayerShowcase } from "@/components/oracoes/PrayerShowcase";
+import { PRAYERS } from "@/lib/prayers";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import prayerImage from "@/assets/prayer-closeness.jpg";
 import "@/styles/v2-theme.css";
 
 // Página de venda do plano Orações e Meditações (sem acompanhamento contínuo com a AURA).
@@ -89,32 +89,31 @@ export default function Oracoes() {
         <Link to="/meu-espaco/entrar" className="text-sm text-muted-foreground underline-offset-4 hover:underline">Já tenho acesso</Link>
       </header>
 
-      <main className="container mx-auto grid max-w-6xl gap-10 px-6 pb-14 pt-6 md:grid-cols-[1.1fr_1fr] md:items-center md:pt-10">
+      <main className="container mx-auto grid max-w-6xl gap-10 px-6 pb-16 pt-4 md:grid-cols-[1fr_1.05fr] md:items-center md:pt-10">
         <section>
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Orações e meditações · 7 dias por R$ 6,90</p>
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Orações guiadas · 7 dias por R$ 6,90</p>
           <h1 className="font-display text-4xl font-medium leading-[1.08] tracking-tight md:text-6xl">
             Quando faltam as palavras, você ainda pode orar.
           </h1>
           <p className="mt-5 max-w-xl text-lg text-foreground/75">
-            Orações narradas com voz acolhedora e meditações guiadas para o fim de um dia pesado, uma madrugada sem sono ou uma manhã que começa com o peito apertado.
+            Você não precisa de uma pregação longa nem de palavras bonitas quando está exausta. Precisa de alguns minutos de silêncio e entrega com Deus — e a AURA ora com você.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
-            <Button size="lg" onClick={scrollToForm}>Começar por R$ 6,90</Button>
-            <span className="text-sm text-muted-foreground">Inclui 1 encontro de 45 min com a AURA</span>
+            <Button size="lg" onClick={() => document.getElementById("ouvir")?.scrollIntoView({ behavior: "smooth" })}>Ouvir uma oração agora</Button>
+            <button onClick={scrollToForm} className="text-sm font-semibold text-primary underline-offset-4 hover:underline">Começar por R$ 6,90</button>
           </div>
         </section>
-        <div className="overflow-hidden rounded-2xl shadow-xl">
-          <img src={prayerImage} alt="Um momento de oração em silêncio" className="h-full max-h-[460px] w-full object-cover" />
-        </div>
+        <div id="ouvir" className="scroll-mt-6"><PrayerShowcase /></div>
       </main>
 
-      <section className="container mx-auto max-w-3xl px-6 pb-16">
-        <h2 className="font-display text-2xl font-medium md:text-3xl">Ouça antes de decidir</h2>
-        <p className="mt-2 text-foreground/70">Um trecho real, do jeito que você vai ouvir no App.</p>
-        <div className="mt-6"><PreviewPlayer /></div>
+      <section className="border-y border-border bg-card/60">
+        <div className="container mx-auto max-w-3xl px-6 py-14 text-center">
+          <p className="font-display text-2xl italic leading-snug md:text-3xl">“Deus, hoje eu estou sem forças. Mas eu estou aqui.”</p>
+          <p className="mt-4 text-foreground/70">É assim que muitas orações da AURA começam: do jeito que você chega, sem precisar parecer forte.</p>
+        </div>
       </section>
 
-      <section className="container mx-auto max-w-6xl px-6 pb-16">
+      <section className="container mx-auto max-w-6xl px-6 py-16">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">Por que é diferente</span>
         <h2 className="mt-1 font-display text-2xl font-medium md:text-3xl">Uma oração que fala a sua língua</h2>
         <ul className="mt-6 grid gap-4 md:grid-cols-2">
@@ -129,21 +128,23 @@ export default function Oracoes() {
       </section>
 
       <section className="container mx-auto max-w-6xl px-6 pb-16">
-        <h2 className="font-display text-2xl font-medium md:text-3xl">Para cada momento do seu dia</h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          {[
-            { icon: Sunrise, t: "Ao acordar", b: "Para começar o dia entregando os passos a Deus." },
-            { icon: Moon, t: "Antes de dormir", b: "Para quando a mente não desliga e o coração pede descanso." },
-            { icon: Headphones, t: "No meio do caos", b: "Meditações para desacelerar o corpo e respirar de novo." },
-          ].map((m) => (
-            <div key={m.t} className="rounded-xl border border-border bg-card p-6">
-              <m.icon className="h-5 w-5 text-primary" />
-              <p className="mt-3 font-semibold">{m.t}</p>
-              <p className="mt-1 text-sm text-foreground/70">{m.b}</p>
-            </div>
+        <h2 className="font-display text-2xl font-medium md:text-3xl">Uma oração para cada momento</h2>
+        <p className="mt-2 text-foreground/70">No App você encontra todas, organizadas pelo que você está vivendo.</p>
+        <ul className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+          {PRAYERS.slice(0, 8).map((p) => (
+            <li key={p.id} className="relative isolate aspect-[4/5] overflow-hidden rounded-2xl">
+              <img src={p.image} alt={p.imageAlt} loading="lazy" className="absolute inset-0 -z-10 h-full w-full object-cover" />
+              <div className="preview-shade absolute inset-0 -z-10" aria-hidden="true" />
+              <div className="preview-copy flex h-full flex-col justify-end p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-wider opacity-80">{p.category}</p>
+                <p className="mt-1 font-display text-base font-medium leading-tight">{p.title}</p>
+              </div>
+            </li>
           ))}
-        </div>
+        </ul>
+        <p className="mt-4 text-sm text-muted-foreground">E também meditações guiadas para desacelerar o corpo e respirar de novo.</p>
       </section>
+
 
       <section id="assinar" className="container mx-auto max-w-3xl scroll-mt-6 px-6 pb-20">
         <div className="rounded-2xl border border-border bg-card p-6 shadow-xl md:p-8">
