@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useNavigate } from "react-router-dom";
-import { Check, Copy, CreditCard, QrCode, HandHeart, HeartHandshake, Loader2, MessageCircleHeart, Moon, ShieldCheck } from "lucide-react";
+import { Check, Copy, CreditCard, Gift, QrCode, HandHeart, HeartHandshake, Loader2, MessageCircleHeart, Moon, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -212,8 +212,13 @@ export default function Oracoes() {
       </section>
 
       <section className="container mx-auto max-w-6xl px-6 pb-16">
-        <h2 className="font-display text-2xl font-medium md:text-3xl">Uma oração para cada momento</h2>
-        <p className="mt-2 text-foreground/70">No App você encontra todas, organizadas pelo que você está vivendo.</p>
+        <h2 className="font-display text-2xl font-medium md:text-3xl">Um acervo de orações para cada momento</h2>
+        <p className="mt-2 text-foreground/70">São várias orações guiadas com a voz da AURA, organizadas pelo que você está vivendo.</p>
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {["Noite e insônia", "Manhã e direção", "Cansaço e sobrecarga", "Força e coragem", "Família e gratidão", "Esperança e confiança"].map((t) => (
+            <li key={t} className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground/80">{t}</li>
+          ))}
+        </ul>
         <ul className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
           {PRAYERS.slice(0, 8).map((p) => (
             <li key={p.id} className="relative isolate aspect-[4/5] overflow-hidden rounded-2xl">
@@ -226,9 +231,16 @@ export default function Oracoes() {
             </li>
           ))}
         </ul>
-        <p className="mt-4 text-sm text-muted-foreground">E também meditações guiadas para desacelerar o corpo e respirar de novo.</p>
+        <p className="mt-4 text-sm text-muted-foreground">E o acervo segue crescendo, com novas orações e meditações guiadas para desacelerar o corpo e respirar de novo.</p>
       </section>
 
+      <section className="container mx-auto max-w-3xl px-6 pb-10">
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-6 md:p-8">
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary"><Gift className="h-4 w-4" />Presente incluído no seu plano</p>
+          <h2 className="mt-2 font-display text-2xl font-medium md:text-3xl">1 encontro de 45 minutos com a AURA</h2>
+          <p className="mt-3 text-foreground/75">Além das orações e meditações, quando o peito apertar e você precisar desabafar e organizar os pensamentos, você tem uma conversa profunda de 45 minutos com a AURA no App. Sem custo extra.</p>
+        </div>
+      </section>
 
       <section id="assinar" className="container mx-auto max-w-3xl scroll-mt-6 px-6 pb-20">
         <div className="rounded-2xl border border-border bg-card p-6 shadow-xl md:p-8">
