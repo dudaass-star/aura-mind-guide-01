@@ -102,7 +102,6 @@ export default function Oracoes() {
             <Button size="lg" onClick={() => document.getElementById("ouvir")?.scrollIntoView({ behavior: "smooth" })}>Ouvir uma oração agora</Button>
             <button onClick={scrollToForm} className="text-sm font-semibold text-primary underline-offset-4 hover:underline">Começar por R$ 6,90</button>
           </div>
-          <p className="mt-6 text-sm text-muted-foreground">Mais de 9 em cada 10 pessoas que começam uma oração no App ouvem até o fim.</p>
         </section>
         <div id="ouvir" className="scroll-mt-6"><PrayerShowcase /></div>
       </main>
