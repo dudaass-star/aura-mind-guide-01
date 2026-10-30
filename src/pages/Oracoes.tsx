@@ -156,7 +156,6 @@ export default function Oracoes() {
     window.location.href = data.url;
   };
 
-  const selected = OFFERS.find((o) => o.id === offer)!;
 
   return (
     <div className="theme-v2 deg-hero-bg min-h-dvh bg-background text-foreground">
