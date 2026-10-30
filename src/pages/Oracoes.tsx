@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { Link } from "react-router-dom";
-import { Check, HandHeart, HeartHandshake, Loader2, MessageCircleHeart, Moon, ShieldCheck } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Check, Copy, CreditCard, QrCode, HandHeart, HeartHandshake, Loader2, MessageCircleHeart, Moon, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { getFbc, getFbp } from "@/lib/meta-pixel";
 import { PrayerShowcase } from "@/components/oracoes/PrayerShowcase";
 import { PRAYERS } from "@/lib/prayers";
@@ -13,12 +14,28 @@ import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
 
 // Página de venda do plano Orações e Meditações (sem acompanhamento contínuo com a AURA).
-type Offer = "weekly" | "monthly" | "yearly";
+type Offer = "weekly" | "yearly";
+type PayMethod = "card" | "pix";
+
+// Mesmo token do checkout principal: libera o App neste aparelho após o PIX.
+const getCheckoutAccessToken = (): string => {
+  const key = "aura_checkout_access";
+  const current = localStorage.getItem(key);
+  if (current && /^[a-f0-9]{64}$/i.test(current)) return current;
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  localStorage.setItem(key, token);
+  return token;
+};
+
+const maskCpf = (v: string) => {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  return d.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+};
 
 const OFFERS: { id: Offer; label: string; price: string; unit: string; note: string; featured?: boolean }[] = [
   { id: "weekly", label: "Experimente 7 dias", price: "6,90", unit: "por 7 dias", note: "Depois R$ 16,90/mês. Cancele quando quiser." },
-  { id: "yearly", label: "Anual", price: "11,90", unit: "/mês", note: "R$ 142,80 por ano, no cartão.", featured: true },
-  { id: "monthly", label: "Mensal", price: "16,90", unit: "/mês", note: "Renova todo mês. Sem fidelidade." },
+  { id: "yearly", label: "Anual", price: "11,90", unit: "/mês", note: "R$ 142,80 por ano. Renova uma vez por ano.", featured: true },
 ];
 
 const pillars = [
@@ -44,6 +61,44 @@ export default function Oracoes() {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [method, setMethod] = useState<PayMethod>("pix");
+  const [cpf, setCpf] = useState("");
+  const [pix, setPix] = useState<{ qr: string; code: string; amount: number } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const navigate = useNavigate();
+
+  // Aguarda a confirmação do PIX e abre o App já autenticado.
+  useEffect(() => {
+    if (!pix) return;
+    const token = getCheckoutAccessToken();
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const check = async () => {
+      attempts += 1;
+      try {
+        const status = await supabase.functions.invoke("checkout-app-access", { body: { action: "status", token } });
+        if (cancelled) return;
+        if (status.data?.paid) {
+          const consumed = await supabase.functions.invoke("checkout-app-access", { body: { action: "consume", token } });
+          if (cancelled) return;
+          if (consumed.data?.token_hash) {
+            const v = await supabasePortal.auth.verifyOtp({ token_hash: consumed.data.token_hash, type: consumed.data.type || "magiclink" });
+            if (!v.error) {
+              localStorage.removeItem("aura_checkout_access");
+              navigate("/meu-espaco?tab=oracoes", { replace: true });
+              return;
+            }
+          }
+          navigate("/obrigado", { replace: true });
+          return;
+        }
+      } catch { /* segue tentando */ }
+      if (!cancelled && attempts < 200) timer = setTimeout(check, 3000);
+    };
+    timer = setTimeout(check, 3000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [pix, navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +107,32 @@ export default function Oracoes() {
     if (name.trim().length < 2) return setError("Digite seu nome.");
     if (digits.length < 10) return setError("Digite um WhatsApp válido com DDD.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Digite um e-mail válido.");
+    if (method === "pix") {
+      const c = cpf.replace(/\D/g, "");
+      if (c.length !== 11) return setError("Digite um CPF válido.");
+      setLoading(true);
+      const { data, error: fnError } = await supabase.functions.invoke("criar-pix-recorrente-woovi", {
+        body: {
+          plan: "oracoes",
+          billing: offer === "yearly" ? "yearly" : "monthly",
+          ...(offer === "weekly" ? { trial: true } : {}),
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          phone: `55${digits}`,
+          cpf: c,
+          accessToken: getCheckoutAccessToken(),
+          fbp: getFbp(),
+          fbc: getFbc(),
+        },
+      });
+      setLoading(false);
+      if (data?.blocked || data?.code) return setError(data?.message || "Já existe uma assinatura ativa com esses dados.");
+      if (fnError || !data?.qrCodeImage || !data?.copyPaste) {
+        return setError(data?.error || "Não conseguimos gerar o PIX agora. Tente novamente em instantes.");
+      }
+      setPix({ qr: data.qrCodeImage, code: data.copyPaste, amount: Number(data.amount) || 0 });
+      return;
+    }
     setLoading(true);
     const { data, error: fnError } = await supabase.functions.invoke("create-checkout", {
       body: {
@@ -149,7 +230,7 @@ export default function Oracoes() {
       <section id="assinar" className="container mx-auto max-w-3xl scroll-mt-6 px-6 pb-20">
         <div className="rounded-2xl border border-border bg-card p-6 shadow-xl md:p-8">
           <h2 className="font-display text-2xl font-medium md:text-3xl">Escolha como começar</h2>
-          <div role="radiogroup" aria-label="Escolha do plano" className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div role="radiogroup" aria-label="Escolha do plano" className="mt-6 grid gap-3 sm:grid-cols-2">
             {OFFERS.map((o) => (
               <button
                 key={o.id}
@@ -173,17 +254,41 @@ export default function Oracoes() {
             ))}
           </ul>
 
+          {pix ? (
+            <div className="mt-6 space-y-4 text-center">
+              <p className="font-semibold">Pague R$ {pix.amount.toFixed(2).replace(".", ",")} pelo PIX</p>
+              <p className="text-sm text-muted-foreground">Abra o app do seu banco, escaneie o QR Code ou use o código abaixo. Ao pagar, autorize o PIX Automático para renovar sem precisar lembrar.</p>
+              <img src={pix.qr.startsWith("data:") || pix.qr.startsWith("http") ? pix.qr : `data:image/png;base64,${pix.qr}`} alt="QR Code PIX" className="mx-auto h-56 w-56 rounded-lg bg-background p-2" />
+              <Button type="button" variant="outline" className="w-full" onClick={async () => { await navigator.clipboard.writeText(pix.code); setCopied(true); setTimeout(() => setCopied(false), 2500); }}>
+                <Copy className="mr-2 h-4 w-4" />{copied ? "Código copiado!" : "Copiar código PIX"}
+              </Button>
+              <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Aguardando o pagamento… seu acesso abre sozinho aqui.</p>
+              <button type="button" className="text-xs text-muted-foreground underline" onClick={() => setPix(null)}>Voltar</button>
+            </div>
+          ) : (
+          <>
+          <div role="radiogroup" aria-label="Forma de pagamento" className="mt-6 grid grid-cols-2 gap-3">
+            {([["pix", "PIX", QrCode], ["card", "Cartão", CreditCard]] as const).map(([id, label, Icon]) => (
+              <button key={id} type="button" role="radio" aria-checked={method === id} onClick={() => setMethod(id)}
+                className={`flex items-center justify-center gap-2 rounded-xl border p-3 text-sm font-semibold transition-colors ${method === id ? "border-primary bg-primary/5 ring-2 ring-primary" : "border-border hover:border-primary/50"}`}>
+                <Icon className="h-4 w-4" />{label}
+              </button>
+            ))}
+          </div>
           <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
             <div className="space-y-1.5"><Label htmlFor="or-name">Seu nome</Label><Input id="or-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></div>
             <div className="space-y-1.5"><Label htmlFor="or-phone">WhatsApp</Label><Input id="or-phone" inputMode="tel" autoComplete="tel" placeholder="(11) 99999-9999" value={phone} onChange={(e) => setPhone(maskPhone(e.target.value))} /></div>
             <div className="space-y-1.5"><Label htmlFor="or-email">E-mail</Label><Input id="or-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={200} /></div>
+            {method === "pix" && <div className="space-y-1.5"><Label htmlFor="or-cpf">CPF</Label><Input id="or-cpf" inputMode="numeric" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(maskCpf(e.target.value))} /></div>}
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <Button type="submit" size="lg" className="w-full" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {offer === "weekly" ? "Começar 7 dias por R$ 6,90" : `Assinar por R$ ${selected.price}${selected.unit}`}
+              {offer === "weekly" ? "Começar 7 dias por R$ 6,90" : method === "pix" ? "Assinar por R$ 142,80/ano" : "Assinar por 12x de R$ 11,90"}
             </Button>
           </form>
-          <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="h-4 w-4 text-primary" />Pagamento seguro no cartão. {offer === "weekly" && "Após 7 dias, renova automaticamente por R$ 16,90/mês."}</p>
+          <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="h-4 w-4 text-primary" />{method === "pix" ? "PIX Automático seguro, autorizado no app do seu banco." : "Pagamento seguro no cartão."} {offer === "weekly" && "Após 7 dias, renova automaticamente por R$ 16,90/mês."}</p>
+          </>
+          )}
           <p className="mt-2 text-xs text-muted-foreground">Quer conversar com a AURA sempre que precisar? Você pode mudar para um plano com acompanhamento a qualquer momento dentro do App.</p>
         </div>
       </section>
