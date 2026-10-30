@@ -138,7 +138,6 @@ main().catch((e) => {
       { path: "/", changefreq: "weekly", priority: "1.0" },
       { path: "/v2", changefreq: "weekly", priority: "0.9" },
       { path: "/oracoes", changefreq: "weekly", priority: "0.9" },
-    { path: "/oracoes", changefreq: "weekly", priority: "0.9" },
       { path: "/blog", changefreq: "daily", priority: "0.8" },
     ]),
   );
