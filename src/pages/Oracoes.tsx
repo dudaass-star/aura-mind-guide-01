@@ -160,8 +160,12 @@ export default function Oracoes() {
   return (
     <div className="theme-v2 deg-hero-bg min-h-dvh bg-background text-foreground">
       <Helmet>
-        <title>Orações guiadas e meditações | Olá Aura</title>
-        <meta name="description" content="Orações narradas com voz acolhedora e meditações guiadas para o seu dia. Experimente 7 dias por R$ 6,90." />
+        <title>Oração para dormir em paz e oração da noite guiada | Olá Aura</title>
+        <meta name="description" content="Ouça orações guiadas para a noite, para dormir em paz e para começar o dia, com voz acolhedora. Experimente 7 dias por R$ 6,90." />
+        <link rel="canonical" href="https://olaaura.com.br/oracoes" />
+        <meta property="og:title" content="Orações guiadas para a noite e para dormir em paz | Olá Aura" />
+        <meta property="og:description" content="Quando faltam as palavras, você ainda pode orar. Orações narradas para cada momento do seu dia." />
+        <meta property="og:url" content="https://olaaura.com.br/oracoes" />
       </Helmet>
 
       <header className="container mx-auto flex items-center justify-between px-6 py-5">
