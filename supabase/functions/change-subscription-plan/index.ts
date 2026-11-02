@@ -1,7 +1,7 @@
 // Edge function: change-subscription-plan
 // Troca o plano da assinatura ativa do usuário (Stripe subscription_item swap)
 // com proração automática. Reaproveita o método de pagamento já cadastrado.
-// Bloqueia: trial em curso, assinaturas PIX/Boleto/Trial, plano igual ao atual,
+// Trial em curso: encerra o trial e cobra o plano novo. Bloqueia: assinaturas PIX/Boleto/Trial, plano igual ao atual,
 // assinaturas com cancel_at_period_end ou status canceled.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
@@ -294,12 +294,9 @@ serve(async (req) => {
       );
     }
 
-    if (activeSub.status === "trialing") {
-      return jsonError(
-        "Você ainda está no período de avaliação. A troca de plano libera após o primeiro pagamento.",
-        409,
-      );
-    }
+    // Em avaliação: a troca encerra o trial agora e cobra o novo plano integral
+    // no cartão salvo (antes bloqueava e impedia upgrades de maior ticket).
+    const endTrialNow = activeSub.status === "trialing";
 
     const item = activeSub.items.data[0];
     if (!item) {
@@ -334,6 +331,7 @@ serve(async (req) => {
         // no cartão já cadastrado. Alinha com o texto "cobrança proporcional hoje" da UI.
         proration_behavior: "always_invoice",
         payment_behavior: "error_if_incomplete",
+        ...(endTrialNow ? { trial_end: "now" as const } : {}),
         metadata: {
           ...(activeSub.metadata ?? {}),
           plan,
