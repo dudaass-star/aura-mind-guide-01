@@ -452,7 +452,7 @@ REVISÃO FINAL OBRIGATÓRIA:
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey}` },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: FULL_SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
@@ -623,7 +623,7 @@ REVISÃO FINAL OBRIGATÓRIA:
 
     const { data: draft, error: dErr } = await supabase.from("support_ticket_drafts").insert({
       ticket_id,
-      ai_model: "google/gemini-2.5-pro",
+      ai_model: "google/gemini-3-flash-preview",
       draft_body: args.draft_response,
       suggested_action: args.suggested_action,
       suggested_actions: args.suggested_actions,
