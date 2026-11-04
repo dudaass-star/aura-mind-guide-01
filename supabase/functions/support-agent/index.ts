@@ -153,7 +153,7 @@ REGRA DE DATAS (INVIOLÁVEL):
 REGRA DE VALORES:
 - Use os campos *_brl pré-formatados (ex: stripe.invoices[0].amount_paid_brl). Nunca divida centavos de cabeça nem invente valor.`;
 
-const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE + APP_SUPPORT_POLICY + SERVICE_POLICY;
+const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE + APP_SUPPORT_POLICY + SERVICE_POLICY + RENEWAL_POLICY;
 
 // Categorias seguras pra auto-resposta (nunca incluem ações financeiras/sensíveis)
 const SAFE_AUTO_REPLY_CATEGORIES = new Set(["duvida_tecnica", "elogio", "outro"]);
