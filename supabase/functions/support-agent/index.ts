@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { normalizePendingActionWording, SERVICE_POLICY } from "./service-policy.ts";
 import { APP_SUPPORT_POLICY, normalizeAppSupportAction } from "./app-policy.ts";
+import { RENEWAL_POLICY } from "./renewal-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -152,7 +153,7 @@ REGRA DE DATAS (INVIOLÁVEL):
 REGRA DE VALORES:
 - Use os campos *_brl pré-formatados (ex: stripe.invoices[0].amount_paid_brl). Nunca divida centavos de cabeça nem invente valor.`;
 
-const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE + APP_SUPPORT_POLICY + SERVICE_POLICY;
+const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE + APP_SUPPORT_POLICY + SERVICE_POLICY + RENEWAL_POLICY;
 
 // Categorias seguras pra auto-resposta (nunca incluem ações financeiras/sensíveis)
 const SAFE_AUTO_REPLY_CATEGORIES = new Set(["duvida_tecnica", "elogio", "outro"]);
@@ -337,6 +338,57 @@ serve(async (req) => {
       } catch (e) {
         log("Asaas lookup failed", { error: String(e) });
       }
+    }
+
+    // ========== PIX Woovi/Inter: renovação direta do próprio cadastro ==========
+    // Sem isto o agente era cego para o PIX Automático e mandava cliente antigo
+    // para o /v2 (checkout de cliente novo).
+    try {
+      let prof: { id: string; user_id: string; plan: string | null; status: string | null; card_gateway: string | null; plan_expires_at: string | null } | null = null;
+      const sel = "id, user_id, plan, status, card_gateway, plan_expires_at";
+      if (ticket.profile_user_id) {
+        const { data } = await supabase.from("profiles").select(sel).eq("user_id", ticket.profile_user_id).maybeSingle();
+        prof = data as typeof prof;
+      }
+      if (!prof && ticket.customer_email) {
+        const { data } = await supabase.from("profiles").select(sel).ilike("email", ticket.customer_email).limit(1).maybeSingle();
+        prof = data as typeof prof;
+      }
+      if (prof && (prof.card_gateway === "woovi" || prof.card_gateway === "inter")) {
+        const { data: sub } = await supabase.from("woovi_subscriptions")
+          .select("status, plan, value_cents, billing_period, last_error")
+          .eq("user_id", prof.id).is("replaced_by_subscription_id", null)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        const mandateLive = ["APROVADA", "ATIVA"].includes(String(sub?.status || "").toUpperCase());
+        const expiresAt = prof.plan_expires_at ? Date.parse(prof.plan_expires_at) : NaN;
+        const expiredOrSoon = !Number.isFinite(expiresAt) || expiresAt - Date.now() <= 7 * 86400000;
+        const pixInfo: Record<string, unknown> = {
+          gateway: prof.card_gateway,
+          plan: prof.plan,
+          plan_expires_at_brt: Number.isFinite(expiresAt) ? fmtBRT(expiresAt / 1000) : null,
+          mandate_status: sub?.status || null,
+          mandate_live: mandateLive,
+        };
+        if (!mandateLive && expiredOrSoon && prof.status !== "demo") {
+          const { data: tok } = await supabase.from("user_portal_tokens").select("token").eq("user_id", prof.user_id).maybeSingle();
+          if (tok?.token) {
+            pixInfo.renewal_url = `https://olaaura.com.br/reautorizar-pix?token=${tok.token}`;
+            // Mesmo token reaproveita o QR enquanto válido: não cria mandato duplicado.
+            const { data: qr } = await supabase.functions.invoke("pix-reauth-router", { body: { action: "create", token: tok.token } });
+            const q = qr as { copyPaste?: string; amount?: number; expiresAt?: string; error?: string } | null;
+            if (q && !q.error && q.copyPaste) {
+              pixInfo.copy_paste = q.copyPaste;
+              pixInfo.amount_brl = typeof q.amount === "number" ? fmtBRL(Math.round(q.amount * 100)) : null;
+              pixInfo.copy_paste_expires_brt = q.expiresAt ? fmtBRT(Date.parse(q.expiresAt) / 1000) : null;
+            } else {
+              log("PIX renewal QR failed", { error: q?.error });
+            }
+          }
+        }
+        context.pix_renewal = pixInfo;
+      }
+    } catch (e) {
+      log("PIX renewal context failed", { error: String(e) });
     }
 
     const inboundEmails = (messages || [])
