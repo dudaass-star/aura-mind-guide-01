@@ -4115,6 +4115,7 @@ let timeContext = `
 - Fase atual: ${phaseLabel}
 
 ⏱️ REGRA DE OURO DO TEMPO: o relógio é SEU, não do usuário. NUNCA cite minutos decorridos ou restantes, nunca diga "faltam X minutos", "estamos no fim do tempo" ou "nosso tempo está acabando". O que fecha uma sessão é o material ter chegado a um lugar — não o relógio. Se o momento é importante, o tempo espera.
+- EXCEÇÃO: se o PRÓPRIO usuário perguntar sobre o tempo ("já acabou nosso tempo?", "acabou a sessão?"), responda com honestidade e acolhimento, conforme a fase: no início/meio, diga que ainda há espaço; na costura/aterrissagem, confirme que o encontro de hoje está se completando e conduza para a síntese. NUNCA negue que vocês estão em sessão.
 
 🫶 SOBERANIA DO MATERIAL VIVO: uma lembrança, revelação, correção ou detalhe novo prevalece sobre qualquer orientação de movimento ou fechamento. Enquanto o cliente estiver narrando material vivo, acompanhe-o em Presença; não transforme acolhimento ou interpretação em despedida.
 
@@ -6086,13 +6087,25 @@ serve(async (req) => {
         evolutionSummaryResult,
         portraitFeedbackResult,
       ] = await Promise.allSettled([
-        // 1. Últimas mensagens (10 em minimal, 40 normal)
-        supabase
-          .from('messages')
-          .select('role, content, created_at, metadata', { count: 'exact' })
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(minimal_context ? 10 : 40),
+        // 1. Histórico de mensagens.
+        // Em sessão ativa, carrega o encontro inteiro (desde 15 min antes do início,
+        // teto de 200) para a Aura não esquecer o que foi dito no começo — 40 linhas
+        // cobriam só ~9 min, porque cada turno da Aura grava vários balões.
+        // Fora de sessão mantém 40 (foco no presente); minimal_context mantém 10.
+        (() => {
+          let q = supabase
+            .from('messages')
+            .select('role, content, created_at, metadata', { count: 'exact' })
+            .eq('user_id', userId);
+          if (!minimal_context && sessionActive && currentSession?.started_at) {
+            const sessionStartCutoff = new Date(
+              new Date(currentSession.started_at).getTime() - 15 * 60 * 1000
+            ).toISOString();
+            q = q.gte('created_at', sessionStartCutoff);
+            return q.order('created_at', { ascending: false }).limit(200);
+          }
+          return q.order('created_at', { ascending: false }).limit(minimal_context ? 10 : 40);
+        })(),
         // 2. Insights críticos (pessoa, identidade) - reduzido em minimal
         supabase
           .from('user_insights')
