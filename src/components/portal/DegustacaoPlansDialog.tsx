@@ -19,6 +19,7 @@ const HEADLINES: Record<DegustacaoReason, { title: string; body: string }> = {
   chat: { title: "Converse sempre que precisar", body: "Com um plano ativo, a conversa com a AURA fica aberta todos os dias, junto com seus encontros." },
   prayer: { title: "Todas as orações, sempre com você", body: "Sua oração de cortesia já foi usada. Ative um plano para ouvir todas, quando quiser." },
   meditation: { title: "Todas as meditações, sempre com você", body: "Sua meditação de cortesia já foi usada. Ative um plano para ouvir todas, quando quiser." },
+  reactivate: { title: "Que bom ter você de volta 💜", body: "Seu espaço e seu histórico continuam guardados. Escolha seu plano para retomar as conversas e os encontros com a AURA." },
   manual: { title: "Continue sua jornada com a AURA", body: "Escolha o plano que acompanha o seu ritmo." },
 };
 

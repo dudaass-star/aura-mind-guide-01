@@ -285,6 +285,8 @@ const UserPortal = () => {
 
   // Degustação gratuita: estado da cortesia e do próximo encontro.
   const isDegustacao = profile?.status === "degustacao";
+  // Assinatura encerrada: o App oferece a reativação direto, sem novo checkout externo.
+  const isCanceled = ["canceled", "inactive", "expired"].includes(String(profile?.status || ""));
   const { data: degustacaoState } = useQuery({
     queryKey: ["degustacao-state", userId],
     enabled: !!userId && isDegustacao,
@@ -359,11 +361,11 @@ const UserPortal = () => {
   }, [isDegustacao, degustacaoState?.courtesyStatus, userId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Troca de plano genérica vira o modal da degustação para quem ainda não tem plano.
   useEffect(() => {
-    if (isDegustacao && changePlanOpen) {
+    if ((isDegustacao || isCanceled) && changePlanOpen) {
       setChangePlanOpen(false);
-      openDegustacaoPlans("manual");
+      openDegustacaoPlans(isCanceled ? "reactivate" : "manual");
     }
-  }, [isDegustacao, changePlanOpen]);
+  }, [isDegustacao, isCanceled, changePlanOpen]);
 
   const { data: movementMember, refetch: refetchMovementMember } = useQuery({
     queryKey: ["portal-movement-member", userId],
@@ -491,6 +493,8 @@ const UserPortal = () => {
 
   const handleOpenBillingPortal = async () => {
     if (portalLoading) return;
+    // Assinatura encerrada não tem o que atualizar no gateway: reativa no App.
+    if (isCanceled) { openDegustacaoPlans("reactivate"); return; }
     // PIX Automático Bacen (Inter): não existe cartão para atualizar. O que
     // resolve, quando a renovação para, é reautorizar o débito num QR novo.
     if (isInterPix) {
@@ -577,6 +581,20 @@ const UserPortal = () => {
       </Helmet>
 
       <div className={`min-h-screen bg-background text-foreground flex flex-col ${activeTab === "conversar" ? "" : `portal-chat-theme portal-app-theme portal-app-area-${activeTab}`}`}>
+        {isCanceled && !isDemo && userId && (
+          <div role="status" className="sticky top-0 z-40 border-b border-primary/25 bg-primary/10 backdrop-blur" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+            <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">Sua assinatura está inativa</p>
+                <p className="text-xs text-muted-foreground">Seu espaço e seu histórico continuam salvos aqui.</p>
+              </div>
+              <Button size="sm" className="shrink-0 rounded-full" onClick={() => {
+                void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "session", event_type: "reactivation_banner_clicked", source: "app", metadata: { tab: activeTab } }).then(() => undefined);
+                openDegustacaoPlans("reactivate");
+              }}>Reativar agora</Button>
+            </div>
+          </div>
+        )}
         {isDemo && <div className="border-b border-border bg-muted px-4 py-1.5 text-center text-xs font-semibold text-muted-foreground">Personagem fictícia · Conta de demonstração</div>}
         {areaMeta && (
           <header className="portal-app-header sticky top-0 z-30 border-b border-border/70 bg-card/90 backdrop-blur-xl">
@@ -616,7 +634,7 @@ const UserPortal = () => {
               onOpenBilling={() => void handleOpenBillingPortal()}
               onChangePlan={() => { setMinimumSessionLimit(undefined); setChangePlanOpen(true); }}
               onSignOut={() => void signOut()}
-              billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
+              billingLabel={isCanceled ? "Reativar assinatura" : isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
               accountLoading={portalLoading}
               isDemo={isDemo}
               hasJoinedMovement={Boolean(movementMember)}
@@ -715,6 +733,15 @@ const UserPortal = () => {
             onActivated={() => { void refetchProfile(); }}
           />
         </>
+      )}
+      {userId && isCanceled && !isDemo && (
+        <DegustacaoPlansDialog
+          open={degustacaoPlans.open}
+          onOpenChange={(open) => setDegustacaoPlans((prev) => ({ ...prev, open }))}
+          reason="reactivate"
+          userId={userId}
+          onActivated={() => { void refetchProfile(); }}
+        />
       )}
       {userId && !isDemo && (
         <ChangePlanDialog
