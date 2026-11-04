@@ -634,7 +634,7 @@ const UserPortal = () => {
               onOpenBilling={() => void handleOpenBillingPortal()}
               onChangePlan={() => { setMinimumSessionLimit(undefined); setChangePlanOpen(true); }}
               onSignOut={() => void signOut()}
-              billingLabel={isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
+              billingLabel={isCanceled ? "Reativar assinatura" : isWooviPix ? "Passar a pagar no cartão" : "Atualizar forma de pagamento"}
               accountLoading={portalLoading}
               isDemo={isDemo}
               hasJoinedMovement={Boolean(movementMember)}
