@@ -53,8 +53,8 @@ test('cliente histórico removido mantém identidade exata de cobrança entre pr
  });
  test('fim incerto preserva cobertura histórica e não inventa perda ou taxa', () => {
    const data = monthlyChurn([{ identity: 'a', start: '2026-08-15', end: '2026-09-15', cause: 'unknown', endUncertain: true }], '2026-10-08');
-   expect(data[10]).toMatchObject({ base: 1, lost: 0, rate: null, uncertain: 1 });
-   expect(data[11]).toMatchObject({ base: 0, rate: null, uncertain: 1 });
+   expect(data[10]).toMatchObject({ base: 1, lost: 0, rate: 0, uncertain: 1 });
+   expect(data[11]).toMatchObject({ base: 0, rate: null, uncertain: 0 });
  });
  test('cartão inclui semana paga vinculada', () => {
    const source = churnSources([{ id: 'a', email: 'a@b.c' }], {

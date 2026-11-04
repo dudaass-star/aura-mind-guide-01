@@ -42,7 +42,8 @@ export function monthlyChurn(intervals: RecurringInterval[], today: string): Chu
     const initial = merged.filter(i => i.start < start && (!i.end || i.end >= start));
     const base = new Set(initial.map(i => i.identity)).size;
     // Cobertura comprovada permanece na história; fim desconhecido nunca vira perda inventada.
-    const uncertain = new Set(merged.filter(i => i.endUncertain && i.start < start && i.end && i.end < next).map(i => i.identity)).size;
+    // Só conta como incerto quem terminou DENTRO do mês; incertezas antigas não contaminam meses posteriores.
+    const uncertain = new Set(initial.filter(i => i.endUncertain && i.end && i.end >= start && i.end < next).map(i => i.identity)).size;
     const losses = new Map<string, RecurringInterval>();
     for (const i of initial) if (!i.endUncertain && i.end && i.end >= start && i.end < next && i.end <= today) losses.set(i.identity, i);
     const lost = losses.size;
@@ -56,8 +57,9 @@ export function monthlyChurn(intervals: RecurringInterval[], today: string): Chu
     const recLosses = new Set(exposed.filter(i => !i.endUncertain && i.end && i.end >= start && i.end < next && i.end <= today).map(i => i.identity)).size;
     const recUncertain = new Set(exposed.filter(i => i.endUncertain && i.end && i.end >= start && i.end < next).map(i => i.identity)).size;
     result.push({ month: start.slice(0, 7), recStartBase, recNew: recExposed - recStartBase, recExposed, recLost: recLosses, recUncertain,
-      recRate: recExposed && !recUncertain ? Math.round(recLosses / recExposed * 10000) / 100 : null,
-      base, lost, rate: base && !uncertain ? Math.round(lost / base * 10000) / 100 : null,
+      // Taxa sempre calculada sobre perdas comprovadas; incertos ficam sinalizados à parte, sem bloquear o número.
+      recRate: recExposed ? Math.round(recLosses / recExposed * 10000) / 100 : null,
+      base, lost, rate: base ? Math.round(lost / base * 10000) / 100 : null,
       voluntary: [...losses.values()].filter(i => i.cause === 'voluntary').length,
       involuntary: [...losses.values()].filter(i => i.cause === 'involuntary').length,
       unknown: [...losses.values()].filter(i => i.cause === 'unknown').length,
