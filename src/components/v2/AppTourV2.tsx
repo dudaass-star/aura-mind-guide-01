@@ -77,7 +77,7 @@ const AppTourV2 = () => {
           </div>
 
           <div className="mt-8 flex flex-col items-center gap-2">
-            <Link to={checkoutHref("tour")} onClick={() => trackLandingCta("tour", "Começar por R$ 6,90 (tour v2)")}>
+            <Link to={checkoutHref("demo")} onClick={() => trackLandingCta("demo", "Começar por R$ 6,90 (tour v2)")}>
               <Button variant="sage" size="xl" className="rounded-2xl px-10 shadow-lg">
                 Começar por R$ 6,90
               </Button>
