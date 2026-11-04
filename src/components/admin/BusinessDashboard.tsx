@@ -93,6 +93,21 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
     { label: 'Vencidas sem pagamento', value: money ? currency(pending.reduce((s, b) => s + b.cents, 0) / 100) : pending.length, detail: 'Vencimentos anteriores a hoje' },
     { label: 'Sessões realizadas', value: days.reduce((s, d) => s + d.completed, 0), detail: 'Agendadas no período' },
   ];
+  const conversionBlock = (
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-muted-foreground mt-1">Pagas do previsto: primeiras mensalidades quitadas até a última atualização, associadas ao vencimento original mesmo quando pagas depois. Não representa as entradas de dinheiro no dia.</p></div><Select value={conversionProvider} onValueChange={setConversionProvider}><SelectTrigger className="w-[160px]" aria-label="Meio da primeira mensalidade"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Cartão e PIX</SelectItem><SelectItem value="stripe">Cartão</SelectItem><SelectItem value="woovi">PIX · Woovi</SelectItem></SelectContent></Select></div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">Primeiras mensalidades previstas</p><p className="text-3xl font-semibold mt-2">{conversion ? conversionRows.length : '—'}</p></div>
+            <div className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">Clientes convertidos</p><p className="text-3xl font-semibold mt-2">{conversion ? converted : '—'}</p></div>
+            <div className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">Taxa de conversão</p><p className="text-3xl font-semibold mt-2">{conversionRows.length ? `${(converted / conversionRows.length * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</p></div>
+          </div>
+          {conversion && <DailyChart data={conversionDays} series={['firstExpected', 'firstPaid']} />}
+          {conversion && !conversionRows.length && <p className="text-sm text-muted-foreground">Nenhuma semana paga com primeira mensalidade prevista neste período e meio de pagamento.</p>}
+          {!conversion && <p role="status" className="text-sm text-muted-foreground">Dados de conversão aguardando atualização.</p>}
+          {!!conversion?.warnings.length && <div role="alert" className="border-l-2 border-destructive pl-4 text-sm"><p className="font-semibold text-destructive">Conversão parcial</p>{conversion.warnings.map(w => <p key={w} className="text-muted-foreground">{w}</p>)}</div>}
+          <p className="text-xs text-muted-foreground">Cancelamentos após a semana permanecem na base. Semanas cuja primeira mensalidade ainda não venceu ficam fora. Conversão = clientes com a primeira mensalidade paga ÷ clientes previstos; pagamentos conferidos até a última atualização.</p>
+        </div>
+  );
   return <div className="space-y-8 py-4">
     <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
       <div><h2 className="text-xl font-semibold">{onlyUsage ? 'Uso e continuidade' : 'Panorama do negócio'}</h2><p className="text-sm text-muted-foreground mt-1">{shortDate(range.from)} a {shortDate(range.to)} · horário de Brasília</p></div>
@@ -105,7 +120,7 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
     </div>
     {query.data?.providerUpdatedAt && <p className="text-xs text-muted-foreground">Dados dos provedores conferidos em {new Date(query.data.providerUpdatedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} · atualização automática</p>}
     {validation && <p role="alert" className="text-sm text-destructive">{validation}</p>}
-    {!onlyUsage && <MonthlyChurnChart />}
+    {!onlyUsage && <MonthlyChurnChart conversion={query.isPending ? undefined : query.isError ? <p className="text-sm text-destructive">Não foi possível carregar a conversão.</p> : conversionBlock} />}
     {query.isPending ? <div className="h-[420px] bg-muted/40 animate-pulse flex items-center justify-center text-muted-foreground" role="status">Carregando gráficos…</div> : query.isError ? <div role="alert" className="py-12 text-center space-y-3"><AlertCircle className="mx-auto h-6 w-6 text-destructive" /><p>Não foi possível carregar o panorama.</p><Button variant="outline" onClick={() => query.refetch()}>Tentar novamente</Button></div> : <>
       {!onlyUsage && <>
         {!!query.data?.issues?.length && <div role="alert" className="border-l-2 border-destructive pl-4 text-sm space-y-1"><p className="font-semibold text-destructive">Conciliação incompleta — não usar como fechamento financeiro</p>{query.data.issues.map((issue, index) => <p key={index} className="text-muted-foreground">{issue.reason}: {issue.count}{issue.cents > 0 ? ` · ${currency(issue.cents / 100)}` : ''}</p>)}</div>}
@@ -117,19 +132,6 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
           <div className="flex flex-wrap justify-between items-center gap-3"><Button variant="ghost" size="sm" onClick={() => setDefinitions(!definitions)} aria-expanded={definitions}><ChevronDown className="mr-2 h-4 w-4" />Fontes e critérios</Button><Select value={selectedDay || ''} onValueChange={setSelectedDay}><SelectTrigger className="w-[180px]" aria-label="Consultar dia"><SelectValue placeholder="Consultar um dia" /></SelectTrigger><SelectContent>{days.map(d => <SelectItem key={d.date} value={d.date}>{shortDate(d.date)}</SelectItem>)}</SelectContent></Select></div>
           {definitions && <div className="text-xs text-muted-foreground space-y-2 border-t pt-4"><p>Cartão: faturas mensais do Stripe. PIX: cobranças e pagamentos conciliados; entradas semanais e tentativas repetidas não contam como mensalidades.</p>{query.data?.warnings.map(w => <p key={w}>{w}</p>)}<p>Previstas e recebidas são séries independentes. O total recebido não é uma taxa de pagamento dos vencimentos do período.</p><p>Atualizado em {new Date(query.data?.updatedAt || '').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.</p></div>}
           {selectedDay && <div className="overflow-x-auto border-t pt-4"><h4 className="font-semibold mb-3">Mensalidades de {shortDate(selectedDay)}</h4><table className="w-full text-sm"><thead><tr className="text-left text-muted-foreground"><th className="py-2">Cliente</th><th>Meio</th><th>Vencimento</th><th>Pagamento</th><th className="text-right">Valor</th></tr></thead><tbody>{rows.filter(r => r.due === selectedDay || r.paid === selectedDay).map(r => <tr key={r.id} className="border-t border-border"><td className="py-3 pr-4">{r.name || r.email || 'Cliente sem nome'}</td><td className="pr-4">{r.provider === 'stripe' ? 'Cartão' : 'PIX'}</td><td className="pr-4">{shortDate(r.due)}</td><td className="pr-4">{r.paid ? shortDate(r.paid) : 'Não registrado'}</td><td className="text-right whitespace-nowrap">{currency(r.cents / 100)}</td></tr>)}</tbody></table>{!rows.some(r => r.due === selectedDay || r.paid === selectedDay) && <p className="text-muted-foreground py-4">Nenhuma mensalidade neste dia.</p>}</div>}
-        </section>
-        <section className="space-y-5 border-b border-border pb-8" aria-label="Conversão da semana para primeira mensalidade">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-lg">Semana paga → primeira mensalidade</h3><p className="text-xs text-muted-foreground mt-1">Pagas do previsto: primeiras mensalidades quitadas até a última atualização, associadas ao vencimento original mesmo quando pagas depois. Não representa as entradas de dinheiro no dia.</p></div><Select value={conversionProvider} onValueChange={setConversionProvider}><SelectTrigger className="w-[160px]" aria-label="Meio da primeira mensalidade"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Cartão e PIX</SelectItem><SelectItem value="stripe">Cartão</SelectItem><SelectItem value="woovi">PIX · Woovi</SelectItem></SelectContent></Select></div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            <div className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">Primeiras mensalidades previstas</p><p className="text-3xl font-semibold mt-2">{conversion ? conversionRows.length : '—'}</p></div>
-            <div className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">Clientes convertidos</p><p className="text-3xl font-semibold mt-2">{conversion ? converted : '—'}</p></div>
-            <div className="border-l-2 border-border pl-4"><p className="text-sm text-muted-foreground">Taxa de conversão</p><p className="text-3xl font-semibold mt-2">{conversionRows.length ? `${(converted / conversionRows.length * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</p></div>
-          </div>
-          {conversion && <DailyChart data={conversionDays} series={['firstExpected', 'firstPaid']} />}
-          {conversion && !conversionRows.length && <p className="text-sm text-muted-foreground">Nenhuma semana paga com primeira mensalidade prevista neste período e meio de pagamento.</p>}
-          {!conversion && <p role="status" className="text-sm text-muted-foreground">Dados de conversão aguardando atualização.</p>}
-          {!!conversion?.warnings.length && <div role="alert" className="border-l-2 border-destructive pl-4 text-sm"><p className="font-semibold text-destructive">Conversão parcial</p>{conversion.warnings.map(w => <p key={w} className="text-muted-foreground">{w}</p>)}</div>}
-          <p className="text-xs text-muted-foreground">Cancelamentos após a semana permanecem na base. Semanas cuja primeira mensalidade ainda não venceu ficam fora. Conversão = clientes com a primeira mensalidade paga ÷ clientes previstos; pagamentos conferidos até a última atualização.</p>
         </section>
       </>}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
