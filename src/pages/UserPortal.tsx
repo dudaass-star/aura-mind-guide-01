@@ -582,7 +582,16 @@ const UserPortal = () => {
 
       <div className={`min-h-screen bg-background text-foreground flex flex-col ${activeTab === "conversar" ? "" : `portal-chat-theme portal-app-theme portal-app-area-${activeTab}`}`}>
         {isCanceled && !isDemo && userId && (
-          <div role="status" className="sticky top-0 z-40 border-b border-primary/25 bg-primary/10 backdrop-blur" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+          <div role="status" ref={(el) => {
+            // Reserva o espaço da barra para a conversa (que usa posição fixa no celular)
+            if (!el) { document.documentElement.style.removeProperty("--portal-top-offset"); return; }
+            const sync = () => {
+              const mobile = window.matchMedia("(max-width: 767px)").matches;
+              document.documentElement.style.setProperty("--portal-top-offset", mobile ? `${el.offsetHeight}px` : "0px");
+            };
+            sync();
+            new ResizeObserver(sync).observe(el);
+          }} className="sticky top-0 z-40 border-b border-primary/25 bg-primary/10 backdrop-blur" style={{ paddingTop: "env(safe-area-inset-top)" }}>
             <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-2.5">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-foreground">Sua assinatura está inativa</p>
