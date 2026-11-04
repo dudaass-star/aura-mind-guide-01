@@ -1582,7 +1582,7 @@ export function ConversarTab({
   return (
     <main
       className="portal-chat-theme fixed inset-x-0 min-h-0 overflow-hidden bg-foreground/10 md:relative md:inset-auto md:min-h-dvh md:overflow-visible md:flex md:items-center md:justify-center md:p-6"
-      style={mobileViewport ? { height: `${mobileViewport.height}px`, top: `${mobileViewport.top}px` } : { height: "100dvh", top: 0 }}
+      style={mobileViewport ? { height: `calc(${mobileViewport.height}px - var(--portal-top-offset, 0px))`, top: `calc(${mobileViewport.top}px + var(--portal-top-offset, 0px))` } : { height: "calc(100dvh - var(--portal-top-offset, 0px))", top: "var(--portal-top-offset, 0px)" }}
     >
        <div className={cn("mx-auto flex h-full min-h-0 w-full overflow-hidden bg-background md:h-auto md:rounded-2xl md:border md:border-border/70 md:shadow-card", chatOpen ? "max-w-4xl" : "max-w-lg")}>
         {conversationList}
