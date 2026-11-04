@@ -4,7 +4,7 @@ import { invoiceSubscription } from './first-month-conversion.ts';
 
 type Row = Record<string, any>;
 export interface RecurringInterval { identity: string; start: string; end: string | null; cause: 'voluntary' | 'involuntary' | 'unknown'; recurringStart?: string | null; endUncertain?: boolean }
-export interface ChurnMonth { month: string; base: number | null; lost: number | null; rate: number | null; voluntary: number | null; involuntary: number | null; unknown: number | null; trialBase: number | null; recurringBase: number | null; trialLost: number | null; recurringLost: number | null; uncertain: number; status: 'no_history' | 'no_base' | 'closed' | 'current' }
+export interface ChurnMonth { month: string; recStartBase?: number; recNew?: number; recExposed?: number; recLost?: number; recUncertain?: number; recRate?: number | null; base: number | null; lost: number | null; rate: number | null; voluntary: number | null; involuntary: number | null; unknown: number | null; trialBase: number | null; recurringBase: number | null; trialLost: number | null; recurringLost: number | null; uncertain: number; status: 'no_history' | 'no_base' | 'closed' | 'current' }
 const earliestDay = (days: (string | null | undefined)[]) => days.filter((d): d is string => Boolean(d && validDay(d))).sort()[0] || null;
 const latestDay = (days: (string | null | undefined)[]) => days.filter((d): d is string => Boolean(d && validDay(d))).sort().at(-1) || null;
 const plusWeek = (day: string) => new Date(Date.parse(`${day}T12:00:00Z`) + 7 * 864e5).toISOString().slice(0, 10);
@@ -48,7 +48,16 @@ export function monthlyChurn(intervals: RecurringInterval[], today: string): Chu
     const lost = losses.size;
     const trialBase = initial.filter(i => !i.recurringStart || i.recurringStart >= start).length;
     const trialLost = [...losses.values()].filter(i => !i.recurringStart || (i.end && i.recurringStart > i.end)).length;
-    result.push({ month: start.slice(0, 7), base, lost, rate: base && !uncertain ? Math.round(lost / base * 10000) / 100 : null,
+    // Churn recorrente: só quem já pagou mensalidade cheia; a base cresce no dia em que a pessoa vira recorrente.
+    const isRec = (i: RecurringInterval) => Boolean(i.recurringStart && (!i.end || i.recurringStart <= i.end));
+    const exposed = merged.filter(i => isRec(i) && i.recurringStart! < next && i.recurringStart! <= today && (!i.end || i.end >= start));
+    const recExposed = new Set(exposed.map(i => i.identity)).size;
+    const recStartBase = new Set(exposed.filter(i => i.recurringStart! < start).map(i => i.identity)).size;
+    const recLosses = new Set(exposed.filter(i => !i.endUncertain && i.end && i.end >= start && i.end < next && i.end <= today).map(i => i.identity)).size;
+    const recUncertain = new Set(exposed.filter(i => i.endUncertain && i.end && i.end >= start && i.end < next).map(i => i.identity)).size;
+    result.push({ month: start.slice(0, 7), recStartBase, recNew: recExposed - recStartBase, recExposed, recLost: recLosses, recUncertain,
+      recRate: recExposed && !recUncertain ? Math.round(recLosses / recExposed * 10000) / 100 : null,
+      base, lost, rate: base && !uncertain ? Math.round(lost / base * 10000) / 100 : null,
       voluntary: [...losses.values()].filter(i => i.cause === 'voluntary').length,
       involuntary: [...losses.values()].filter(i => i.cause === 'involuntary').length,
       unknown: [...losses.values()].filter(i => i.cause === 'unknown').length,
