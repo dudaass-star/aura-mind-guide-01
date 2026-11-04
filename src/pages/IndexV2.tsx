@@ -5,7 +5,7 @@ import "@/styles/v2-theme.css";
 import HeaderV2 from "@/components/v2/HeaderV2";
 import HeroV2 from "@/components/v2/HeroV2";
 import HowItWorksV2 from "@/components/v2/HowItWorksV2";
-import DemoV2 from "@/components/v2/DemoV2";
+import AppTourV2 from "@/components/v2/AppTourV2";
 import BenefitsGridV2 from "@/components/v2/BenefitsGridV2";
 import TestimonialsV2 from "@/components/v2/TestimonialsV2";
 import PricingV2 from "@/components/v2/PricingV2";
@@ -72,7 +72,7 @@ const IndexV2 = () => {
         <HeaderV2 />
         <main>
           <HeroV2 />
-          <DemoV2 />
+          <AppTourV2 />
           <BenefitsGridV2 />
           <HowItWorksV2 />
           <MovementV2 />
