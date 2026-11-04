@@ -29,7 +29,7 @@
 - Movement is collective-first; local previews share live invite copy.
 - Home keeps tracking; practice dialogs stop audio on exit.
 
-- Revenue splits potential/coverage; churn unions paid people, using official E2E and contract dates to avoid cross-plan attribution.
+- Revenue splits potential/coverage; churn unions paid people, using official E2E and contract dates to avoid cross-plan attribution. Headline churn counts only people with a paid full installment (base = recurring on day 1 + those converting during the month); paid-week drop-off is measured only by the D+7 conversion cohort, so trials never inflate churn.
 - Stripe invoice classification separates prorations from monthly conversions; plan swaps update descriptions without changing cash history.
 <!-- LOVABLE:BEGIN -->
 - Support ingestion uses bounded UID reads and lightweight MIME parsing; message-level deduplication and human review prevent lost mail and unintended sends.
