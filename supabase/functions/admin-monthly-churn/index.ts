@@ -60,7 +60,7 @@ Deno.serve(async req => {
       { provider: 'asaas', subscriptions: asaas, charges: churnPaymentHistory('asaas', asaas, asaasCharges, snap) },
       { provider: 'inter', subscriptions: inter, charges: interCharges },
     ], events, mandateEvents);
-    const result = { version: 4, months: monthlyChurn(source.intervals, today), warnings: source.warnings, excluded: source.excluded,
+    const result = { version: 5, months: monthlyChurn(source.intervals, today), warnings: source.warnings, excluded: source.excluded,
       completeness: source.warnings.length ? 'partial' : 'recorded_sources', updatedAt: new Date().toISOString(), providerUpdatedAt: stripeSnapshot?.fetched_at || null };
     cache.clear(); cache.set(today, { at: Date.now(), data: result });
     return reply(result);

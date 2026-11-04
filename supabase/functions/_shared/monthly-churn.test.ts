@@ -91,3 +91,13 @@ test('outro contrato ainda vigente impede churn por cancelamento de um contrato 
   ], '2026-10-08')[11];
   expect(month).toMatchObject({ base: 1, lost: 0, rate: 0 });
 });
+test('churn recorrente ignora quem só fez a semana e inclui quem virou mensal no mês', () => {
+  const m = monthlyChurn([
+    { identity: 'semana', start: '2026-10-01', end: '2026-10-08', cause: 'unknown', recurringStart: null },
+    { identity: 'novo', start: '2026-09-28', end: null, cause: 'unknown', recurringStart: '2026-10-05' },
+    { identity: 'antigo', start: '2026-08-01', end: '2026-10-04', cause: 'voluntary', recurringStart: '2026-08-08' },
+    { identity: 'fiel', start: '2026-08-01', end: null, cause: 'unknown', recurringStart: '2026-08-08' },
+  ], '2026-10-20')[11];
+  expect(m).toMatchObject({ recStartBase: 2, recNew: 1, recExposed: 3, recLost: 1 });
+  expect(m.recRate).toBe(33.33);
+});
