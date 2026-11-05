@@ -38,11 +38,47 @@ const Eyebrow = ({ children }: { children: React.ReactNode }) => (
   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{children}</p>
 );
 
-const Header = () => (
-  <header className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--v2-navy)/0.75)] backdrop-blur-md border-b border-[hsl(var(--v2-navy-foreground)/0.08)] text-[hsl(var(--v2-navy-foreground))]">
+const NAV = [
+  { href: "#como-funciona", label: "Como funciona" },
+  { href: "#app", label: "O App" },
+  { href: "#encontros", label: "Encontros" },
+  { href: "#oracoes", label: "Orações" },
+  { href: "#depoimentos", label: "Depoimentos" },
+  { href: "#planos", label: "Planos" },
+  { href: "#duvidas", label: "Dúvidas" },
+];
+
+const goTo = (href: string) => {
+  const el = document.querySelector(href);
+  if (!el) return;
+  const y = el.getBoundingClientRect().top + window.scrollY - 64;
+  window.scrollTo({ top: y, behavior: "smooth" });
+};
+
+const Header = () => {
+  const [open, setOpen] = useState(false);
+  const linkCls = "text-sm text-[hsl(var(--v2-navy-foreground)/0.75)] hover:text-[hsl(var(--v2-navy-foreground))] transition-colors";
+  return (
+  <header className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--v2-navy)/0.85)] backdrop-blur-md border-b border-[hsl(var(--v2-navy-foreground)/0.08)] text-[hsl(var(--v2-navy-foreground))]">
     <div className="container mx-auto px-5 h-14 flex items-center justify-between">
-      <span className="font-display text-xl">Olá Aura</span>
-      <div className="flex items-center gap-3 sm:gap-5">
+      <a href="#hero-section" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label="Olá AURA — início">
+        <img src={logoHorizontal} alt="Olá AURA" className="h-6 sm:h-7 w-auto brightness-0 invert" />
+      </a>
+      <nav className="hidden lg:flex items-center gap-5">
+        {NAV.map((n) => (
+          <a key={n.href} href={n.href} onClick={(e) => { e.preventDefault(); goTo(n.href); }} className={linkCls}>{n.label}</a>
+        ))}
+      </nav>
+      <div className="flex items-center gap-2 sm:gap-4">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-label={open ? "Fechar menu" : "Abrir menu"}
+          aria-expanded={open}
+          className="lg:hidden order-last p-2 -mr-2 rounded-full hover:bg-[hsl(var(--v2-navy-foreground)/0.08)]"
+        >
+          {open ? <X className="w-5 h-5" /> : <MoreVertical className="w-5 h-5" />}
+        </button>
         <Link to="/meu-espaco" className="text-xs sm:text-sm text-[hsl(var(--v2-navy-foreground)/0.75)] hover:text-[hsl(var(--v2-navy-foreground))] transition-colors">
           <span className="hidden sm:inline">Já sou assinante · </span>Entrar
         </Link>
@@ -173,7 +209,7 @@ const HowItWorks = () => {
 };
 
 const SessionShowcase = () => (
-  <section className="py-16 md:py-24 v2-dark-section">
+  <section id="encontros" className="py-16 md:py-24 v2-dark-section">
     <div className="container mx-auto px-5 max-w-5xl grid md:grid-cols-2 gap-10 items-center">
       <div>
         <Eyebrow>Encontros guiados</Eyebrow>
@@ -204,7 +240,7 @@ const Built = () => {
     { icon: Cloud, t: "Cápsula do tempo", d: "Grave um áudio para o seu eu do futuro e receba de volta, de surpresa, daqui a 3 meses." },
   ];
   return (
-    <section className="py-16 md:py-24">
+    <section id="percurso" className="py-16 md:py-24">
       <div className="container mx-auto px-5 max-w-5xl">
         <div className="text-center max-w-2xl mx-auto">
           <Eyebrow>Uma experiência que cresce com você</Eyebrow>
@@ -224,7 +260,7 @@ const Built = () => {
 };
 
 const PrayerShowcase = () => (
-  <section className="py-16 md:py-24">
+  <section id="oracoes" className="py-16 md:py-24">
     <div className="container mx-auto px-5 max-w-5xl grid md:grid-cols-2 gap-10 items-center">
       <div className="order-2 md:order-1 mx-auto w-full max-w-[300px] rounded-[2rem] bg-card border border-border/60 p-6 shadow-lg">
         <div className="flex items-center gap-2 text-xs text-primary"><Moon className="w-4 h-4" /> Oração da noite</div>
@@ -322,7 +358,7 @@ const Testimonials = () => {
     { tag: "Sobrecarga", q: "É como ter alguém que lembra de tudo e me devolve com carinho e honestidade.", n: "C., 29 anos" },
   ];
   return (
-    <section className="py-16 md:py-24">
+    <section id="depoimentos" className="py-16 md:py-24">
       <div className="container mx-auto px-5 max-w-5xl">
         <div className="text-center"><Eyebrow>Quem já começou</Eyebrow><h2 className="mt-3 font-display text-3xl md:text-4xl">Histórias reais de clareza.</h2></div>
         <div className="mt-10 grid md:grid-cols-3 gap-4">
