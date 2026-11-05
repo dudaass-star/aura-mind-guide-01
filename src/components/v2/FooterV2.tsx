@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Shield, Lock } from "lucide-react";
-import logoOlaAura from "@/assets/logo-ola-aura.png";
+import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 
 const FooterV2 = () => (
   <footer className="v2-dark-section border-t border-white/10 py-12">
@@ -8,7 +8,7 @@ const FooterV2 = () => (
       <div className="grid md:grid-cols-4 gap-8 mb-10">
         <div>
           <Link to="/" className="flex items-center mb-4">
-            <img src={logoOlaAura} alt="Olá AURA" className="h-16 w-auto brightness-0 invert" />
+            <img src={logoOlaAura} alt="Olá AURA" className="h-9 w-auto brightness-0 invert" />
           </Link>
           <p className="text-xs text-white/65 max-w-[220px]">
             Uma inteligência de acompanhamento emocional que transforma conversas em clareza, direção e percurso.

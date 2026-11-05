@@ -5,8 +5,9 @@ import "@/styles/v2-theme.css";
 import { Button } from "@/components/ui/button";
 import {
   Star, ShieldCheck, Lock, MessageCircle, CalendarHeart, Sparkles, Check, X, Mic, Moon,
-  Waypoints, Compass, BookMarked, Route, Cloud, Play, HeartHandshake,
+  Waypoints, Compass, BookMarked, Route, Cloud, Play, HeartHandshake, MoreVertical,
 } from "lucide-react";
+import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import movementImage from "@/assets/movimento-ola-aura.jpg";
 import AppTourV2 from "@/components/v2/AppTourV2";
 import PricingV2 from "@/components/v2/PricingV2";
@@ -87,8 +88,22 @@ const Header = () => {
         </Link>
       </div>
     </div>
+    {open && (
+      <nav className="lg:hidden border-t border-[hsl(var(--v2-navy-foreground)/0.08)] bg-[hsl(var(--v2-navy)/0.97)] max-h-[calc(100dvh-3.5rem)] overflow-y-auto">
+        <div className="container mx-auto px-5 py-4 flex flex-col">
+          {NAV.map((n) => (
+            <a key={n.href} href={n.href} onClick={(e) => { e.preventDefault(); setOpen(false); setTimeout(() => goTo(n.href), 10); }} className="py-3 text-base border-b border-[hsl(var(--v2-navy-foreground)/0.06)] text-[hsl(var(--v2-navy-foreground)/0.85)]">{n.label}</a>
+          ))}
+          <Link to="/meu-espaco" className="py-3 text-base text-[hsl(var(--v2-navy-foreground)/0.85)]">Já sou assinante · Entrar</Link>
+          <Link to={checkoutHref("header", V)} onClick={() => trackLandingCta("header", "Menu: Começar (v5)", V)} className="mt-2">
+            <Button variant="sage" className="w-full rounded-full">Começar por R$ 6,90</Button>
+          </Link>
+        </div>
+      </nav>
+    )}
   </header>
-);
+  );
+};
 
 const Hero = () => (
   <section id="hero-section" className="v5-hero relative pt-20 md:pt-28 pb-16 md:pb-24 overflow-hidden">
