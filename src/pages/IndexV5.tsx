@@ -13,7 +13,7 @@ import FooterV2 from "@/components/v2/FooterV2";
 import { trackLandingCta, checkoutHref, useLandingEngagement, type CtaSource } from "@/lib/landing-analytics";
 import { trackViewItem } from "@/lib/ga4";
 import { trackMetaViewContent } from "@/lib/meta-pixel";
-import heroImg from "@/assets/v2/hero-mulher-sofa.jpg";
+import "@/styles/v5-hero.css";
 
 // Página V5: versão de alta conversão, independente da /v2.
 const V = "v5" as const;
@@ -37,7 +37,7 @@ const Eyebrow = ({ children }: { children: React.ReactNode }) => (
 );
 
 const Header = () => (
-  <header className="fixed inset-x-0 top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border/50">
+  <header className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--v2-navy)/0.75)] backdrop-blur-md border-b border-[hsl(var(--v2-navy-foreground)/0.08)] text-[hsl(var(--v2-navy-foreground))]">
     <div className="container mx-auto px-5 h-14 flex items-center justify-between">
       <span className="font-display text-xl">Olá Aura</span>
       <Link to={checkoutHref("header", V)} onClick={() => trackLandingCta("header", "Começar (v5)", V)}>
@@ -48,43 +48,66 @@ const Header = () => (
 );
 
 const Hero = () => (
-  <section id="hero-section" className="relative pt-20 md:pt-28 pb-14 md:pb-24 overflow-hidden">
-    <div className="absolute inset-0 v2-glow-sage pointer-events-none" />
-    <div className="container relative mx-auto px-5 grid md:grid-cols-2 gap-10 items-center">
-      <div className="v2-fade-up">
-        <div className="flex items-center gap-2 text-sm">
-          <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 text-primary fill-primary" />)}</div>
-          <span className="text-muted-foreground"><strong className="text-foreground">4.9/5</strong> · +5.000 pessoas</span>
-        </div>
-        <h1 className="mt-5 font-display text-[2.4rem] leading-[1.05] md:text-6xl font-medium tracking-tight">
-          Quando a cabeça não para, <span className="italic text-primary">fale com quem lembra de você.</span>
+  <section id="hero-section" className="v5-hero relative pt-20 md:pt-28 pb-16 md:pb-24 overflow-hidden">
+    <div className="v5-orb v5-orb-a" />
+    <div className="v5-orb v5-orb-b" />
+    <div className="v5-orb v5-orb-c" />
+    <div className="container relative mx-auto px-5 grid md:grid-cols-2 gap-8 md:gap-12 items-center">
+      <div className="text-center md:text-left v2-fade-up">
+        <span className="inline-flex items-center gap-2 rounded-full border border-[hsl(var(--v2-navy-foreground)/0.15)] bg-[hsl(var(--v2-navy-foreground)/0.06)] px-3 py-1 text-xs text-[hsl(var(--v2-navy-foreground)/0.85)] backdrop-blur">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> AURA online agora
+        </span>
+        <h1 className="mt-4 font-sans font-semibold tracking-tight text-[2.15rem] leading-[1.05] md:text-6xl text-[hsl(var(--v2-navy-foreground))]">
+          Sua mente merece <span className="v5-gradient-text">um lugar pra respirar.</span>
         </h1>
-        <p className="mt-5 text-base md:text-lg text-muted-foreground leading-relaxed max-w-lg">
-          A AURA te escuta por texto ou áudio a qualquer hora, conecta o que você vive e conduz encontros guiados que transformam confusão em clareza.
+        <p className="mt-3 text-sm md:text-lg text-[hsl(var(--v2-navy-muted))] max-w-md mx-auto md:mx-0">
+          Converse por texto ou áudio, 24h. A AURA lembra de você e te guia até a clareza.
         </p>
-        <div className="mt-7 flex flex-col gap-2 items-stretch sm:items-start">
+        <div className="hidden md:flex mt-7 flex-col gap-2 items-start">
           <Cta source="hero" />
-          <Reassure />
-        </div>
-        <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 text-primary" /> Privado e protegido (LGPD)</span>
-          <span className="inline-flex items-center gap-1.5"><Moon className="w-3.5 h-3.5 text-primary" /> Disponível 24h</span>
-          <span className="inline-flex items-center gap-1.5"><Mic className="w-3.5 h-3.5 text-primary" /> Texto e áudio</span>
+          <Reassure dark />
         </div>
       </div>
-      <div className="relative">
-        <div className="relative rounded-[2rem] overflow-hidden shadow-2xl aspect-[4/5] md:aspect-[4/5]">
-          <img src={heroImg} alt="Mulher conversando com a Aura no celular" className="absolute inset-0 w-full h-full object-cover" width={1280} height={1280} fetchPriority="high" />
-          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-foreground/60 to-transparent" />
-          <div className="absolute left-4 right-4 bottom-4 space-y-2">
-            <div className="ml-auto max-w-[80%] rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm shadow-lg">
-              Não consigo parar de pensar no que ele disse…
+
+      <div className="relative mx-auto w-[230px] md:w-[300px]">
+        <div className="v5-phone">
+          <div className="v5-notch" />
+          <div className="v5-screen">
+            <div className="flex items-center gap-2 pb-3 border-b border-[hsl(var(--v2-navy-foreground)/0.08)]">
+              <div className="w-8 h-8 rounded-full v5-avatar" />
+              <div className="text-left">
+                <p className="text-xs font-semibold text-[hsl(var(--v2-navy-foreground))]">AURA</p>
+                <p className="text-[10px] text-primary">escutando você…</p>
+              </div>
             </div>
-            <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-card text-card-foreground px-4 py-2.5 text-sm shadow-lg">
-              Semana passada você falou algo parecido sobre sua mãe. Posso te mostrar a conexão que estou vendo?
+            <div className="mt-3 space-y-2 text-[11px] md:text-xs text-left">
+              <div className="ml-auto max-w-[80%] rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-3 py-2">Não consigo parar de pensar no que ele disse…</div>
+              <div className="max-w-[88%] rounded-2xl rounded-bl-sm bg-[hsl(var(--v2-navy-foreground)/0.1)] text-[hsl(var(--v2-navy-foreground))] px-3 py-2">Semana passada você sentiu algo parecido com sua mãe. Quer olhar isso comigo?</div>
+              <div className="max-w-[75%] rounded-2xl rounded-bl-sm bg-[hsl(var(--v2-navy-foreground)/0.1)] px-3 py-2 flex items-center gap-2">
+                <Mic className="w-3.5 h-3.5 text-primary shrink-0" />
+                <div className="flex items-end gap-[2px] h-4">
+                  {[5,9,14,8,12,16,7,11,15,6,10,13,7].map((h, i) => (
+                    <span key={i} className="v5-bar" style={{ height: h, animationDelay: `${i * 0.08}s` }} />
+                  ))}
+                </div>
+                <span className="text-[10px] text-[hsl(var(--v2-navy-muted))]">0:24</span>
+              </div>
             </div>
           </div>
         </div>
+        <div className="v5-float v5-float-l">
+          <CalendarHeart className="w-4 h-4 text-primary" />
+          <div className="text-left leading-tight"><p className="text-[10px] opacity-70">Encontro guiado</p><p className="text-xs font-semibold">Hoje, 20h</p></div>
+        </div>
+        <div className="v5-float v5-float-r" style={{ animationDelay: "1.5s" }}>
+          <Sparkles className="w-4 h-4 text-primary" />
+          <p className="text-xs font-semibold">Oração da noite</p>
+        </div>
+      </div>
+
+      <div className="md:hidden flex flex-col gap-2 items-stretch text-center">
+        <Cta source="hero" />
+        <Reassure dark />
       </div>
     </div>
   </section>
