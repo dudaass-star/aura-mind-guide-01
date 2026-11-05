@@ -8,6 +8,7 @@ import {
   Waypoints, Compass, BookMarked, Route, Cloud, Play, HeartHandshake, MoreVertical,
 } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
+import avatarAura from "@/assets/avatar-aura.jpg";
 import movementImage from "@/assets/movimento-ola-aura.jpg";
 import AppTourV2 from "@/components/v2/AppTourV2";
 import PricingV2 from "@/components/v2/PricingV2";
@@ -211,7 +212,10 @@ const Hero = () => {
           <div className="v5-notch" />
           <div className="v5-screen">
             <div className="flex items-center gap-2 pb-3 border-b border-[hsl(var(--v2-navy-foreground)/0.08)]">
-              <div className="w-8 h-8 rounded-full v5-avatar" />
+              <div className="relative shrink-0">
+                <img src={avatarAura} alt="AURA" className="w-9 h-9 rounded-full object-cover ring-2 ring-primary/60 shadow-[0_0_14px_hsl(var(--primary)/0.55)]" />
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-[hsl(var(--v2-navy))]" />
+              </div>
               <div className="text-left">
                 <p className="text-xs font-semibold text-[hsl(var(--v2-navy-foreground))]">AURA</p>
                 <p className="text-[10px] text-primary">{typing ? "lendo você…" : done ? "online" : "digitando…"}</p>
