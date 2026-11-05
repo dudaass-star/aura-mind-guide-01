@@ -37,7 +37,7 @@ const Eyebrow = ({ children }: { children: React.ReactNode }) => (
 );
 
 const Header = () => (
-  <header className="fixed inset-x-0 top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border/50">
+  <header className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--v2-navy)/0.75)] backdrop-blur-md border-b border-[hsl(var(--v2-navy-foreground)/0.08)] text-[hsl(var(--v2-navy-foreground))]">
     <div className="container mx-auto px-5 h-14 flex items-center justify-between">
       <span className="font-display text-xl">Olá Aura</span>
       <Link to={checkoutHref("header", V)} onClick={() => trackLandingCta("header", "Começar (v5)", V)}>
