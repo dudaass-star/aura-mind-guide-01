@@ -17,3 +17,20 @@
 @keyframes v5spin{to{filter:hue-rotate(360deg)}}
 @keyframes v5wave{from{transform:scaleY(.4)}to{transform:scaleY(1)}}
 @media (prefers-reduced-motion:reduce){.v5-orb,.v5-phone,.v5-float,.v5-bar,.v5-avatar{animation:none}}
+.v5-grain{position:absolute;inset:0;pointer-events:none;opacity:.06;background-image:radial-gradient(hsl(0 0% 100%) 1px,transparent 1px);background-size:3px 3px;mix-blend-mode:overlay}
+.v5-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9999px;font-size:12px;color:hsl(var(--v2-navy-foreground)/.8);background:hsl(var(--v2-navy-foreground)/.06);border:1px solid hsl(var(--v2-navy-foreground)/.14);backdrop-filter:blur(10px);transition:all .3s}
+.v5-chip:hover{background:hsl(var(--v2-navy-foreground)/.12)}
+.v5-chip-active{color:hsl(var(--v2-navy-foreground));border-color:hsl(var(--primary)/.8);background:hsl(var(--primary)/.22);box-shadow:0 0 22px -4px hsl(var(--primary)/.7)}
+.v5-shimmer{position:relative;overflow:hidden}
+.v5-shimmer::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,hsl(0 0% 100%/.35) 50%,transparent 70%);transform:translateX(-100%);animation:v5shine 3.2s ease-in-out infinite}
+@keyframes v5shine{60%,100%{transform:translateX(100%)}}
+.v5-halo{position:absolute;inset:8% -10%;border-radius:9999px;background:radial-gradient(circle,hsl(var(--primary)/.45),transparent 65%);filter:blur(40px);animation:v5breath 5s ease-in-out infinite}
+@keyframes v5breath{50%{transform:scale(1.12);opacity:.7}}
+.v5-phone::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;background:linear-gradient(135deg,hsl(0 0% 100%/.5),transparent 35%,transparent 65%,hsl(var(--primary)/.6));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.v5-pop{animation:v5pop .45s cubic-bezier(.2,.9,.3,1.2) both}
+@keyframes v5pop{from{opacity:0;transform:translateY(8px) scale(.96)}}
+.v5-dot{width:5px;height:5px;border-radius:9999px;background:hsl(var(--v2-navy-foreground)/.7);animation:v5blink 1s ease-in-out infinite}
+@keyframes v5blink{50%{opacity:.25;transform:translateY(-2px)}}
+.v5-caret{display:inline-block;width:1px;height:1em;margin-left:1px;vertical-align:-2px;background:hsl(var(--primary));animation:v5blink .8s steps(2) infinite}
+.v5-fade-bottom{position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(to bottom,transparent,hsl(var(--background)));pointer-events:none}
+@media (prefers-reduced-motion:reduce){.v5-halo,.v5-shimmer::after{animation:none}}

@@ -105,11 +105,66 @@ const Header = () => {
   );
 };
 
-const Hero = () => (
+// Cenários do "Efeito Espelho": dores e reframes reais mais frequentes nas sessões (temas e reframes 5★).
+const MIRROR = [
+  {
+    id: "mente",
+    icon: Moon,
+    label: "Minha cabeça não desliga",
+    user: "Deito e fico repassando tudo. Parece que se eu relaxar, algo ruim vai acontecer.",
+    aura: "Você vive como uma sentinela, vigiando perigos 24h por dia. Soltar o controle não é se perder — é deixar o corpo descansar do susto.",
+  },
+  {
+    id: "exaustao",
+    icon: Cloud,
+    label: "Exaustão e culpa por não dar conta",
+    user: "A casa tá um caos, nada fica pronto. Sinto que estou falhando com todo mundo.",
+    aura: "Isso não é incapacidade. É um sinal claro de exaustão profunda. Você não está falhando: está sustentando peso demais há tempo demais.",
+  },
+  {
+    id: "relacao",
+    icon: HeartHandshake,
+    label: "Carregando tudo sozinha na relação",
+    user: "Só eu tento salvar isso. E ainda me sinto culpada por querer me afastar.",
+    aura: "Talvez a dor não seja perder o outro, mas perceber que você se anulou para cuidar de dois — enquanto ninguém cuidava de você.",
+  },
+];
+
+const useTyped = (text: string, speed = 22) => {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    setN(0);
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { setN(text.length); return; }
+    let i = 0;
+    let t: number;
+    const start = window.setTimeout(function tick() {
+      i += 1; setN(i);
+      if (i < text.length) t = window.setTimeout(tick, speed);
+    }, 900);
+    return () => { clearTimeout(start); clearTimeout(t); };
+  }, [text, speed]);
+  return { shown: text.slice(0, n), typing: n === 0, done: n >= text.length };
+};
+
+const Hero = () => {
+  const [idx, setIdx] = useState(0);
+  const [manual, setManual] = useState(false);
+  const sc = MIRROR[idx];
+  const { shown, typing, done } = useTyped(sc.aura);
+
+  useEffect(() => {
+    if (manual || !done) return;
+    const t = window.setTimeout(() => setIdx((i) => (i + 1) % MIRROR.length), 4200);
+    return () => clearTimeout(t);
+  }, [done, manual]);
+
+  return (
   <section id="hero-section" className="v5-hero relative pt-20 md:pt-28 pb-16 md:pb-24 overflow-hidden">
     <div className="v5-orb v5-orb-a" />
     <div className="v5-orb v5-orb-b" />
     <div className="v5-orb v5-orb-c" />
+    <div className="v5-grain" />
     <div className="container relative mx-auto px-5 grid md:grid-cols-2 gap-8 md:gap-12 items-center">
       <div className="text-center md:text-left v2-fade-up">
         <span className="inline-flex items-center gap-2 rounded-full border border-[hsl(var(--v2-navy-foreground)/0.15)] bg-[hsl(var(--v2-navy-foreground)/0.06)] px-3 py-1 text-xs text-[hsl(var(--v2-navy-foreground)/0.85)] backdrop-blur">
@@ -121,17 +176,37 @@ const Hero = () => (
         <p className="mt-3 text-sm md:text-lg text-[hsl(var(--v2-navy-muted))] max-w-md mx-auto md:mx-0">
           Seu espaço seguro para desabafar, organizar os pensamentos e encontrar paz — 24 horas por dia.
         </p>
-        <div className="md:hidden mt-5 flex flex-col gap-2 items-stretch">
-          <Cta source="hero" />
-          <Reassure dark />
+
+        <div className="mt-5">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[hsl(var(--v2-navy-muted))]">O que pesa em você hoje?</p>
+          <div className="mt-2 flex flex-wrap justify-center md:justify-start gap-2" role="tablist" aria-label="Escolha o que você sente">
+            {MIRROR.map((m, i) => {
+              const Icon = m.icon;
+              const active = i === idx;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => { setManual(true); setIdx(i); }}
+                  className={`v5-chip ${active ? "v5-chip-active" : ""}`}
+                >
+                  <Icon className="w-3.5 h-3.5" /> {m.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="hidden md:flex mt-7 flex-col gap-2 items-start">
-          <Cta source="hero" />
+
+        <div className="mt-5 flex flex-col gap-2 items-stretch md:items-start">
+          <Cta source="hero" className="v5-shimmer" />
           <Reassure dark />
         </div>
       </div>
 
-      <div className="relative mx-auto w-[230px] md:w-[300px]">
+      <div className="relative mx-auto w-[250px] md:w-[310px]">
+        <div className="v5-halo" />
         <div className="v5-phone">
           <div className="v5-notch" />
           <div className="v5-screen">
@@ -139,21 +214,31 @@ const Hero = () => (
               <div className="w-8 h-8 rounded-full v5-avatar" />
               <div className="text-left">
                 <p className="text-xs font-semibold text-[hsl(var(--v2-navy-foreground))]">AURA</p>
-                <p className="text-[10px] text-primary">escutando você…</p>
+                <p className="text-[10px] text-primary">{typing ? "lendo você…" : done ? "online" : "digitando…"}</p>
               </div>
             </div>
-            <div className="mt-3 space-y-2 text-[11px] md:text-xs text-left">
-              <div className="ml-auto max-w-[80%] rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-3 py-2">Não consigo parar de pensar no que ele disse…</div>
-              <div className="max-w-[88%] rounded-2xl rounded-bl-sm bg-[hsl(var(--v2-navy-foreground)/0.1)] text-[hsl(var(--v2-navy-foreground))] px-3 py-2">Tem uma conexão aqui. Semana passada você sentiu algo parecido com sua mãe. Posso te mostrar o que estou percebendo?</div>
-              <div className="max-w-[75%] rounded-2xl rounded-bl-sm bg-[hsl(var(--v2-navy-foreground)/0.1)] px-3 py-2 flex items-center gap-2">
-                <Mic className="w-3.5 h-3.5 text-primary shrink-0" />
-                <div className="flex items-end gap-[2px] h-4">
-                  {[5,9,14,8,12,16,7,11,15,6,10,13,7].map((h, i) => (
-                    <span key={i} className="v5-bar" style={{ height: h, animationDelay: `${i * 0.08}s` }} />
-                  ))}
+            <div key={sc.id} className="mt-3 space-y-2 text-[11px] md:text-xs text-left min-h-[230px]">
+              <div className="v5-pop ml-auto max-w-[82%] rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-3 py-2">{sc.user}</div>
+              {typing ? (
+                <div className="v5-pop inline-flex gap-1 rounded-2xl rounded-bl-sm bg-[hsl(var(--v2-navy-foreground)/0.1)] px-3 py-3">
+                  <span className="v5-dot" /><span className="v5-dot" style={{ animationDelay: ".15s" }} /><span className="v5-dot" style={{ animationDelay: ".3s" }} />
                 </div>
-                <span className="text-[10px] text-[hsl(var(--v2-navy-muted))]">0:24</span>
-              </div>
+              ) : (
+                <div className="max-w-[90%] rounded-2xl rounded-bl-sm bg-[hsl(var(--v2-navy-foreground)/0.1)] text-[hsl(var(--v2-navy-foreground))] px-3 py-2 leading-relaxed">
+                  {shown}{!done && <span className="v5-caret" />}
+                </div>
+              )}
+              {done && (
+                <div className="v5-pop max-w-[75%] rounded-2xl rounded-bl-sm bg-[hsl(var(--v2-navy-foreground)/0.1)] px-3 py-2 flex items-center gap-2">
+                  <Mic className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <div className="flex items-end gap-[2px] h-4">
+                    {[5,9,14,8,12,16,7,11,15,6,10,13,7].map((h, i) => (
+                      <span key={i} className="v5-bar" style={{ height: h, animationDelay: `${i * 0.08}s` }} />
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-[hsl(var(--v2-navy-muted))]">0:24</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -166,10 +251,11 @@ const Hero = () => (
           <p className="text-xs font-semibold">Oração da noite</p>
         </div>
       </div>
-
     </div>
+    <div className="v5-fade-bottom" />
   </section>
-);
+  );
+};
 
 const Problem = () => {
   const items = [
