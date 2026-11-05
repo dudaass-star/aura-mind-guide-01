@@ -116,10 +116,10 @@ const Hero = () => (
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> AURA online agora
         </span>
         <h1 className="mt-4 font-sans font-semibold tracking-tight text-[2.15rem] leading-[1.05] md:text-6xl text-[hsl(var(--v2-navy-foreground))]">
-          Sua mente merece <span className="v5-gradient-text">um lugar pra respirar.</span>
+          Presente quando você mais precisa. <span className="v5-gradient-text">E em cada dia difícil.</span>
         </h1>
         <p className="mt-3 text-sm md:text-lg text-[hsl(var(--v2-navy-muted))] max-w-md mx-auto md:mx-0">
-          Converse por texto ou áudio, a qualquer hora. A AURA conecta o que acontece na sua vida e transforma pensamento confuso em clareza, direção e movimento.
+          Seu espaço seguro para desabafar, organizar os pensamentos e encontrar paz — 24 horas por dia.
         </p>
         <div className="md:hidden mt-5 flex flex-col gap-2 items-stretch">
           <Cta source="hero" />
