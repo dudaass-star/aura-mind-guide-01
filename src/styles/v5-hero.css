@@ -1,0 +1,19 @@
+.v5-hero{background:radial-gradient(120% 80% at 50% 0%,hsl(220 40% 16%),hsl(var(--v2-navy)) 70%);}
+.v5-orb{position:absolute;border-radius:9999px;filter:blur(70px);pointer-events:none;animation:v5drift 14s ease-in-out infinite alternate}
+.v5-orb-a{width:420px;height:420px;background:hsl(var(--primary)/.45);top:-120px;left:-120px}
+.v5-orb-b{width:360px;height:360px;background:hsl(265 60% 65%/.35);bottom:-100px;right:-80px;animation-delay:-5s}
+.v5-orb-c{width:260px;height:260px;background:hsl(35 90% 70%/.22);top:40%;left:45%;animation-delay:-9s}
+@keyframes v5drift{to{transform:translate(40px,30px) scale(1.1)}}
+.v5-gradient-text{background:linear-gradient(100deg,hsl(var(--primary)),hsl(150 45% 78%) 50%,hsl(265 70% 82%));-webkit-background-clip:text;background-clip:text;color:transparent}
+.v5-phone{position:relative;border-radius:2.4rem;padding:10px;background:linear-gradient(145deg,hsl(220 20% 28%),hsl(220 30% 8%));box-shadow:0 40px 80px -20px hsl(var(--primary)/.45),0 0 0 1px hsl(0 0% 100%/.08) inset;animation:v5float 6s ease-in-out infinite}
+.v5-notch{position:absolute;top:16px;left:50%;transform:translateX(-50%);width:70px;height:18px;border-radius:9999px;background:hsl(220 30% 5%);z-index:2}
+.v5-screen{border-radius:1.9rem;padding:42px 14px 22px;min-height:330px;background:linear-gradient(180deg,hsl(220 35% 14%),hsl(220 35% 10%))}
+.v5-avatar{background:conic-gradient(from 0deg,hsl(var(--primary)),hsl(265 60% 70%),hsl(35 90% 70%),hsl(var(--primary)));animation:v5spin 6s linear infinite;box-shadow:0 0 16px hsl(var(--primary)/.6)}
+.v5-bar{width:2px;border-radius:2px;background:hsl(var(--primary));animation:v5wave 1s ease-in-out infinite alternate}
+.v5-float{position:absolute;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:14px;color:hsl(var(--v2-navy-foreground));background:hsl(var(--v2-navy-foreground)/.1);border:1px solid hsl(var(--v2-navy-foreground)/.15);backdrop-filter:blur(14px);box-shadow:0 12px 30px -10px hsl(0 0% 0%/.5);animation:v5float 5s ease-in-out infinite}
+.v5-float-l{left:-58px;top:36%}
+.v5-float-r{right:-52px;bottom:16%}
+@keyframes v5float{50%{transform:translateY(-10px)}}
+@keyframes v5spin{to{filter:hue-rotate(360deg)}}
+@keyframes v5wave{from{transform:scaleY(.4)}to{transform:scaleY(1)}}
+@media (prefers-reduced-motion:reduce){.v5-orb,.v5-phone,.v5-float,.v5-bar,.v5-avatar{animation:none}}
