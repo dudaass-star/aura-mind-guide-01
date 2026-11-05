@@ -14,6 +14,7 @@ import PortalLogin from "./pages/PortalLogin";
 const IndexV2 = lazy(() => import("./pages/IndexV2"));
 const IndexV3 = lazy(() => import("./pages/IndexV3"));
 const IndexV4 = lazy(() => import("./pages/IndexV4"));
+const IndexV5 = lazy(() => import("./pages/IndexV5"));
 const CheckoutV2 = lazy(() => import("./pages/CheckoutV2"));
 const ThankYou = lazy(() => import("./pages/ThankYou"));
 const CancelSubscription = lazy(() => import("./pages/CancelSubscription"));
@@ -117,6 +118,7 @@ const App = () => (
             <Route path="/v2" element={<IndexV2 />} />
             <Route path="/v3" element={<IndexV3 />} />
             <Route path="/v4" element={<IndexV4 />} />
+            <Route path="/v5" element={<IndexV5 />} />
             <Route path="/checkout" element={<LegacyCheckoutRedirect />} />
             <Route path="/v2/checkout" element={<CheckoutV2 />} />
             <Route path="/obrigado" element={<ThankYou />} />
