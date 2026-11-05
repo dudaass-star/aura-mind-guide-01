@@ -42,9 +42,14 @@ const Header = () => (
   <header className="fixed inset-x-0 top-0 z-40 bg-[hsl(var(--v2-navy)/0.75)] backdrop-blur-md border-b border-[hsl(var(--v2-navy-foreground)/0.08)] text-[hsl(var(--v2-navy-foreground))]">
     <div className="container mx-auto px-5 h-14 flex items-center justify-between">
       <span className="font-display text-xl">Olá Aura</span>
-      <Link to={checkoutHref("header", V)} onClick={() => trackLandingCta("header", "Começar (v5)", V)}>
-        <Button variant="sage" size="sm" className="rounded-full px-5">Começar</Button>
-      </Link>
+      <div className="flex items-center gap-3 sm:gap-5">
+        <Link to="/meu-espaco" className="text-xs sm:text-sm text-[hsl(var(--v2-navy-foreground)/0.75)] hover:text-[hsl(var(--v2-navy-foreground))] transition-colors">
+          <span className="hidden sm:inline">Já sou assinante · </span>Entrar
+        </Link>
+        <Link to={checkoutHref("header", V)} onClick={() => trackLandingCta("header", "Começar (v5)", V)}>
+          <Button variant="sage" size="sm" className="rounded-full px-5">Começar</Button>
+        </Link>
+      </div>
     </div>
   </header>
 );
@@ -65,6 +70,10 @@ const Hero = () => (
         <p className="mt-3 text-sm md:text-lg text-[hsl(var(--v2-navy-muted))] max-w-md mx-auto md:mx-0">
           Converse por texto ou áudio, a qualquer hora. A AURA conecta o que acontece na sua vida e transforma pensamento confuso em clareza, direção e movimento.
         </p>
+        <div className="md:hidden mt-5 flex flex-col gap-2 items-stretch">
+          <Cta source="hero" />
+          <Reassure dark />
+        </div>
         <div className="hidden md:flex mt-7 flex-col gap-2 items-start">
           <Cta source="hero" />
           <Reassure dark />
@@ -107,10 +116,6 @@ const Hero = () => (
         </div>
       </div>
 
-      <div className="md:hidden flex flex-col gap-2 items-stretch text-center">
-        <Cta source="hero" />
-        <Reassure dark />
-      </div>
     </div>
   </section>
 );
@@ -123,7 +128,7 @@ const Problem = () => {
     "Terapia não cabe agora no tempo ou no bolso",
   ];
   return (
-    <section className="py-16 md:py-24 bg-secondary/60">
+    <section className="py-16 md:py-24">
       <div className="container mx-auto px-5 max-w-3xl text-center">
         <Eyebrow>Isso soa familiar?</Eyebrow>
         <h2 className="mt-3 font-display text-3xl md:text-4xl">Você não precisa carregar tudo sozinha.</h2>
@@ -219,7 +224,7 @@ const Built = () => {
 };
 
 const PrayerShowcase = () => (
-  <section className="py-16 md:py-24 bg-secondary/60">
+  <section className="py-16 md:py-24">
     <div className="container mx-auto px-5 max-w-5xl grid md:grid-cols-2 gap-10 items-center">
       <div className="order-2 md:order-1 mx-auto w-full max-w-[300px] rounded-[2rem] bg-card border border-border/60 p-6 shadow-lg">
         <div className="flex items-center gap-2 text-xs text-primary"><Moon className="w-4 h-4" /> Oração da noite</div>
@@ -289,10 +294,10 @@ const Compare = () => {
     ["A partir de R$ 6,90 na primeira semana", true, false],
   ];
   return (
-    <section className="py-16 md:py-24 v2-dark-section">
+    <section className="py-16 md:py-24">
       <div className="container mx-auto px-5 max-w-3xl">
         <h2 className="text-center font-display text-3xl md:text-4xl">Diferente de desabafar no vazio.</h2>
-        <div className="mt-8 rounded-3xl border border-border/40 overflow-hidden">
+        <div className="mt-8 rounded-3xl border border-border/60 bg-card overflow-hidden shadow-sm">
           <div className="grid grid-cols-[1fr_auto_auto] text-xs uppercase tracking-wider px-5 py-3 border-b border-border/40 text-muted-foreground">
             <span /> <span className="w-16 text-center text-primary">AURA</span> <span className="w-16 text-center">Sozinha</span>
           </div>
@@ -304,7 +309,7 @@ const Compare = () => {
             </div>
           ))}
         </div>
-        <div className="mt-8 flex flex-col items-center gap-2"><Cta source="demo" /><Reassure dark /></div>
+        <div className="mt-8 flex flex-col items-center gap-2"><Cta source="demo" /><Reassure /></div>
       </div>
     </section>
   );
@@ -402,19 +407,32 @@ const IndexV5 = () => {
           <Hero />
           <Problem />
           <HowItWorks />
-          <Pillars />
+          <div id="app"><AppTourV2 /></div>
           <SessionShowcase />
           <PrayerShowcase />
           <Built />
-          <AppTourV2 />
+          <Testimonials />
           <Compare />
           <Movement />
-          <Testimonials />
-          <PricingV2 />
+          <div id="planos"><PricingV2 /></div>
           <Guarantee />
-          <FAQV2 />
+          <div id="duvidas"><FAQV2 /></div>
           <FinalCta />
         </main>
+        <nav aria-label="Navegação da página" className="v2-dark-section border-t border-[hsl(var(--v2-navy-foreground)/0.08)]">
+          <div className="container mx-auto px-5 py-8 flex flex-col md:flex-row items-center justify-between gap-5">
+            <ul className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-[hsl(var(--v2-navy-muted))]">
+              <li><a href="#como-funciona" className="hover:text-[hsl(var(--v2-navy-foreground))]">Como funciona</a></li>
+              <li><a href="#app" className="hover:text-[hsl(var(--v2-navy-foreground))]">O que tem no App</a></li>
+              <li><a href="#planos" className="hover:text-[hsl(var(--v2-navy-foreground))]">Planos</a></li>
+              <li><a href="#duvidas" className="hover:text-[hsl(var(--v2-navy-foreground))]">Dúvidas</a></li>
+              <li><Link to="/meu-espaco" className="hover:text-[hsl(var(--v2-navy-foreground))]">Já sou assinante · Entrar</Link></li>
+            </ul>
+            <Link to={checkoutHref("final", V)} onClick={() => trackLandingCta("final", "Rodapé: Experimente 7 dias (v5)", V)}>
+              <Button variant="sage" size="sm" className="rounded-full px-6">Experimente 7 dias por R$ 6,90</Button>
+            </Link>
+          </div>
+        </nav>
         <FooterV2 />
         <Sticky />
       </div>
