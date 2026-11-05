@@ -128,7 +128,7 @@ const Problem = () => {
     "Terapia não cabe agora no tempo ou no bolso",
   ];
   return (
-    <section className="py-16 md:py-24 bg-secondary/60">
+    <section className="py-16 md:py-24">
       <div className="container mx-auto px-5 max-w-3xl text-center">
         <Eyebrow>Isso soa familiar?</Eyebrow>
         <h2 className="mt-3 font-display text-3xl md:text-4xl">Você não precisa carregar tudo sozinha.</h2>
@@ -224,7 +224,7 @@ const Built = () => {
 };
 
 const PrayerShowcase = () => (
-  <section className="py-16 md:py-24 bg-secondary/60">
+  <section className="py-16 md:py-24">
     <div className="container mx-auto px-5 max-w-5xl grid md:grid-cols-2 gap-10 items-center">
       <div className="order-2 md:order-1 mx-auto w-full max-w-[300px] rounded-[2rem] bg-card border border-border/60 p-6 shadow-lg">
         <div className="flex items-center gap-2 text-xs text-primary"><Moon className="w-4 h-4" /> Oração da noite</div>
@@ -294,10 +294,10 @@ const Compare = () => {
     ["A partir de R$ 6,90 na primeira semana", true, false],
   ];
   return (
-    <section className="py-16 md:py-24 v2-dark-section">
+    <section className="py-16 md:py-24">
       <div className="container mx-auto px-5 max-w-3xl">
         <h2 className="text-center font-display text-3xl md:text-4xl">Diferente de desabafar no vazio.</h2>
-        <div className="mt-8 rounded-3xl border border-border/40 overflow-hidden">
+        <div className="mt-8 rounded-3xl border border-border/60 bg-card overflow-hidden shadow-sm">
           <div className="grid grid-cols-[1fr_auto_auto] text-xs uppercase tracking-wider px-5 py-3 border-b border-border/40 text-muted-foreground">
             <span /> <span className="w-16 text-center text-primary">AURA</span> <span className="w-16 text-center">Sozinha</span>
           </div>
@@ -309,7 +309,7 @@ const Compare = () => {
             </div>
           ))}
         </div>
-        <div className="mt-8 flex flex-col items-center gap-2"><Cta source="demo" /><Reassure dark /></div>
+        <div className="mt-8 flex flex-col items-center gap-2"><Cta source="demo" /><Reassure /></div>
       </div>
     </section>
   );
