@@ -1289,7 +1289,7 @@ export function ConversarTab({
 
   const conversationList = (
     <aside className={cn(
-       "flex h-full min-h-0 w-full flex-col overflow-y-auto bg-background md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
+       "portal-home-surface flex h-full min-h-0 w-full flex-col overflow-y-auto md:h-[min(820px,calc(100dvh-3rem))] md:min-h-[36rem]",
        chatOpen && "hidden",
     )}>
       <header className="shrink-0 pb-5 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] md:pt-6">
@@ -1363,21 +1363,21 @@ export function ConversarTab({
           type="button"
           variant="ghost"
           onClick={() => setChatOpen(true)}
-          className="portal-primary-conversation group h-auto w-full justify-start gap-3 rounded-lg border px-3 py-4 text-left transition-transform active:scale-[0.99] hover:border-primary/30"
+          className="portal-primary-conversation group h-auto w-full justify-start gap-3 rounded-2xl border px-4 py-5 text-left transition-transform active:scale-[0.99]"
           aria-label="Abrir conversa com a AURA"
         >
           <div className="relative shrink-0">
-            <img src={avatarAura} alt="AURA" className="h-14 w-14 rounded-full object-cover ring-1 ring-border" />
-            <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-background bg-primary" aria-label="AURA disponível" />
+            <img src={avatarAura} alt="AURA" className="portal-pc-avatar h-14 w-14 rounded-full object-cover" />
+            <span className="portal-pc-dot absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2" aria-label="AURA disponível" />
           </div>
            <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="font-body text-base font-bold text-foreground">Converse com a AURA</span>
-              <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{formatTime(latestMessage?.created_at || null)}</span>
+              <span className="portal-pc-title font-body text-base font-bold">Converse com a AURA</span>
+              <span className="portal-pc-muted shrink-0 text-[11px] font-medium">{formatTime(latestMessage?.created_at || null)}</span>
             </div>
             <div className="mt-1 flex items-center gap-2">
-              <p className="min-w-0 flex-1 truncate text-sm font-normal text-muted-foreground">{latestPreview}</p>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              <p className="portal-pc-muted min-w-0 flex-1 truncate text-sm font-normal">{latestPreview}</p>
+              <ChevronRight className="portal-pc-muted h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
             </div>
           </div>
         </Button>

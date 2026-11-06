@@ -30,10 +30,10 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
   const renderGroup = (group: typeof groups[number]) => (
     <section key={group.title} aria-label={group.title}>
       <h2 className="mb-3 text-[17px] font-medium text-foreground">{group.title}</h2>
-      <div className="divide-y divide-border/40 border-y border-border/60">
-        {group.areas.map(({ label, detail, tab, icon: Icon, tone }) => (
-          <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className="group h-auto min-h-[66px] w-full justify-start gap-3 rounded-none px-0.5 py-2.5 text-left hover:bg-card">
-            <span className={cn("flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg", tone)}><Icon className="h-5 w-5" /></span>
+      <div className="portal-home-list divide-y divide-border/40 overflow-hidden">
+        {group.areas.map(({ label, detail, tab, icon: Icon }) => (
+          <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className="group h-auto min-h-[66px] w-full justify-start gap-3 rounded-none px-3.5 py-2.5 text-left hover:bg-secondary/40">
+            <span className="portal-home-icon flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full"><Icon className="h-[18px] w-[18px]" strokeWidth={1.6} /></span>
             <span className="min-w-0 flex-1 whitespace-normal"><span className="block text-sm font-semibold text-foreground">{label}</span><span className="mt-1 block text-xs font-normal leading-relaxed text-muted-foreground">{detail}</span></span>
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           </Button>
