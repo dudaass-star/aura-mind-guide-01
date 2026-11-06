@@ -25,30 +25,22 @@ export default function PrayerSlides({ onStart }: { onStart?: () => void }) {
   const s = SLIDES[i];
   return (
     <div className="mx-auto w-full max-w-[340px]">
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-        {SLIDES.map((x, n) => (
-          <button key={x.id} onClick={() => go(n)}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${n === i ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground"}`}>
-            <x.icon className="h-3.5 w-3.5" /> {x.label}
-          </button>
-        ))}
-      </div>
       <div className="relative isolate overflow-hidden rounded-[2rem] shadow-2xl"
         onTouchStart={(e) => (touch.current = e.touches[0].clientX)}
         onTouchEnd={(e) => { if (touch.current == null) return; const d = e.changedTouches[0].clientX - touch.current; if (Math.abs(d) > 40) go(i + (d < 0 ? 1 : -1)); touch.current = null; }}>
         <img key={s.prayer.image} src={s.prayer.image} alt={s.prayer.imageAlt} className="absolute inset-0 -z-10 h-full w-full object-cover animate-fade-in" loading="lazy" />
         <div className="preview-shade absolute inset-0 -z-10" aria-hidden="true" />
-        <div key={s.id} className="preview-copy flex min-h-[30rem] flex-col justify-end p-6 animate-fade-in">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-80">{s.prayer.moment}</p>
-          <h3 className="mt-2 font-display text-2xl leading-tight">{s.prayer.title}</h3>
-          <div className="mt-5 space-y-2 font-display text-lg leading-snug">
+        <div key={s.id} className="preview-copy flex h-[min(26rem,68svh)] flex-col justify-end p-5 animate-fade-in">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-80">{s.prayer.moment}</p>
+          <h3 className="mt-1.5 font-display text-xl leading-tight">{s.prayer.title}</h3>
+          <div className="mt-3 space-y-1.5 font-display text-base leading-snug">
             {s.lines.map((l, n) => (
               <p key={n} className={`transition-opacity duration-700 ${n === line ? "opacity-100" : "opacity-45"}`}>{l}</p>
             ))}
           </div>
-          <div className="mt-6 flex items-center gap-4">
+          <div className="mt-4 flex items-center gap-4">
             <button onClick={onStart} aria-label="Ouvir orações completas"
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:scale-105">
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:scale-105">
               <Play className="ml-1 h-5 w-5" fill="currentColor" />
             </button>
             <div className="flex-1">
@@ -58,7 +50,7 @@ export default function PrayerSlides({ onStart }: { onStart?: () => void }) {
           </div>
         </div>
       </div>
-      <div className="mt-4 flex items-center justify-between">
+      <div className="mt-3 flex items-center justify-between">
         <button onClick={() => go(i - 1)} aria-label="Oração anterior" className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card"><ChevronLeft className="h-4 w-4" /></button>
         <div className="flex gap-1.5">
           {SLIDES.map((x, n) => <button key={x.id} onClick={() => go(n)} aria-label={x.label} className={`h-1.5 rounded-full transition-all ${n === i ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/30"}`} />)}
