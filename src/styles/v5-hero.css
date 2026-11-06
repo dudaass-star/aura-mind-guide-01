@@ -67,3 +67,18 @@
 /* Tipografia única moderna, exceto as citações humanas. */
 .theme-v5-night h1,.theme-v5-night h2,.theme-v5-night h3,.theme-v5-night .font-display:not(blockquote):not([aria-hidden]){font-family:theme('fontFamily.sans');font-weight:600;letter-spacing:-.02em}
 .theme-v5-night .v5-fade-bottom{background:linear-gradient(to bottom,transparent,hsl(var(--background)/0))}
+
+/* Jornada da luz: o topo continua noturno; do meio para baixo o céu clareia até o amanhecer. */
+.theme-v5-night .v5-dusk{background:linear-gradient(180deg,hsl(var(--background)) 0%,hsl(240 28% 15%) 30%,hsl(258 26% 22%) 70%,hsl(268 24% 30%) 100%)}
+.theme-v5-night .v5-dawn{
+  --background:36 45% 97%;--foreground:222 35% 16%;--card:0 0% 100%;--card-foreground:222 35% 16%;
+  --popover:0 0% 100%;--popover-foreground:222 35% 16%;--secondary:36 35% 92%;--secondary-foreground:222 35% 16%;
+  --muted:36 30% 93%;--muted-foreground:222 12% 40%;--border:30 20% 86%;--input:30 20% 86%;
+  --sage-soft:135 30% 92%;--primary:135 28% 40%;--accent:268 40% 55%;
+  --v2-navy-foreground:222 35% 16%;--v2-navy-muted:222 12% 40%;
+  color-scheme:light;color:hsl(var(--foreground));
+  background:
+    radial-gradient(50rem 26rem at 50% 14rem,hsl(35 90% 75%/.35),transparent 70%),
+    linear-gradient(180deg,hsl(268 24% 30%) 0,hsl(300 25% 62%) 9rem,hsl(25 70% 85%) 20rem,hsl(36 45% 97%) 34rem,hsl(36 45% 97%) 100%);
+}
+.theme-v5-night .v5-dawn .bg-card,.theme-v5-night .v5-dawn .bg-card\/70,.theme-v5-night .v5-dawn .bg-card\/60,.theme-v5-night .v5-dawn .bg-card\/40{background-color:hsl(0 0% 100%/.7)!important;border-color:hsl(var(--border));box-shadow:0 20px 50px -25px hsl(268 40% 40%/.35)}
