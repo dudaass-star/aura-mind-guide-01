@@ -606,18 +606,22 @@ const IndexV5 = () => {
         <main>
           <Hero />
           <Metrics />
+          <div className="v5-dusk">
           <Problem />
           <HowItWorks />
           <div id="app"><AppTourV2 /></div>
           <SessionShowcase />
           <PrayerShowcase />
           <Built />
+          </div>
+          <div className="v5-dawn">
           <Testimonials />
           <Compare />
           <Movement />
           <div id="planos"><PricingV2 /></div>
           <Guarantee />
           <div id="duvidas"><FAQV2 /></div>
+          </div>
           <FinalCta />
         </main>
         <nav aria-label="Navegação da página" className="v2-dark-section border-t border-[hsl(var(--v2-navy-foreground)/0.08)]">
