@@ -30,10 +30,10 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
   const renderGroup = (group: typeof groups[number]) => (
     <section key={group.title} aria-label={group.title}>
       <h2 className="mb-3 text-[17px] font-medium text-foreground">{group.title}</h2>
-      <div className="divide-y divide-border/40 border-y border-border/60">
-        {group.areas.map(({ label, detail, tab, icon: Icon, tone }) => (
-          <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className="group h-auto min-h-[66px] w-full justify-start gap-3 rounded-none px-0.5 py-2.5 text-left hover:bg-card">
-            <span className={cn("flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg", tone)}><Icon className="h-5 w-5" /></span>
+      <div className="portal-home-list divide-y divide-border/40 overflow-hidden">
+        {group.areas.map(({ label, detail, tab, icon: Icon }) => (
+          <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className="group h-auto min-h-[66px] w-full justify-start gap-3 rounded-none px-3.5 py-2.5 text-left hover:bg-secondary/40">
+            <span className="portal-home-icon flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full"><Icon className="h-[18px] w-[18px]" strokeWidth={1.6} /></span>
             <span className="min-w-0 flex-1 whitespace-normal"><span className="block text-sm font-semibold text-foreground">{label}</span><span className="mt-1 block text-xs font-normal leading-relaxed text-muted-foreground">{detail}</span></span>
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           </Button>
@@ -48,7 +48,7 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Um momento para você</h2>
         <div className="grid grid-cols-2 gap-3">
           {practices.map(({ label, detail, action, tab, image, alt, icon: Icon, tone }) => (
-            <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className={cn("group block h-auto min-w-0 overflow-hidden rounded-lg p-0 text-left whitespace-normal hover:opacity-90", tone)}>
+            <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className={cn("group block h-auto min-w-0 overflow-hidden rounded-2xl p-0 text-left shadow-sm whitespace-normal hover:opacity-90", tone)}>
               <img src={image} alt={alt} className="aspect-[1.85/1] w-full object-cover" loading="lazy" />
               <span className="block p-3"><span className="flex min-h-6 items-center gap-1.5"><Icon className="h-4 w-4 shrink-0" /><span className="text-base font-semibold">{label}</span></span><span className="mt-2 block min-h-9 text-xs font-normal leading-[18px]">{detail}</span><span className="mt-3 flex min-h-5 items-center justify-between gap-1 text-[11px] font-semibold"><span>{action}</span><ArrowRight className="h-4 w-4 shrink-0" /></span></span>
             </Button>
@@ -57,7 +57,7 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
       </section>
       <section aria-label="Faça parte de algo maior">
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Faça parte de algo maior</h2>
-        <article data-movement-event="card_viewed" className="overflow-hidden rounded-lg portal-area-journey">
+        <article data-movement-event="card_viewed" className="overflow-hidden rounded-2xl shadow-sm portal-area-journey">
           <img src={movementImage} alt="Pessoas abraçadas com camisetas do Movimento Olá Aura" className="aspect-[2.8/1] w-full object-cover" loading="lazy" />
           <div className="p-4">
             <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase"><HeartHandshake className="h-4 w-4" /><span>Movimento Olá Aura</span>{movementIsNew && !hasJoinedMovement && <span className="rounded-full bg-primary px-2 py-0.5 text-[9px] text-primary-foreground">Novo</span>}</div>

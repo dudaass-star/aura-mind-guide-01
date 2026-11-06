@@ -227,9 +227,46 @@
   background-color: hsl(var(--primary-foreground));
 }
 
+/* Card principal da AURA no padrão da /v5: sálvia profundo + brilho lavanda */
 .portal-primary-conversation {
-  background-color: hsl(var(--portal-conversation));
-  border-color: hsl(var(--portal-conversation-border));
+  --pc-sage: 153 13% 27%;
+  --pc-sage-deep: 153 16% 20%;
+  --pc-lavender: 270 40% 78%;
+  --pc-ink: 0 0% 100%;
+  position: relative;
+  overflow: hidden;
+  color: hsl(var(--pc-ink));
+  background:
+    radial-gradient(120% 140% at 100% 0%, hsl(var(--pc-lavender) / 0.32) 0%, transparent 55%),
+    radial-gradient(90% 120% at 0% 100%, hsl(140 22% 62% / 0.28) 0%, transparent 60%),
+    linear-gradient(140deg, hsl(var(--pc-sage)) 0%, hsl(var(--pc-sage-deep)) 100%);
+  border-color: hsl(var(--pc-ink) / 0.12) !important;
+  box-shadow: 0 22px 40px -26px hsl(var(--pc-sage-deep) / 0.9);
+}
+.portal-primary-conversation:hover { background-color: transparent; color: hsl(var(--pc-ink)); }
+.portal-pc-title { color: hsl(var(--pc-ink)); }
+.portal-pc-muted { color: hsl(var(--pc-ink) / 0.72); }
+.portal-pc-avatar { box-shadow: 0 0 0 3px hsl(var(--pc-ink) / 0.18), 0 0 24px hsl(var(--pc-lavender) / 0.55); }
+.portal-pc-dot { background: hsl(140 45% 70%); border-color: hsl(var(--pc-sage)); }
+
+/* Fundo da entrada do App com a luz suave da /v5 */
+.portal-home-surface {
+  background:
+    radial-gradient(80% 40% at 100% 0%, hsl(270 40% 85% / 0.35) 0%, transparent 70%),
+    radial-gradient(70% 35% at 0% 8%, hsl(153 25% 80% / 0.35) 0%, transparent 70%),
+    hsl(var(--background));
+}
+
+/* Ícones refinados da lista de acompanhamento */
+.portal-home-icon {
+  background: hsl(153 13% 27% / 0.08);
+  color: hsl(153 13% 30%);
+  box-shadow: inset 0 0 0 1px hsl(153 13% 27% / 0.14);
+}
+.portal-home-list {
+  border-radius: 1rem;
+  background: hsl(var(--card) / 0.85);
+  box-shadow: 0 14px 30px -26px hsl(153 16% 20% / 0.6), inset 0 0 0 1px hsl(153 13% 27% / 0.1);
 }
 
 .portal-session-header {
