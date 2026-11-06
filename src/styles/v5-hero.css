@@ -95,7 +95,7 @@
 .theme-v5-night .v5-navy section,.theme-v5-night .v5-navy [class*="bg-gradient"]{background:transparent!important}
 
 /* Cards sálvia sobre fundo claro (seção "O que pode mudar"). */
-.theme-v5-night .v5-sage-card{background:linear-gradient(110deg,hsl(153 13% 30%) 0%,hsl(153 13% 25%) 55%,hsl(200 22% 17%) 100%);border:1px solid hsl(128 20% 70%/.25);box-shadow:0 18px 40px -22px hsl(153 13% 20%/.6),inset 0 1px 0 hsl(0 0% 100%/.12)}
+.theme-v5-night .v5-sage-card{background:linear-gradient(135deg,hsl(149 13% 45%),hsl(149 12% 40%));border:1px solid hsl(128 20% 70%/.25);box-shadow:0 18px 40px -22px hsl(153 13% 20%/.6),inset 0 1px 0 hsl(0 0% 100%/.12)}
 .theme-v5-night .v5-sage-card-icon{background:hsl(128 20% 61%/.2);border:1px solid hsl(128 20% 75%/.3);color:hsl(128 30% 85%)}
 .theme-v5-night .v5-sage-card-title{color:hsl(0 0% 100%)!important}
 .theme-v5-night .v5-sage-card-text{color:hsl(140 15% 88%)!important}
