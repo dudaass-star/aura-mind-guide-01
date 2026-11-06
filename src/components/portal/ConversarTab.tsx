@@ -250,8 +250,8 @@ const MessageTimeline = memo(function MessageTimeline({
           <div key={message.id} data-chat-message data-message-id={message.id} className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
               "min-w-0 max-w-[86%] text-[15px] leading-relaxed md:max-w-[76%]",
-              message.is_audio && message.audio_url ? "px-2.5 py-2" : mine ? "px-3 py-1.5" : "px-2 py-1.5",
-              mine ? "rounded-2xl rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : message.is_audio ? "rounded-2xl rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm" : "text-foreground",
+              message.is_audio && message.audio_url ? "px-2.5 py-2" : "px-3 py-1.5",
+              mine ? "rounded-2xl rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : "rounded-2xl rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm",
               message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
             )} data-message-bubble>
               {episodeCard ? (
