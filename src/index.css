@@ -245,7 +245,12 @@ hsl(152 17% 36%);
     0 0 28px -4px hsl(140 45% 65% / 0.35),
     0 18px 36px -22px hsl(220 35% 5% / 0.9);
 }
-.portal-primary-conversation:hover { background-color: transparent; color: hsl(var(--pc-ink)); }
+.portal-primary-conversation:hover,
+.portal-primary-conversation:active,
+.portal-primary-conversation:focus-visible {
+  background: hsl(152 18% 31%) !important;
+  color: hsl(var(--pc-ink)) !important;
+}
 /* Doodles da conversa como textura interna do card da AURA */
 .portal-primary-conversation::before {
   content: "";
@@ -261,7 +266,7 @@ hsl(152 17% 36%);
 }
 .portal-primary-conversation > * { position: relative; z-index: 1; }
 .portal-pc-title { color: hsl(var(--pc-ink)); }
-.portal-pc-muted { color: hsl(var(--pc-ink) / 0.72); }
+.portal-pc-muted { color: hsl(140 35% 92%) !important; text-shadow: 0 1px 2px hsl(153 25% 12% / 0.5); }
 .portal-pc-avatar { box-shadow: 0 0 0 3px hsl(var(--pc-ink) / 0.18), 0 0 24px hsl(var(--pc-lavender) / 0.55); }
 .portal-pc-dot { background: hsl(140 45% 70%); border-color: hsl(var(--pc-sage)); }
 
