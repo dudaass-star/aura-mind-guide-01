@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Feather, Moon, Play, Sunrise, CloudMoon } from "lucide-react";
 import { PRAYERS } from "@/lib/prayers";
-import strengthHero from "@/assets/v5-prayer-strength.jpg";
 
 // Vitrine em slides com trechos reais das orações e a mesma arte do player do App.
 const SLIDES = [
@@ -10,9 +9,7 @@ const SLIDES = [
   { id: "prayer-restless-mind", label: "Mente que não para", icon: CloudMoon, lines: ["Meu corpo parou, mas meus pensamentos continuam.", "Que eu consiga enxergar um próximo passo,", "não todos os passos de uma vez."] },
   { id: "prayer-morning-guidance", label: "Começar o dia", icon: Sunrise, lines: ["Deus, mais um dia começa, e eu quero vivê-lo contigo.", "Nem tudo o que faz barulho", "é o que mais importa."] },
 ].map((s) => {
-  const found = PRAYERS.find((p) => p.id === s.id);
-  // Arte exclusiva da vitrine para a primeira oração, a de maior impacto.
-  const prayer = found && s.id === "prayer-strength" ? { ...found, image: strengthHero, imageAlt: "Pessoa no alto da montanha diante do nascer do sol sobre lago e névoa" } : found;
+  const prayer = PRAYERS.find((p) => p.id === s.id);
   return { ...s, prayer: prayer! };
 }).filter((s) => s.prayer);
 
