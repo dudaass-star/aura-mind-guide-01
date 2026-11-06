@@ -163,7 +163,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
         </section>
       )}
 
-      <PrayerEntranceCard userId={userId} onOpen={() => onNavigateTab("oracoes")} onEvent={(eventType) => { void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "prayers", event_type: eventType, source: "app", metadata: { origin: "today" } }); }} />
+      <PrayerEntranceCard userId={userId} onOpen={() => onNavigateTab("oracoes")} onEvent={(eventType) => { void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "today", event_type: eventType, source: "app", metadata: { origin: "today_prayer" } as Json }).then(() => undefined); }} />
 
       {showPushInvitation && (
         <section className="flex items-center gap-3 border-t border-border pt-4 animate-fade-up">
