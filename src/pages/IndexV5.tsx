@@ -13,6 +13,7 @@ import avatarAura from "@/assets/avatar-aura.jpg";
 import movementImage from "@/assets/movimento-ola-aura.jpg";
 import AppTourV2 from "@/components/v2/AppTourV2";
 import PrayerSlides from "@/components/v5/PrayerSlides";
+import SessionSummarySlides from "@/components/v5/SessionSummarySlides";
 import PricingV2 from "@/components/v2/PricingV2";
 import FAQV2 from "@/components/v2/FAQV2";
 import FooterV2 from "@/components/v2/FooterV2";
@@ -382,15 +383,7 @@ const SessionShowcase = () => (
         </p>
         <p className="mt-3 text-[hsl(var(--v2-navy-muted))] leading-relaxed">No final, o resumo fica salvo no seu App para você reler quando precisar.</p>
       </div>
-      <div className="rounded-3xl border border-[hsl(var(--v2-navy-foreground)/0.12)] bg-[hsl(var(--v2-navy-foreground)/0.05)] p-6 backdrop-blur">
-        <div className="flex items-center gap-2 text-xs text-primary"><BookMarked className="w-4 h-4" /> O que levamos deste encontro</div>
-        <p className="mt-4 font-display text-xl leading-snug text-[hsl(var(--v2-navy-foreground))]">“Você não precisa provar seu valor cuidando de todo mundo para merecer ficar.”</p>
-        <ul className="mt-5 space-y-2 text-sm text-[hsl(var(--v2-navy-muted))]">
-          <li className="flex gap-2"><Check className="w-4 h-4 text-primary shrink-0 mt-0.5" /> Perceber quando o medo de perder decide por você</li>
-          <li className="flex gap-2"><Check className="w-4 h-4 text-primary shrink-0 mt-0.5" /> Esta semana: dizer um “não” pequeno e observar o que acontece</li>
-        </ul>
-        <p className="mt-5 text-[11px] text-[hsl(var(--v2-navy-muted))]">Exemplo ilustrativo de resumo</p>
-      </div>
+      <SessionSummarySlides />
     </div>
   </section>
 );
