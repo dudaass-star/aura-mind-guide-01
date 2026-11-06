@@ -88,6 +88,8 @@
 }
 .theme-v5-night .v5-navy{background:radial-gradient(48rem 30rem at 15% 20%,hsl(var(--accent)/.10),transparent 65%),hsl(222 38% 8%)}
 .theme-v5-night .v5-cream .bg-card,.theme-v5-night .v5-cream .bg-card\/70,.theme-v5-night .v5-cream .bg-card\/60,.theme-v5-night .v5-cream .bg-card\/40{background-color:hsl(0 0% 100%/.9)!important;border-color:hsl(128 20% 60%/.35);box-shadow:0 24px 50px -28px hsl(153 13% 31%/.4),0 0 0 1px hsl(0 0% 100%/.6) inset}
+.theme-v5-night .v5-cream .preview-copy,.theme-v5-night .v5-cream .preview-copy *{color:hsl(0 0% 100%)!important}
+.theme-v5-night .v5-cream .preview-shade{background:linear-gradient(to top,hsl(222 38% 8%/.85),hsl(222 38% 8%/.25) 60%,transparent)!important}
 .theme-v5-night .v5-cream .text-gradient-sage{background:linear-gradient(100deg,hsl(153 13% 31%),hsl(128 20% 50%) 55%,hsl(265 40% 58%));-webkit-background-clip:text;background-clip:text;color:transparent}
 .theme-v5-night .v5-cream .v5-fade-bottom,.theme-v5-night .v5-olive .v5-fade-bottom{display:none}
 .theme-v5-night .v5-navy section,.theme-v5-night .v5-navy [class*="bg-gradient"]{background:transparent!important}
