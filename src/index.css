@@ -240,6 +240,13 @@
   background-color: hsl(var(--portal-session-canvas));
 }
 
+/* Papel de parede sutil da conversa (estilo apps de mensagem) */
+.portal-chat-wallpaper {
+  background-image: url("./assets/chat-wallpaper.svg");
+  background-size: 240px 240px;
+  background-repeat: repeat;
+}
+
 .portal-session-composer {
   background-color: hsl(var(--portal-session-composer) / 0.97);
 }
