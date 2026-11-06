@@ -304,19 +304,19 @@ const Problem = () => {
           <Eyebrow>Transformação real</Eyebrow>
           <h2 className="mt-3 font-display text-3xl md:text-5xl leading-tight">O que pode mudar na sua vida</h2>
         </div>
-        <ul className="mt-8 md:mt-12 grid md:grid-cols-2 gap-2.5 md:gap-4">
+        <ul className="mt-6 md:mt-12 grid md:grid-cols-2 gap-2 md:gap-4">
           {items.map(({ t, d }, i) => (
             <li
               key={t}
-              className="relative flex gap-4 overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-br from-card via-card to-primary/5 p-4 md:p-5 shadow-[0_1px_2px_hsl(var(--foreground)/0.04),0_8px_24px_-12px_hsl(var(--primary)/0.25)]"
+              className="relative flex gap-3 overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-br from-card via-card to-primary/5 py-3 pl-4 pr-3.5 md:p-5 shadow-[0_1px_2px_hsl(var(--foreground)/0.04),0_8px_24px_-12px_hsl(var(--primary)/0.25)]"
             >
               <span className="absolute left-0 top-4 bottom-4 w-[3px] rounded-full bg-gradient-to-b from-primary/70 to-primary/10" />
-              <span className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 font-display text-sm text-primary ring-1 ring-primary/20">
+              <span className="shrink-0 mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 font-display text-xs text-primary ring-1 ring-primary/20">
                 {String(i + 1).padStart(2, "0")}
               </span>
               <div className="min-w-0">
-                <h3 className="font-display text-lg md:text-xl leading-snug text-foreground">{t}</h3>
-                <p className="mt-1 text-sm text-muted-foreground leading-relaxed">{d}</p>
+                <h3 className="font-display text-[17px] md:text-xl leading-snug text-foreground">{t}</h3>
+                <p className="mt-0.5 text-[13.5px] md:text-sm text-muted-foreground leading-snug">{d}</p>
               </div>
             </li>
           ))}
@@ -396,7 +396,7 @@ const Built = () => {
           {b.map(({ icon: I, t, d }) => (
             <div key={t} className="flex gap-4 rounded-3xl bg-card border border-border/60 p-6 shadow-sm">
               <div className="w-11 h-11 shrink-0 rounded-2xl bg-[hsl(var(--sage-soft))] flex items-center justify-center"><I className="w-5 h-5 text-primary" /></div>
-              <div><h3 className="font-display text-lg">{t}</h3><p className="mt-1 text-sm text-muted-foreground leading-relaxed">{d}</p></div>
+              <div><h3 className="font-display text-lg">{t}</h3><p className="mt-0.5 text-[13.5px] md:text-sm text-muted-foreground leading-snug">{d}</p></div>
             </div>
           ))}
         </div>
