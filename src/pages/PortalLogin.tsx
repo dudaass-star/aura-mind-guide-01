@@ -253,11 +253,12 @@ export default function PortalLogin() {
                 ))}
               </div>
             ) : (
-              <div className="mb-6 grid grid-cols-4 border-y border-border/70 py-3" aria-label="Recursos do aplicativo">
+              <div className="mb-6 grid grid-cols-5 border-y border-border/70 py-3" aria-label="Recursos do aplicativo">
                 {[
                   { label: "Conversa", icon: MessagesSquare, tone: "portal-area-conversation" },
                   { label: "Jornadas", icon: BookOpen, tone: "portal-area-content" },
                   { label: "Sessões", icon: CalendarDays, tone: "portal-area-sessions" },
+                  { label: "Orações", icon: HeartHandshake, tone: "portal-area-content" },
                   { label: "Meditações", icon: Headphones, tone: "portal-area-audio" },
                 ].map(({ label, icon: Icon, tone }) => (
                   <div key={label} className="flex min-w-0 flex-col items-center gap-1.5 px-1 text-center">
