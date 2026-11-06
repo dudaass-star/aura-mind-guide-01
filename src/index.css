@@ -250,49 +250,35 @@
 .portal-pc-dot { background: hsl(140 45% 70%); border-color: hsl(var(--pc-sage)); }
 
 /* Fundo da entrada do App com a luz suave da /v5 */
-/* Entrada do App: degradê horizontal sálvia profundo → navy, com sopro lavanda (padrão do topo da /v5) */
+/* Entrada do App: santuário arejado — degradê horizontal claro sálvia → lavanda, cards com corpo e contraste */
 .portal-home-surface {
-  --background: 220 35% 10%;
-  --foreground: 40 25% 95%;
-  --card: 0 0% 100%;
-  --card-foreground: 40 25% 95%;
-  --muted-foreground: 150 10% 76%;
-  --secondary: 0 0% 100%;
-  --secondary-foreground: 150 12% 82%;
-  --border: 0 0% 100%;
-  --portal-journey: 153 14% 24%;
-  --portal-journey-foreground: 40 25% 95%;
-  --portal-audio: 222 30% 18%;
-  --portal-audio-foreground: 40 25% 95%;
-  color: hsl(var(--foreground));
+  --portal-journey: 153 14% 30%;
+  --portal-journey-foreground: 40 25% 97%;
   background:
-    radial-gradient(55% 40% at 80% 8%, hsl(268 45% 72% / 0.32) 0%, transparent 70%),
-    radial-gradient(60% 50% at 5% 25%, hsl(145 26% 52% / 0.35) 0%, transparent 70%),
-    radial-gradient(50% 35% at 50% 100%, hsl(255 35% 60% / 0.22) 0%, transparent 70%),
-    linear-gradient(90deg, hsl(153 16% 30%) 0%, hsl(175 18% 26%) 30%, hsl(235 22% 30%) 65%, hsl(258 26% 34%) 100%);
+    radial-gradient(55% 40% at 90% 5%, hsl(265 50% 88% / 0.7) 0%, transparent 70%),
+    radial-gradient(60% 45% at 0% 20%, hsl(145 30% 82% / 0.7) 0%, transparent 70%),
+    linear-gradient(90deg, hsl(145 22% 93%) 0%, hsl(180 20% 96%) 45%, hsl(260 35% 95%) 100%);
   background-attachment: local;
 }
-/* Cards iluminados: superfície sólida com borda luminosa para destacar do fundo */
 .portal-home-surface .bg-card {
-  background: linear-gradient(160deg, hsl(222 30% 20% / 0.94), hsl(225 32% 15% / 0.94));
-  box-shadow: 0 14px 30px -18px hsl(225 45% 5% / 0.85), inset 0 1px 0 hsl(0 0% 100% / 0.1);
+  background-color: hsl(0 0% 100%);
+  box-shadow: 0 12px 28px -18px hsl(153 25% 20% / 0.35), 0 1px 2px hsl(153 20% 20% / 0.06);
 }
 .portal-home-surface .border-border,
-.portal-home-surface .border-border\/70 { border-color: hsl(150 30% 75% / 0.28); }
-.portal-home-surface .divide-border\/40 > * + * { border-color: hsl(0 0% 100% / 0.08); }
+.portal-home-surface .border-border\/70 { border-color: hsl(153 15% 85%); }
 
-/* Ícones refinados da lista de acompanhamento */
+/* Ícones da lista de acompanhamento em sálvia com contraste */
 .portal-home-icon {
-  background: hsl(140 30% 60% / 0.22);
-  color: hsl(140 45% 82%);
-  box-shadow: inset 0 0 0 1px hsl(140 35% 70% / 0.4);
+  background: hsl(153 13% 27%);
+  color: hsl(0 0% 100%);
+  box-shadow: 0 4px 10px -4px hsl(153 13% 27% / 0.5);
 }
 .portal-home-list {
   border-radius: 1rem;
-  background: linear-gradient(160deg, hsl(222 30% 20% / 0.95), hsl(225 32% 15% / 0.95));
-  box-shadow: 0 18px 36px -20px hsl(225 45% 5% / 0.9), inset 0 0 0 1px hsl(150 30% 75% / 0.28), inset 0 1px 0 hsl(0 0% 100% / 0.12);
+  background: hsl(0 0% 100%);
+  box-shadow: 0 14px 30px -18px hsl(153 25% 20% / 0.35), inset 0 0 0 1px hsl(153 15% 87%);
 }
-.portal-home-list button:hover { background: hsl(0 0% 100% / 0.06); }
+.portal-home-list button:hover { background: hsl(145 25% 96%); }
 
 .portal-session-header {
   background-color: hsl(var(--portal-session-header) / 0.96);
