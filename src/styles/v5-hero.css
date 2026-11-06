@@ -78,12 +78,12 @@
   color-scheme:light;color:hsl(var(--foreground));background:hsl(var(--background));
 }
 .theme-v5-night .v5-olive{
-  --background:85 22% 17%;--foreground:45 30% 94%;--card:85 18% 22%;--card-foreground:45 30% 94%;
-  --muted:85 16% 22%;--secondary:85 16% 24%;--border:85 14% 30%;--muted-foreground:70 14% 74%;
-  --primary:85 35% 62%;--accent:42 55% 70%;--sage-soft:85 18% 26%;
-  --v2-navy-foreground:45 30% 94%;--v2-navy-muted:70 14% 74%;
+  --background:153 13% 27%;--foreground:40 25% 95%;--card:153 12% 32%;--card-foreground:40 25% 95%;
+  --muted:153 11% 32%;--secondary:153 11% 34%;--border:153 10% 40%;--muted-foreground:140 10% 78%;
+  --primary:128 20% 64%;--accent:265 45% 78%;--sage-soft:153 12% 34%;
+  --v2-navy-foreground:40 25% 95%;--v2-navy-muted:140 10% 78%;
   color:hsl(var(--foreground));
-  background:radial-gradient(44rem 28rem at 85% 20%,hsl(42 60% 70%/.10),transparent 65%),hsl(var(--background));
+  background:radial-gradient(44rem 28rem at 15% 20%,hsl(128 20% 64%/.12),transparent 65%),hsl(var(--background));
 }
 .theme-v5-night .v5-navy{background:radial-gradient(48rem 30rem at 15% 20%,hsl(var(--accent)/.10),transparent 65%),hsl(222 38% 8%)}
 .theme-v5-night .v5-cream .bg-card,.theme-v5-night .v5-cream .bg-card\/70,.theme-v5-night .v5-cream .bg-card\/60,.theme-v5-night .v5-cream .bg-card\/40{background-color:hsl(0 0% 100%/.85)!important;border-color:hsl(var(--border));box-shadow:0 20px 50px -25px hsl(140 30% 20%/.28)}
