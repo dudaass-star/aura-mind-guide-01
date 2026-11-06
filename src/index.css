@@ -1026,3 +1026,41 @@ hsl(152 17% 36%);
 }
 .portal-login-page > header img,
 .portal-app-theme .portal-app-header img { filter: brightness(0) invert(1); opacity: 0.9; }
+
+/* Cards translúcidos sobre o navy ficavam turvos: viram superfícies brancas sólidas */
+.portal-app-theme .portal-progress-intro,
+.portal-app-theme .portal-progress-resume,
+.portal-app-theme .portal-area-page > [class*="bg-[hsl(var(--portal-area-surface)"],
+.portal-app-theme .portal-area-page > [class*="bg-secondary/"] {
+  --foreground: 220 30% 14%;
+  --muted-foreground: 220 12% 40%;
+  --primary: 153 13% 27%;
+  --primary-foreground: 0 0% 100%;
+  --background: 0 0% 100%;
+  --portal-area-foreground: 153 13% 27%;
+  --portal-area-surface: 150 20% 94%;
+  color: hsl(var(--foreground));
+  background: hsl(0 0% 100%) !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 14px 30px -18px hsl(220 40% 5% / 0.6) !important;
+}
+.portal-app-theme .portal-progress-flow::before { background: hsl(140 35% 80% / 0.3); }
+
+/* Oração em Hoje: véu escuro fixo, independente do tema */
+.portal-prayer-veil { background: linear-gradient(to top, hsl(220 40% 8% / 0.92), hsl(220 40% 8% / 0.55) 55%, hsl(220 40% 8% / 0.1)); }
+.portal-prayer-text { color: hsl(0 0% 100%) !important; text-shadow: 0 1px 8px hsl(220 40% 5% / 0.7); }
+
+/* Cabeçalho e campo de mensagem da conversa no visual navy */
+.portal-chat-header, .portal-chat-composer {
+  --foreground: 40 25% 96%;
+  --muted-foreground: 220 15% 75%;
+  --primary: 145 45% 62%;
+  --primary-foreground: 153 25% 12%;
+  --border: 220 25% 25%;
+  --input: 220 25% 28%;
+  --card: 220 38% 13%;
+  --secondary: 220 30% 20%;
+  color: hsl(var(--foreground));
+  background: hsl(220 38% 12% / 0.94) !important;
+  border-color: hsl(0 0% 100% / 0.08) !important;
+}

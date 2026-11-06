@@ -1395,7 +1395,7 @@ export function ConversarTab({
       activeSession && "portal-session-mode",
       chatOpen ? "flex" : "hidden",
     )}>
-      <header className={cn("relative flex min-h-[calc(4.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-border/70 bg-card/90 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur-xl transition-colors duration-500 md:min-h-[4.5rem] md:px-5 md:pt-0", activeSession && "portal-session-header")}>
+      <header className={cn("portal-chat-header relative flex min-h-[calc(4.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-border/70 bg-card/90 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur-xl transition-colors duration-500 md:min-h-[4.5rem] md:px-5 md:pt-0", activeSession && "portal-session-header")}>
          <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => setChatOpen(false)} aria-label="Voltar para conversas">
           <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -1526,7 +1526,7 @@ export function ConversarTab({
            <Button type="button" className="mt-3 w-full rounded-full" onClick={onOpenBilling}>Renovar meu plano</Button>
          </div>
          ) : (
-         <form onSubmit={send} className={cn("shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl transition-colors duration-500", activeSession && "portal-session-composer")}>
+         <form onSubmit={send} className={cn("portal-chat-composer shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl transition-colors duration-500", activeSession && "portal-session-composer")}>
          <div className="flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner focus-within:border-primary/50 focus-within:bg-card focus-within:ring-2 focus-within:ring-ring/20">
           {recording ? (
             <>
