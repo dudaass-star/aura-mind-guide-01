@@ -620,8 +620,6 @@ const IndexV5 = () => {
           <Testimonials />
           </div>
           <div className="v5-navy">
-          <Compare />
-          <Movement />
           <div id="planos"><PricingV2 /></div>
           <Guarantee />
           <div id="duvidas"><FAQV2 /></div>
