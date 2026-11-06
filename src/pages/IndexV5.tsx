@@ -290,34 +290,34 @@ const Hero = () => {
 
 const Problem = () => {
   const items = [
-    { t: "Pare de sofrer em silêncio.", d: "Quando todo mundo acha que você está dando conta de tudo, mas por dentro o peito aperta. Um refúgio seguro e sem julgamentos para tirar o peso do que você não conta para ninguém." },
-    { t: "Supere o medo.", d: "Aquela conversa que você evita, a decisão que fica adiando, o recomeço que assusta. Entenda a raiz da sua trava e encontre firmeza para dar o primeiro passo." },
-    { t: "Diga não sem culpa.", d: "Dizer “sim” só para não desagradar e depois se ressentir por ter se anulado de novo. Encontre clareza e firmeza para sustentar os seus limites sem sentir que está devendo nada a ninguém." },
-    { t: "Quebre o ciclo.", d: "A mesma discussão. A mesma reação automática. O mesmo arrependimento logo depois. Enxergue o padrão que te prende e aprenda a responder com serenidade em vez de reagir no impulso." },
-    { t: "Volte a confiar em você.", d: "Pedir a opinião de todo mundo e terminar com a cabeça ainda mais confusa. Cale o ruído de fora, organize o que você realmente pensa e recupere a segurança nas suas próprias decisões." },
-    { t: "Faça as pazes com o passado.", d: "Uma relação que acabou, escolhas que você ainda se cobra, palavras que ficaram engasgadas. Solte o peso do que não volta atrás e abra espaço para viver o presente em paz." },
+    { t: "Pare de sofrer em silêncio.", d: "Quando todo mundo acha que você está bem, mas por dentro você só precisa soltar o peso." },
+    { t: "Supere o medo.", d: "A conversa que você evita ou a decisão que adia. Entenda o que trava e dê o primeiro passo." },
+    { t: "Diga não sem culpa.", d: "Chega de dizer sim para agradar e pagar com exaustão. Coloque limites sem carregar culpa." },
+    { t: "Quebre o ciclo.", d: "A mesma briga, a mesma reação, o mesmo arrependimento. Entenda o padrão e mude sua resposta." },
+    { t: "Volte a confiar em você.", d: "Quando você pede opinião para todo mundo e fica mais em dúvida. Resgate a sua própria voz." },
+    { t: "Faça as pazes com o passado.", d: "Uma história que acabou ou uma escolha que ainda dói. Encontre paz para seguir em frente." },
   ];
   return (
-    <section id="resultados" className="py-16 md:py-24">
-      <div className="container mx-auto px-5 max-w-6xl">
+    <section id="resultados" className="py-14 md:py-24">
+      <div className="container mx-auto px-5 max-w-5xl">
         <div className="text-center max-w-2xl mx-auto">
           <Eyebrow>Transformação real</Eyebrow>
           <h2 className="mt-3 font-display text-3xl md:text-5xl leading-tight">O que pode mudar na sua vida</h2>
-          <p className="mt-4 text-base md:text-lg text-muted-foreground leading-relaxed">
-            Não é sobre mais uma dica. É sobre olhar de frente o que pesa e sair diferente do outro lado.
-          </p>
         </div>
-        <ul className="mt-10 md:mt-14 grid md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+        <ul className="mt-8 md:mt-12 grid md:grid-cols-2 gap-2.5 md:gap-4">
           {items.map(({ t, d }, i) => (
             <li
               key={t}
-              className="group relative overflow-hidden rounded-2xl border border-border/80 bg-card/70 backdrop-blur-sm p-6 md:p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40"
+              className="relative flex gap-4 overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-br from-card via-card to-primary/5 p-4 md:p-5 shadow-[0_1px_2px_hsl(var(--foreground)/0.04),0_8px_24px_-12px_hsl(var(--primary)/0.25)]"
             >
-              <div className="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-primary/10 blur-3xl transition-opacity duration-300 group-hover:opacity-100 opacity-60" />
-              <span className="relative font-display text-sm tracking-[0.2em] text-primary/80">{String(i + 1).padStart(2, "0")}</span>
-              <h3 className="relative mt-3 font-display text-2xl md:text-[1.75rem] leading-tight text-foreground">{t}</h3>
-              <div className="relative mt-4 h-px w-10 bg-gradient-to-r from-primary/60 to-transparent" />
-              <p className="relative mt-4 text-[15px] text-muted-foreground leading-relaxed">{d}</p>
+              <span className="absolute left-0 top-4 bottom-4 w-[3px] rounded-full bg-gradient-to-b from-primary/70 to-primary/10" />
+              <span className="shrink-0 flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 font-display text-sm text-primary ring-1 ring-primary/20">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <div className="min-w-0">
+                <h3 className="font-display text-lg md:text-xl leading-snug text-foreground">{t}</h3>
+                <p className="mt-1 text-sm text-muted-foreground leading-relaxed">{d}</p>
+              </div>
             </li>
           ))}
         </ul>
