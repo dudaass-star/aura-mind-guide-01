@@ -250,15 +250,27 @@
 .portal-pc-dot { background: hsl(140 45% 70%); border-color: hsl(var(--pc-sage)); }
 
 /* Fundo da entrada do App com a luz suave da /v5 */
-/* Entrada do App: santuário arejado — degradê horizontal claro sálvia → lavanda, cards com corpo e contraste */
+/* Entrada do App: fundo azul navy com respiro de sálvia e lavanda */
 .portal-home-surface {
   --portal-journey: 153 14% 30%;
   --portal-journey-foreground: 40 25% 97%;
+  /* textos soltos sobre o fundo escuro ficam creme; dentro dos cards brancos, escuros */
+  --foreground: 40 25% 96%;
+  color: hsl(40 25% 96%);
+  --primary: 145 45% 62%;
+  --primary-foreground: 153 25% 12%;
   background:
-    radial-gradient(55% 40% at 90% 5%, hsl(265 50% 88% / 0.7) 0%, transparent 70%),
-    radial-gradient(60% 45% at 0% 20%, hsl(145 30% 82% / 0.7) 0%, transparent 70%),
-    linear-gradient(90deg, hsl(145 22% 93%) 0%, hsl(180 20% 96%) 45%, hsl(260 35% 95%) 100%);
+    radial-gradient(55% 40% at 90% 5%, hsl(265 45% 72% / 0.28) 0%, transparent 70%),
+    radial-gradient(60% 45% at 0% 20%, hsl(153 25% 55% / 0.22) 0%, transparent 70%),
+    linear-gradient(90deg, hsl(220 38% 13%) 0%, hsl(218 34% 16%) 45%, hsl(222 42% 10%) 100%);
   background-attachment: local;
+}
+.portal-home-surface .bg-card,
+.portal-home-surface .portal-home-list {
+  --foreground: 220 30% 14%;
+  --muted-foreground: 220 12% 42%;
+  --secondary-foreground: 220 20% 22%;
+  color: hsl(var(--foreground));
 }
 .portal-home-surface .bg-card {
   background-color: hsl(0 0% 100%);
