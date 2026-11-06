@@ -1064,3 +1064,25 @@ hsl(152 17% 36%);
   background: hsl(153 13% 27% / 0.97) !important;
   border-color: hsl(0 0% 100% / 0.08) !important;
 }
+
+/* Login: doodles só na parte de cima e ícones legíveis sobre o navy */
+.portal-login-page main { position: relative; }
+.portal-login-page main::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 17rem;
+  background-image: url("./assets/aura-card-doodles.svg");
+  background-size: 90px 90px;
+  filter: brightness(0) invert(1);
+  opacity: 0.5;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 100%);
+  pointer-events: none;
+}
+.portal-login-page main > * { position: relative; }
+.portal-login-page .portal-area-conversation {
+  background-color: hsl(153 13% 27%);
+  color: hsl(0 0% 100%);
+  box-shadow: 0 0 0 1px hsl(140 45% 80% / 0.35);
+}
