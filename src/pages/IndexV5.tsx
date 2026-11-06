@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Star, ShieldCheck, Lock, MessageCircle, CalendarHeart, Sparkles, Check, X, Mic, Moon,
   Waypoints, Compass, BookMarked, Route, Cloud, Play, HeartHandshake, MoreVertical,
+  Feather, Zap, RefreshCcw, Sunrise,
 } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
@@ -288,6 +289,16 @@ const Hero = () => {
   );
 };
 
+// Ícone e matiz de cada transformação (ordem igual aos itens).
+const PROBLEM_ICONS = [
+  { Icon: Feather, hue: 265 },
+  { Icon: Zap, hue: 38 },
+  { Icon: ShieldCheck, hue: 140 },
+  { Icon: RefreshCcw, hue: 232 },
+  { Icon: Compass, hue: 285 },
+  { Icon: Sunrise, hue: 22 },
+];
+
 const Problem = () => {
   const items = [
     { t: "Pare de sofrer em silêncio.", d: "Quando todo mundo acha que você está bem, mas por dentro você só precisa soltar o peso." },
@@ -303,23 +314,40 @@ const Problem = () => {
         <div className="text-center max-w-2xl mx-auto">
           <Eyebrow>Transformação real</Eyebrow>
           <h2 className="mt-3 font-display text-3xl md:text-5xl leading-tight">O que pode mudar na sua vida</h2>
+          <p className="mt-3 text-[15px] md:text-lg text-muted-foreground leading-snug">
+            Se você se reconhece em uma dessas situações, a <span className="text-primary font-medium">Aura foi feita para o seu momento.</span>
+          </p>
         </div>
-        <ul className="mt-6 md:mt-12 grid md:grid-cols-2 gap-2 md:gap-4">
-          {items.map(({ t, d }, i) => (
+        <ul className="mt-6 md:mt-12 grid md:grid-cols-2 gap-2.5 md:gap-4">
+          {items.map(({ t, d }, i) => {
+            const { Icon, hue } = PROBLEM_ICONS[i];
+            const c = (a: number, l = 55, s = 60) => `hsl(${hue} ${s}% ${l}% / ${a})`;
+            return (
             <li
               key={t}
-              className="relative flex gap-3 overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-br from-card via-card to-primary/5 py-3 pl-4 pr-3.5 md:p-5 shadow-[0_1px_2px_hsl(var(--foreground)/0.04),0_8px_24px_-12px_hsl(var(--primary)/0.25)]"
+              className="group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border bg-card py-3 pl-3 pr-3.5 md:p-5 transition-transform duration-300 hover:-translate-y-0.5"
+              style={{
+                borderColor: c(0.28),
+                backgroundImage: `linear-gradient(110deg, ${c(0.12, 60)} 0%, transparent 55%)`,
+                boxShadow: `0 1px 2px hsl(var(--foreground) / 0.04), 0 10px 28px -14px ${c(0.55, 50)}`,
+              }}
             >
-              <span className="absolute left-0 top-4 bottom-4 w-[3px] rounded-full bg-gradient-to-b from-primary/70 to-primary/10" />
-              <span className="shrink-0 mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 font-display text-xs text-primary ring-1 ring-primary/20">
-                {String(i + 1).padStart(2, "0")}
+              <span
+                className="relative shrink-0 flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-full"
+                style={{
+                  background: `radial-gradient(circle at 30% 30%, ${c(1, 78, 80)}, ${c(1, 50, 65)})`,
+                  boxShadow: `0 0 0 4px ${c(0.12)}, 0 6px 18px -4px ${c(0.7, 50)}, inset 0 1px 2px hsl(0 0% 100% / 0.5)`,
+                }}
+              >
+                <Icon className="h-5 w-5 text-primary-foreground drop-shadow" strokeWidth={2.2} />
               </span>
               <div className="min-w-0">
-                <h3 className="font-display text-[17px] md:text-xl leading-snug text-foreground">{t}</h3>
+                <h3 className="font-display text-[18px] md:text-xl font-semibold leading-tight" style={{ color: c(1, 32, 55) }}>{t}</h3>
                 <p className="mt-0.5 text-[13.5px] md:text-sm text-muted-foreground leading-snug">{d}</p>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       </div>
     </section>
