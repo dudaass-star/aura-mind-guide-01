@@ -18,6 +18,30 @@ import { trackLandingCta, checkoutHref, useLandingEngagement, type CtaSource } f
 import { trackViewItem } from "@/lib/ga4";
 import { trackMetaViewContent } from "@/lib/meta-pixel";
 import "@/styles/v5-hero.css";
+import heroRefugio from "@/assets/v5-hero-refugio.jpg";
+
+// Números reais (session_ratings e conclusão de orações), atualizar manualmente.
+const METRICS = [
+  { value: "4,6★", label: "nota média dada aos encontros guiados" },
+  { value: "91%", label: "avaliam o encontro com 4 ou 5 estrelas" },
+  { value: "91%", label: "ouvem as orações até a última palavra" },
+  { value: "24h", label: "ao seu lado, sempre que a cabeça pesar" },
+];
+
+function Metrics() {
+  return (
+    <section aria-label="Resultados" className="bg-[hsl(var(--v2-navy))] pb-12 md:pb-16">
+      <div className="container mx-auto px-5 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
+        {METRICS.map((m) => (
+          <div key={m.label} className="rounded-2xl border border-[hsl(var(--v2-navy-foreground)/0.12)] bg-[hsl(var(--v2-navy-foreground)/0.05)] p-4 md:p-6 text-center backdrop-blur">
+            <div className="v5-gradient-text font-semibold text-3xl md:text-4xl">{m.value}</div>
+            <p className="mt-1 text-xs md:text-sm text-[hsl(var(--v2-navy-muted))]">{m.label}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 // Página V5: versão de alta conversão, independente da /v2.
 const V = "v5" as const;
@@ -162,6 +186,8 @@ const Hero = () => {
 
   return (
   <section id="hero-section" className="v5-hero relative pt-20 md:pt-28 pb-16 md:pb-24 overflow-hidden">
+    <img src={heroRefugio} alt="" aria-hidden="true" width={1600} height={1200} fetchPriority="high" className="absolute inset-0 w-full h-full object-cover opacity-60" />
+    <div className="absolute inset-0 bg-gradient-to-b from-[hsl(var(--v2-navy)/0.55)] via-[hsl(var(--v2-navy)/0.35)] to-[hsl(var(--v2-navy))]" />
     <div className="v5-orb v5-orb-a" />
     <div className="v5-orb v5-orb-b" />
     <div className="v5-orb v5-orb-c" />
@@ -169,13 +195,13 @@ const Hero = () => {
     <div className="container relative mx-auto px-5 grid md:grid-cols-2 gap-8 md:gap-12 items-center">
       <div className="text-center md:text-left v2-fade-up">
         <span className="inline-flex items-center gap-2 rounded-full border border-[hsl(var(--v2-navy-foreground)/0.15)] bg-[hsl(var(--v2-navy-foreground)/0.06)] px-3 py-1 text-xs text-[hsl(var(--v2-navy-foreground)/0.85)] backdrop-blur">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> AURA online agora
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> ★ 4,6 de média nos encontros guiados
         </span>
-        <h1 className="mt-4 font-sans font-semibold tracking-tight text-[2.15rem] leading-[1.05] md:text-6xl text-[hsl(var(--v2-navy-foreground))]">
-          Presente quando você mais precisa. <span className="v5-gradient-text">E em cada dia difícil.</span>
+        <h1 className="mt-4 font-sans font-semibold tracking-tight text-[2.6rem] leading-[1.02] md:text-7xl text-[hsl(var(--v2-navy-foreground))]">
+          Entenda o que sente.<br /><span className="v5-gradient-text">Mude sua vida.</span>
         </h1>
         <p className="mt-3 text-sm md:text-lg text-[hsl(var(--v2-navy-muted))] max-w-md mx-auto md:mx-0">
-          Seu espaço seguro para desabafar, organizar os pensamentos e encontrar paz — 24 horas por dia.
+          Conversas que escutam de verdade, encontros guiados para organizar a mente e orações para os dias difíceis — 24 horas por dia.
         </p>
 
         <div className="mt-5">
@@ -546,6 +572,7 @@ const IndexV5 = () => {
         <Header />
         <main>
           <Hero />
+          <Metrics />
           <Problem />
           <HowItWorks />
           <div id="app"><AppTourV2 /></div>
