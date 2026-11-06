@@ -258,7 +258,7 @@
   background-size: 200px 200px;
   background-repeat: repeat;
   filter: brightness(0) invert(1);
-  opacity: 0.22;
+  opacity: 1;
   z-index: 0;
 }
 .portal-primary-conversation > * { position: relative; z-index: 1; }
