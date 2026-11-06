@@ -1071,16 +1071,31 @@ hsl(152 17% 36%);
   content: "";
   position: absolute;
   inset: 0 0 auto 0;
-  height: 17rem;
+  height: 20rem;
   background-image: url("./assets/aura-card-doodles.svg");
   background-size: 90px 90px;
   filter: brightness(0) invert(1);
-  opacity: 0.5;
+  opacity: 0.18;
   -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 100%);
   mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 100%);
   pointer-events: none;
 }
 .portal-login-page main > * { position: relative; }
+/* Login: mesma paisagem do entardecer do site e do ícone, com véu navy para leitura */
+.portal-login-page {
+  background:
+    linear-gradient(180deg, hsl(220 38% 12% / 0.35) 0%, hsl(220 38% 11% / 0.7) 40%, hsl(222 42% 9% / 0.96) 75%),
+    url("./assets/v5-hero-refugio.jpg") center top / cover no-repeat,
+    hsl(222 42% 9%) !important;
+  background-attachment: scroll !important;
+}
+.portal-login-page main { background-image: none !important; }
+.portal-login-page [aria-label="Recursos do aplicativo"] span[class*="portal-area-"] {
+  background-color: hsl(0 0% 100% / 0.08) !important;
+  color: hsl(145 45% 75%) !important;
+  box-shadow: 0 0 0 1px hsl(0 0% 100% / 0.14) !important;
+  backdrop-filter: blur(8px);
+}
 .portal-login-page .portal-area-conversation {
   background-color: hsl(153 13% 27%);
   color: hsl(0 0% 100%);
