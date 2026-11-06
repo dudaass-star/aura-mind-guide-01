@@ -11,6 +11,7 @@ import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import movementImage from "@/assets/movimento-ola-aura.jpg";
 import AppTourV2 from "@/components/v2/AppTourV2";
+import PrayerSlides from "@/components/v5/PrayerSlides";
 import PricingV2 from "@/components/v2/PricingV2";
 import FAQV2 from "@/components/v2/FAQV2";
 import FooterV2 from "@/components/v2/FooterV2";
@@ -393,15 +394,8 @@ const Built = () => {
 const PrayerShowcase = () => (
   <section id="oracoes" className="py-16 md:py-24">
     <div className="container mx-auto px-5 max-w-5xl grid md:grid-cols-2 gap-10 items-center">
-      <div className="order-2 md:order-1 mx-auto w-full max-w-[300px] rounded-[2rem] bg-card border border-border/60 p-6 shadow-lg">
-        <div className="flex items-center gap-2 text-xs text-primary"><Moon className="w-4 h-4" /> Oração da noite</div>
-        <div className="mt-6 space-y-3 font-display text-lg leading-snug">
-          <p className="text-muted-foreground/60">Deus, estou aqui.</p>
-          <p className="text-foreground">Entrego a Ti o que ficou sem resolver hoje.</p>
-          <p className="text-muted-foreground/60">O dia terminou. O Teu cuidado, não.</p>
-        </div>
-        <div className="mt-6 h-1 rounded-full bg-muted"><div className="h-1 w-2/5 rounded-full bg-primary" /></div>
-        <div className="mt-4 flex justify-center"><span className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center"><Play className="w-5 h-5 fill-current" /></span></div>
+      <div className="order-2 md:order-1">
+        <PrayerSlides onStart={() => document.getElementById("planos")?.scrollIntoView({ behavior: "smooth" })} />
       </div>
       <div className="order-1 md:order-2">
         <Eyebrow>Um momento para você</Eyebrow>
