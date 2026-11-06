@@ -138,22 +138,22 @@ const MIRROR = [
     id: "mente",
     icon: Moon,
     label: "Minha cabeça não desliga",
-    user: "Deito e fico repassando tudo. Parece que se eu relaxar, algo ruim vai acontecer.",
-    aura: "Você vive como uma sentinela, vigiando perigos 24h por dia. Soltar o controle não é se perder — é deixar o corpo descansar do susto.",
+    user: "Fico com o coração disparado prevendo o pior. Parece que se eu não vigiar tudo, alguma coisa vai desabar.",
+    aura: "Prever o pior não te protege contra a dor: só rouba a sua paz do presente. Você pode tirar o uniforme de sentinela e respirar.",
   },
   {
     id: "exaustao",
     icon: Cloud,
     label: "Exaustão e culpa por não dar conta",
-    user: "A casa tá um caos, nada fica pronto. Sinto que estou falhando com todo mundo.",
-    aura: "Isso não é incapacidade. É um sinal claro de exaustão profunda. Você não está falhando: está sustentando peso demais há tempo demais.",
+    user: "Tudo que começo eu não termino. Parece que tô estagnada e falhando com todo mundo.",
+    aura: "Você não tá travada por incapacidade. Tá olhando pra tudo de uma vez só e usando o cansaço pra se condenar. Isso é exaustão, não fracasso.",
   },
   {
     id: "relacao",
     icon: HeartHandshake,
     label: "Carregando tudo sozinha na relação",
-    user: "Só eu tento salvar isso. E ainda me sinto culpada por querer me afastar.",
-    aura: "Talvez a dor não seja perder o outro, mas perceber que você se anulou para cuidar de dois — enquanto ninguém cuidava de você.",
+    user: "Faço de tudo pra ver a pessoa bem e recebo cobrança. Até onde eu devo continuar numa relação assim?",
+    aura: "Existe uma diferença brutal entre tolerar manias e tolerar desamparo. O limite é até onde a relação não exige que você se desmonte inteira pra caber nela.",
   },
 ];
 
