@@ -482,27 +482,30 @@ const Pillars = () => {
 };
 
 const Compare = () => {
-  const rows: [string, boolean, boolean][] = [
-    ["Disponível às 3h da manhã", true, false],
-    ["Lembra de tudo que você já contou", true, false],
-    ["Encontros guiados com resumo", true, false],
-    ["A partir de R$ 6,90 na primeira semana", true, false],
+  const pairs: [string, string][] = [
+    ["Às 3h da manhã, a cabeça gira e ninguém responde", "Alguém presente a qualquer hora, por texto ou áudio"],
+    ["Você recomeça a explicar tudo do zero", "Ela lembra do que você já contou e conecta os pontos"],
+    ["O desabafo alivia, mas nada muda", "Encontros guiados que terminam em direção clara"],
+    ["Ajuda parece distante ou cara demais", "Comece por R$ 6,90 na primeira semana"],
   ];
   return (
-    <section className="py-16 md:py-24">
-      <div className="container mx-auto px-5 max-w-3xl">
-        <h2 className="text-center font-display text-3xl md:text-4xl">Diferente de desabafar no vazio.</h2>
-        <div className="mt-8 rounded-3xl border border-border/60 bg-card overflow-hidden shadow-sm">
-          <div className="grid grid-cols-[1fr_auto_auto] text-xs uppercase tracking-wider px-5 py-3 border-b border-border/40 text-muted-foreground">
-            <span /> <span className="w-16 text-center text-primary">AURA</span> <span className="w-16 text-center">Sozinha</span>
+    <section className="relative overflow-hidden py-16 md:py-24">
+      <div aria-hidden className="pointer-events-none absolute top-1/3 -left-24 w-80 h-80 rounded-full bg-primary/10 blur-3xl" />
+      <div className="relative container mx-auto px-5 max-w-4xl">
+        <h2 className="text-center font-display text-3xl md:text-4xl">Diferente de desabafar <span className="italic text-gradient-sage">no vazio.</span></h2>
+        <div className="mt-10 grid md:grid-cols-2 gap-4">
+          <div className="rounded-3xl border border-border/40 bg-muted/40 p-6 md:p-7">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Quando você carrega sozinha</p>
+            <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
+              {pairs.map(([s]) => <li key={s} className="flex gap-3"><span className="mt-2 w-1.5 h-1.5 shrink-0 rounded-full bg-muted-foreground/40" />{s}</li>)}
+            </ul>
           </div>
-          {rows.map(([t, a, b]) => (
-            <div key={t} className="grid grid-cols-[1fr_auto_auto] items-center px-5 py-4 border-b border-border/40 last:border-0 text-sm">
-              <span>{t}</span>
-              <span className="w-16 flex justify-center">{a && <Check className="w-5 h-5 text-primary" />}</span>
-              <span className="w-16 flex justify-center">{!b && <X className="w-5 h-5 text-muted-foreground" />}</span>
-            </div>
-          ))}
+          <div className="rounded-3xl border border-primary/25 bg-card/70 backdrop-blur-md p-6 md:p-7 shadow-[0_20px_50px_-25px_hsl(var(--primary)/0.45)]">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-primary">Com a Aura ao seu lado</p>
+            <ul className="mt-4 space-y-3 text-sm">
+              {pairs.map(([, a]) => <li key={a} className="flex gap-3"><Check className="mt-0.5 w-4 h-4 shrink-0 text-primary" />{a}</li>)}
+            </ul>
+          </div>
         </div>
         <div className="mt-8 flex flex-col items-center gap-2"><Cta source="demo" /><Reassure /></div>
       </div>
@@ -517,18 +520,20 @@ const Testimonials = () => {
     { tag: "Sobrecarga", q: "É como ter alguém que lembra de tudo e me devolve com carinho e honestidade.", n: "C., 29 anos" },
   ];
   return (
-    <section id="depoimentos" className="py-16 md:py-24">
-      <div className="container mx-auto px-5 max-w-5xl">
-        <div className="text-center"><Eyebrow>Quem já começou</Eyebrow><h2 className="mt-3 font-display text-3xl md:text-4xl">Histórias reais de clareza.</h2></div>
-        <div className="mt-10 grid md:grid-cols-3 gap-4">
-          {t.map((x) => (
-            <figure key={x.n} className="rounded-3xl bg-card border border-border/60 p-6 shadow-sm flex flex-col">
-              <div className="flex items-center justify-between">
-                <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 text-primary fill-primary" />)}</div>
-                <span className="text-[11px] rounded-full bg-[hsl(var(--lavender-soft))] px-2.5 py-1">{x.tag}</span>
-              </div>
-              <blockquote className="mt-4 font-display text-lg leading-snug flex-1">“{x.q}”</blockquote>
-              <figcaption className="mt-4 text-xs text-muted-foreground">{x.n} · assinante verificada</figcaption>
+    <section id="depoimentos" className="relative overflow-hidden py-16 md:py-24">
+      <div aria-hidden className="pointer-events-none absolute -top-20 right-0 w-96 h-96 rounded-full bg-accent/20 blur-3xl" />
+      <div className="relative container mx-auto px-5 max-w-5xl">
+        <div className="text-center"><Eyebrow>Quem já começou</Eyebrow><h2 className="mt-3 font-display text-3xl md:text-4xl">Histórias reais de <span className="italic text-gradient-sage">clareza.</span></h2></div>
+        <div className="mt-10 grid md:grid-cols-3 gap-5">
+          {t.map((x, idx) => (
+            <figure key={x.n} className={`relative rounded-[2rem] bg-card/60 backdrop-blur-md border border-border/40 p-7 shadow-[0_20px_50px_-25px_hsl(var(--primary)/0.35)] flex flex-col ${idx === 1 ? "md:-translate-y-4" : ""}`}>
+              <span aria-hidden className="absolute top-3 left-6 font-display text-7xl leading-none text-primary/15">“</span>
+              <span className="relative text-[11px] uppercase tracking-[0.2em] text-primary/80">{x.tag}</span>
+              <blockquote className="relative mt-4 font-display italic text-xl md:text-[1.35rem] leading-snug flex-1">{x.q}</blockquote>
+              <figcaption className="mt-6 pt-4 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">
+                <span>{x.n}</span>
+                <span className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="w-3.5 h-3.5 text-primary fill-primary" />)}</span>
+              </figcaption>
             </figure>
           ))}
         </div>
