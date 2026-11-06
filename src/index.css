@@ -1024,3 +1024,5 @@ hsl(152 17% 36%);
   border-radius: 1.25rem;
   padding: 1.25rem;
 }
+.portal-login-page > header img,
+.portal-app-theme .portal-app-header img { filter: brightness(0) invert(1); opacity: 0.9; }
