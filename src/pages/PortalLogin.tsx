@@ -217,7 +217,7 @@ export default function PortalLogin() {
                 </div>
               )}
               <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
-                {isMovementEntry ? "Movimento Olá Aura" : "Olá Aura, sempre por perto"}
+                {isMovementEntry ? "Movimento Olá Aura" : "Entenda o que sente. Mude sua vida."}
               </p>
               <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">
                 {isMovementEntry ? "Entre para fazer parte" : "Entre na Olá Aura"}
@@ -268,7 +268,7 @@ export default function PortalLogin() {
               <>
                 <Button
                   type="button"
-                  className="w-full h-12 mb-4 font-body shadow-sm"
+                  className="w-full h-12 mb-4 font-body font-medium shadow-sm border border-[#747775] bg-[#FFFFFF] text-[#1F1F1F] hover:bg-[#F2F2F2]"
                   onClick={handleGoogle}
                   disabled={googleLoading}
                 >
