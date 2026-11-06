@@ -9,7 +9,7 @@ const guarantees = [
   "7 dias por R$ 6,90 para experimentar",
   "Reembolso em 7 dias se não sentir diferença",
   "Cancele quando quiser, sem fidelidade",
-  "Acesso completo a todos os recursos",
+  "Acesso completo: conversas, encontros, orações e meditações",
 ];
 
 // Ciclos da landing. As chaves de `checkoutBilling` seguem o contrato do /v2/checkout.
@@ -35,9 +35,9 @@ const plans: {
   features: string[];
   popular: boolean;
 }[] = [
-  { id: "essencial", name: "Essencial", tag: "Pra começar", features: ["Conversas ilimitadas 24/7", "1 sessão guiada/mês (45min)", "Memória de longo prazo"], popular: false },
-  { id: "direcao", name: "Direção", tag: "Recomendado", features: ["Tudo do Essencial", "4 sessões guiadas/mês (45min)", "Resumo escrito após cada sessão"], popular: true },
-  { id: "transformacao", name: "Transformação", tag: "Pra momentos de virada", features: ["Tudo do Direção", "8 sessões guiadas/mês", "Prioridade em crise"], popular: false },
+  { id: "essencial", name: "Essencial", tag: "Pra começar", features: ["Conversas ilimitadas com a AURA, 24h", "1 encontro guiado por mês (45 min)", "Todas as orações e meditações guiadas", "Memória do seu percurso"], popular: false },
+  { id: "direcao", name: "Direção", tag: "Recomendado", features: ["Tudo do Essencial", "4 encontros guiados por mês — um por semana", "Resumo do que você levou de cada encontro", "Orações e meditações para cada momento do dia"], popular: true },
+  { id: "transformacao", name: "Transformação", tag: "Pra momentos de virada", features: ["Tudo do Direção", "8 encontros guiados por mês — dois por semana", "Prioridade em momentos difíceis", "Orações e meditações para cada momento do dia"], popular: false },
 ];
 
 const PricingV2 = () => {
