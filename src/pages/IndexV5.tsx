@@ -309,8 +309,9 @@ const Problem = () => {
     { t: "Faça as pazes com o passado.", d: "Uma história que acabou ou uma escolha que ainda dói. Encontre paz para seguir em frente." },
   ];
   return (
-    <section id="resultados" className="py-14 md:py-24">
-      <div className="container mx-auto px-5 max-w-5xl">
+    <section id="resultados" className="relative py-14 md:py-24 overflow-hidden">
+      <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[36rem] w-[36rem] rounded-full bg-primary/10 blur-3xl" />
+      <div className="relative container mx-auto px-5 max-w-5xl">
         <div className="text-center max-w-2xl mx-auto">
           <Eyebrow>Transformação real</Eyebrow>
           <h2 className="mt-3 font-display text-3xl md:text-5xl leading-tight">O que pode mudar na sua vida</h2>
@@ -320,29 +321,17 @@ const Problem = () => {
         </div>
         <ul className="mt-6 md:mt-12 grid md:grid-cols-2 gap-2.5 md:gap-4">
           {items.map(({ t, d }, i) => {
-            const { Icon, hue } = PROBLEM_ICONS[i];
-            const c = (a: number, l = 55, s = 60) => `hsl(${hue} ${s}% ${l}% / ${a})`;
+            const { Icon } = PROBLEM_ICONS[i];
             return (
             <li
               key={t}
-              className="group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border bg-card py-3 pl-3 pr-3.5 md:p-5 transition-transform duration-300 hover:-translate-y-0.5"
-              style={{
-                borderColor: c(0.28),
-                backgroundImage: `linear-gradient(110deg, ${c(0.12, 60)} 0%, transparent 55%)`,
-                boxShadow: `0 1px 2px hsl(var(--foreground) / 0.04), 0 10px 28px -14px ${c(0.55, 50)}`,
-              }}
+              className="group relative flex items-center gap-3.5 rounded-2xl border border-primary/15 bg-card/70 backdrop-blur-sm py-3 pl-3 pr-3.5 md:p-5 shadow-[0_10px_30px_-18px_hsl(var(--primary)/0.35)] transition-all duration-300 hover:border-primary/30 hover:-translate-y-0.5"
             >
-              <span
-                className="relative shrink-0 flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-full"
-                style={{
-                  background: `radial-gradient(circle at 30% 30%, ${c(1, 78, 80)}, ${c(1, 50, 65)})`,
-                  boxShadow: `0 0 0 4px ${c(0.12)}, 0 6px 18px -4px ${c(0.7, 50)}, inset 0 1px 2px hsl(0 0% 100% / 0.5)`,
-                }}
-              >
-                <Icon className="h-5 w-5 text-primary-foreground drop-shadow" strokeWidth={2.2} />
+              <span className="shrink-0 flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-xl border border-primary/15 bg-primary/[0.07] text-primary">
+                <Icon className="h-5 w-5" strokeWidth={1.5} />
               </span>
               <div className="min-w-0">
-                <h3 className="font-display text-[18px] md:text-xl font-semibold leading-tight" style={{ color: c(1, 32, 55) }}>{t}</h3>
+                <h3 className="font-display text-[18px] md:text-xl font-semibold leading-tight text-foreground">{t}</h3>
                 <p className="mt-0.5 text-[13.5px] md:text-sm text-muted-foreground leading-snug">{d}</p>
               </div>
             </li>
