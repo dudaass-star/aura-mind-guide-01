@@ -250,24 +250,45 @@
 .portal-pc-dot { background: hsl(140 45% 70%); border-color: hsl(var(--pc-sage)); }
 
 /* Fundo da entrada do App com a luz suave da /v5 */
+/* Entrada do App: degradê horizontal sálvia profundo → navy, com sopro lavanda (padrão do topo da /v5) */
 .portal-home-surface {
+  --background: 220 35% 10%;
+  --foreground: 40 25% 95%;
+  --card: 0 0% 100%;
+  --card-foreground: 40 25% 95%;
+  --muted-foreground: 150 10% 76%;
+  --secondary: 0 0% 100%;
+  --secondary-foreground: 150 12% 82%;
+  --border: 0 0% 100%;
+  --portal-journey: 153 14% 24%;
+  --portal-journey-foreground: 40 25% 95%;
+  --portal-audio: 222 30% 18%;
+  --portal-audio-foreground: 40 25% 95%;
+  color: hsl(var(--foreground));
   background:
-    radial-gradient(80% 40% at 100% 0%, hsl(270 40% 85% / 0.35) 0%, transparent 70%),
-    radial-gradient(70% 35% at 0% 8%, hsl(153 25% 80% / 0.35) 0%, transparent 70%),
-    hsl(var(--background));
+    radial-gradient(60% 45% at 85% 10%, hsl(270 40% 70% / 0.16) 0%, transparent 70%),
+    radial-gradient(70% 60% at 0% 30%, hsl(140 22% 45% / 0.28) 0%, transparent 70%),
+    linear-gradient(90deg, hsl(153 18% 19%) 0%, hsl(190 25% 14%) 45%, hsl(220 35% 10%) 100%);
+  background-attachment: local;
 }
+.portal-home-surface .bg-card { background-color: hsl(0 0% 100% / 0.06); }
+.portal-home-surface .border-border,
+.portal-home-surface .border-border\/70 { border-color: hsl(0 0% 100% / 0.1); }
+.portal-home-surface .divide-border\/40 > * + * { border-color: hsl(0 0% 100% / 0.08); }
 
 /* Ícones refinados da lista de acompanhamento */
 .portal-home-icon {
-  background: hsl(153 13% 27% / 0.08);
-  color: hsl(153 13% 30%);
-  box-shadow: inset 0 0 0 1px hsl(153 13% 27% / 0.14);
+  background: hsl(140 22% 62% / 0.14);
+  color: hsl(140 30% 78%);
+  box-shadow: inset 0 0 0 1px hsl(140 22% 62% / 0.25);
 }
 .portal-home-list {
   border-radius: 1rem;
-  background: hsl(var(--card) / 0.85);
-  box-shadow: 0 14px 30px -26px hsl(153 16% 20% / 0.6), inset 0 0 0 1px hsl(153 13% 27% / 0.1);
+  background: hsl(0 0% 100% / 0.05);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 36px -24px hsl(220 40% 4% / 0.8), inset 0 0 0 1px hsl(0 0% 100% / 0.09);
 }
+.portal-home-list button:hover { background: hsl(0 0% 100% / 0.06); }
 
 .portal-session-header {
   background-color: hsl(var(--portal-session-header) / 0.96);
