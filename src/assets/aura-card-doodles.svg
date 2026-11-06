@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" fill="none" stroke="#465a51" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.32">
+  <!-- ramo de sálvia -->
+  <path d="M20 60c10-14 22-22 36-24"/><path d="M30 50c-6-6-6-12-2-16 5 3 6 9 2 16z"/><path d="M42 42c-3-8 0-13 5-15 3 5 1 11-5 15z"/>
+  <!-- sol nascente -->
+  <path d="M120 40a16 16 0 0 1 32 0"/><path d="M114 40h44"/><path d="M136 14v6M118 22l4 4M154 22l-4 4"/>
+  <!-- estrela -->
+  <path d="M206 30l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/>
+  <!-- xícara -->
+  <path d="M24 130h26v10a13 13 0 0 1-26 0z"/><path d="M50 133h4a5 5 0 0 1 0 10h-4"/><path d="M32 120c-3-4 3-6 0-10M42 120c-3-4 3-6 0-10"/>
+  <!-- balão -->
+  <path d="M100 112h34a8 8 0 0 1 8 8v12a8 8 0 0 1-8 8h-22l-9 7v-7h-3a8 8 0 0 1-8-8v-12a8 8 0 0 1 8-8z"/>
+  <!-- ondas de respiração -->
+  <path d="M176 120c6-6 12-6 18 0s12 6 18 0"/><path d="M176 132c6-6 12-6 18 0s12 6 18 0"/>
+  <!-- vela -->
+  <path d="M62 196h14v26H62z"/><path d="M69 196v-5"/><path d="M69 178c-5 6-5 10 0 12 5-2 5-6 0-12z"/>
+  <!-- coração -->
+  <path d="M150 210c-12-8-18-14-18-21a8 8 0 0 1 18-3 8 8 0 0 1 18 3c0 7-6 13-18 21z"/>
+  <!-- lua -->
+  <path d="M220 184a12 12 0 1 1-12-14 9 9 0 0 0 12 14z"/>
+  <!-- pontinhos -->
+  <circle cx="92" cy="78" r="1.4"/><circle cx="196" cy="80" r="1.4"/><circle cx="110" cy="170" r="1.4"/><circle cx="20" cy="210" r="1.4"/>
+</svg>

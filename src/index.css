@@ -252,7 +252,7 @@ hsl(152 17% 36%);
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: url("./assets/chat-wallpaper.svg");
+  background-image: url("./assets/aura-card-doodles.svg");
   background-size: 90px 90px;
   background-repeat: repeat;
   filter: brightness(0) invert(1);
