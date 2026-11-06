@@ -326,14 +326,14 @@ const Problem = () => {
             return (
             <li
               key={t}
-              className="group relative flex items-center gap-3.5 rounded-2xl border border-primary/15 bg-card/70 backdrop-blur-sm py-3 pl-3 pr-3.5 md:p-5 shadow-[0_10px_30px_-18px_hsl(var(--primary)/0.35)] transition-all duration-300 hover:border-primary/30 hover:-translate-y-0.5"
+              className="group relative flex items-center gap-3.5 rounded-2xl v5-sage-card py-3 pl-3 pr-3.5 md:p-5 transition-all duration-300 hover:-translate-y-0.5"
             >
-              <span className="shrink-0 flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-xl border border-primary/15 bg-primary/[0.07] text-primary">
+              <span className="v5-sage-card-icon shrink-0 flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-xl">
                 <Icon className="h-5 w-5" strokeWidth={1.5} />
               </span>
               <div className="min-w-0">
-                <h3 className="font-sans font-semibold tracking-tight text-[18px] md:text-xl leading-tight text-foreground">{t}</h3>
-                <p className="mt-0.5 text-[13.5px] md:text-sm text-muted-foreground leading-snug">{d}</p>
+                <h3 className="v5-sage-card-title font-sans font-semibold tracking-tight text-[18px] md:text-xl leading-tight">{t}</h3>
+                <p className="v5-sage-card-text mt-0.5 text-[13.5px] md:text-sm leading-snug">{d}</p>
               </div>
             </li>
             );
