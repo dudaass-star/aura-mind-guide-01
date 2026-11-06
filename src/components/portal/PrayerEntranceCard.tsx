@@ -42,18 +42,20 @@ export function PrayerEntranceCard({ userId, onOpen, onEvent }: { userId?: strin
   const minutes = Math.max(1, Math.round(prayer.duration / 60));
 
   return (
-    <div className="mb-3 flex items-center gap-2.5 rounded-lg border border-border bg-card py-1.5 pl-2 pr-1 shadow-sm">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden="true"><Icon className="h-4 w-4" /></span>
-      <button type="button" onClick={() => { onEvent?.("prayer_card_clicked"); onOpen(); }} className="min-w-0 flex-1 text-left" aria-label={`Ouvir oração: ${prayer.title}`}>
-        <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{slot === "morning" ? "Para começar o dia" : slot === "afternoon" ? "Para renovar as forças" : "Para esta noite"} · {minutes} min</span>
-        <span className="block truncate text-sm font-medium text-foreground">{prayer.title}</span>
-      </button>
-      <Button type="button" size="sm" onClick={() => { onEvent?.("prayer_card_clicked"); onOpen(); }} className="h-8 shrink-0 gap-1.5 rounded-full px-3">
-        <Play className="h-3 w-3" fill="currentColor" /> Ouvir
-      </Button>
-      <Button type="button" variant="ghost" size="icon" onClick={() => { write(userId, { dismissedAt: Date.now() }); setVisible(false); onEvent?.("prayer_card_dismissed"); }} className="h-8 w-8 shrink-0 text-muted-foreground" aria-label="Ocultar sugestão de oração">
-        <X className="h-4 w-4" />
-      </Button>
-    </div>
+    <section className="border-t border-border pt-4 animate-fade-up">
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={() => { onEvent?.("prayer_card_clicked"); onOpen(); }} className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left" aria-label={`Ouvir oração: ${prayer.title}`}>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary" aria-hidden="true"><Icon className="h-4 w-4" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-semibold text-muted-foreground">Oração {slot === "morning" ? "para começar o dia" : slot === "afternoon" ? "para renovar as forças" : "para esta noite"} · {minutes} min</span>
+            <span className="mt-0.5 block text-sm font-semibold leading-snug text-foreground">{prayer.title}</span>
+          </span>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground" aria-hidden="true"><Play className="h-3.5 w-3.5" fill="currentColor" /></span>
+        </button>
+        <Button type="button" variant="ghost" size="icon" onClick={() => { write(userId, { dismissedAt: Date.now() }); setVisible(false); onEvent?.("prayer_card_dismissed"); }} className="h-8 w-8 shrink-0 text-muted-foreground" aria-label="Ocultar sugestão de oração">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    </section>
   );
 }

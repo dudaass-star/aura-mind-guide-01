@@ -22,7 +22,6 @@ import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { sanitizePortalText } from "@/components/portal/sanitize";
 import { PortalHomeAreas, type HomeArea } from "@/components/portal/PortalHomeAreas";
-import { PrayerEntranceCard } from "@/components/portal/PrayerEntranceCard";
 
 type ChatMessage = {
   id: string;
@@ -1360,7 +1359,6 @@ export function ConversarTab({
 
       <div className="shrink-0 px-4 pb-7">
         {degustacaoCard && <div className="mb-3">{degustacaoCard}</div>}
-        {!isDemo && !chatOpen && <PrayerEntranceCard userId={userId} onOpen={() => navigateFromConversation("oracoes")} onEvent={(event) => recordConversationEvent(userId, event, { origin: "home" })} />}
         <Button
           type="button"
           variant="ghost"
