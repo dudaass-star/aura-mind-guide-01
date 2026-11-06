@@ -1071,7 +1071,7 @@ hsl(152 17% 36%);
   content: "";
   position: absolute;
   inset: 0 0 auto 0;
-  height: 12rem;
+  height: 10rem;
   background-image: url("./assets/aura-card-doodles.svg");
   background-size: 90px 90px;
   filter: brightness(0) invert(1);
