@@ -6,7 +6,7 @@
 - Mobile chat inherits visualViewport-adjusted container height; avoid inner 100dvh so keyboard cannot hide input.
 - Record home-icon launches in `portal_value_events` only after authentication and standalone detection; admin reads the latest launch, never inferring installation from browser use.
 - O PortalAuthProvider isola a sessão admin e serializa o vínculo; consolidação transacional só ocorre se a identidade antiga já não existe.
-- A tela de entrada do App permanece no pacote principal, sem carregamento dinâmico; isso impede tela branca por arquivo de versão anterior após uma atualização.
+- A tela de entrada do App é carregada dinamicamente, mas o download começa antecipadamente quando o caminho começa com /meu-espaco, reduzindo a espera visual.
 - Pedidos explícitos de encerrar uma sessão aceitam artigos e pronomes entre o verbo e “sessão/encontro”; isso reconhece a fala natural sem transformar despedidas comuns em encerramento.
 - A avaliação de uma sessão concluída é solicitada na própria conversa do App e registrada pelo fluxo autenticado de experiência; isso não depende de telefone nem do pós-sessão no WhatsApp.
 - Sessões em andamento mudam suavemente o contexto visual da conversa e mostram progresso no cabeçalho; o aviso de fechamento nunca entra como mensagem da AURA.
@@ -24,7 +24,7 @@
 - Disputas PIX vinculam a cobrança pelo End-to-End ID tanto em campos diretos quanto no payload original, recusando associação ambígua; isso preserva a defesa automática sem atribuir evidência ao cliente errado.
 - Meta buyer sync: daily, additive, idempotent, hashed, no demos.
 - Woovi reconciliation exhausts ascending pagination and links a different payer only through exact installment E2E, prioritizing prior payer relationships; this avoids heuristic attribution.
-- Chat thinking stays low except in session reframe/closure, cutting latency.
+- Chat thinking stays low except in session reframe, development, transition and closure phases, cutting latency.
 - Parallelize independent chat reads after profile, quota and sessions; reduce waits without changing context.
 - Movement is collective-first; local previews share live invite copy.
 - Home keeps tracking; practice dialogs stop audio on exit.
