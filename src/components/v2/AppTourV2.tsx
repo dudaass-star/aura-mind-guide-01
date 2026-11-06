@@ -2,11 +2,11 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
+import { trackLandingCta, checkoutHref, type LandingVariant } from "@/lib/landing-analytics";
 import tourVideo from "@/assets/videos/tour_app_ola_aura.mp4.asset.json";
 
 // Tour do App em vídeo — substitui a simulação de conversa na V2.
-const AppTourV2 = () => {
+const AppTourV2 = ({ variant = "v2" }: { variant?: LandingVariant } = {}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
 
@@ -77,7 +77,7 @@ const AppTourV2 = () => {
           </div>
 
           <div className="mt-8 flex flex-col items-center gap-2">
-            <Link to={checkoutHref("demo")} onClick={() => trackLandingCta("demo", "Começar por R$ 6,90 (tour v2)")}>
+            <Link to={checkoutHref("demo", variant)} onClick={() => trackLandingCta("demo", `Começar por R$ 6,90 (tour ${variant})`, variant)}>
               <Button variant="sage" size="xl" className="rounded-2xl px-10 shadow-lg">
                 Começar por R$ 6,90
               </Button>

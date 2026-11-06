@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, BadgeCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
+import { trackLandingCta, checkoutHref, type LandingVariant } from "@/lib/landing-analytics";
 import { PLAN_MONTHLY_EQUIVALENT, PlanId, fmtBRL } from "@/lib/plan-pricing";
 
 const guarantees = [
@@ -40,7 +40,7 @@ const plans: {
   { id: "transformacao", name: "Transformação", tag: "Pra momentos de virada", features: ["Tudo do Direção", "8 encontros guiados por mês — dois por semana", "Prioridade em momentos difíceis", "Orações e meditações para cada momento do dia"], popular: false },
 ];
 
-const PricingV2 = () => {
+const PricingV2 = ({ variant = "v2" }: { variant?: LandingVariant } = {}) => {
   const [cycleId, setCycleId] = useState<CycleId>("yearly");
   const cycle = cycles.find((c) => c.id === cycleId)!;
 
@@ -84,8 +84,8 @@ const PricingV2 = () => {
             ))}
           </ul>
           <Link
-            to={checkoutHref("pricing")}
-            onClick={() => trackLandingCta("pricing", "Começar agora R$ 6,90 (v2)")}
+            to={checkoutHref("pricing", variant)}
+            onClick={() => trackLandingCta("pricing", `Começar agora R$ 6,90 (${variant})`, variant)}
           >
             <Button variant="default" size="lg" className="w-full rounded-xl bg-foreground text-background hover:bg-foreground/90">
               Começar agora por R$ 6,90
@@ -176,9 +176,9 @@ const PricingV2 = () => {
               ))}
             </ul>
             <Link
-              to={checkoutHref("pricing")}
+              to={checkoutHref("pricing", variant)}
               state={{ plan: p.id, billing: cycle.checkoutBilling }}
-              onClick={() => trackLandingCta("pricing", `${p.name} ${cycle.label} (v2)`)}
+              onClick={() => trackLandingCta("pricing", `${p.name} ${cycle.label} (${variant})`, variant)}
             >
               <Button
                 variant={p.popular ? "sage" : "outline"}

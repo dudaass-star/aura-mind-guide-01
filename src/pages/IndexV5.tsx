@@ -611,7 +611,7 @@ const IndexV5 = () => {
           <HowItWorks />
           </div>
           <div className="v5-olive">
-          <div id="app"><AppTourV2 /></div>
+          <div id="app"><AppTourV2 variant={V} /></div>
           <SessionShowcase />
           </div>
           <div className="v5-cream">
@@ -620,7 +620,7 @@ const IndexV5 = () => {
           <Testimonials />
           </div>
           <div className="v5-navy">
-          <div id="planos"><PricingV2 /></div>
+          <div id="planos"><PricingV2 variant={V} /></div>
           <Guarantee />
           <div id="duvidas"><FAQV2 /></div>
           </div>
