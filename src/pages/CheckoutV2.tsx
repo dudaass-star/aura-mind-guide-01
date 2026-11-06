@@ -84,7 +84,7 @@ const plans: Record<PlanId, PlanConfig> = {
     semestralDiscount: 50,
     trialPrice: "6,90",
     sessions: 1,
-    highlights: ["Conversas ilimitadas 24/7", "1 Sessão Especial/mês", "Check-in diário"],
+    highlights: ["Conversas ilimitadas 24/7", "1 encontro guiado/mês", "Todas as orações e meditações"],
   },
   direcao: {
     name: "Direção",
@@ -100,7 +100,7 @@ const plans: Record<PlanId, PlanConfig> = {
     semestralDiscount: 50,
     trialPrice: "9,90",
     sessions: 4,
-    highlights: ["Tudo do Essencial", "4 Sessões Especiais/mês", "Resumo após cada sessão"],
+    highlights: ["Tudo do Essencial", "4 encontros guiados/mês", "Resumo após cada encontro", "Orações e meditações guiadas"],
   },
   transformacao: {
     name: "Transformação",
@@ -116,7 +116,7 @@ const plans: Record<PlanId, PlanConfig> = {
     semestralDiscount: 50,
     trialPrice: "19,90",
     sessions: 8,
-    highlights: ["Tudo do Direção", "8 Sessões Especiais/mês", "Prioridade no agendamento"],
+    highlights: ["Tudo do Direção", "8 encontros guiados/mês", "Prioridade em momentos difíceis", "Orações e meditações guiadas"],
   },
 };
 
