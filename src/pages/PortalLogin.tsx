@@ -184,26 +184,20 @@ export default function PortalLogin() {
         <title>{isMovementEntry ? "Faça parte do Movimento | Olá Aura" : "Entrar no aplicativo | Olá Aura"}</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
-      <div className="portal-chat-theme portal-login-page min-h-dvh bg-background text-foreground flex flex-col">
-        <header className="border-b border-border/70 bg-card/90 backdrop-blur-xl">
-          <div className="relative max-w-lg mx-auto px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-center">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={handleBack}
-              aria-label={step === "otp" ? "Voltar para o email" : "Voltar para a página anterior"}
-              className="absolute left-3 bottom-1.5 h-10 w-10 text-muted-foreground"
-            >
-              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-            </Button>
-            <Link to="/" aria-label="Olá Aura — página inicial">
-              <img src={logoOlaAura} alt="Olá Aura" className="h-8 w-auto" />
-            </Link>
-          </div>
-        </header>
+      <div className="portal-chat-theme portal-login-page relative min-h-dvh bg-background text-foreground flex flex-col">
+        {/* Sem barra no topo: a seta fica solta, sem fundo, para a imagem respirar */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={handleBack}
+          aria-label={step === "otp" ? "Voltar para o email" : "Voltar para a página anterior"}
+          className="absolute left-2 top-[max(0.5rem,env(safe-area-inset-top))] z-10 h-10 w-10 rounded-full text-muted-foreground hover:bg-white/10 hover:text-foreground"
+        >
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+        </Button>
 
-        <main className="flex-1 px-5 py-7 sm:py-9">
+        <main className="flex-1 px-5 pt-14 pb-7 sm:pt-16 sm:pb-9">
           <div className="mx-auto w-full max-w-sm">
             <div className="mb-5 flex flex-col items-center text-center">
               {isMovementEntry ? (
@@ -216,13 +210,23 @@ export default function PortalLogin() {
                   <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-[3px] border-background bg-primary" aria-hidden="true" />
                 </div>
               )}
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
-                {isMovementEntry ? "Movimento Olá Aura" : "Entenda o que sente. Mude sua vida."}
-              </p>
-              <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">
-                {isMovementEntry ? "Entre para fazer parte" : "Entre na Olá Aura"}
-              </h1>
-              <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground font-body">
+              {isMovementEntry ? (
+                <>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Movimento Olá Aura</p>
+                  <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">Entre para fazer parte</h1>
+                </>
+              ) : (
+                <h1 className="portal-login-slogan text-foreground">
+                  Entenda o que sente.<br />
+                  <span>Mude sua vida.</span>
+                </h1>
+              )}
+              <img
+                src={logoOlaAura}
+                alt="Olá Aura"
+                className={`portal-login-logo mx-auto w-auto ${isMovementEntry ? "mt-3 h-7" : "mt-5 h-9 sm:h-10"}`}
+              />
+              <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground font-body">
                 {isAmbassadorEntry
                   ? "Receba seu link pessoal, compartilhe do seu jeito e acompanhe o impacto."
                   : isMovementEntry

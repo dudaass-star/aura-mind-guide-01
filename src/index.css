@@ -363,10 +363,12 @@ hsl(152 17% 36%);
   }
 
   .portal-login-page main > div {
-    border: 1px solid hsl(var(--border) / 0.7);
-    border-radius: 1rem;
-    background-color: hsl(var(--background));
-    box-shadow: var(--shadow-card);
+    /* Painel de vidro escuro: texto branco legível e a paisagem aparecendo atrás */
+    border: 1px solid hsl(0 0% 100% / 0.1);
+    border-radius: 1.5rem;
+    background-color: hsl(220 38% 10% / 0.62);
+    box-shadow: 0 30px 70px -30px hsl(220 45% 3% / 0.9);
+    backdrop-filter: blur(14px);
     padding: 2rem;
   }
 }
@@ -1084,10 +1086,29 @@ hsl(152 17% 36%);
 /* Login: mesma paisagem do entardecer do site e do ícone, com véu navy para leitura */
 .portal-login-page {
   background:
-    linear-gradient(180deg, hsl(220 38% 12% / 0.35) 0%, hsl(220 38% 11% / 0.7) 40%, hsl(222 42% 9% / 0.96) 75%),
+    linear-gradient(180deg, hsl(220 38% 12% / 0.18) 0%, hsl(220 38% 11% / 0.6) 45%, hsl(222 42% 9% / 0.95) 78%),
     url("./assets/v5-hero-refugio.jpg") center top / cover no-repeat,
     hsl(222 42% 9%) !important;
   background-attachment: scroll !important;
+}
+/* Login: slogan em destaque, com o degradê sálvia→lavanda do topo do site */
+.portal-login-page .portal-login-slogan {
+  font-family: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(1.5rem, 7.4vw, 1.9rem);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  filter: drop-shadow(0 0 22px hsl(153 45% 60% / 0.22));
+}
+.portal-login-page .portal-login-slogan span {
+  background: linear-gradient(100deg, hsl(145 45% 62%), hsl(150 45% 78%) 50%, hsl(265 70% 82%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* Login: logo oficial no lugar do título "Entre na Olá Aura" */
+.portal-login-page .portal-login-logo {
+  filter: brightness(0) invert(1) drop-shadow(0 2px 16px hsl(153 40% 60% / 0.35));
 }
 .portal-login-page main { background-image: none !important; }
 .portal-login-page [aria-label="Recursos do aplicativo"] span[class*="portal-area-"] {
