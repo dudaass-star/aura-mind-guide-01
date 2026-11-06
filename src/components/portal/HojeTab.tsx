@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import type { Json } from "@/integrations/supabase/types";
 import { PortalLoadingInline } from "./shared";
+import { PrayerEntranceCard } from "./PrayerEntranceCard";
 import { rememberTodayDirection, type TodayAction, type TodayDirection, type TodayDirectionResponse } from "@/lib/today-direction";
 
 interface HojeTabProps {
@@ -161,6 +162,8 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
           </Button>
         </section>
       )}
+
+      <PrayerEntranceCard userId={userId} onOpen={() => onNavigateTab("oracoes")} onEvent={(eventType) => { void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "prayers", event_type: eventType, source: "app", metadata: { origin: "today" } }); }} />
 
       {showPushInvitation && (
         <section className="flex items-center gap-3 border-t border-border pt-4 animate-fade-up">
