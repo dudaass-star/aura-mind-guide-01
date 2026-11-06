@@ -48,7 +48,7 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Um momento para você</h2>
         <div className="grid grid-cols-2 gap-3">
           {practices.map(({ label, detail, action, tab, image, alt, icon: Icon, tone }) => (
-            <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className={cn("group block h-auto min-w-0 overflow-hidden rounded-lg p-0 text-left whitespace-normal hover:opacity-90", tone)}>
+            <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className={cn("group block h-auto min-w-0 overflow-hidden rounded-2xl p-0 text-left shadow-sm whitespace-normal hover:opacity-90", tone)}>
               <img src={image} alt={alt} className="aspect-[1.85/1] w-full object-cover" loading="lazy" />
               <span className="block p-3"><span className="flex min-h-6 items-center gap-1.5"><Icon className="h-4 w-4 shrink-0" /><span className="text-base font-semibold">{label}</span></span><span className="mt-2 block min-h-9 text-xs font-normal leading-[18px]">{detail}</span><span className="mt-3 flex min-h-5 items-center justify-between gap-1 text-[11px] font-semibold"><span>{action}</span><ArrowRight className="h-4 w-4 shrink-0" /></span></span>
             </Button>
@@ -57,7 +57,7 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
       </section>
       <section aria-label="Faça parte de algo maior">
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Faça parte de algo maior</h2>
-        <article data-movement-event="card_viewed" className="overflow-hidden rounded-lg portal-area-journey">
+        <article data-movement-event="card_viewed" className="overflow-hidden rounded-2xl shadow-sm portal-area-journey">
           <img src={movementImage} alt="Pessoas abraçadas com camisetas do Movimento Olá Aura" className="aspect-[2.8/1] w-full object-cover" loading="lazy" />
           <div className="p-4">
             <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase"><HeartHandshake className="h-4 w-4" /><span>Movimento Olá Aura</span>{movementIsNew && !hasJoinedMovement && <span className="rounded-full bg-primary px-2 py-0.5 text-[9px] text-primary-foreground">Novo</span>}</div>
