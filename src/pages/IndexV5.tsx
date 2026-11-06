@@ -290,20 +290,22 @@ const Hero = () => {
 
 const Problem = () => {
   const items = [
-    "Você pensa demais à noite e acorda cansada",
-    "Sente que precisa desabafar, mas não quer pesar ninguém",
-    "Já entendeu muita coisa, mas continua travada no mesmo lugar",
-    "Terapia não cabe agora no tempo ou no bolso",
+    { t: "Pare de sofrer em silêncio.", d: "Quando todo mundo acha que você tá bem, mas por dentro a história é outra, fale com a Aura sobre o que você tem guardado." },
+    { t: "Supere o medo.", d: "Uma conversa que você evita, uma decisão que adia, um recomeço que assusta. Entenda o que te trava e encontre um primeiro passo." },
+    { t: "Diga não sem culpa.", d: "Você diz sim pra não decepcionar e depois fica mal por ter cedido? Ensaie com a Aura como colocar um limite com as suas palavras." },
+    { t: "Quebre o ciclo.", d: "A mesma briga. A mesma reação. O mesmo arrependimento. Entenda o que se repete e como agir diferente da próxima vez." },
+    { t: "Volte a confiar em você.", d: "Quando você pede opinião pra todo mundo e termina ainda mais em dúvida, organize o que pensa e entenda o que faz sentido pra você." },
+    { t: "Faça as pazes com o passado.", d: "Uma história que acabou, uma escolha da qual você se arrepende, algo que ficou sem resposta. Converse sobre o que ainda pesa e pense em como seguir em frente." },
   ];
   return (
-    <section className="py-16 md:py-24">
-      <div className="container mx-auto px-5 max-w-3xl text-center">
-        <Eyebrow>Isso soa familiar?</Eyebrow>
-        <h2 className="mt-3 font-display text-3xl md:text-4xl">Você não precisa carregar tudo sozinha.</h2>
-        <ul className="mt-8 grid sm:grid-cols-2 gap-3 text-left">
-          {items.map((t) => (
-            <li key={t} className="flex gap-3 rounded-2xl bg-card border border-border/60 p-4 text-sm">
-              <Check className="w-5 h-5 text-primary shrink-0" /> {t}
+    <section id="resultados" className="py-16 md:py-24">
+      <div className="container mx-auto px-5 max-w-5xl">
+        <h2 className="text-center font-display text-3xl md:text-5xl">O que pode mudar na sua vida</h2>
+        <ul className="mt-10 md:mt-14 grid md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-8 md:gap-y-12">
+          {items.map(({ t, d }) => (
+            <li key={t} className="border-t border-border/70 pt-5">
+              <h3 className="font-display text-2xl md:text-[1.7rem] leading-tight">{t}</h3>
+              <p className="mt-3 text-[15px] text-muted-foreground leading-relaxed">{d}</p>
             </li>
           ))}
         </ul>
