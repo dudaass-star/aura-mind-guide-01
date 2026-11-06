@@ -88,3 +88,4 @@
 .theme-v5-night .v5-navy{background:radial-gradient(48rem 30rem at 15% 20%,hsl(var(--accent)/.10),transparent 65%),hsl(222 38% 8%)}
 .theme-v5-night .v5-cream .bg-card,.theme-v5-night .v5-cream .bg-card\/70,.theme-v5-night .v5-cream .bg-card\/60,.theme-v5-night .v5-cream .bg-card\/40{background-color:hsl(0 0% 100%/.85)!important;border-color:hsl(var(--border));box-shadow:0 20px 50px -25px hsl(140 30% 20%/.28)}
 .theme-v5-night .v5-cream .v5-fade-bottom,.theme-v5-night .v5-olive .v5-fade-bottom{display:none}
+.theme-v5-night .v5-navy section,.theme-v5-night .v5-navy [class*="bg-gradient"]{background:transparent!important}
