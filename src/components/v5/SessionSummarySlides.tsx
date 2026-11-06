@@ -45,7 +45,7 @@ export default function SessionSummarySlides() {
   const s = SLIDES[i];
   return (
     <div
-      className="rounded-3xl border border-[hsl(var(--v2-navy-foreground)/0.12)] bg-[hsl(var(--v2-navy-foreground)/0.05)] p-6 backdrop-blur select-none"
+      className="v5-pearl-card rounded-3xl border p-6 select-none"
       onTouchStart={(e) => { startX.current = e.touches[0].clientX; setPaused(true); }}
       onTouchEnd={(e) => {
         if (startX.current === null) return;
