@@ -606,16 +606,20 @@ const IndexV5 = () => {
         <main>
           <Hero />
           <Metrics />
-          <div className="v5-dusk">
+          <div className="v5-cream">
           <Problem />
           <HowItWorks />
+          </div>
+          <div className="v5-olive">
           <div id="app"><AppTourV2 /></div>
           <SessionShowcase />
+          </div>
+          <div className="v5-cream">
           <PrayerShowcase />
           <Built />
-          </div>
-          <div className="v5-dawn">
           <Testimonials />
+          </div>
+          <div className="v5-navy">
           <Compare />
           <Movement />
           <div id="planos"><PricingV2 /></div>
