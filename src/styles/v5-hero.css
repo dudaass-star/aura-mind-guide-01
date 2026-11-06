@@ -70,12 +70,13 @@
 
 /* Capítulos de cor sólidos: navy → creme → oliva → creme → navy, com contraste nativo em cada um. */
 .theme-v5-night .v5-cream{
-  --background:36 45% 96%;--foreground:222 35% 16%;--card:0 0% 100%;--card-foreground:222 35% 16%;
-  --popover:0 0% 100%;--popover-foreground:222 35% 16%;--secondary:36 35% 91%;--secondary-foreground:222 35% 16%;
-  --muted:36 30% 92%;--muted-foreground:222 12% 38%;--border:30 20% 85%;--input:30 20% 85%;
-  --sage-soft:95 25% 90%;--primary:95 30% 32%;--accent:95 25% 38%;
-  --v2-navy-foreground:222 35% 16%;--v2-navy-muted:222 12% 38%;
-  color-scheme:light;color:hsl(var(--foreground));background:hsl(var(--background));
+  --background:150 14% 97%;--foreground:222 38% 12%;--card:0 0% 100%;--card-foreground:222 38% 12%;
+  --popover:0 0% 100%;--popover-foreground:222 38% 12%;--secondary:150 12% 93%;--secondary-foreground:222 38% 12%;
+  --muted:150 10% 94%;--muted-foreground:222 14% 36%;--border:153 12% 86%;--input:153 12% 86%;
+  --sage-soft:128 20% 92%;--primary:153 13% 31%;--accent:265 40% 62%;
+  --v2-navy-foreground:222 38% 12%;--v2-navy-muted:222 14% 36%;
+  color-scheme:light;color:hsl(var(--foreground));
+  background:radial-gradient(40rem 26rem at 85% 10%,hsl(265 60% 80%/.18),transparent 65%),radial-gradient(40rem 26rem at 10% 90%,hsl(128 20% 60%/.16),transparent 65%),hsl(var(--background));
 }
 .theme-v5-night .v5-olive{
   --background:153 13% 27%;--foreground:40 25% 95%;--card:153 12% 32%;--card-foreground:40 25% 95%;
@@ -86,6 +87,9 @@
   background:radial-gradient(44rem 28rem at 15% 20%,hsl(128 20% 64%/.12),transparent 65%),hsl(var(--background));
 }
 .theme-v5-night .v5-navy{background:radial-gradient(48rem 30rem at 15% 20%,hsl(var(--accent)/.10),transparent 65%),hsl(222 38% 8%)}
-.theme-v5-night .v5-cream .bg-card,.theme-v5-night .v5-cream .bg-card\/70,.theme-v5-night .v5-cream .bg-card\/60,.theme-v5-night .v5-cream .bg-card\/40{background-color:hsl(0 0% 100%/.85)!important;border-color:hsl(var(--border));box-shadow:0 20px 50px -25px hsl(140 30% 20%/.28)}
+.theme-v5-night .v5-cream .bg-card,.theme-v5-night .v5-cream .bg-card\/70,.theme-v5-night .v5-cream .bg-card\/60,.theme-v5-night .v5-cream .bg-card\/40{background-color:hsl(0 0% 100%/.9)!important;border-color:hsl(128 20% 60%/.35);box-shadow:0 24px 50px -28px hsl(153 13% 31%/.4),0 0 0 1px hsl(0 0% 100%/.6) inset}
+.theme-v5-night .v5-cream .preview-copy,.theme-v5-night .v5-cream .preview-copy *{color:hsl(0 0% 100%)!important}
+.theme-v5-night .v5-cream .preview-shade{background:linear-gradient(to top,hsl(222 38% 8%/.85),hsl(222 38% 8%/.25) 60%,transparent)!important}
+.theme-v5-night .v5-cream .text-gradient-sage{background:linear-gradient(100deg,hsl(153 13% 31%),hsl(128 20% 50%) 55%,hsl(265 40% 58%));-webkit-background-clip:text;background-clip:text;color:transparent}
 .theme-v5-night .v5-cream .v5-fade-bottom,.theme-v5-night .v5-olive .v5-fade-bottom{display:none}
 .theme-v5-night .v5-navy section,.theme-v5-night .v5-navy [class*="bg-gradient"]{background:transparent!important}
