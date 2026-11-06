@@ -1695,7 +1695,7 @@ const CheckoutV2 = () => {
                           <p className="font-medium text-white">{plan.name}</p>
                           <p className="text-xs text-white/65 truncate">
                             {plan.sessions > 0
-                              ? `${plan.sessions} ${plan.sessions === 1 ? "sessão" : "sessões"}/mês + chat ilimitado`
+                              ? `${plan.sessions} ${plan.sessions === 1 ? "encontro" : "encontros"}/mês + chat ilimitado + orações`
                               : "Chat ilimitado 24/7"}
                           </p>
                           {perSession && (
