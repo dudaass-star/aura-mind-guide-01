@@ -1444,7 +1444,7 @@ export function ConversarTab({
           nearBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 150;
           if (nearBottomRef.current) setShowNew(false);
         }}
-        className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain bg-secondary/45 px-4 py-5 transition-colors duration-500 sm:px-5", activeSession && "portal-session-canvas")}
+        className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain portal-chat-wallpaper bg-secondary/45 px-4 py-5 transition-colors duration-500 sm:px-5", activeSession && "portal-session-canvas")}
       >
         {hasOlder && (
           <Button type="button" variant="ghost" size="sm" className="mx-auto mb-5 flex" onClick={() => void loadOlder()}>
