@@ -255,6 +255,7 @@
   --portal-journey: 153 14% 30%;
   --portal-journey-foreground: 40 25% 97%;
   /* textos soltos sobre o fundo escuro ficam creme; dentro dos cards brancos, escuros */
+  --foreground: 40 25% 96%;
   color: hsl(40 25% 96%);
   --primary: 145 45% 62%;
   --primary-foreground: 153 25% 12%;
@@ -269,6 +270,7 @@
   --foreground: 220 30% 14%;
   --muted-foreground: 220 12% 42%;
   --secondary-foreground: 220 20% 22%;
+  color: hsl(var(--foreground));
 }
 .portal-home-surface .bg-card {
   background-color: hsl(0 0% 100%);
