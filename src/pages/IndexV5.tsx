@@ -351,19 +351,29 @@ const HowItWorks = () => {
     { icon: Compass, t: "Você encontra direção", d: "A conversa ganha um fechamento, um próximo passo ou um encontro guiado de 45 minutos para aprofundar." },
   ];
   return (
-    <section id="como-funciona" className="py-16 md:py-24">
-      <div className="container mx-auto px-5 max-w-5xl">
+    <section id="como-funciona" className="relative overflow-hidden py-16 md:py-24">
+      {/* Luz ambiente suave, mesma linguagem do topo */}
+      <div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[38rem] h-[38rem] rounded-full bg-primary/10 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute bottom-0 -right-24 w-80 h-80 rounded-full bg-accent/20 blur-3xl" />
+      <div className="relative container mx-auto px-5 max-w-5xl">
         <div className="text-center max-w-2xl mx-auto">
           <Eyebrow>Como funciona</Eyebrow>
-          <h2 className="mt-3 font-display text-3xl md:text-4xl">Simples como mandar uma mensagem. Profundo o bastante para mudar sua perspectiva.</h2>
+          <h2 className="mt-3 font-display text-3xl md:text-4xl">Simples como mandar uma mensagem. <span className="italic text-gradient-sage">Profundo o bastante para mudar sua perspectiva.</span></h2>
         </div>
-        <ol className="mt-10 grid md:grid-cols-3 gap-4">
+        <ol className="relative mt-12 grid md:grid-cols-3 gap-10 md:gap-6">
+          {/* Linha fluida que conecta a jornada */}
+          <span aria-hidden className="absolute left-[1.6rem] top-8 bottom-8 w-px md:hidden bg-gradient-to-b from-primary/50 via-primary/25 to-transparent" />
+          <span aria-hidden className="hidden md:block absolute top-[1.6rem] left-[16%] right-[16%] h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           {s.map(({ icon: I, t, d }, i) => (
-            <li key={t} className="relative rounded-3xl bg-card border border-border/60 p-6 shadow-sm">
-              <span className="absolute top-5 right-6 font-display text-4xl text-primary/20">{i + 1}</span>
-              <div className="w-11 h-11 rounded-2xl bg-[hsl(var(--sage-soft))] flex items-center justify-center"><I className="w-5 h-5 text-primary" /></div>
-              <h3 className="mt-4 font-display text-xl">{t}</h3>
-              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{d}</p>
+            <li key={t} className="relative flex md:flex-col md:items-center md:text-center gap-5 md:gap-0">
+              <div className="relative z-10 shrink-0 w-[3.2rem] h-[3.2rem] rounded-full bg-background/80 backdrop-blur border border-primary/30 shadow-[0_0_30px_-6px_hsl(var(--primary)/0.55)] flex items-center justify-center">
+                <I className="w-5 h-5 text-primary" />
+              </div>
+              <div className="md:mt-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border/40 p-5 md:p-6 shadow-[0_20px_50px_-25px_hsl(var(--primary)/0.35)] flex-1">
+                <span className="text-[11px] uppercase tracking-[0.2em] text-primary/70">Passo {i + 1}</span>
+                <h3 className="mt-1.5 font-display text-xl">{t}</h3>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{d}</p>
+              </div>
             </li>
           ))}
         </ol>
