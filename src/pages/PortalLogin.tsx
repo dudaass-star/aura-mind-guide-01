@@ -184,26 +184,20 @@ export default function PortalLogin() {
         <title>{isMovementEntry ? "Faça parte do Movimento | Olá Aura" : "Entrar no aplicativo | Olá Aura"}</title>
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
-      <div className="portal-chat-theme portal-login-page min-h-dvh bg-background text-foreground flex flex-col">
-        <header className="border-b border-border/70 bg-card/90 backdrop-blur-xl">
-          <div className="relative max-w-lg mx-auto px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-center">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={handleBack}
-              aria-label={step === "otp" ? "Voltar para o email" : "Voltar para a página anterior"}
-              className="absolute left-3 bottom-1.5 h-10 w-10 text-muted-foreground"
-            >
-              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-            </Button>
-            <Link to="/" aria-label="Olá Aura — página inicial">
-              <img src={logoOlaAura} alt="Olá Aura" className="h-8 w-auto" />
-            </Link>
-          </div>
-        </header>
+      <div className="portal-chat-theme portal-login-page relative min-h-dvh bg-background text-foreground flex flex-col">
+        {/* Sem barra no topo: a seta fica solta, sem fundo, para a imagem respirar */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={handleBack}
+          aria-label={step === "otp" ? "Voltar para o email" : "Voltar para a página anterior"}
+          className="absolute left-2 top-[max(0.5rem,env(safe-area-inset-top))] z-10 h-10 w-10 rounded-full text-muted-foreground hover:bg-white/10 hover:text-foreground"
+        >
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+        </Button>
 
-        <main className="flex-1 px-5 py-7 sm:py-9">
+        <main className="flex-1 px-5 pt-14 pb-7 sm:pt-16 sm:pb-9">
           <div className="mx-auto w-full max-w-sm">
             <div className="mb-5 flex flex-col items-center text-center">
               {isMovementEntry ? (
