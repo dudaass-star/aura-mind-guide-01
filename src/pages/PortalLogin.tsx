@@ -210,13 +210,23 @@ export default function PortalLogin() {
                   <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-[3px] border-background bg-primary" aria-hidden="true" />
                 </div>
               )}
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
-                {isMovementEntry ? "Movimento Olá Aura" : "Entenda o que sente. Mude sua vida."}
-              </p>
-              <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">
-                {isMovementEntry ? "Entre para fazer parte" : "Entre na Olá Aura"}
-              </h1>
-              <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground font-body">
+              {isMovementEntry ? (
+                <>
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Movimento Olá Aura</p>
+                  <h1 className="font-display text-[1.75rem] font-semibold leading-tight text-foreground">Entre para fazer parte</h1>
+                </>
+              ) : (
+                <h1 className="portal-login-slogan text-foreground">
+                  Entenda o que sente.<br />
+                  <span>Mude sua vida.</span>
+                </h1>
+              )}
+              <img
+                src={logoOlaAura}
+                alt="Olá Aura"
+                className={`portal-login-logo mx-auto w-auto ${isMovementEntry ? "mt-3 h-7" : "mt-5 h-9 sm:h-10"}`}
+              />
+              <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground font-body">
                 {isAmbassadorEntry
                   ? "Receba seu link pessoal, compartilhe do seu jeito e acompanhe o impacto."
                   : isMovementEntry
