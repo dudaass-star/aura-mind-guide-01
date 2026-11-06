@@ -315,7 +315,7 @@ const Problem = () => {
       <div className="relative container mx-auto px-5 max-w-5xl">
         <div className="text-center max-w-2xl mx-auto">
           <Eyebrow>Transformação real</Eyebrow>
-          <h2 className="mt-3 font-display text-3xl md:text-5xl leading-tight">O que pode mudar na sua vida</h2>
+          <h2 className="mt-3 font-sans font-semibold tracking-tight text-3xl md:text-5xl leading-tight">O que pode mudar na sua vida</h2>
           <p className="mt-3 text-[15px] md:text-lg text-muted-foreground leading-snug">
             Se você se reconhece em uma dessas situações, a <span className="text-primary font-medium">Aura foi feita para o seu momento.</span>
           </p>
@@ -332,7 +332,7 @@ const Problem = () => {
                 <Icon className="h-5 w-5" strokeWidth={1.5} />
               </span>
               <div className="min-w-0">
-                <h3 className="font-display text-[18px] md:text-xl font-semibold leading-tight text-foreground">{t}</h3>
+                <h3 className="font-sans font-semibold tracking-tight text-[18px] md:text-xl leading-tight text-foreground">{t}</h3>
                 <p className="mt-0.5 text-[13.5px] md:text-sm text-muted-foreground leading-snug">{d}</p>
               </div>
             </li>
@@ -358,7 +358,7 @@ const HowItWorks = () => {
       <div className="relative container mx-auto px-5 max-w-5xl">
         <div className="text-center max-w-2xl mx-auto">
           <Eyebrow>Como funciona</Eyebrow>
-          <h2 className="mt-3 font-display text-3xl md:text-4xl">Simples como mandar uma mensagem. <span className="italic text-gradient-sage">Profundo o bastante para mudar sua perspectiva.</span></h2>
+          <h2 className="mt-3 font-sans font-semibold tracking-tight text-3xl md:text-4xl">Simples como mandar uma mensagem. <span className="italic text-gradient-sage">Profundo o bastante para mudar sua perspectiva.</span></h2>
         </div>
         <ol className="relative mt-12 grid md:grid-cols-3 gap-10 md:gap-6">
           {/* Linha fluida que conecta a jornada */}
@@ -371,7 +371,7 @@ const HowItWorks = () => {
               </div>
               <div className="md:mt-6 rounded-3xl bg-card/60 backdrop-blur-md border border-border/40 p-5 md:p-6 shadow-[0_20px_50px_-25px_hsl(var(--primary)/0.35)] flex-1">
                 <span className="text-[11px] uppercase tracking-[0.2em] text-primary/70">Passo {i + 1}</span>
-                <h3 className="mt-1.5 font-display text-xl">{t}</h3>
+                <h3 className="mt-1.5 font-sans font-semibold tracking-tight text-xl">{t}</h3>
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{d}</p>
               </div>
             </li>
@@ -387,7 +387,7 @@ const SessionShowcase = () => (
     <div className="container mx-auto px-5 max-w-5xl grid md:grid-cols-2 gap-10 items-center">
       <div>
         <Eyebrow>Encontros guiados</Eyebrow>
-        <h2 className="mt-3 font-display text-3xl md:text-4xl">45 minutos que terminam em algo concreto.</h2>
+        <h2 className="mt-3 font-sans font-semibold tracking-tight text-3xl md:text-4xl">45 minutos que terminam em algo concreto.</h2>
         <p className="mt-4 text-[hsl(var(--v2-navy-muted))] leading-relaxed">
           Não fica só no que aconteceu. Vai pro que aquilo significa pra você — e quais caminhos existem dali pra frente. A AURA conduz com método, aponta o que pode estar passando despercebido e fecha com uma conclusão clara.
         </p>
@@ -410,13 +410,13 @@ const Built = () => {
       <div className="container mx-auto px-5 max-w-5xl">
         <div className="text-center max-w-2xl mx-auto">
           <Eyebrow>Uma experiência que cresce com você</Eyebrow>
-          <h2 className="mt-3 font-display text-3xl md:text-4xl">A conversa passa. O que ela constrói <span className="italic text-gradient-sage">fica com você.</span></h2>
+          <h2 className="mt-3 font-sans font-semibold tracking-tight text-3xl md:text-4xl">A conversa passa. O que ela constrói <span className="italic text-gradient-sage">fica com você.</span></h2>
         </div>
         <div className="mt-10 grid sm:grid-cols-2 gap-4">
           {b.map(({ icon: I, t, d }) => (
             <div key={t} className="flex gap-4 rounded-3xl bg-card border border-border/60 p-6 shadow-sm">
               <div className="w-11 h-11 shrink-0 rounded-2xl bg-[hsl(var(--sage-soft))] flex items-center justify-center"><I className="w-5 h-5 text-primary" /></div>
-              <div><h3 className="font-display text-lg">{t}</h3><p className="mt-0.5 text-[13.5px] md:text-sm text-muted-foreground leading-snug">{d}</p></div>
+              <div><h3 className="font-sans font-semibold tracking-tight text-lg">{t}</h3><p className="mt-0.5 text-[13.5px] md:text-sm text-muted-foreground leading-snug">{d}</p></div>
             </div>
           ))}
         </div>
@@ -433,7 +433,7 @@ const PrayerShowcase = () => (
       </div>
       <div className="order-1 md:order-2">
         <Eyebrow>Um momento para você</Eyebrow>
-        <h2 className="mt-3 font-display text-3xl md:text-4xl">Orações e meditações guiadas para cada momento do dia.</h2>
+        <h2 className="mt-3 font-sans font-semibold tracking-tight text-3xl md:text-4xl">Orações e meditações guiadas para cada momento do dia.</h2>
         <p className="mt-4 text-muted-foreground leading-relaxed">Na voz acolhedora da AURA, com as frases acompanhando o áudio na tela. Para começar a manhã com força ou entregar à noite o que não depende de você.</p>
       </div>
     </div>
@@ -446,7 +446,7 @@ const Movement = () => (
       <img src={movementImage} alt="Pessoas reunidas pelo Movimento Olá Aura" className="rounded-3xl aspect-[4/3] w-full object-cover" loading="lazy" />
       <div>
         <Eyebrow>Movimento Olá Aura</Eyebrow>
-        <h2 className="mt-3 font-display text-3xl md:text-4xl">Compreender a si mesmo não deveria ser privilégio de poucos.</h2>
+        <h2 className="mt-3 font-sans font-semibold tracking-tight text-3xl md:text-4xl">Compreender a si mesmo não deveria ser privilégio de poucos.</h2>
         <p className="mt-4 text-muted-foreground leading-relaxed">Uma comunidade que acredita que apoio, compreensão e direção precisam chegar a mais gente — sem pressão, sem competição e sem transformar cuidado em venda. Dentro do App, você pode fazer parte com um toque.</p>
         <div className="mt-5 flex items-center gap-2 text-sm font-semibold"><HeartHandshake className="w-5 h-5 text-primary" /> Faça parte de algo maior</div>
       </div>
@@ -465,13 +465,13 @@ const Pillars = () => {
       <div className="container mx-auto px-5 max-w-5xl">
         <div className="text-center max-w-2xl mx-auto">
           <Eyebrow>Como a AURA ajuda</Eyebrow>
-          <h2 className="mt-3 font-display text-3xl md:text-4xl">Três formas de cuidar de você, num só lugar.</h2>
+          <h2 className="mt-3 font-sans font-semibold tracking-tight text-3xl md:text-4xl">Três formas de cuidar de você, num só lugar.</h2>
         </div>
         <div className="mt-10 grid md:grid-cols-3 gap-4">
           {p.map(({ icon: I, t, d }) => (
             <div key={t} className="rounded-3xl bg-card border border-border/60 p-6 shadow-sm">
               <div className="w-11 h-11 rounded-2xl bg-[hsl(var(--sage-soft))] flex items-center justify-center"><I className="w-5 h-5 text-primary" /></div>
-              <h3 className="mt-4 font-display text-xl">{t}</h3>
+              <h3 className="mt-4 font-sans font-semibold tracking-tight text-xl">{t}</h3>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{d}</p>
             </div>
           ))}
@@ -492,7 +492,7 @@ const Compare = () => {
     <section className="relative overflow-hidden py-16 md:py-24">
       <div aria-hidden className="pointer-events-none absolute top-1/3 -left-24 w-80 h-80 rounded-full bg-primary/10 blur-3xl" />
       <div className="relative container mx-auto px-5 max-w-4xl">
-        <h2 className="text-center font-display text-3xl md:text-4xl">Diferente de desabafar <span className="italic text-gradient-sage">no vazio.</span></h2>
+        <h2 className="text-center font-sans font-semibold tracking-tight text-3xl md:text-4xl">Diferente de desabafar <span className="italic text-gradient-sage">no vazio.</span></h2>
         <div className="mt-10 grid md:grid-cols-2 gap-4">
           <div className="rounded-3xl border border-border/40 bg-muted/40 p-6 md:p-7">
             <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Quando você carrega sozinha</p>
@@ -523,7 +523,7 @@ const Testimonials = () => {
     <section id="depoimentos" className="relative overflow-hidden py-16 md:py-24">
       <div aria-hidden className="pointer-events-none absolute -top-20 right-0 w-96 h-96 rounded-full bg-accent/20 blur-3xl" />
       <div className="relative container mx-auto px-5 max-w-5xl">
-        <div className="text-center"><Eyebrow>Quem já começou</Eyebrow><h2 className="mt-3 font-display text-3xl md:text-4xl">Histórias reais de <span className="italic text-gradient-sage">clareza.</span></h2></div>
+        <div className="text-center"><Eyebrow>Quem já começou</Eyebrow><h2 className="mt-3 font-sans font-semibold tracking-tight text-3xl md:text-4xl">Histórias reais de <span className="italic text-gradient-sage">clareza.</span></h2></div>
         <div className="mt-10 grid md:grid-cols-3 gap-5">
           {t.map((x, idx) => (
             <figure key={x.n} className={`relative rounded-[2rem] bg-card/60 backdrop-blur-md border border-border/40 p-7 shadow-[0_20px_50px_-25px_hsl(var(--primary)/0.35)] flex flex-col ${idx === 1 ? "md:-translate-y-4" : ""}`}>
@@ -547,7 +547,7 @@ const Guarantee = () => (
     <div className="container mx-auto px-5 max-w-3xl">
       <div className="rounded-3xl border-2 border-primary/30 bg-card p-7 md:p-10 text-center">
         <ShieldCheck className="w-12 h-12 text-primary mx-auto" />
-        <h2 className="mt-4 font-display text-2xl md:text-3xl">Risco zero para experimentar.</h2>
+        <h2 className="mt-4 font-sans font-semibold tracking-tight text-2xl md:text-3xl">Risco zero para experimentar.</h2>
         <p className="mt-3 text-muted-foreground text-sm md:text-base max-w-xl mx-auto">
           Use por 7 dias. Se não fizer sentido, cancele em 1 clique no próprio app e peça reembolso. Sem fidelidade, sem letras miúdas.
         </p>
@@ -559,7 +559,7 @@ const Guarantee = () => (
 const FinalCta = () => (
   <section className="py-20 md:py-28 v2-dark-section text-center">
     <div className="container mx-auto px-5 max-w-2xl">
-      <h2 className="font-display text-3xl md:text-5xl leading-tight">Não é apenas sobre atravessar dias difíceis. É sobre <span className="italic text-gradient-sage">quem você está se tornando.</span></h2>
+      <h2 className="font-sans font-semibold tracking-tight text-3xl md:text-5xl leading-tight">Não é apenas sobre atravessar dias difíceis. É sobre <span className="italic text-gradient-sage">quem você está se tornando.</span></h2>
       <div className="mt-8 flex flex-col items-center gap-2"><Cta source="final" /><Reassure dark /></div>
     </div>
   </section>
