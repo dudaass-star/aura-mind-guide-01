@@ -231,6 +231,12 @@ const CheckoutV2 = () => {
     } catch {
       /* referrer inválido ou indisponível */
     }
+    try {
+      const last = sessionStorage.getItem("aura_last_landing") || "";
+      if (/^\/v\d+$/.test(last)) return last;
+    } catch {
+      /* noop */
+    }
     return "/v2";
   })();
 

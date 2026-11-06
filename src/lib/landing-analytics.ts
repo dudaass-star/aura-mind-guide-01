@@ -63,6 +63,15 @@ let mountedAt = Date.now();
 export const useLandingEngagement = (variant: LandingVariant = "v2"): void => {
   const started = useRef(false);
 
+  // Guarda a última landing visitada para o checkout saber para onde voltar.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("aura_last_landing", `/${variant}`);
+    } catch {
+      /* noop */
+    }
+  }, [variant]);
+
   useEffect(() => {
     if (started.current) return;
     started.current = true;
