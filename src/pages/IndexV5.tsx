@@ -290,22 +290,34 @@ const Hero = () => {
 
 const Problem = () => {
   const items = [
-    { t: "Pare de sofrer em silêncio.", d: "Quando todo mundo acha que você tá bem, mas por dentro a história é outra, fale com a Aura sobre o que você tem guardado." },
-    { t: "Supere o medo.", d: "Uma conversa que você evita, uma decisão que adia, um recomeço que assusta. Entenda o que te trava e encontre um primeiro passo." },
-    { t: "Diga não sem culpa.", d: "Você diz sim pra não decepcionar e depois fica mal por ter cedido? Ensaie com a Aura como colocar um limite com as suas palavras." },
-    { t: "Quebre o ciclo.", d: "A mesma briga. A mesma reação. O mesmo arrependimento. Entenda o que se repete e como agir diferente da próxima vez." },
-    { t: "Volte a confiar em você.", d: "Quando você pede opinião pra todo mundo e termina ainda mais em dúvida, organize o que pensa e entenda o que faz sentido pra você." },
-    { t: "Faça as pazes com o passado.", d: "Uma história que acabou, uma escolha da qual você se arrepende, algo que ficou sem resposta. Converse sobre o que ainda pesa e pense em como seguir em frente." },
+    { t: "Pare de sofrer em silêncio.", d: "Quando todo mundo acha que você está dando conta de tudo, mas por dentro o peito aperta. Um refúgio seguro e sem julgamentos para tirar o peso do que você não conta para ninguém." },
+    { t: "Supere o medo.", d: "Aquela conversa que você evita, a decisão que fica adiando, o recomeço que assusta. Entenda a raiz da sua trava e encontre firmeza para dar o primeiro passo." },
+    { t: "Diga não sem culpa.", d: "Dizer “sim” só para não desagradar e depois se ressentir por ter se anulado de novo. Encontre clareza e firmeza para sustentar os seus limites sem sentir que está devendo nada a ninguém." },
+    { t: "Quebre o ciclo.", d: "A mesma discussão. A mesma reação automática. O mesmo arrependimento logo depois. Enxergue o padrão que te prende e aprenda a responder com serenidade em vez de reagir no impulso." },
+    { t: "Volte a confiar em você.", d: "Pedir a opinião de todo mundo e terminar com a cabeça ainda mais confusa. Cale o ruído de fora, organize o que você realmente pensa e recupere a segurança nas suas próprias decisões." },
+    { t: "Faça as pazes com o passado.", d: "Uma relação que acabou, escolhas que você ainda se cobra, palavras que ficaram engasgadas. Solte o peso do que não volta atrás e abra espaço para viver o presente em paz." },
   ];
   return (
     <section id="resultados" className="py-16 md:py-24">
-      <div className="container mx-auto px-5 max-w-5xl">
-        <h2 className="text-center font-display text-3xl md:text-5xl">O que pode mudar na sua vida</h2>
-        <ul className="mt-10 md:mt-14 grid md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-8 md:gap-y-12">
-          {items.map(({ t, d }) => (
-            <li key={t} className="border-t border-border/70 pt-5">
-              <h3 className="font-display text-2xl md:text-[1.7rem] leading-tight">{t}</h3>
-              <p className="mt-3 text-[15px] text-muted-foreground leading-relaxed">{d}</p>
+      <div className="container mx-auto px-5 max-w-6xl">
+        <div className="text-center max-w-2xl mx-auto">
+          <Eyebrow>Transformação real</Eyebrow>
+          <h2 className="mt-3 font-display text-3xl md:text-5xl leading-tight">O que pode mudar na sua vida</h2>
+          <p className="mt-4 text-base md:text-lg text-muted-foreground leading-relaxed">
+            Não é sobre mais uma dica. É sobre olhar de frente o que pesa e sair diferente do outro lado.
+          </p>
+        </div>
+        <ul className="mt-10 md:mt-14 grid md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+          {items.map(({ t, d }, i) => (
+            <li
+              key={t}
+              className="group relative overflow-hidden rounded-2xl border border-border/80 bg-card/70 backdrop-blur-sm p-6 md:p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/40"
+            >
+              <div className="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-primary/10 blur-3xl transition-opacity duration-300 group-hover:opacity-100 opacity-60" />
+              <span className="relative font-display text-sm tracking-[0.2em] text-primary/80">{String(i + 1).padStart(2, "0")}</span>
+              <h3 className="relative mt-3 font-display text-2xl md:text-[1.75rem] leading-tight text-foreground">{t}</h3>
+              <div className="relative mt-4 h-px w-10 bg-gradient-to-r from-primary/60 to-transparent" />
+              <p className="relative mt-4 text-[15px] text-muted-foreground leading-relaxed">{d}</p>
             </li>
           ))}
         </ul>
