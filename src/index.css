@@ -985,3 +985,44 @@ hsl(152 17% 36%);
   .meditation-player-body { gap: 0.75rem; }
   .meditation-player footer { padding-top: 0.75rem; }
 }
+
+/* Áreas internas e login no mesmo visual da entrada (navy + sálvia + lavanda) */
+.portal-app-theme,
+.portal-login-page {
+  --foreground: 40 25% 96%;
+  --muted-foreground: 220 15% 75%;
+  --primary: 145 45% 62%;
+  --primary-foreground: 153 25% 12%;
+  --border: 220 20% 28%;
+  color: hsl(var(--foreground));
+  background:
+    radial-gradient(55% 35% at 90% 0%, hsl(265 45% 72% / 0.24) 0%, transparent 70%),
+    radial-gradient(60% 40% at 0% 15%, hsl(153 25% 55% / 0.2) 0%, transparent 70%),
+    linear-gradient(90deg, hsl(220 38% 13%) 0%, hsl(218 34% 16%) 45%, hsl(222 42% 10%) 100%) !important;
+  background-attachment: fixed !important;
+}
+.portal-app-theme .portal-app-header,
+.portal-login-page > header {
+  background: hsl(220 38% 12% / 0.82) !important;
+  border-color: hsl(0 0% 100% / 0.08) !important;
+}
+.portal-app-theme .bg-card,
+.portal-app-theme [class*="bg-white"],
+.portal-login-page main form,
+.portal-login-page .bg-card {
+  --foreground: 220 30% 14%;
+  --muted-foreground: 220 12% 42%;
+  --primary: 153 13% 27%;
+  --primary-foreground: 0 0% 100%;
+  --border: 153 15% 85%;
+  color: hsl(var(--foreground));
+  background-color: hsl(0 0% 100%) !important;
+  box-shadow: 0 14px 30px -18px hsl(220 40% 5% / 0.6);
+}
+.portal-app-theme .bg-card *, .portal-login-page main form * { border-color: hsl(153 15% 87%); }
+.portal-login-page main form {
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+}
+.portal-login-page > header img,
+.portal-app-theme .portal-app-header img { filter: brightness(0) invert(1); opacity: 0.9; }
