@@ -34,3 +34,36 @@
 .v5-caret{display:inline-block;width:1px;height:1em;margin-left:1px;vertical-align:-2px;background:hsl(var(--primary));animation:v5blink .8s steps(2) infinite}
 .v5-fade-bottom{position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(to bottom,transparent,hsl(var(--background)));pointer-events:none}
 @media (prefers-reduced-motion:reduce){.v5-halo,.v5-shimmer::after{animation:none}}
+
+/* Santuário Noturno: a /v5 inteira herda a atmosfera do topo (navy, vidro e luz ambiente). */
+.theme-v2.theme-v5-night{
+  --background:222 38% 8%;
+  --foreground:36 25% 94%;
+  --card:222 30% 14%;
+  --card-foreground:36 25% 94%;
+  --popover:222 32% 12%;
+  --popover-foreground:36 25% 94%;
+  --secondary:222 25% 18%;
+  --secondary-foreground:36 25% 94%;
+  --muted:222 22% 16%;
+  --muted-foreground:220 15% 68%;
+  --accent:270 40% 62%;
+  --border:222 20% 24%;
+  --input:222 20% 24%;
+  --sage-soft:140 20% 20%;
+  --primary:135 24% 52%;
+  color-scheme:dark;
+  background:
+    radial-gradient(60rem 40rem at 10% 30%,hsl(var(--primary)/.08),transparent 60%),
+    radial-gradient(50rem 40rem at 90% 60%,hsl(var(--accent)/.08),transparent 60%),
+    radial-gradient(50rem 40rem at 20% 85%,hsl(var(--primary)/.06),transparent 60%),
+    hsl(var(--background));
+}
+/* Sem efeito zebra: seções escuras e de preço ficam transparentes sobre o mesmo fundo. */
+.theme-v5-night main > section,.theme-v5-night main > div > section,.theme-v5-night .v2-dark-section{background:transparent!important}
+/* Cartões em vidro com microborda luminosa. */
+.theme-v5-night .bg-card{background-color:hsl(var(--foreground)/.05)!important;backdrop-filter:blur(14px);border-color:hsl(var(--foreground)/.1)}
+.theme-v5-night .bg-card\/70,.theme-v5-night .bg-card\/60,.theme-v5-night .bg-card\/40{background-color:hsl(var(--foreground)/.05)!important;backdrop-filter:blur(14px)}
+/* Tipografia única moderna, exceto as citações humanas. */
+.theme-v5-night h1,.theme-v5-night h2,.theme-v5-night h3,.theme-v5-night .font-display:not(blockquote):not([aria-hidden]){font-family:theme('fontFamily.sans');font-weight:600;letter-spacing:-.02em}
+.theme-v5-night .v5-fade-bottom{background:linear-gradient(to bottom,transparent,hsl(var(--background)/0))}

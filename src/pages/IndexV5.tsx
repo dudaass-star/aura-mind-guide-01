@@ -601,7 +601,7 @@ const IndexV5 = () => {
         <meta property="og:description" content="Acolhimento 24h, encontros guiados e orações no app Olá Aura. 7 dias por R$ 6,90." />
         <meta property="og:type" content="website" />
       </Helmet>
-      <div className="theme-v2 min-h-screen bg-background text-foreground antialiased pb-20 md:pb-0">
+      <div className="theme-v2 theme-v5-night min-h-screen bg-background text-foreground antialiased pb-20 md:pb-0">
         <Header />
         <main>
           <Hero />
