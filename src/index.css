@@ -248,6 +248,20 @@
     0 18px 36px -22px hsl(220 35% 5% / 0.9);
 }
 .portal-primary-conversation:hover { background-color: transparent; color: hsl(var(--pc-ink)); }
+/* Doodles da conversa como textura interna do card da AURA */
+.portal-primary-conversation::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("./assets/chat-wallpaper.svg");
+  background-size: 200px 200px;
+  background-repeat: repeat;
+  filter: brightness(0) invert(1);
+  opacity: 0.22;
+  z-index: 0;
+}
+.portal-primary-conversation > * { position: relative; z-index: 1; }
 .portal-pc-title { color: hsl(var(--pc-ink)); }
 .portal-pc-muted { color: hsl(var(--pc-ink) / 0.72); }
 .portal-pc-avatar { box-shadow: 0 0 0 3px hsl(var(--pc-ink) / 0.18), 0 0 24px hsl(var(--pc-lavender) / 0.55); }
