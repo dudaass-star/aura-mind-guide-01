@@ -27,7 +27,7 @@ const METRICS = [
   { value: "4,6★", label: "nota média dada aos encontros guiados" },
   { value: "91%", label: "avaliam o encontro com 4 ou 5 estrelas" },
   { value: "91%", label: "ouvem as orações até a última palavra" },
-  { value: "24h", label: "ao seu lado, sempre que a cabeça pesar" },
+  { value: "24h", label: "seu porto seguro, sempre que precisar" },
 ];
 
 function Metrics() {
@@ -207,7 +207,7 @@ const Hero = () => {
         </p>
 
         <div className="mt-5">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[hsl(var(--v2-navy-muted))]">O que pesa em você hoje?</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[hsl(var(--v2-navy-muted))]">Como você está se sentindo hoje?</p>
           <div className="mt-2 flex flex-wrap justify-center md:justify-start gap-2" role="tablist" aria-label="Escolha o que você sente">
             {MIRROR.map((m, i) => {
               const Icon = m.icon;
