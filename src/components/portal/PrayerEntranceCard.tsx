@@ -42,18 +42,18 @@ export function PrayerEntranceCard({ userId, onOpen, onEvent }: { userId?: strin
   const minutes = Math.max(1, Math.round(prayer.duration / 60));
 
   return (
-    <section className="prayer-feature relative isolate overflow-hidden rounded-xl shadow-card animate-fade-up">
+    <section className="relative isolate overflow-hidden rounded-xl shadow-card animate-fade-up">
       <img src={prayer.image} alt={prayer.imageAlt} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-      <div className="prayer-feature-shade absolute inset-0" aria-hidden="true" />
+      <div className="absolute inset-0 bg-gradient-to-t from-foreground/90 via-foreground/55 to-foreground/10" aria-hidden="true" />
       <Button type="button" variant="ghost" size="icon" onClick={() => { write(userId, { dismissedAt: Date.now() }); setVisible(false); onEvent?.("prayer_card_dismissed"); }} className="absolute right-2 top-2 z-10 h-8 w-8 rounded-full bg-background/20 text-primary-foreground backdrop-blur-sm hover:bg-background/30 hover:text-primary-foreground" aria-label="Ocultar sugestão de oração">
         <X className="h-4 w-4" />
       </Button>
-      <button type="button" onClick={() => { onEvent?.("prayer_card_clicked"); onOpen(); }} className="prayer-feature-copy relative flex min-h-[13rem] w-full flex-col justify-end gap-2 p-5 text-left" aria-label={`Ouvir oração: ${prayer.title}`}>
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]"><Icon className="h-3.5 w-3.5" />Oração {slot === "morning" ? "para começar o dia" : slot === "afternoon" ? "para renovar as forças" : "para esta noite"}</span>
-        <span className="block max-w-[18rem] font-display text-2xl font-medium leading-tight">{prayer.title}</span>
+      <button type="button" onClick={() => { onEvent?.("prayer_card_clicked"); onOpen(); }} className="relative flex text-background [text-shadow:0_1px_8px_hsl(var(--foreground)/0.6)] min-h-[13rem] w-full flex-col justify-end gap-2 p-5 text-left" aria-label={`Ouvir oração: ${prayer.title}`}>
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase text-background/90 tracking-[0.14em]"><Icon className="h-3.5 w-3.5" />Oração {slot === "morning" ? "para começar o dia" : slot === "afternoon" ? "para renovar as forças" : "para esta noite"}</span>
+        <span className="block max-w-[18rem] font-display text-2xl font-semibold leading-tight">{prayer.title}</span>
         <span className="mt-2 flex items-center gap-3">
-          <span className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm"><Play className="h-3.5 w-3.5" fill="currentColor" />Ouvir agora</span>
-          <span className="text-xs">{minutes} min · Com a Aura</span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm [text-shadow:none]"><Play className="h-3.5 w-3.5" fill="currentColor" />Ouvir agora</span>
+          <span className="text-xs font-medium text-background/90">{minutes} min · Com a Aura</span>
         </span>
       </button>
     </section>
