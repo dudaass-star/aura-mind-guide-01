@@ -123,6 +123,8 @@ const App = () => (
             <Route path="/v2/checkout" element={<CheckoutV2 />} />
             <Route path="/obrigado" element={<ThankYou />} />
             <Route path="/cancelar" element={<CancelSubscription />} />
+            {/* Link do winback: mesma tela da oferta, com endereço que não fala em cancelar. */}
+            <Route path="/reativar" element={<CancelSubscription />} />
             <Route path="/termos" element={<TermsOfService />} />
             <Route path="/privacidade" element={<PrivacyPolicy />} />
             <Route path="/experimentar" element={<StartTrial />} />

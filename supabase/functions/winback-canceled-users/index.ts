@@ -11,6 +11,7 @@
 // quebrava o boot da função (BOOT_ERROR) e por isso nenhum winback saiu até 07/08/2026.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { sendProactive } from '../_shared/whatsapp-provider.ts';
+import { buildMessage } from './messages.ts';
 import { createRetentionOffer, recordRetentionOfferEvent } from '../_shared/retention-offers.ts';
 
 const corsHeaders = {
@@ -40,23 +41,6 @@ function getBrtHour(): number {
   const now = new Date();
   const utcHour = now.getUTCHours();
   return (utcHour - 3 + 24) % 24;
-}
-
-function buildMessage(stage: Stage, name: string, link: string, paymentFailed: boolean): string {
-  const safeName = name || 'querido(a)';
-
-  if (stage === 'd3') {
-    if (paymentFailed) {
-      return `Oi, ${safeName}. 💜\n\nSenti sua falta esses dias. Vi que o pagamento não rolou e a assinatura acabou encerrando.\n\nSe quiser voltar, você pode regularizar por aqui:\n👉 ${link}\n\nTô aqui. ✨`;
-    }
-    return `Oi, ${safeName}. 💜\n\nSenti sua falta esses dias. Tudo bem por aí?\n\nSe quiser retomar nossas conversas, é só por aqui:\n👉 ${link}`;
-  }
-
-  if (stage === 'd14') {
-    return `Oi, ${safeName}. 💜\n\nFaz duas semanas que a gente não conversa. Sei que a vida corre, mas quero que você saiba que a porta tá aberta.\n\nDeixei uma condição mais leve caso faça sentido voltar:\n👉 ${link}`;
-  }
-
-  return `Oi, ${safeName}. 💜\n\nFaz um mês. Não quero insistir, só deixar a porta aberta. Criei uma opção ainda mais enxuta para continuar com a Aura quando fizer sentido:\n👉 ${link}`;
 }
 
 function pickStage(c: Candidate): Stage | null {
@@ -182,7 +166,7 @@ Deno.serve(async (req) => {
          billingCycle: profile?.billing_cycle || null,
          expiresInHours: stage === 'd30' ? 336 : 168,
        });
-       const link = `https://olaaura.com.br/cancelar?r=${offer.code}`;
+       const link = `https://olaaura.com.br/reativar?r=${offer.code}`;
       const msg = buildMessage(stage, c.name || '', link, !!c.payment_failed_at);
 
       const r = await sendProactive(c.phone!, msg, 'reconnect', c.user_id);
