@@ -100,12 +100,16 @@ Deno.serve(async (req) => {
         const cents = Number(i.value ?? i.cobr?.value ?? s.value_cents);
         if (!validDate(due) || (s.is_trial && cents === s.trial_value_cents)) continue;
         if (['CANCELED', 'CANCELLED', 'DELETED'].includes(String(i.status).toUpperCase())) continue;
+        // Mandato cancelado/rejeitado: parcelas não pagas ficam no carnê, mas o banco não tenta debitar.
+        const subActive = ['ATIVA', 'APROVADA'].includes(s.status) && !s.replaced_by_subscription_id;
         const charge = charges.find(c => c.subscription_id === s.subscription_id && (exactInstallment(c, i) || (c.due_date === due && !String(c.installment_id).startsWith('E'))) && c.paid_at);
         // Pago = parcela, cobrança ou alguma tentativa concluída; a data é a do crédito (inclusive retentativas).
         const PAID = ['PAID', 'COMPLETED', 'CONFIRMED', 'CONCLUDED'];
         const paidTry = (Array.isArray(i.cobr?.tries) ? i.cobr.tries : []).find((t: any) => PAID.includes(String(t?.tryStatus || t?.status || '').toUpperCase()));
         const officialPaid = PAID.includes(String(i.status).toUpperCase()) || PAID.includes(String(i.cobr?.status).toUpperCase()) || !!paidTry;
         const paidAt = i.cobr?.paymentDate || paidTry?.updatedAt || paidTry?.createdAt || null;
+        const resolvedPaid = officialPaid && paidAt ? day(paidAt) : charge?.status === 'COMPLETED' ? day(charge.paid_at) : null;
+        if (!resolvedPaid && !subActive) continue;
         add({ id: `woovi:${s.subscription_id}:${due}`, userId: s.user_id, email: s.customer_email, name: s.customer_name, plan: s.plan, provider: 'woovi', due, paid: officialPaid && paidAt ? day(paidAt) : charge?.status === 'COMPLETED' ? day(charge.paid_at) : null, cents, source: 'parcela oficial Woovi' });
         if (due >= dateFrom && due <= dateTo && officialPaid && !charge && !paidAt) issues.push({ provider: 'woovi', reason: 'Parcela oficial paga sem data de pagamento', count: 1, cents });
       }
@@ -155,6 +159,20 @@ Deno.serve(async (req) => {
       const paid = inv.status === 'paid' && inv.status_transitions?.paid_at ? day(inv.status_transitions.paid_at) : null;
       if (!(due >= dateFrom && due <= dateTo) && !(paid && paid >= dateFrom && paid <= dateTo)) continue;
       add({ id: inv.id, email: inv.customer_email, name: inv.customer_name, provider: 'stripe', plan: inv.metadata?.plan || 'mensal', due, paid, cents: inv.amount_due, receivedCents: inv.amount_paid });
+    }
+    // Renovações futuras de cartão: só assinaturas vigentes sem cancelamento agendado e sem fatura já emitida.
+    const today = day(new Date().toISOString());
+    const invoicedKeys = new Set((stripeData?.invoices || []).map((inv: any) => `${typeof inv.subscription === 'string' ? inv.subscription : inv.subscription?.id || inv.parent?.subscription_details?.subscription}:${inv.due_date ? day(inv.due_date) : day(inv.created)}`));
+    for (const sub of stripeData?.subscriptions || []) {
+      if (!['active', 'trialing'].includes(sub.status) || sub.cancel_at_period_end || sub.cancel_at) continue;
+      const item = sub.items?.data?.find((it: any) => it.price?.recurring?.interval === 'month' && it.price.recurring.interval_count === 1);
+      const periodEnd = item?.current_period_end || sub.current_period_end;
+      if (!item || !periodEnd) continue;
+      const due = day(periodEnd);
+      if (due <= today || due < dateFrom || due > dateTo || invoicedKeys.has(`${sub.id}:${due}`)) continue;
+      const email = (typeof sub.customer === 'object' ? sub.customer?.email : null) || sub.metadata?.email || null;
+      if (email && demoEmails.has(String(email).toLowerCase())) continue;
+      add({ id: `stripe-upcoming:${sub.id}:${due}`, email, name: typeof sub.customer === 'object' ? sub.customer?.name : null, provider: 'stripe', plan: sub.metadata?.plan || 'mensal', due, paid: null, cents: (item.price.unit_amount || 0) * (item.quantity || 1) });
     }
     const billing = [...entries.values()].filter(e => (e.due && e.due >= dateFrom && e.due <= dateTo) || (e.paid && e.paid >= dateFrom && e.paid <= dateTo));
     const missingDue = billing.filter(e => !e.due && e.paid);
