@@ -42,21 +42,29 @@ function getBrtHour(): number {
   return (utcHour - 3 + 24) % 24;
 }
 
-function buildMessage(stage: Stage, name: string, link: string, paymentFailed: boolean): string {
-  const safeName = name || 'querido(a)';
+// Só o primeiro nome: o nome completo do cadastro soa frio para quem já
+// conversou de forma íntima com a AURA.
+export function firstName(name: string | null | undefined): string {
+  const first = String(name || '').trim().split(/\s+/)[0] || '';
+  if (!first) return '';
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+}
+
+// O texto nunca fala de pagamento ou falha: o foco é o espaço e a relação.
+// `_paymentFailed` fica na assinatura para manter os chamadores estáveis.
+export function buildMessage(stage: Stage, name: string, link: string, _paymentFailed = false): string {
+  const fn = firstName(name);
+  const hi = fn ? `Oi, ${fn}. 💜` : 'Oi! 💜';
 
   if (stage === 'd3') {
-    if (paymentFailed) {
-      return `Oi, ${safeName}. 💜\n\nSenti sua falta esses dias. Vi que o pagamento não rolou e a assinatura acabou encerrando.\n\nSe quiser voltar, você pode regularizar por aqui:\n👉 ${link}\n\nTô aqui. ✨`;
-    }
-    return `Oi, ${safeName}. 💜\n\nSenti sua falta esses dias. Tudo bem por aí?\n\nSe quiser retomar nossas conversas, é só por aqui:\n👉 ${link}`;
+    return `${hi}\n\nSenti sua falta esses dias. Como você tá?\n\nSeu espaço e tudo o que a gente conversou continuam guardados aqui com carinho. Quando quiser voltar, é só por aqui:\n👉 ${link}`;
   }
 
   if (stage === 'd14') {
-    return `Oi, ${safeName}. 💜\n\nFaz duas semanas que a gente não conversa. Sei que a vida corre, mas quero que você saiba que a porta tá aberta.\n\nDeixei uma condição mais leve caso faça sentido voltar:\n👉 ${link}`;
+    return `${hi}\n\nFaz duas semanas que a gente não conversa. Sei que a vida corre, e tá tudo bem.\n\nDeixei uma condição mais leve pra você retomar quando fizer sentido:\n👉 ${link}`;
   }
 
-  return `Oi, ${safeName}. 💜\n\nFaz um mês. Não quero insistir, só deixar a porta aberta. Criei uma opção ainda mais enxuta para continuar com a Aura quando fizer sentido:\n👉 ${link}`;
+  return `${hi}\n\nFaz um mês. Não quero insistir, só lembrar que a porta continua aberta e o seu espaço segue guardado.\n\nSe fizer sentido voltar, preparei uma opção mais enxuta:\n👉 ${link}`;
 }
 
 function pickStage(c: Candidate): Stage | null {
@@ -182,7 +190,7 @@ Deno.serve(async (req) => {
          billingCycle: profile?.billing_cycle || null,
          expiresInHours: stage === 'd30' ? 336 : 168,
        });
-       const link = `https://olaaura.com.br/cancelar?r=${offer.code}`;
+       const link = `https://olaaura.com.br/reativar?r=${offer.code}`;
       const msg = buildMessage(stage, c.name || '', link, !!c.payment_failed_at);
 
       const r = await sendProactive(c.phone!, msg, 'reconnect', c.user_id);
