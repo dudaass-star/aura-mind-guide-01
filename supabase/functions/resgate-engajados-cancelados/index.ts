@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       if (u.last_reactivation_sent && agora - Date.parse(u.last_reactivation_sent) < 30 * 864e5) {
         results.push({ ...r, skip: "reencontro nos últimos 30 dias" }); continue;
       }
-      const { data: last } = await sb.from("messages").select("created_at").eq("user_id", u.user_id)
+      const { data: last } = await sb.from("messages").select("created_at").eq("user_id", u.user_id).eq("role", "user")
         .order("created_at", { ascending: false }).limit(1);
       if (last?.[0] && agora - Date.parse(last[0].created_at) < 864e5) {
         results.push({ ...r, skip: "conversa <24h" }); continue;
