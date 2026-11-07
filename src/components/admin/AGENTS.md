@@ -4,3 +4,4 @@
 - Billing plots group expected invoices by due date and receipts by payment date; this prevents late payments from being mistaken for same-cohort conversion.
 - Billing refresh rereads every open Woovi mandate within a time budget (skipping settled and recently read ones) and treats any concluded try as paid; Woovi recurring debits often arrive without webhooks, so partial refreshes hid receipts.
 - O avaliador de sessões usa `sessions.closure_mode='unilateral'` como sinal determinístico de interrupção pelo usuário; isso evita penalizar a condução da AURA por fechamento que dependia de respostas ausentes.
+- Billing forecast plots unpaid installments only from active Woovi mandates and active, non-canceling Stripe subscriptions, and stops the received series at today; canceled carnês keep SCHEDULED installments the bank never debits.
