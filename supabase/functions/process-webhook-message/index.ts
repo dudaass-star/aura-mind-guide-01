@@ -682,17 +682,12 @@ Deno.serve(async (req) => {
             console.error(`⚠️ [winback-reactive] createShortLink threw, using fallback:`, linkErr);
           }
 
-          if (profile.status === 'canceled') {
-            // Copy segmentada por motivo do cancelamento
-            if ((profile as any).payment_failed_at) {
-              // Dunning: foco prático em atualizar pagamento
-              blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSeu pagamento não passou e sua assinatura acabou sendo encerrada.\n\nSe quiser voltar, é só atualizar o cartão por aqui:\n👉 ${checkoutLink}\n\nQualquer coisa eu tô por aqui. ✨`;
-            } else {
-              // Cancelamento ativo: foco afetivo
-              blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nQue bom te ver por aqui. Sua assinatura tá encerrada, mas se quiser voltar a conversar comigo é só reativar:\n👉 ${checkoutLink}\n\nTô aqui te esperando. ✨`;
-            }
-          } else if (profile.status === 'inactive') {
-            blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta tá inativa no momento.\n\nPra continuarmos nossas conversas, é só assinar um plano:\n👉 ${checkoutLink}\n\nEstou aqui te esperando! ✨`;
+          if (profile.status === 'canceled' || profile.status === 'inactive') {
+            // Resposta acolhedora: primeiro nome, sem falar de pagamento, e o
+            // link do próprio espaço (lá o banner "Reativar agora" oferece PIX
+            // ou cartão sem passar pelo checkout de novos clientes).
+            const primeiroNome = (profile.name || '').trim().split(/\s+/)[0] || '';
+            blockMessage = `Oi${primeiroNome ? `, ${primeiroNome}` : ''}! 💜 Que bom ter notícias suas.\n\nSeu espaço continua aqui, com tudo o que a gente já viveu junto: nossas conversas, sessões e orações.\n\nQuando quiser retomar, é só entrar e tocar em "Reativar":\n👉 https://olaaura.com.br/meu-espaco\n\nTô aqui. ✨`;
           } else {
             blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura tá pausada no momento.\n\nQuando estiver pronto(a) pra voltar, é só reativar:\n👉 ${checkoutLink}\n\nEstarei aqui quando você precisar! ✨`;
           }
