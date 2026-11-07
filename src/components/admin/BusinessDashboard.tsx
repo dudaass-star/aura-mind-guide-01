@@ -41,6 +41,55 @@ function DailyChart({ data, series, money = false, today }: { data: Record<strin
   </ChartContainer>;
 }
 
+const pct = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+
+// Comparativo mês anterior (fechado) × mês atual (em andamento), no mesmo filtro de meio de pagamento.
+function MonthComparison({ rows, money, todayStr, range }: { rows: BillingEntry[]; money: boolean; todayStr: string; range: { from: string; to: string } }) {
+  const now = brtNow();
+  const f = (d: Date) => format(d, 'yyyy-MM-dd');
+  const prevStart = f(subMonths(startOfMonth(now), 1)), prevEnd = f(endOfMonth(subMonths(now, 1)));
+  const curStart = f(startOfMonth(now)), curEnd = f(endOfMonth(now));
+  if (range.from > prevStart || range.to < curEnd) return <p className="text-xs text-muted-foreground">Para ver o comparativo entre o mês anterior e o atual, escolha "Mês anterior + atual".</p>;
+  const day = todayStr.slice(8, 10);
+  const prevSameDay = `${prevStart.slice(0, 8)}${day}` > prevEnd ? prevEnd : `${prevStart.slice(0, 8)}${day}`;
+  const val = (list: BillingEntry[], paid = false) => money ? list.reduce((s, b) => s + (paid ? (b.receivedCents ?? b.cents) : b.cents), 0) / 100 : list.length;
+  const show = (v: number) => money ? currency(v) : String(v);
+  const inM = (d: string | null, a: string, b: string) => !!d && d >= a && d <= b;
+  const pExp = rows.filter(r => inM(r.due, prevStart, prevEnd));
+  const pRec = rows.filter(r => inM(r.paid, prevStart, prevEnd));
+  const pRate = val(pExp) ? val(pRec, true) / val(pExp) * 100 : 0;
+  const cExp = rows.filter(r => inM(r.due, curStart, curEnd));
+  const cRec = rows.filter(r => inM(r.paid, curStart, todayStr));
+  const cUp = cExp.filter(r => !r.paid && r.due! >= todayStr);
+  const cRecV = val(cRec, true), cExpV = val(cExp), cUpV = val(cUp);
+  const cRate = cExpV ? cRecV / cExpV * 100 : 0;
+  const cProj = cExpV ? (cRecV + cUpV) / cExpV * 100 : 0;
+  const pace = val(rows.filter(r => inM(r.paid, prevStart, prevSameDay)), true);
+  const paceDiff = pace ? (cRecV - pace) / pace * 100 : null;
+  const label = (d: Date) => format(d, 'MM/yyyy');
+  const Line_ = ({ k, v, strong }: { k: string; v: string; strong?: boolean }) => <div className="flex justify-between gap-4 text-sm"><span className="text-muted-foreground">{k}</span><span className={strong ? 'font-semibold' : ''}>{v}</span></div>;
+  return <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-border pt-6">
+    <div className="space-y-2 border-l-2 border-border pl-4">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">Mês anterior · {label(subMonths(now, 1))} · fechado</p>
+      <Line_ k="Previstas" v={show(val(pExp))} />
+      <Line_ k="Recebidas" v={show(val(pRec, true))} />
+      <Line_ k="Diferença" v={show(Math.max(0, val(pExp) - val(pRec, true)))} />
+      <Line_ k="Taxa de realização" v={pct(pRate)} strong />
+      <div className="h-2 rounded-full bg-muted overflow-hidden"><div className="h-full bg-[hsl(var(--chart-2))]" style={{ width: `${Math.min(100, pRate)}%` }} /></div>
+    </div>
+    <div className="space-y-2 border-l-2 border-primary pl-4">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">Mês atual · {label(now)} · em andamento</p>
+      <Line_ k="Previstas no mês" v={show(cExpV)} />
+      <Line_ k={`Já recebidas (até ${shortDate(todayStr)})`} v={show(cRecV)} />
+      <Line_ k="A receber até o fim do mês" v={show(cUpV)} />
+      <Line_ k="Projeção de fechamento" v={show(cRecV + cUpV)} strong />
+      <Line_ k="Realização atual → projetada" v={`${pct(cRate)} → ${pct(cProj)}`} strong />
+      <div className="h-2 rounded-full bg-muted overflow-hidden flex"><div className="h-full bg-[hsl(var(--chart-2))]" style={{ width: `${Math.min(100, cRate)}%` }} /><div className="h-full bg-primary/40" style={{ width: `${Math.max(0, Math.min(100, cProj) - Math.min(100, cRate))}%` }} /></div>
+      <p className="text-xs text-muted-foreground">{paceDiff === null ? 'Sem recebimentos no mesmo período do mês anterior para comparar o ritmo.' : `Ritmo: ${paceDiff >= 0 ? '+' : ''}${pct(paceDiff)} em relação ao mês anterior no mesmo dia (${show(pace)} até ${shortDate(prevSameDay)}).`}</p>
+    </div>
+  </div>;
+}
+
 export default function BusinessDashboard({ onlyUsage = false, dateRange }: { onlyUsage?: boolean; dateRange?: { from: string; to: string } }) {
   const [from, setFrom] = useState(() => format(subMonths(startOfMonth(brtNow()), 1), 'yyyy-MM-dd'));
   const [to, setTo] = useState(() => format(endOfMonth(brtNow()), 'yyyy-MM-dd'));
@@ -142,6 +191,7 @@ export default function BusinessDashboard({ onlyUsage = false, dateRange }: { on
         <section className="space-y-4 border-b border-border pb-8">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-lg">Mensalidades · previstas × recebidas</h3><p className="text-xs text-muted-foreground mt-1">Recebidas no dia real do pagamento até hoje; depois de hoje, apenas o previsto de mandatos e cartões ativos.</p></div><div className="flex flex-wrap gap-2"><Select value={provider} onValueChange={v => { setProvider(v); setSelectedDay(null); }}><SelectTrigger className="w-[160px]" aria-label="Meio de pagamento"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Cartão e PIX</SelectItem><SelectItem value="stripe">Cartão · Stripe</SelectItem><SelectItem value="woovi">PIX · Woovi</SelectItem><SelectItem value="asaas">PIX · Asaas</SelectItem><SelectItem value="inter">PIX · Inter</SelectItem></SelectContent></Select><Tabs value={unit} onValueChange={setUnit}><TabsList><TabsTrigger value="count">Quantidade</TabsTrigger><TabsTrigger value="money">R$</TabsTrigger></TabsList></Tabs></div></div>
           <DailyChart data={days} series={['expected', 'received']} money={money} today={todayStr} />
+          <MonthComparison rows={rows} money={money} todayStr={todayStr} range={range} />
           {!rows.length && <p className="text-sm text-muted-foreground">Nenhuma mensalidade registrada neste período e meio de pagamento.</p>}
           <div className="flex flex-wrap justify-between items-center gap-3"><Button variant="ghost" size="sm" onClick={() => setDefinitions(!definitions)} aria-expanded={definitions}><ChevronDown className="mr-2 h-4 w-4" />Fontes e critérios</Button><Select value={selectedDay || ''} onValueChange={setSelectedDay}><SelectTrigger className="w-[180px]" aria-label="Consultar dia"><SelectValue placeholder="Consultar um dia" /></SelectTrigger><SelectContent>{days.map(d => <SelectItem key={d.date} value={d.date}>{shortDate(d.date)}</SelectItem>)}</SelectContent></Select></div>
           {definitions && <div className="text-xs text-muted-foreground space-y-2 border-t pt-4"><p>Cartão: faturas mensais do Stripe. PIX: cobranças e pagamentos conciliados; entradas semanais e tentativas repetidas não contam como mensalidades.</p>{query.data?.warnings.map(w => <p key={w}>{w}</p>)}<p>Previstas e recebidas são séries independentes. O total recebido não é uma taxa de pagamento dos vencimentos do período.</p><p>Atualizado em {new Date(query.data?.updatedAt || '').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.</p></div>}
