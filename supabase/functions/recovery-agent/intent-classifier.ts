@@ -70,7 +70,7 @@ export async function classifyRecoveryIntentWithAI(
       signal: ctrl.signal,
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "google/gemini-3.1-flash-lite",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: `Última mensagem da Aura:\n"${(lastAuraMsg || "").slice(0, 600)}"\n\nMensagem do lead:\n"${userText.slice(0, 400)}"` },
