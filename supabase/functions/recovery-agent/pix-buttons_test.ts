@@ -31,3 +31,8 @@ Deno.test("erro técnico recorrente não vira encontro avulso", () => {
   assertEquals(classifyPixButton(text), "replace_code");
   assertEquals(classifyTasterIntent(text), null);
 });
+Deno.test("aceites naturais da oferta avulsa contam como aceite curto", () => {
+  for (const text of ["Pode ser", "pode ser sim", "Ok", "Tá bom", "Beleza", "Me manda o Pix", "manda o código"]) {
+    assertEquals(classifyTasterIntent(text), "short_accept", text);
+  }
+});

@@ -229,6 +229,14 @@ export async function handlePixButton(
       const t = await handleTasterAccept(supabase, phone, checkout, "regenerar_codigo");
       if (t.handled) return t;
     }
+    // Oferta do avulso feita só em texto (sem linha em taster_offers ainda):
+    // se a conversa recente ofereceu o R$ 6,90 avulso, o código pedido é o
+    // avulso — nunca o QR composto do mandato, que a pessoa recusou e que
+    // alguns bancos rejeitam como "inválido".
+    if (!lastTaster && await tasterOfferAlreadySent(supabase, phone)) {
+      const t = await handleTasterAccept(supabase, phone, checkout, "aceite_oferta_texto");
+      if (t.handled) return t;
+    }
   }
   const valid = qrStillValid(sub);
   if (intent === "resend_code" && valid) {
@@ -306,7 +314,9 @@ export async function handlePixButton(
 
 const RE_TASTER_BUTTON =
   /(quero experimentar|experimentar (a|uma) sess[aã]o|quero (a )?sess[aã]o avulsa|quero o encontro|encontro avulso|sess[aã]o avulsa|^\s*avuls[oa]\s*[.!]?\s*$)/i;
-const RE_SHORT_ACCEPT = /^\s*(sim|quero|bora|vamos|manda|fechado|topo|pode mandar|manda o c[oó]digo|quero sim)\s*[.!]?\s*$/i;
+// Aceites naturais ("pode ser", "tá bom", "me manda o pix") também contam: antes
+// caíam no LLM, que prometia o código sem gerar (caso Alessandra, 08/11).
+const RE_SHORT_ACCEPT = /^\s*(sim|quero|bora|vamos|manda|fechado|topo|pode|pode ser|pode sim|pode ser sim|pode mandar|ok|okay|blz|beleza|t[aá] bom|ta bom|combinado|claro|aceito|quero sim|manda a[ií]|(me )?manda (o )?(c[oó]digo|pix|qr)|(me )?envia (o )?(c[oó]digo|pix))\s*[.!]?\s*$/i;
 
 /**
  * Pedido de "só uma vez, sem autorizar nada": é exatamente o encontro avulso de
