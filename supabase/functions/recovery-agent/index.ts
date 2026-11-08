@@ -19,6 +19,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { classifyPixButton, handlePixButton, classifyTasterIntent, wantsSingleSessionNow, handleTasterAccept, tasterOfferAlreadySent, isBlankDoubt, phoneMatchList } from "./pix-buttons.ts";
 import { isTasterTestPhone } from "../_shared/taster.ts";
+import { classifyRecoveryIntentWithAI, type RecoveryIntent } from "./intent-classifier.ts";
 import { isExplicitStopRequest, isHumanRequest, isLiteAcceptance } from "./retention-intents.ts";
 
 const corsHeaders = {
@@ -725,7 +726,20 @@ Deno.serve(async (req) => {
       .slice(-2)
       .map(m => m.body || "")
       .join("\n");
-    const pixIntent = classifyPixButton(text, recentOutboundForPix);
+    let pixIntent = classifyPixButton(text, recentOutboundForPix);
+
+    // Camada 2: micro-classificador semântico, só quando os regex não pegaram.
+    // A IA só rotula; a geração de cobrança continua determinística abaixo.
+    let aiIntent: RecoveryIntent = "general_doubt";
+    if (!previewMode && !pixIntent && !classifyTasterIntent(text) && !wantsSingleSessionNow(text)) {
+      const lastAura = historyAsc.filter(m => m.direction === "out").slice(-1)[0]?.body || "";
+      if (lastAura) {
+        aiIntent = await classifyRecoveryIntentWithAI(lastAura, text);
+        console.log(`[recovery-agent] ai_intent=${aiIntent}`);
+        if (aiIntent === "replace_pix") pixIntent = "replace_code";
+        else if (aiIntent === "already_paid") pixIntent = "already_paid";
+      }
+    }
     if (!previewMode && (pixIntent === "replace_code" || pixIntent === "resend_code" || pixIntent === "already_paid")) {
       const res = await handlePixButton(supabase, pixIntent, phone, checkout);
       if (res.handled && res.body) {
@@ -776,7 +790,9 @@ Deno.serve(async (req) => {
 
     // Aceite: clique do template (Porta B), pedido de sessão única (Porta C) ou
     // "quero/bora" depois de a oferta ter saído.
-    const tasterIntent = classifyTasterIntent(text) || (singleSessionAsk ? "single_request" : null);
+    // Aceite semântico vira "short_accept": só gera se a oferta já saiu de fato.
+    const tasterIntent = classifyTasterIntent(text) || (singleSessionAsk ? "single_request" : null) ||
+      (aiIntent === "accept_taster" ? "short_accept" as const : null);
     if (!previewMode && (!customer || tasterTestBypass) && tasterEligible && tasterIntent) {
       const okToGenerate = tasterIntent === "button" || tasterIntent === "single_request" ||
         await tasterOfferAlreadySent(supabase, phone);
