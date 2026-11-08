@@ -81,13 +81,13 @@ const queryClient = new QueryClient({
 });
 
 /**
- * Redireciona a raiz para /v2 preservando query string e hash.
+ * Redireciona a raiz para /v5 preservando query string e hash.
  * Sem isso o fbclid do anúncio é descartado e o Meta perde a atribuição
  * do clique (Landing Page Views zeradas).
  */
 const RootRedirect = () => (
   <Navigate
-    to={`/v2${window.location.search}${window.location.hash}`}
+    to={`/v5${window.location.search}${window.location.hash}`}
     replace
   />
 );
