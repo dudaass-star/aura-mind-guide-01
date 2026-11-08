@@ -237,7 +237,7 @@ const CheckoutV2 = () => {
     } catch {
       /* noop */
     }
-    return "/v2";
+    return "/v5";
   })();
 
   const initialPlan = planFromUrl || planFromState || "essencial";
