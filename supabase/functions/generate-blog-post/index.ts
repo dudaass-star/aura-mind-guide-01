@@ -180,7 +180,7 @@ async function planNextSlots(supabase: any, howMany = 8): Promise<number> {
         {
           role: "system",
           content:
-            "Você é estrategista de SEO PT-BR para o app Olá Aura, um aplicativo de acompanhamento emocional. Propõe keywords de cauda longa com intenção informacional real, que gente em sofrimento digita no Google.",
+            "Você é estrategista de SEO PT-BR para o app Olá Aura, um aplicativo de acompanhamento emocional. Propõe keywords de cauda longa com intenção informacional real, que gente em sofrimento digita no Google. Evite temas de sintomas físicos agudos (dor no peito, falta de ar, taquicardia), preços de terapia e qualquer tema médico/diagnóstico.",
         },
         {
           role: "user",
@@ -264,7 +264,7 @@ async function generatePost(
   cluster: Cluster,
   recentTitles: string[],
 ): Promise<GeneratedPost> {
-  const system = `Você é redator sênior de SEO em PT-BR para o app Olá Aura, um aplicativo de acompanhamento emocional. Escreve com voz humana, frases curtas, zero firula, sem moralismo, sem chavões de coach. Cita estudos só quando tem repertório real. Nunca promete cura. Aceita que a dor existe e oferece passos práticos. Apresenta o WhatsApp somente como canal complementar de acesso, avisos e suporte, nunca como o produto principal. Estrutura SEO impecável: H1 com keyword, resposta direta nos 2 primeiros parágrafos, H2s em formato de pergunta, listas, tabelas quando útil, FAQ no final.`;
+  const system = `Você é redator sênior de SEO em PT-BR para o app Olá Aura, um aplicativo de acompanhamento emocional. Escreve com voz humana, frases curtas, zero firula, sem moralismo, sem chavões de coach. Cita estudos só quando tem repertório real. Nunca promete cura. Aceita que a dor existe e oferece passos práticos. A Olá Aura é um aplicativo próprio (conversas por texto ou voz, encontros guiados, orações e meditações): NUNCA diga que a Aura funciona pelo WhatsApp e NUNCA a apresente como substituta de terapia ou de atendimento médico — ela é um apoio complementar. Em sintomas físicos agudos (dor no peito, falta de ar, taquicardia) ou risco de vida, oriente procurar atendimento médico/CVV 188 e não associe o sintoma ao app. Estrutura SEO impecável: H1 com keyword, resposta direta nos 2 primeiros parágrafos, H2s em formato de pergunta, listas, tabelas quando útil, FAQ no final.`;
 
   const user = `Gere um post de blog completo em JSON.
 
@@ -286,7 +286,7 @@ REGRAS OBRIGATÓRIAS:
 - slug: kebab-case da keyword exata
 - excerpt: 1-2 frases (até 200 chars) que dão vontade de clicar
 - cover_alt: descrição da capa em uma frase
-- cover_prompt: prompt em INGLÊS para gerar imagem 1200x630 com estilo "soft editorial illustration, calm muted palette (soft purples, warm beige, dusty blue), minimal, no text, abstract emotional metaphor, no people faces" — adapte ao tema
+- cover_prompt: prompt em INGLÊS para gerar imagem 1200x630 com estilo "soft editorial illustration, calm palette (deep navy, sage green, soft lavender, white glow; no beige), minimal, no text, abstract emotional metaphor, no people faces" — adapte ao tema
 - tags: 3 a 5 tags em pt-br
 - content_md: Markdown com mínimo 1500 palavras, contendo:
   - H1 ("# ...") com a keyword
@@ -295,7 +295,9 @@ REGRAS OBRIGATÓRIAS:
   - Listas e/ou tabelas quando ajudar
   - 1 link interno markdown para o cluster (use [texto](/blog?cluster=${cluster.slug}))
   - Antes do fechamento, um CTA inline (parágrafo curto convidando pra Aura)
-  - Fechamento humano com a copy do CTA do cluster, terminando com link [Conhecer a Aura](/v2)
+  - Uma seção curta "Experimente agora" com uma prática de 2-3 minutos que o leitor faz na hora, convidando a continuar no app Olá Aura
+  - Fechamento humano com a copy do CTA do cluster, terminando com link [Conhecer a Aura](/)
+  - Nunca escreva um ano específico no título ou texto (evita conteúdo datado)
 - faq: 3-5 perguntas reais com respostas curtas (2-4 frases)
 
 RESPONDA SOMENTE com JSON válido seguindo o schema. Sem comentários, sem markdown wrapper.`;
