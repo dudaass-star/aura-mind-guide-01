@@ -611,8 +611,10 @@ const IndexV5 = () => {
             operatingSystem: "Web, Android, iOS",
             url: "https://olaaura.com.br/",
             inLanguage: "pt-BR",
-            offers: { "@type": "Offer", price: "6.90", priceCurrency: "BRL" },
-            aggregateRating: { "@type": "AggregateRating", ratingValue: "4.6", ratingCount: "251", bestRating: "5" },
+            image: "https://olaaura.com.br/og-image.jpg",
+            description: "Acolhimento 24h, encontros guiados e orações no app Olá Aura.",
+            offers: { "@type": "Offer", price: 6.9, priceCurrency: "BRL" },
+            aggregateRating: { "@type": "AggregateRating", ratingValue: 4.6, ratingCount: 251, bestRating: 5, worstRating: 1 },
           })}
         </script>
       </Helmet>
