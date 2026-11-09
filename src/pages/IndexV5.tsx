@@ -596,7 +596,8 @@ const IndexV5 = () => {
       <Helmet>
         <title>Olá AURA — Fale com quem lembra de você</title>
         <meta name="description" content="Converse por texto ou áudio a qualquer hora, faça encontros guiados e ouça orações e meditações no app Olá Aura. 7 dias por R$ 6,90." />
-        <meta name="robots" content="noindex, nofollow" />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://olaaura.com.br/" />
         <meta property="og:title" content="Olá AURA — Fale com quem lembra de você" />
         <meta property="og:description" content="Acolhimento 24h, encontros guiados e orações no app Olá Aura. 7 dias por R$ 6,90." />
         <meta property="og:type" content="website" />

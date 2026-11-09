@@ -187,7 +187,7 @@ const BlogPost = () => {
               Conversas por texto ou áudio no app Olá Aura. R$ 6,90 nos 7 primeiros dias.
             </p>
             <Button asChild size="lg">
-              <Link to="/v2">
+              <Link to={cluster?.slug === "espiritualidade-oracoes" ? "/oracoes" : "/"}>
                 Conhecer a Aura <ArrowRight className="ml-2 w-4 h-4" />
               </Link>
             </Button>

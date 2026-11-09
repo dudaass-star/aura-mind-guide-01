@@ -1,19 +1,13 @@
 # Olá AURA
 
-> Olá Aura é um aplicativo de acompanhamento emocional. Dentro dele, a AURA conversa por texto ou áudio, conecta acontecimentos ao longo do tempo e ajuda cada pessoa a encontrar clareza, direção e sentido, com memória de longo prazo e metodologia baseada em Logoterapia. O WhatsApp funciona como canal complementar para acesso, avisos e suporte.
+> Olá Aura é um aplicativo de acompanhamento emocional. Dentro do app, a AURA conversa por texto ou áudio, conduz encontros guiados, oferece orações e meditações, conecta acontecimentos ao longo do tempo e ajuda cada pessoa a encontrar clareza, direção e sentido, com memória de longo prazo e metodologia baseada em Logoterapia. Não substitui terapia nem atendimento médico.
 
 ## Páginas
 
-- [/](/): Página inicial — conheça a AURA, veja depoimentos, planos e FAQ.
-- [/v2](/v2): Nova versão da landing page com design atualizado.
-- [/checkout](/checkout): Finalize sua assinatura e escolha entre os planos Essencial, Direção ou Transformação.
-- [/v2/checkout](/v2/checkout): Checkout na versão atualizada da interface.
-- [/obrigado](/obrigado): Página de confirmação após assinatura bem-sucedida.
-- [/experimentar](/experimentar): Redirecionamento para o checkout (trial de 7 dias).
-- [/trial-iniciado](/trial-iniciado): Confirmação de início do período de teste.
-- [/termos](/termos): Termos de Uso do serviço AURA.
-- [/privacidade](/privacidade): Política de Privacidade e conformidade com a LGPD.
-- [/guia](/guia): Guia completo de como usar a AURA — conversas, sessões, jornadas, meditações e mais.
-- [/blog](/blog): Artigos sobre autoconhecimento emocional, ansiedade, meditação e bem-estar mental.
-- [/meu-espaco](/meu-espaco): Aplicativo Olá Aura — converse com a AURA e acompanhe sessões, jornadas, percurso, meditações e informações pessoais.
-- [/cancelar](/cancelar): Página para cancelamento da assinatura.
+- [/](https://olaaura.com.br/): Página inicial — conheça a AURA, como funciona, depoimentos e planos (7 dias por R$ 6,90).
+- [/oracoes](https://olaaura.com.br/oracoes): Plano Orações e Meditações — orações guiadas na voz da AURA.
+- [/blog](https://olaaura.com.br/blog): Artigos sobre autoconhecimento, emoções, relações, espiritualidade e autonomia emocional.
+- [/guia](https://olaaura.com.br/guia): Guia de uso do app — conversas, sessões, orações, meditações e percurso.
+- [/meu-espaco](https://olaaura.com.br/meu-espaco): Aplicativo Olá Aura (acesso de assinantes).
+- [/termos](https://olaaura.com.br/termos): Termos de Uso.
+- [/privacidade](https://olaaura.com.br/privacidade): Política de Privacidade (LGPD).
