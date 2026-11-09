@@ -122,6 +122,22 @@ const BlogPost = () => {
         <meta property="og:description" content={post.meta_description} />
         <meta property="og:url" content={url} />
         {post.cover_url && <meta property="og:image" content={post.cover_url} />}
+        {post.published_at && <meta property="article:published_time" content={post.published_at} />}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={post.meta_title} />
+        <meta name="twitter:description" content={post.meta_description} />
+        {post.cover_url && <meta name="twitter:image" content={post.cover_url} />}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "Início", item: `${SITE}/` },
+              { "@type": "ListItem", position: 2, name: "Blog", item: `${SITE}/blog` },
+              { "@type": "ListItem", position: 3, name: post.title, item: url },
+            ],
+          })}
+        </script>
         {post.json_ld && (
           <script type="application/ld+json">{JSON.stringify(post.json_ld)}</script>
         )}

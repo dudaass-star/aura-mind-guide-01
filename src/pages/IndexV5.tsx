@@ -601,6 +601,20 @@ const IndexV5 = () => {
         <meta property="og:title" content="Olá AURA — Fale com quem lembra de você" />
         <meta property="og:description" content="Acolhimento 24h, encontros guiados e orações no app Olá Aura. 7 dias por R$ 6,90." />
         <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://olaaura.com.br/" />
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "Olá Aura",
+            applicationCategory: "HealthApplication",
+            operatingSystem: "Web, Android, iOS",
+            url: "https://olaaura.com.br/",
+            inLanguage: "pt-BR",
+            offers: { "@type": "Offer", price: "6.90", priceCurrency: "BRL" },
+            aggregateRating: { "@type": "AggregateRating", ratingValue: "4.6", ratingCount: "251", bestRating: "5" },
+          })}
+        </script>
       </Helmet>
       <div className="theme-v2 theme-v5-night min-h-screen bg-background text-foreground antialiased pb-20 md:pb-0">
         <Header />

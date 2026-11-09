@@ -102,6 +102,9 @@ async function main() {
     { path: "/", changefreq: "weekly", priority: "1.0" },
     { path: "/oracoes", changefreq: "weekly", priority: "0.9" },
     { path: "/blog", changefreq: "daily", priority: "0.8" },
+    { path: "/movimento", changefreq: "monthly", priority: "0.6" },
+    { path: "/termos", changefreq: "yearly", priority: "0.3" },
+    { path: "/privacidade", changefreq: "yearly", priority: "0.3" },
   ];
   // URLs com filtro (?cluster=) ficam fora: o canonical do blog aponta só para /blog.
   void clusters;
