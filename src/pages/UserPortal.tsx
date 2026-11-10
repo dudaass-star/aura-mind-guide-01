@@ -11,6 +11,7 @@ import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { PortalLoading, PortalLoadingInline } from "@/components/portal/shared";
 import { PhoneLinkPrompt } from "@/components/portal/PhoneLinkPrompt";
 import { ConversarTab } from "@/components/portal/ConversarTab";
+import { clearResumeIntent, setResumeIntent } from "@/lib/chat-resume-intent";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 import { DegustacaoPlansDialog } from "@/components/portal/DegustacaoPlansDialog";
@@ -208,6 +209,8 @@ const UserPortal = () => {
   const handleTabClick = (id: TabId) => {
     setVisitedTabs((current) => current.has(id) ? current : new Set(current).add(id));
     setActiveTab(id);
+    // Saiu do fluxo de retomada sem enviar: descarta a intenção.
+    if (id !== "conversar" && userId) clearResumeIntent(userId);
     if (id === "hoje" && userId) void queryClient.invalidateQueries({ queryKey: ["portal-today-direction", userId] });
     const valueFeature = id === "sessoes"
       ? "session"
@@ -251,8 +254,11 @@ const UserPortal = () => {
     return () => cancel(task);
   }, []);
 
-  const handleOpenConversation = (prefilledMessage?: string) => {
+  const handleOpenConversation = (prefilledMessage?: string, options?: { resumeSessionId?: string }) => {
     if (!userId) return;
+    // Retomada da aba Hoje: só abre o chat; o fio viaja como contexto no 1º envio.
+    if (options?.resumeSessionId) setResumeIntent(userId, options.resumeSessionId);
+    else clearResumeIntent(userId);
     if (prefilledMessage?.trim()) {
       const nextDraft = prefilledMessage.trim();
       localStorage.setItem(`aura-chat-draft:${userId}`, nextDraft);

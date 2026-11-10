@@ -42,3 +42,4 @@
 - Active sessions load chat history from 15 min before session start (cap 200), not the casual 40-row window; Aura replies split into many rows, so 40 rows lost the session's opening.
 - Support renewals for existing PIX customers use the customer's own /reautorizar-pix link plus a pre-generated copy-paste code (reused while valid); /v2 is only for first-time buyers, so returning customers never re-enter the new-customer checkout.
 - Today tab hero is chosen by one pure selector (`src/lib/today-hero.ts`, BRT, night 20h30–05h59) over raw `heroSignals` from today-direction; cards only render the chosen state, so screens never stack equal-priority cards.
+- Hoje → Retomar com a AURA never prefills the composer; it stores a temporary session reference sent with the first message, validated server-side and injected as context; keeps the client's own words and the mic available.
