@@ -25,6 +25,7 @@ const BodySchema = z.object({
   audio_mime: z.string().max(80).optional(),
   audio_duration_ms: z.number().int().min(100).max(120_000).optional(),
   journey_episode_id: z.string().uuid().optional(),
+  resume_session_id: z.string().uuid().optional(),
   client_sent_at: z.string().datetime().optional(),
 }).superRefine((value, context) => {
   if (value.action === "initialize") return;
@@ -72,7 +73,7 @@ Deno.serve(async (req) => {
     const receivedAt = new Date().toISOString();
     const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return json({ error: "Mensagem inválida", details: parsed.error.flatten().fieldErrors }, 400);
-    const { action, entry_context: requestedEntryContext, client_message_id: clientMessageId, source_message_id: sourceMessageId, audio_base64: audioBase64, audio_duration_ms: audioDurationMs, journey_episode_id: journeyEpisodeId, client_sent_at: clientSentAt } = parsed.data;
+    const { action, entry_context: requestedEntryContext, client_message_id: clientMessageId, source_message_id: sourceMessageId, audio_base64: audioBase64, audio_duration_ms: audioDurationMs, journey_episode_id: journeyEpisodeId, resume_session_id: requestedResumeSessionId, client_sent_at: clientSentAt } = parsed.data;
     const text = parsed.data.text || "";
     const audioMime = parsed.data.audio_mime?.split(";")[0].toLowerCase();
     const hasAudio = Boolean(audioBase64);
@@ -171,6 +172,20 @@ Deno.serve(async (req) => {
         .eq("episode_id", journeyEpisodeId)
         .maybeSingle();
       if (releasedEpisodeError || !releasedEpisode) return json({ error: "Episódio não disponível" }, 403);
+    }
+
+    // Retomada vinda da aba Hoje: a referência só vale se a sessão concluída
+    // pertencer à cliente autenticada. Se não validar, a mensagem segue normal.
+    let resumeSessionId: string | null = null;
+    if (requestedResumeSessionId) {
+      const { data: resumeSession } = await admin
+        .from("sessions")
+        .select("id")
+        .eq("id", requestedResumeSessionId)
+        .eq("user_id", userId)
+        .eq("status", "completed")
+        .maybeSingle();
+      resumeSessionId = resumeSession?.id ?? null;
     }
 
     if (action === "retry_response" && sourceMessageId) {
@@ -335,6 +350,7 @@ Deno.serve(async (req) => {
           server_received_at: receivedAt,
           accepted_at: new Date().toISOString(),
           ...(journeyEpisodeId ? { journey_episode_id: journeyEpisodeId } : {}),
+          ...(resumeSessionId ? { resume_session_id: resumeSessionId } : {}),
         },
       })
       .select("id, sequence_no, delivery_status, created_at, is_audio, audio_url, metadata")
@@ -396,6 +412,7 @@ Deno.serve(async (req) => {
         audioUrl,
         hasImage: false,
         journeyEpisodeId,
+        resumeSessionId,
       }),
     }).then(async (response) => {
       if (!response.ok) console.error("Falha no processamento do chat:", response.status, await response.text());
