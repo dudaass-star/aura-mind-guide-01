@@ -1,3 +1,4 @@
+// @ts-ignore -- executado com bun test, fora do typecheck do app
 import { beforeEach, expect, test } from "bun:test";
 const store = new Map<string, string>();
 (globalThis as any).sessionStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) };
