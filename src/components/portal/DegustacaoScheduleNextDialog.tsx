@@ -1,3 +1,4 @@
+import { TimeSlotPills } from "@/components/portal/TimeSlotPills";
 import { useMemo, useState } from "react";
 import { CalendarDays, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -70,11 +71,8 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
             <Input id="next-date" type="date" value={date} min={today} max={addDays(today, 30)} onChange={(e) => { setDate(e.target.value); setTime(""); }} />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="next-time">Horário</Label>
-            <select id="next-time" value={time} onChange={(e) => setTime(e.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-base text-foreground">
-              <option value="">Escolha um horário</option>
-              {times.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <Label>Horário</Label>
+            <TimeSlotPills times={times} value={time} onChange={setTime} />
           </div>
           <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">A AURA guarda esse horário por 24 horas. Para confirmar o encontro, é preciso ativar um plano logo em seguida.</p>
           {error && <p className="text-sm text-destructive">{error}</p>}
