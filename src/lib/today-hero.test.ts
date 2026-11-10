@@ -57,3 +57,15 @@ describe("aba Hoje", () => {
     expect(threadText(thread.closure_text)).toBe("Você percebeu que queria se dar um tempo antes de responder aos pedidos no trabalho.");
   });
 });
+
+import { homeBarFromHero } from "./today-hero";
+describe("barra da tela inicial", () => {
+  const s = { id: "s1", scheduled_at: "2026-11-11T22:00:00.000Z", status: "scheduled" };
+  test("preparo a mais de 4h fica oculto", () => { expect(homeBarFromHero({ kind: "prepare", session: s })).toBeNull(); });
+  test("rotina fica oculta, mesmo com encontro secundário", () => { expect(homeBarFromHero({ kind: "routine", secondarySession: s })).toBeNull(); });
+  test("encontro próximo aparece com acesso", () => { expect(homeBarFromHero({ kind: "session", session: s, canEnter: true })).toEqual({ kind: "session", session: s, canEnter: true }); });
+  test("noite e fio aparecem", () => {
+    expect(homeBarFromHero({ kind: "night", secondarySession: s })).toEqual({ kind: "night" });
+    expect(homeBarFromHero({ kind: "thread", session: { id: "l1", scheduled_at: s.scheduled_at }, text: "x" })).toEqual({ kind: "thread", sessionId: "l1" });
+  });
+});

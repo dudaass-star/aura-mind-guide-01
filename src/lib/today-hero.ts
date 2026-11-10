@@ -77,3 +77,17 @@ export function selectTodayHero(input: {
   }
   return { kind: "routine", secondarySession: s && diff > 4 * HOUR && diff <= 24 * HOUR ? s : null };
 }
+
+// Barra da tela inicial: só mostra o estado escolhido se ele merece ação imediata.
+// Preparo (>4h) e rotina ficam ocultos; nunca busca outro estado para preencher o espaço.
+export type HomeBar =
+  | { kind: "session"; session: HeroSession; canEnter: boolean }
+  | { kind: "night" }
+  | { kind: "thread"; sessionId: string };
+
+export function homeBarFromHero(hero: TodayHero): HomeBar | null {
+  if (hero.kind === "session") return { kind: "session", session: hero.session, canEnter: hero.canEnter };
+  if (hero.kind === "night") return { kind: "night" };
+  if (hero.kind === "thread") return { kind: "thread", sessionId: hero.session.id };
+  return null;
+}
