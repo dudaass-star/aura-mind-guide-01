@@ -41,6 +41,13 @@ export function OracoesTab({ isActive = true, isDegustacao = false, userId, prof
     return () => document.removeEventListener("visibilitychange", refresh);
   }, [isActive]);
   useEffect(() => { if (!isActive) setSelectedPrayer(null); }, [isActive]);
+  useEffect(() => {
+    const consume = () => { const id = takeRequestedPrayer(); const prayer = id ? PRAYERS.find((p) => p.id === id) : null; if (prayer) setSelectedPrayer(prayer); };
+    if (isActive) consume();
+    window.addEventListener("aura:play-prayer", consume);
+    return () => window.removeEventListener("aura:play-prayer", consume);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
   return <section className="prayer-library space-y-7">
     <div className="space-y-1.5"><p className="text-xs font-semibold text-primary">Sua fé, no seu tempo</p><h2 className="font-display text-3xl leading-tight text-foreground">Um momento com Deus</h2></div>
     {showGift && userId && !selectedPrayer && <MovementGiftPrompt userId={userId} fullName={fullName} trigger="prayer" onClose={() => setShowGift(false)} />}

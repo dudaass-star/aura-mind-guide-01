@@ -292,3 +292,23 @@ export function getPrayerHighlight(now = new Date()) {
     label: morning ? "Para começar o dia com Deus" : night ? "Para esta noite" : "Um respiro de fé",
   };
 }
+
+// Pedido de reprodução vindo de outra área (ex.: Hoje); Orações consome ao montar ou ao receber o evento.
+let pendingPrayerId: string | null = null;
+export function requestPrayerPlayback(id: string) {
+  pendingPrayerId = id;
+  window.dispatchEvent(new Event("aura:play-prayer"));
+}
+export function takeRequestedPrayer(): string | null {
+  const id = pendingPrayerId;
+  pendingPrayerId = null;
+  return id;
+}
+// Oração da noite com áudio reproduzível, estável durante a noite (inclui madrugada).
+export function getNightPrayer(now = new Date()) {
+  const candidates = PRAYERS.filter((p) => p.category === "Noite" && Boolean(p.audioUrl));
+  if (!candidates.length) return null;
+  const brt = new Date(now.getTime() - 3 * 3600000);
+  const day = Math.floor((brt.getTime() - (brt.getUTCHours() < 12 ? 86400000 : 0)) / 86400000);
+  return candidates[((day % candidates.length) + candidates.length) % candidates.length];
+}

@@ -18,6 +18,7 @@ export type TodayDirectionResponse = {
   direction: TodayDirection;
   continuation: TodayDirection | null;
   pushEnabled: boolean;
+  heroSignals?: { nextSession: import("./today-hero").HeroSession | null; lastSession: import("./today-hero").HeroLastSession | null };
   reliable: boolean;
   generatedAt: string;
 };
