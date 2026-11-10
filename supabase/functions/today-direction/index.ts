@@ -73,7 +73,11 @@ Deno.serve(async (req) => {
       lastSession,
       ignoredActions,
     });
-    return json({ ...result, pushEnabled: (devices.count || 0) > 0, reliable: true, generatedAt: new Date().toISOString() });
+    const heroSignals = {
+      nextSession: nextSession ? { id: nextSession.id, scheduled_at: nextSession.scheduled_at, status: nextSession.status, preparation_note: nextSession.preparation_note ?? null } : null,
+      lastSession: lastSession ? { id: lastSession.id, scheduled_at: lastSession.scheduled_at, ended_at: lastSession.ended_at ?? null, theme_label: lastSession.theme_label ?? null, closure_text: lastSession.closure_text ?? null } : null,
+    };
+    return json({ ...result, heroSignals, pushEnabled: (devices.count || 0) > 0, reliable: true, generatedAt: new Date().toISOString() });
   } catch (error) {
     console.error("Falha ao calcular a direção do Hoje", error);
     return json({ reliable: false, error: "direction_unavailable" }, 500);

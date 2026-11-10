@@ -1,12 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Bell, BookOpen, CalendarDays, Headphones, MessageCircle, NotebookPen, Sparkles } from "lucide-react";
+import { ArrowRight, Bell, Moon, Play, BookOpen, CalendarDays, Headphones, MessageCircle, NotebookPen, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import type { Json } from "@/integrations/supabase/types";
 import { PortalLoadingInline } from "./shared";
 import { PrayerEntranceCard } from "./PrayerEntranceCard";
+import { getNightPrayer, requestPrayerPlayback } from "@/lib/prayers";
+import { brtDayKey, selectTodayHero } from "@/lib/today-hero";
 import { rememberTodayDirection, type TodayAction, type TodayDirection, type TodayDirectionResponse } from "@/lib/today-direction";
 
 interface HojeTabProps {
@@ -92,6 +94,22 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
     return () => window.removeEventListener("aura:today-changed", refresh);
   }, [queryClient, userId]);
 
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = () => setNowMs(Date.now());
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      tick();
+      void queryClient.invalidateQueries({ queryKey: ["portal-today-direction", userId] });
+    };
+    const timer = window.setInterval(tick, 60_000);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
+  }, [queryClient, userId]);
+  const dismissKey = `aura-thread-dismissed:${userId}:${brtDayKey(nowMs)}`;
+  const [dismissedThreadId, setDismissedThreadId] = useState<string | null>(null);
+  useEffect(() => { try { setDismissedThreadId(localStorage.getItem(dismissKey)); } catch { setDismissedThreadId(null); } }, [dismissKey]);
+
   const priority = data?.direction;
   useEffect(() => {
     if (!priority) return;
@@ -129,41 +147,104 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
     if (direction.action === "continuity") return onOpenConversation(`Quero retomar o que ficou da minha última sessão: ${direction.description}`);
     return onOpenConversation();
   };
-  const PriorityIcon = ICONS[priority.action];
-  const continuation = data.continuation;
-  const ContinuationIcon = continuation ? ICONS[continuation.action] : null;
-  const showPushInvitation = !data.pushEnabled && Boolean(profile?.last_user_message_at) && !continuation;
+  const nightPrayer = getNightPrayer(new Date(nowMs));
+  const hero = selectTodayHero({
+    nowMs,
+    nextSession: data.heroSignals?.nextSession ?? null,
+    lastSession: data.heroSignals?.lastSession ?? null,
+    nightAudioAvailable: Boolean(nightPrayer),
+    dismissedThreadId,
+  });
+  // Na rotina, o backend sugere descobertas; estados de encontro/fio já foram decididos acima.
+  const routine = ["session", "session_preparation", "continuity"].includes(priority.action)
+    ? { action: "conversation" as TodayAction, eyebrow: "Seu momento agora", title: "O que merece atenção hoje?", description: "Você não precisa chegar com tudo organizado. Comece pelo que estiver mais vivo.", button: "Conversar com a AURA", target: "conversation" as const, reason: "open_conversation" }
+    : priority;
+  const RoutineIcon = ICONS[routine.action];
+  const heroEvent = (eventType: string) => recordTodayEvent(userId, eventType, { ...routine, action: hero.kind === "routine" ? routine.action : (hero.kind === "night" ? "practice" : hero.kind === "thread" ? "continuity" : hero.kind === "prepare" ? "session_preparation" : "session"), reason: `hero_${hero.kind}` });
+  const secondary = hero.kind === "night" || hero.kind === "routine" ? hero.secondarySession : null;
+  const showPushInvitation = !data.pushEnabled && Boolean(profile?.last_user_message_at) && hero.kind === "routine" && !secondary;
+  const card = "relative overflow-hidden rounded-lg border border-primary/25 bg-primary p-6 text-primary-foreground shadow-card animate-fade-up";
+  const eyebrow = "text-[10px] font-bold uppercase tracking-[0.16em] text-primary-foreground/70";
 
   return (
     <div className="portal-area-page space-y-7">
       <header className="space-y-1 animate-fade-in">
         <h1 className="font-display text-3xl font-semibold text-foreground sm:text-4xl">{greeting()}, {firstName}</h1>
-        <p className="text-xs font-semibold text-primary">{profile?.last_user_message_at ? `Vocês conversaram ${relativeTime(profile.last_user_message_at)}` : "Seu momento de hoje"}</p>
+        <p className="text-xs font-semibold text-primary">{hero.kind === "night" ? "Hora de desacelerar" : profile?.last_user_message_at ? `Vocês conversaram ${relativeTime(profile.last_user_message_at)}` : "Seu momento de hoje"}</p>
       </header>
 
-      <section className="relative overflow-hidden rounded-lg border border-primary/25 bg-primary p-6 text-primary-foreground shadow-card animate-fade-up">
-        <div className="flex items-start gap-4">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/12" aria-hidden="true"><PriorityIcon className="h-5 w-5" /></span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary-foreground/70">{priority.eyebrow}</p>
-            <h2 className="mt-1 font-display text-2xl font-semibold leading-tight">{priority.title}</h2>
-            <p className="mt-2 text-sm leading-relaxed text-primary-foreground/80">{visibleDescription(priority)}</p>
-          </div>
-        </div>
-        <Button type="button" variant="secondary" className="mt-5 w-full justify-between" onClick={() => openDirection(priority, "priority_opened")}>{priority.button}<ArrowRight className="h-4 w-4" /></Button>
-      </section>
+      {hero.kind === "session" && (
+        <section className={card}>
+          <p className={eyebrow}>{hero.session.status === "in_progress" ? "Seu encontro está acontecendo" : "Seu encontro de hoje"}</p>
+          <h2 className="mt-1 font-display text-2xl font-semibold leading-tight">{hero.session.status === "in_progress" ? "Continue de onde parou" : formatScheduledBrt(hero.session.scheduled_at)}</h2>
+          <p className="mt-2 text-sm leading-relaxed text-primary-foreground/80">{hero.canEnter ? "O acesso já está aberto. A AURA te espera." : hero.session.preparation_note ? "Sua anotação está guardada para a hora do encontro." : "Se algo estiver vivo, você pode deixar anotado para não esquecer."}</p>
+          {hero.canEnter
+            ? <Button type="button" variant="secondary" className="mt-5 w-full justify-between" onClick={() => { heroEvent("priority_opened"); onNavigateTab("sessoes"); }}>{hero.session.status === "in_progress" ? "Continuar encontro" : "Entrar no encontro"}<ArrowRight className="h-4 w-4" /></Button>
+            : <>
+                <Button type="button" variant="secondary" className="mt-5 w-full justify-between" onClick={() => { heroEvent("priority_opened"); onNavigateTab("sessoes"); }}>{hero.session.preparation_note ? "Editar anotação" : "Deixar uma anotação"}<NotebookPen className="h-4 w-4" /></Button>
+                <Button type="button" variant="link" className="mt-2 h-auto p-0 text-primary-foreground/80" onClick={() => onNavigateTab("sessoes")}>Precisa mudar? Reagendar</Button>
+              </>}
+        </section>
+      )}
 
-      {continuation && ContinuationIcon && (
+      {hero.kind === "night" && nightPrayer && (
+        <section className="relative isolate overflow-hidden rounded-xl shadow-card animate-fade-up">
+          <img src={nightPrayer.image} alt={nightPrayer.imageAlt} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+          <div className="absolute inset-0 portal-prayer-veil" aria-hidden="true" />
+          <button type="button" onClick={() => { heroEvent("priority_opened"); requestPrayerPlayback(nightPrayer.id); onNavigateTab("oracoes"); }} className="portal-prayer-text relative flex min-h-[15rem] w-full flex-col justify-end gap-2 p-5 text-left" aria-label={`Ouvir oração: ${nightPrayer.title}`}>
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]"><Moon className="h-3.5 w-3.5" />Oração da noite · {Math.max(1, Math.round(nightPrayer.duration / 60))} min</span>
+            <span className="block max-w-[18rem] font-display text-2xl font-semibold leading-tight">{nightPrayer.title}</span>
+            <span className="block max-w-[20rem] text-sm leading-relaxed">Você não precisa resolver mais nada hoje.</span>
+            <span className="mt-2 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm [text-shadow:none]"><Play className="h-3.5 w-3.5" fill="currentColor" />Ouvir agora</span>
+          </button>
+        </section>
+      )}
+
+      {hero.kind === "prepare" && (
+        <section className={card}>
+          <p className={eyebrow}>Seu próximo encontro</p>
+          <h2 className="mt-1 font-display text-2xl font-semibold leading-tight">{formatScheduledBrt(hero.session.scheduled_at)}</h2>
+          <p className="mt-2 text-sm leading-relaxed text-primary-foreground/80">{hero.session.preparation_note ? "Sua anotação está guardada. Pode ajustar quando quiser." : "Se tiver algo que não queira esquecer, pode deixar guardado para a hora."}</p>
+          <Button type="button" variant="secondary" className="mt-5 w-full justify-between" onClick={() => { heroEvent("priority_opened"); rememberTodayDirection({ ...routine, action: "session_preparation", reason: "hero_prepare" }); onNavigateTab("sessoes"); }}>{hero.session.preparation_note ? "Editar anotação" : "Deixar uma anotação"}<NotebookPen className="h-4 w-4" /></Button>
+          <Button type="button" variant="link" className="mt-2 h-auto p-0 text-primary-foreground/80" onClick={() => onNavigateTab("sessoes")}>Precisa mudar de dia? Reagendar</Button>
+        </section>
+      )}
+
+      {hero.kind === "thread" && (
+        <section className={card}>
+          <p className={eyebrow}>Da nossa última conversa{hero.session.theme_label ? ` · ${hero.session.theme_label}` : ""}</p>
+          <p className="mt-2 font-display text-xl font-semibold leading-snug">“{hero.text}”</p>
+          <Button type="button" variant="secondary" className="mt-5 w-full justify-between" onClick={() => { heroEvent("priority_opened"); onOpenConversation(hero.session.theme_label ? `Quero retomar o que conversamos sobre ${hero.session.theme_label.toLowerCase()}.` : undefined); }}>Retomar com a AURA<MessageCircle className="h-4 w-4" /></Button>
+          <Button type="button" variant="link" className="mt-2 h-auto p-0 text-primary-foreground/80" onClick={() => { try { localStorage.setItem(dismissKey, hero.session.id); } catch { /* sem armazenamento */ } setDismissedThreadId(hero.session.id); heroEvent("thread_dismissed"); }}>Agora não</Button>
+        </section>
+      )}
+
+      {hero.kind === "routine" && (
+        <>
+          <section className={card}>
+            <div className="flex items-start gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/12" aria-hidden="true"><RoutineIcon className="h-5 w-5" /></span>
+              <div className="min-w-0 flex-1">
+                <p className={eyebrow}>{routine.eyebrow}</p>
+                <h2 className="mt-1 font-display text-2xl font-semibold leading-tight">{routine.title}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-primary-foreground/80">{visibleDescription(routine)}</p>
+              </div>
+            </div>
+            <Button type="button" variant="secondary" className="mt-5 w-full justify-between" onClick={() => openDirection(routine, "priority_opened")}>{routine.button}<ArrowRight className="h-4 w-4" /></Button>
+          </section>
+          <PrayerEntranceCard userId={userId} onOpen={() => onNavigateTab("oracoes")} onEvent={(eventType) => { void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "today", event_type: eventType, source: "app", metadata: { origin: "today_prayer" } as Json }).then(() => undefined); }} />
+        </>
+      )}
+
+      {secondary && (
         <section className="border-t border-border pt-4 animate-fade-up">
-          <Button type="button" variant="ghost" className="h-auto w-full justify-start gap-3 px-0 py-2 text-left" onClick={() => openDirection(continuation, "continuity_opened")}>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary"><ContinuationIcon className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-xs font-semibold text-muted-foreground">{continuation.eyebrow}</span><span className="mt-0.5 block truncate text-sm font-semibold text-foreground">{visibleDescription(continuation)}</span></span>
+          <Button type="button" variant="ghost" className="h-auto w-full justify-start gap-3 px-0 py-2 text-left" onClick={() => onNavigateTab("sessoes")}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary"><CalendarDays className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-xs font-semibold text-muted-foreground">Seu próximo encontro</span><span className="mt-0.5 block truncate text-sm font-semibold text-foreground">{formatScheduledBrt(secondary.scheduled_at)}</span></span>
             <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
           </Button>
         </section>
       )}
-
-      <PrayerEntranceCard userId={userId} onOpen={() => onNavigateTab("oracoes")} onEvent={(eventType) => { void supabasePortal.from("portal_value_events").insert({ user_id: userId, feature: "today", event_type: eventType, source: "app", metadata: { origin: "today_prayer" } as Json }).then(() => undefined); }} />
 
       {showPushInvitation && (
         <section className="flex items-center gap-3 border-t border-border pt-4 animate-fade-up">
