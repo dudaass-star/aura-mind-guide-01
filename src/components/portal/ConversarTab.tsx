@@ -23,6 +23,8 @@ import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { sanitizePortalText } from "@/components/portal/sanitize";
 import { PortalHomeAreas, type HomeArea } from "@/components/portal/PortalHomeAreas";
+import { HomeMomentBar } from "@/components/portal/HomeMomentBar";
+import { setResumeIntent } from "@/lib/chat-resume-intent";
 
 type ChatMessage = {
   id: string;
@@ -1386,6 +1388,7 @@ export function ConversarTab({
             </div>
           </div>
         </Button>
+        {userId && !isDemo && <HomeMomentBar userId={userId} onNavigate={navigateFromConversation} onResume={(id) => { setResumeIntent(userId, id); setChatOpen(true); }} />}
       </div>
 
       <div className="shrink-0 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
