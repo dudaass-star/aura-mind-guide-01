@@ -372,34 +372,34 @@ export function SessoesTab({
             const diff = new Date(session.scheduled_at).getTime() - Date.now();
             const canEnter = session.status === "in_progress" || (diff <= 15 * 60_000 && diff >= -60 * 60_000);
             return (
-              <article key={session.id} className={index === 0 ? "rounded-lg bg-foreground p-5 text-background shadow-card" : "rounded-lg border border-border bg-card p-4 shadow-sm"}>
-                <div className="flex items-center justify-between gap-3"><p className={`text-xs font-bold uppercase ${index === 0 ? "text-accent" : "text-primary"}`}>{session.status === "in_progress" ? "Sessão em andamento" : isDegustacao && !session.quota_exempt ? "Pré-reserva · Aguardando confirmação" : index === 0 ? "Próxima sessão" : "Sessão agendada"}</p><span className={`text-xs ${index === 0 ? "text-background/70" : "text-muted-foreground"}`}>{countdown(session.scheduled_at)}</span></div>
+              <article key={session.id} className={index === 0 ? "rounded-lg border border-primary/30 bg-card p-5 shadow-card" : "rounded-lg border border-border bg-card p-4 shadow-sm"}>
+                <div className="flex items-center justify-between gap-3"><p className={`text-xs font-bold uppercase ${"text-primary"}`}>{session.status === "in_progress" ? "Sessão em andamento" : isDegustacao && !session.quota_exempt ? "Pré-reserva · Aguardando confirmação" : index === 0 ? "Próxima sessão" : "Sessão agendada"}</p><span className={`text-xs ${"text-muted-foreground"}`}>{countdown(session.scheduled_at)}</span></div>
                 <p className={`mt-2 font-semibold leading-snug ${index === 0 ? "text-xl" : "text-base"}`}>{formatSessionDate(session.scheduled_at)}</p>
                 {isDegustacao && !session.quota_exempt && (
-                  <div className={`mt-4 rounded-md p-3 ${index === 0 ? "bg-background/10" : "bg-primary/5"}`}>
+                  <div className={`mt-4 rounded-md p-3 ${"bg-primary/5"}`}>
                     <p className="text-sm font-semibold">Confirme sua vaga para liberar a sala</p>
-                    <p className={`mt-1 text-xs ${index === 0 ? "text-background/70" : "text-muted-foreground"}`}>Seu primeiro encontro foi cortesia. Este horário está pré-agendado e só fica garantido com o plano ativo.</p>
-                    <Button type="button" size="sm" className="mt-3 w-full" variant={index === 0 ? "secondary" : "default"} onClick={() => openDegustacaoPlans("session_end")}><ArrowUpRight /> Confirmar no Essencial · R$ 29,90</Button>
+                    <p className={`mt-1 text-xs ${"text-muted-foreground"}`}>Seu primeiro encontro foi cortesia. Este horário está pré-agendado e só fica garantido com o plano ativo.</p>
+                    <Button type="button" size="sm" className="mt-3 w-full" variant="default" onClick={() => openDegustacaoPlans("session_end")}><ArrowUpRight /> Confirmar no Essencial · R$ 29,90</Button>
                   </div>
                 )}
                 {canEnter && isDegustacao && !session.quota_exempt ? null : canEnter ? (
-                  <Button type="button" className="mt-4 w-full" variant={index === 0 ? "secondary" : "default"} onClick={() => void enterSession(session)} disabled={saving}><MessageCircle />{session.status === "in_progress" ? "Continuar sessão" : "Entrar na sessão"}</Button>
+                  <Button type="button" className="mt-4 w-full" variant="default" onClick={() => void enterSession(session)} disabled={saving}><MessageCircle />{session.status === "in_progress" ? "Continuar sessão" : "Entrar na sessão"}</Button>
                 ) : (
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <Button type="button" variant={index === 0 ? "secondary" : "outline"} size="sm" onClick={() => openScheduler(session)}><Pencil /> Reagendar</Button>
-                    <Button type="button" variant="ghost" size="sm" className={index === 0 ? "text-background hover:text-foreground" : "text-muted-foreground"} onClick={() => { setSelectedSession(session); setCancelOpen(true); }}><Trash2 /> Cancelar</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => openScheduler(session)}><Pencil /> Reagendar</Button>
+                    <Button type="button" variant="ghost" size="sm" className={"text-muted-foreground"} onClick={() => { setSelectedSession(session); setCancelOpen(true); }}><Trash2 /> Cancelar</Button>
                   </div>
                 )}
                 {session.status === "scheduled" && (
-                  <div className={`mt-4 border-t pt-4 ${index === 0 ? "border-background/20" : "border-border"}`}>
+                  <div className={`mt-4 border-t pt-4 ${"border-border"}`}>
                     <div className="flex items-start gap-3">
-                      <NotebookPen className={`mt-0.5 h-5 w-5 shrink-0 ${index === 0 ? "text-accent" : "text-primary"}`} />
+                      <NotebookPen className={`mt-0.5 h-5 w-5 shrink-0 ${"text-primary"}`} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold">{session.preparation_note ? "Encontro preparado" : "Tem algo que você quer trazer?"}</p>
-                        <p className={`mt-1 text-xs leading-relaxed ${index === 0 ? "text-background/70" : "text-muted-foreground"}`}>
+                        <p className={`mt-1 text-xs leading-relaxed ${"text-muted-foreground"}`}>
                           {session.preparation_note ? "A AURA vai considerar sua anotação quando a sessão começar." : "Conte à AURA o que você quer conversar ou não quer esquecer."}
                         </p>
-                        <Button type="button" variant={index === 0 ? "secondary" : "outline"} size="sm" className="mt-3" onClick={() => { setSelectedSession(session); setPreparation(session.preparation_note || ""); setPreparationOpen(true); }}>
+                        <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => { setSelectedSession(session); setPreparation(session.preparation_note || ""); setPreparationOpen(true); }}>
                           {session.preparation_note ? <Pencil /> : <NotebookPen />}{session.preparation_note ? "Editar preparação" : "Preparar este encontro"}
                         </Button>
                       </div>
