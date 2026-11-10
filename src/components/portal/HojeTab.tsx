@@ -16,7 +16,7 @@ interface HojeTabProps {
   firstName: string;
   profile: any;
   onNavigateTab: (tab: string) => void;
-  onOpenConversation: (prefilledMessage?: string) => void;
+  onOpenConversation: (prefilledMessage?: string, options?: { resumeSessionId?: string }) => void;
   onOpenNotifications: () => void;
 }
 
@@ -144,7 +144,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
     if (direction.target === "meditacoes") return onNavigateTab("meditacoes");
     if (direction.target === "insights") return onNavigateTab("insights");
     if (direction.target === "episode" && direction.targetId) return navigate(`/episodio/${direction.targetId}?u=${userId}`);
-    if (direction.action === "continuity") return onOpenConversation(`Quero retomar o que ficou da minha última sessão: ${direction.description}`);
+    if (direction.action === "continuity") return onOpenConversation(undefined, { resumeSessionId: data.heroSignals?.lastSession?.id });
     return onOpenConversation();
   };
   const nightPrayer = getNightPrayer(new Date(nowMs));
@@ -214,7 +214,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
         <section className={card}>
           <p className={eyebrow}>Da nossa última conversa{hero.session.theme_label ? ` · ${hero.session.theme_label}` : ""}</p>
           <p className="mt-2 font-display text-xl font-semibold leading-snug">“{hero.text}”</p>
-          <Button type="button" variant="secondary" className="mt-5 w-full justify-between" onClick={() => { heroEvent("priority_opened"); onOpenConversation(hero.session.theme_label ? `Quero retomar o que conversamos sobre ${hero.session.theme_label.toLowerCase()}.` : undefined); }}>Retomar com a AURA<MessageCircle className="h-4 w-4" /></Button>
+          <Button type="button" variant="secondary" className="mt-5 w-full justify-between" onClick={() => { heroEvent("priority_opened"); onOpenConversation(undefined, { resumeSessionId: hero.session.id }); }}>Retomar com a AURA<MessageCircle className="h-4 w-4" /></Button>
           <Button type="button" variant="link" className="mt-2 h-auto p-0 text-primary-foreground/80" onClick={() => { try { localStorage.setItem(dismissKey, hero.session.id); } catch { /* sem armazenamento */ } setDismissedThreadId(hero.session.id); heroEvent("thread_dismissed"); }}>Agora não</Button>
         </section>
       )}

@@ -1,3 +1,4 @@
+import { consumeResumeIntent, readResumeIntent } from "@/lib/chat-resume-intent";
 import { MovementGiftPrompt } from "@/components/movement/MovementGiftPrompt";
 import { canOfferGift, readGiftState } from "@/lib/movement-gift-cadence";
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
@@ -110,6 +111,7 @@ type PendingMessage = {
   audioMime?: string;
   audioDurationMs?: number;
   journeyEpisodeId?: string;
+  resumeSessionId?: string;
   createdAt: string;
 };
 
@@ -1040,6 +1042,7 @@ export function ConversarTab({
         audio_mime: pending.audioMime,
         audio_duration_ms: pending.audioDurationMs,
         journey_episode_id: pending.journeyEpisodeId,
+        resume_session_id: pending.resumeSessionId,
         client_sent_at: pending.createdAt,
       },
     });
@@ -1054,6 +1057,7 @@ export function ConversarTab({
     reportTodayDirectionProgress(userId, "completed", "conversation");
     if (pending.journeyEpisodeId) setActiveDiscussionEpisodeId(undefined);
     removeFromOutbox(pending.clientId);
+    if (pending.resumeSessionId) consumeResumeIntent(userId, pending.resumeSessionId);
     setMessages((current) => mergeMessage(current, {
       id: data.message.id,
       user_id: userId,
@@ -1132,7 +1136,7 @@ export function ConversarTab({
 
     const clientId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    const pending: PendingMessage = { clientId, text, journeyEpisodeId: activeDiscussionEpisodeId, createdAt };
+    const pending: PendingMessage = { clientId, text, journeyEpisodeId: activeDiscussionEpisodeId, resumeSessionId: readResumeIntent(userId), createdAt };
     responseTraceRef.current = { clientId, messageId: null, sentAt: createdAt, receivedAt: null, transport: null, recorded: false };
     const optimistic: ChatMessage = {
       id: `local:${clientId}`,
@@ -1240,6 +1244,7 @@ export function ConversarTab({
           audioBase64: await blobToBase64(blob),
           audioMime: blob.type,
           audioDurationMs: duration,
+          resumeSessionId: readResumeIntent(userId),
           createdAt,
         };
         responseTraceRef.current = { clientId, messageId: null, sentAt: createdAt, receivedAt: null, transport: null, recorded: false };
