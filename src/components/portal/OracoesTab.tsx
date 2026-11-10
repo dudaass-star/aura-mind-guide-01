@@ -7,7 +7,7 @@ import { requestDegustacaoContent } from "@/lib/degustacao";
 import { MovementGiftPrompt } from "@/components/movement/MovementGiftPrompt";
 import { canOfferGift, readGiftState, writeGiftState } from "@/lib/movement-gift-cadence";
 import { recordPracticeAudio } from "@/lib/practice-analytics";
-import { getPrayerHighlight, PRAYERS, PRAYER_CATEGORIES, type PrayerCategory, type PrayerTrack } from "@/lib/prayers";
+import { getPrayerHighlight, takeRequestedPrayer, PRAYERS, PRAYER_CATEGORIES, type PrayerCategory, type PrayerTrack } from "@/lib/prayers";
 
 const formatTime = (time: number) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
 const iconForPrayer = (id: string) => id === "prayer-morning-presence" || id === "prayer-morning-guidance" ? Sunrise : id === "prayer-night" ? Moon : id === "prayer-restless-mind" ? CloudMoon : id === "prayer-loved-ones" || id === "prayer-gratitude" || id === "prayer-life-companions" || id === "prayer-closeness" ? Heart : id === "prayer-strength" || id === "prayer-steps" || id === "prayer-hope" || id === "prayer-flourish" ? Sprout : Compass;
