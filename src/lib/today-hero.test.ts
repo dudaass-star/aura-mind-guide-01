@@ -1,3 +1,4 @@
+// @ts-ignore -- executado com bun test, fora do typecheck do app
 import { describe, expect, test } from "bun:test";
 import { isNightBrt, selectTodayHero, threadText } from "./today-hero";
 
