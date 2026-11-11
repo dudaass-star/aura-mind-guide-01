@@ -91,3 +91,8 @@ export function homeBarFromHero(hero: TodayHero): HomeBar | null {
   if (hero.kind === "thread") return { kind: "thread", sessionId: hero.session.id };
   return null;
 }
+
+// "Para você levar": só fechamentos com frase, decisão ou passo concreto; despedidas ficam de fora.
+export function takeawayFromClosure(closure: string | null | undefined): string | null {
+  return threadText(closure);
+}

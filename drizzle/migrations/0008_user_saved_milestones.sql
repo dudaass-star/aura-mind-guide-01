@@ -1,0 +1,2 @@
+ALTER TABLE public.user_milestones ADD COLUMN IF NOT EXISTS session_id uuid;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_user_milestones_user_saved_session ON public.user_milestones(user_id, session_id) WHERE source = 'user_saved';

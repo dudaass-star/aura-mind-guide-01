@@ -69,3 +69,13 @@ describe("barra da tela inicial", () => {
     expect(homeBarFromHero({ kind: "thread", session: { id: "l1", scheduled_at: s.scheduled_at }, text: "x" })).toEqual({ kind: "thread", sessionId: "l1" });
   });
 });
+
+import { takeawayFromClosure as takeaway } from "./today-hero";
+describe("Para você levar", () => {
+  test("pula fechamento que é só despedida", () => {
+    expect(takeaway("Foi muito bom conversar com você. Cuide-se, até a próxima!")).toBeNull();
+  });
+  test("mostra decisão concreta da sessão", () => {
+    expect(takeaway("Você decidiu dizer não ao pedido do seu irmão antes de sexta.")).toContain("dizer não");
+  });
+});

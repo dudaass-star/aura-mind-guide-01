@@ -5,3 +5,4 @@
 - Prayer lyrics use cue-relative progress and measured visible bounds for long-line scrolling; this keeps all words readable without shrinking text or moving playback controls.
 - In-App Movement join is one tap using the profile name, with the role chosen by explicit button; the manual form remains only as fallback when no name exists, keeping consent explicit without friction.
 - Movement gift prompts share one cadence helper (paid members only, stored per user on the device); this keeps post-session and post-prayer invites rare and consistent.
+- Saved session takeaways are `user_milestones` rows with `source='user_saved'` and `session_id`, written only by manage-portal-session from the session's own closure, unique per user+session; prevents duplicates and client-forged text.

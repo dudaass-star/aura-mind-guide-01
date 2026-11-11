@@ -119,7 +119,8 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
     return result;
   }, [data?.themes]);
   const recentMovements = useMemo(() => (data?.snapshots ?? []).filter((snapshot) => snapshot.snapshot_change || snapshot.snapshot_before || snapshot.evidence_quote).slice(0, 3), [data?.snapshots]);
-  const meaningfulMilestones = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)).slice(0, 4), [data?.milestones]);
+  const savedItems = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.source === "user_saved" && milestone.milestone_text), [data?.milestones]);
+  const meaningfulMilestones = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.source !== "user_saved" && milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)).slice(0, 4), [data?.milestones]);
   const lastSession = data?.sessions?.[0] ?? null;
   const weeklyReports = data?.weeklyReports ?? [];
   const monthlyReports = data?.monthlyReports ?? [];
@@ -186,6 +187,20 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       </section>
 
       <div className="portal-progress-flow">
+
+      {savedItems.length > 0 && (
+        <section className="portal-progress-step space-y-3" aria-labelledby="o-que-voce-guardou">
+          <SectionTitle icon={BookMarked} eyebrow="Escolhido por você" title="O que você guardou" />
+          <div id="o-que-voce-guardou" className="rounded-2xl border border-primary/30 bg-card divide-y divide-border">
+            {savedItems.map((item) => (
+              <article key={item.id} id={`guardado-${item.id}`} className="scroll-mt-24 p-4">
+                <p className="text-[15px] leading-relaxed text-foreground">{sanitizePortalText(item.milestone_text)}</p>
+                {item.milestone_date && <p className="mt-1 text-xs text-muted-foreground">Encontro de {new Date(item.milestone_date).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</p>}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {activeThemes.length > 0 ? (
         <section className="portal-progress-step portal-progress-step-current space-y-3" aria-labelledby="momento-atual">

@@ -3,7 +3,7 @@ import { MovementGiftPrompt } from "@/components/movement/MovementGiftPrompt";
 import { canOfferGift, readGiftState } from "@/lib/movement-gift-cadence";
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, HeartHandshake, Loader2, LogOut, Mic, Moon, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Trash2, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, HeartHandshake, Loader2, LogOut, Mic, Moon, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Bookmark, Trash2, UserRound, X } from "lucide-react";
 import { trackMovement } from "@/lib/movement-analytics";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -25,6 +25,7 @@ import { sanitizePortalText } from "@/components/portal/sanitize";
 import { PortalHomeAreas, type HomeArea } from "@/components/portal/PortalHomeAreas";
 import { HomeMomentBar } from "@/components/portal/HomeMomentBar";
 import { setResumeIntent } from "@/lib/chat-resume-intent";
+import { takeawayFromClosure } from "@/lib/today-hero";
 
 type ChatMessage = {
   id: string;
@@ -121,6 +122,7 @@ type PendingSessionRating = {
   id: string;
   ended_at: string;
   continuity_thread: string | null;
+  closure_text?: string | null;
 };
 
 type ActiveSession = {
@@ -387,6 +389,9 @@ export function ConversarTab({
   const [pendingRating, setPendingRating] = useState<PendingSessionRating | null>(null);
   const [ratingSaving, setRatingSaving] = useState(false);
   const [ratingError, setRatingError] = useState("");
+  const [takeawaySaving, setTakeawaySaving] = useState(false);
+  const [takeawaySaved, setTakeawaySaved] = useState<string | null>(null);
+  const [takeawayError, setTakeawayError] = useState("");
   const [showGiftPrompt, setShowGiftPrompt] = useState(false);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [sessionClock, setSessionClock] = useState(Date.now());
@@ -446,7 +451,7 @@ export function ConversarTab({
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: completed } = await supabasePortal
       .from("sessions")
-      .select("id,ended_at,continuity_thread")
+      .select("id,ended_at,continuity_thread,closure_text")
       .eq("user_id", userId)
       .eq("status", "completed")
       .gte("ended_at", cutoff)
@@ -463,6 +468,19 @@ export function ConversarTab({
       .eq("session_id", completed.id)
       .maybeSingle();
     setPendingRating(existing ? null : completed as PendingSessionRating);
+    const { data: saved } = await supabasePortal.from("user_milestones").select("id").eq("user_id", userId).eq("session_id", completed.id).eq("source", "user_saved").maybeSingle();
+    setTakeawaySaved(saved?.id ? completed.id : null);
+  };
+
+  const saveTakeaway = async () => {
+    if (!pendingRating || takeawaySaving) return;
+    setTakeawaySaving(true);
+    setTakeawayError("");
+    const { data, error } = await supabasePortal.functions.invoke("manage-portal-session", { body: { action: "save_takeaway", sessionId: pendingRating.id } });
+    setTakeawaySaving(false);
+    if (error || data?.error || !data?.result?.id) { setTakeawayError("Não consegui guardar agora. Tente mais uma vez."); return; }
+    setTakeawaySaved(pendingRating.id);
+    recordConversationEvent(userId, "takeaway_saved", { session_id: pendingRating.id, milestone_id: data.result.id });
   };
 
   const refreshActiveSession = async () => {
@@ -1492,6 +1510,20 @@ export function ConversarTab({
               <p className="text-xs font-semibold text-primary">Para o próximo encontro</p>
               <p className="mt-1 text-sm leading-relaxed text-foreground">{sanitizePortalText(pendingRating.continuity_thread)}</p>
             </div>
+          )}
+          {pendingRating && !responding && takeawayFromClosure(pendingRating.closure_text) && (
+            <section className="mt-4 max-w-[86%] rounded-lg border border-primary/30 bg-card p-4 shadow-sm" aria-label="Para você levar">
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">Para você levar</p>
+              <p className="mt-2 text-sm leading-relaxed text-foreground">{takeawayFromClosure(pendingRating.closure_text)}</p>
+              {takeawaySaved === pendingRating.id ? (
+                <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-primary"><Check className="h-4 w-4" />Guardado no seu Percurso</p>
+              ) : (
+                <Button type="button" variant="outline" size="sm" className="mt-3" disabled={takeawaySaving} onClick={() => void saveTakeaway()}>
+                  <Bookmark className="h-4 w-4" />{takeawaySaving ? "Guardando…" : "Guardar no meu Percurso"}
+                </Button>
+              )}
+              {takeawayError && <p className="mt-2 text-xs text-destructive">{takeawayError}</p>}
+            </section>
           )}
           {pendingRating && !responding && (
             <section className="mt-4 max-w-[86%] rounded-lg border border-border bg-card p-4 shadow-sm" aria-label="Avaliar sessão">

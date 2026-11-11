@@ -57,6 +57,13 @@
       "when": 1792689771850,
       "tag": "0007_movement_single_membership",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794423184729,
+      "tag": "0008_user_saved_milestones",
+      "breakpoints": true
     }
   ]
 }

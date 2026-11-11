@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const BodySchema = z.object({
-  action: z.enum(["schedule", "reschedule", "cancel", "start", "save_preparation", "rate", "confirm_reframe", "correct_reframe"]),
+  action: z.enum(["schedule", "reschedule", "cancel", "start", "save_preparation", "rate", "confirm_reframe", "correct_reframe", "save_takeaway"]),
   scheduledAt: z.string().datetime().nullable().optional(),
   sessionId: z.string().uuid().nullable().optional(),
   value: z.string().max(800).nullable().optional(),
@@ -73,6 +73,24 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(url, serviceKey);
+
+    // Guardar "Para você levar": texto vem do próprio fechamento da sessão da cliente, nunca do app.
+    if (parsed.data.action === "save_takeaway") {
+      if (!parsed.data.sessionId) return json({ error: "session_required" }, 400);
+      const { data: session } = await admin.from("sessions").select("id,closure_text,ended_at,status").eq("id", parsed.data.sessionId).eq("user_id", userId).maybeSingle();
+      const text = String(session?.closure_text || "").replace(/\[[^\]]*\]/g, " ").replace(/\|\|\|/g, " ").replace(/\s+/g, " ").trim();
+      if (!session || session.status !== "completed" || !text) return json({ error: "session_not_available" }, 409);
+      const existing = await admin.from("user_milestones").select("id").eq("user_id", userId).eq("session_id", session.id).eq("source", "user_saved").maybeSingle();
+      if (existing.data) return json({ result: { id: existing.data.id, already: true } });
+      const inserted = await admin.from("user_milestones").insert({ user_id: userId, session_id: session.id, source: "user_saved", milestone_text: text, milestone_date: session.ended_at || new Date().toISOString() }).select("id").maybeSingle();
+      if (inserted.error) {
+        // Corrida de toque duplo: o índice único devolve o registro já gravado.
+        const again = await admin.from("user_milestones").select("id").eq("user_id", userId).eq("session_id", session.id).eq("source", "user_saved").maybeSingle();
+        if (again.data) return json({ result: { id: again.data.id, already: true } });
+        return json({ error: "session_update_failed" }, 500);
+      }
+      return json({ result: { id: inserted.data?.id } });
+    }
     const experienceActions = ["save_preparation", "rate", "confirm_reframe", "correct_reframe"];
     const { data, error } = experienceActions.includes(parsed.data.action)
       ? await admin.rpc("record_portal_session_experience", {

@@ -4587,6 +4587,7 @@ export type Database = {
           id: string
           milestone_date: string
           milestone_text: string
+          session_id: string | null
           source: string
           user_id: string
         }
@@ -4596,6 +4597,7 @@ export type Database = {
           id?: string
           milestone_date?: string
           milestone_text: string
+          session_id?: string | null
           source?: string
           user_id: string
         }
@@ -4605,6 +4607,7 @@ export type Database = {
           id?: string
           milestone_date?: string
           milestone_text?: string
+          session_id?: string | null
           source?: string
           user_id?: string
         }
