@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { planSessionLimit, suggestNextSession } from "./next-session";
 
 // Quarta, 11/11/2026 16:00 BRT = 19:00 UTC
