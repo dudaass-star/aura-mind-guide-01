@@ -55,7 +55,7 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
       if (status !== "active" || plan === "oracoes" || (upcoming?.length ?? 0) > 0) return;
       if (planSessionLimit(plan, profile.plan_tier) < 2) return;
       const next = suggestNextSession(plan, last.scheduled_at);
-      setRhythm(plan === "essencial" || plan === "mensal" ? "daqui a duas semanas" : plan === "transformacao" ? "ainda nesta semana" : "na próxima semana");
+      setRhythm(plan === "essencial" || plan === "mensal" ? "daqui a duas semanas" : plan === "transformacao" ? "este segundo bloco da semana" : "a semana que vem");
       setDate(brtDate(next));
       setSuggestion(next);
       track("post_session_schedule_shown", { suggested_at: next.toISOString(), plan });
@@ -109,8 +109,8 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
           <>
             <DialogHeader className="text-left">
               <CalendarDays className="mb-2 h-6 w-6 text-primary" />
-              <DialogTitle className="font-display text-xl">Para não perder o ritmo do que começamos hoje</DialogTitle>
-              <DialogDescription>Que tal já guardar o seu próximo encontro {rhythm}, no mesmo horário?</DialogDescription>
+              <DialogTitle className="font-display text-xl">Seu próximo encontro</DialogTitle>
+              <DialogDescription>Para dar sequência ao seu processo, o seu próximo horário fica reservado para {rhythm}:</DialogDescription>
             </DialogHeader>
             {!custom ? (
               <div className="grid gap-3">
@@ -120,10 +120,10 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
                 </div>
                 {error && <p className="text-sm text-destructive">{error}</p>}
                 <Button size="lg" onClick={() => void schedule(suggestion, "one_tap")} disabled={saving}>
-                  {saving && <Loader2 className="animate-spin" />}Confirmar esse horário
+                  {saving && <Loader2 className="animate-spin" />}Garantir esse horário
                 </Button>
                 <Button variant="outline" onClick={() => { setCustom(true); setTime(""); setError(null); }}>Escolher outro dia ou horário</Button>
-                <Button variant="ghost" size="sm" onClick={close}>Agora não, escolho depois</Button>
+                <Button variant="ghost" size="sm" onClick={close}>Escolher depois</Button>
               </div>
             ) : (
               <div className="grid gap-3">
