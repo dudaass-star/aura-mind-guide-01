@@ -75,7 +75,7 @@ export function HomeMomentBar({ userId, onNavigate, onResume }: Props) {
     : bar.kind === "night"
       ? { Icon: Moon, text: `Oração da noite · ${Math.max(1, Math.round((nightPrayer!.duration || 0) / 60))} min`, action: "Ouvir agora", run: () => { requestPrayerPlayback(nightPrayer!.id); onNavigate("oracoes"); } }
       : bar.kind === "saved"
-        ? { Icon: Bookmark, text: "Uma frase que você quis guardar", action: "Ver frase", run: () => { setPercursoFocus(bar.itemId); onNavigate("insights"); } }
+        ? { Icon: Bookmark, text: "O que você levou do encontro", action: "Rever", run: () => { setPercursoFocus(bar.itemId); onNavigate("insights"); } }
       : { Icon: MessageCircle, text: "Da nossa última conversa", action: "Retomar com a AURA", run: () => onResume((bar as { sessionId: string }).sessionId) };
 
   return (
