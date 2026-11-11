@@ -39,7 +39,7 @@ const CYCLE_DAYS: Record<string, number> = {
 };
 // Sessões incluídas por plano (espelha webhook-asaas).
 const PLAN_SESSIONS: Record<string, number> = {
-  essencial: 1, direcao: 4, transformacao: 8,
+  essencial: 2, direcao: 4, transformacao: 8,
 };
 
 /**

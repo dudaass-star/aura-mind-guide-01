@@ -64,6 +64,13 @@
       "when": 1794423184729,
       "tag": "0008_user_saved_milestones",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794427794211,
+      "tag": "0009_essencial_duas_sessoes",
+      "breakpoints": true
     }
   ]
 }

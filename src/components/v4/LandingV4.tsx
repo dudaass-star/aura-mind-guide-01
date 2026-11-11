@@ -363,7 +363,7 @@ export function MovementV4() {
 }
 
 const plans: { id: PlanId; name: string; sessions: string; description: string; trialPrice: string; primary?: boolean }[] = [
-  { id: "essencial", name: "Essencial", sessions: "1 encontro por mês", description: "A forma mais simples de começar a viver a experiência completa da AURA.", trialPrice: "R$ 6,90", primary: true },
+  { id: "essencial", name: "Essencial", sessions: "2 encontros por mês", description: "A forma mais simples de começar a viver a experiência completa da AURA.", trialPrice: "R$ 6,90", primary: true },
   { id: "direcao", name: "Direção", sessions: "4 encontros por mês", description: "Para quem quer continuidade e um espaço semanal de profundidade.", trialPrice: "R$ 9,90" },
   { id: "transformacao", name: "Transformação", sessions: "8 encontros por mês", description: "Para fases que pedem presença e acompanhamento mais frequentes.", trialPrice: "R$ 19,90" },
 ];

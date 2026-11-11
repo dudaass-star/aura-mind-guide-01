@@ -44,7 +44,7 @@ const PLAN_NAMES: Record<string, string> = {
 const CYCLE_MONTHS: Record<string, number> = {
   monthly: 1, quarterly: 3, semestral: 6, yearly: 12,
 };
-const PLAN_SESSIONS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8, oracoes: 0 };
+const PLAN_SESSIONS: Record<string, number> = { essencial: 2, direcao: 4, transformacao: 8, oracoes: 0 };
 
 // Vocabulário de status vive em _shared/woovi.ts (ponto único de tradução).
 // Cobrança do mandato que NÃO entrou. No PIX Automático NÃO avisamos o cliente

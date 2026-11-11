@@ -38,7 +38,7 @@ interface Props {
   minimumSessionLimit?: number;
 }
 
-const PLAN_SESSION_LIMITS: Record<PlanId, number> = { essencial: 1, direcao: 4, transformacao: 8 };
+const PLAN_SESSION_LIMITS: Record<PlanId, number> = { essencial: 2, direcao: 4, transformacao: 8 };
 
 export function ChangePlanDialog({
   open,

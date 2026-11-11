@@ -44,3 +44,4 @@
 - Today tab hero is chosen by one pure selector (`src/lib/today-hero.ts`, BRT, night 20h30–05h59) over raw `heroSignals` from today-direction; cards only render the chosen state, so screens never stack equal-priority cards.
 - Hoje → Retomar com a AURA never prefills the composer; it stores a temporary session reference sent with the first message, validated server-side and injected as context; keeps the client's own words and the mic available.
 - The app home shows one compact action bar under the AURA card from `homeBarFromHero(selectTodayHero(...))`; only imminent session, night audio and recent thread appear, otherwise nothing renders, so home and Hoje never disagree or stack cards.
+- After a paid client rates a session, the app proposes the next one at the same time shifted by the plan rhythm (`src/lib/next-session.ts`), only when nothing is scheduled; limits there must match `manage_portal_session_internal`.

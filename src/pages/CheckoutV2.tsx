@@ -83,8 +83,8 @@ const plans: Record<PlanId, PlanConfig> = {
     semestralMonthlyEquivalent: "14,90",
     semestralDiscount: 50,
     trialPrice: "6,90",
-    sessions: 1,
-    highlights: ["Conversas ilimitadas 24/7", "1 encontro guiado/mês", "Todas as orações e meditações"],
+    sessions: 2,
+    highlights: ["Conversas ilimitadas 24/7", "2 encontros guiados/mês", "Todas as orações e meditações"],
   },
   direcao: {
     name: "Direção",

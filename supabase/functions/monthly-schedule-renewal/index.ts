@@ -53,7 +53,8 @@ Deno.serve(async (req) => {
       try {
         const sessionsCount =
           user.plan === 'transformacao' ? 8 :
-          user.plan === 'direcao' ? 4 : 1;
+          user.plan === 'direcao' ? 4 :
+          user.plan === 'essencial' || user.plan === 'mensal' ? 2 : 1;
 
         // Reset session counter and trigger schedule setup
         const { error: updateError } = await supabase
@@ -76,7 +77,7 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Mensagem adaptada por plano (Essencial = 1 sessão; demais = múltiplas)
+        // Mensagem adaptada por plano (1 sessão; demais = múltiplas)
         const message = sessionsCount === 1
           ? `Oi, ${user.name}! 🌟
 

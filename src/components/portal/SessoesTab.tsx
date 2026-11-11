@@ -18,7 +18,7 @@ import { enablePushNotifications, getPushPermission, isIosPushInstallRequired, r
 import { Checkbox } from "@/components/ui/checkbox";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 
-const PLAN_SESSION_LIMITS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8 };
+import { PLAN_SESSION_LIMITS } from "@/lib/next-session";
 type SessionProfile = { plan?: string | null; plan_tier?: string | null; status?: string | null } | null;
 type PortalSession = {
   id: string;

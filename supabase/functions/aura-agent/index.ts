@@ -15,8 +15,8 @@ const corsHeaders = {
 
 // Plan configurations
 const PLAN_CONFIGS: Record<string, { sessions: number; dailyMessageTarget: number }> = {
-  essencial: { sessions: 1, dailyMessageTarget: 20 },
-  mensal: { sessions: 1, dailyMessageTarget: 20 },  // Alias para essencial
+  essencial: { sessions: 2, dailyMessageTarget: 20 },
+  mensal: { sessions: 2, dailyMessageTarget: 20 },  // Alias para essencial
   direcao: { sessions: 4, dailyMessageTarget: 0 },
   transformacao: { sessions: 8, dailyMessageTarget: 0 },
 };
@@ -5251,7 +5251,7 @@ serve(async (req) => {
     // ------------------------------------------------------------------
     // Sub-tiers de retenção (profiles.plan_tier): lite R$19,90 / base R$9,90.
     // Entitlements reduzidos — ver mem://features/retention/tier-entitlements
-    //   lite: 1 sessão/mês (igual Essencial) + áudio 15 min/mês
+    //   lite: 1 sessão/mês + áudio 15 min/mês
     //   base: sem sessões, sem áudio, 30 mensagens/mês
     // ------------------------------------------------------------------
     const planTier = (profile?.plan_tier || '').toString().toLowerCase();
@@ -7176,7 +7176,11 @@ Exemplo natural:
       let _exampleSchedule: string;
       let _exampleTag: string;
       let _distribution: string;
-      if (sessionsCount === 1) {
+      if (sessionsCount === 2) {
+        _exampleSchedule = '- Quinta, 14/05 às 19h\n- Quinta, 28/05 às 19h';
+        _exampleTag = '[CRIAR_AGENDA:2026-05-14 19:00,2026-05-28 19:00]';
+        _distribution = 'a cada 15 dias (quinzenal) — pergunte 1 dia da semana e 1 horário';
+      } else if (sessionsCount === 1) {
         _exampleSchedule = '- Quinta, 14/05 às 19h';
         _exampleTag = '[CRIAR_AGENDA:2026-05-14 19:00]';
         _distribution = 'apenas 1 data — pergunte 1 dia da semana e 1 horário';
@@ -7194,7 +7198,7 @@ Exemplo natural:
 
 # 📅 CONFIGURAÇÃO DE AGENDA DO MÊS (ATIVO!)
 
-O usuário precisa configurar ${sessionsCount === 1 ? 'sua **1 sessão** do mês (plano Essencial)' : `suas **${sessionsCount} sessões** do mês`}.
+O usuário precisa configurar ${sessionsCount === 1 ? 'sua **1 sessão** do mês' : `suas **${sessionsCount} sessões** do mês`}.
 
 ## SEU OBJETIVO:
 1. Perguntar ${sessionsCount === 1 ? 'qual dia da semana funciona melhor (ex: terça, quinta)' : 'quais dias da semana funcionam (ex: segundas, quintas)'}
@@ -7222,7 +7226,7 @@ AURA: "Pronto! Agenda confirmada! 💜 ${_exampleTag}
 Agora me conta: como você está hoje?"
 
 ## REGRAS IMPORTANTES:
-- ⚠️ **Você DEVE emitir EXATAMENTE ${sessionsCount} data(s) na tag [CRIAR_AGENDA] — nem mais, nem menos.** Plano do usuário: ${sessionsCount === 1 ? 'Essencial (1 sessão/mês)' : sessionsCount === 4 ? 'Direção (4 sessões/mês)' : `${sessionsCount} sessões/mês`}.
+- ⚠️ **Você DEVE emitir EXATAMENTE ${sessionsCount} data(s) na tag [CRIAR_AGENDA] — nem mais, nem menos.** Plano do usuário: ${sessionsCount === 2 ? 'Essencial (2 sessões/mês, quinzenal)' : sessionsCount === 1 ? '1 sessão/mês' : sessionsCount === 4 ? 'Direção (4 sessões/mês)' : `${sessionsCount} sessões/mês`}.
 - Só use [CRIAR_AGENDA:...] APÓS confirmação explícita ("sim", "ok", "pode ser", "confirmo")
 - Se o usuário quiser mudar algo, negocie naturalmente
 ${sessionsCount > 1 ? '- Se o usuário pedir 2 dias diferentes (ex: segundas e quintas), alterne entre eles\n' : ''}- Sempre mostre a ${sessionsCount === 1 ? 'data' : 'lista formatada'} ANTES de pedir confirmação

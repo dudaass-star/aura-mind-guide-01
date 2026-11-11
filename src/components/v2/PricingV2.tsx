@@ -35,7 +35,7 @@ const plans: {
   features: string[];
   popular: boolean;
 }[] = [
-  { id: "essencial", name: "Essencial", tag: "Pra começar", features: ["Conversas ilimitadas com a AURA, 24h", "1 encontro guiado por mês (45 min)", "Todas as orações e meditações guiadas", "Memória do seu percurso"], popular: false },
+  { id: "essencial", name: "Essencial", tag: "Pra começar", features: ["Conversas ilimitadas com a AURA, 24h", "2 encontros guiados por mês (45 min)", "Todas as orações e meditações guiadas", "Memória do seu percurso"], popular: false },
   { id: "direcao", name: "Direção", tag: "Recomendado", features: ["Tudo do Essencial", "4 encontros guiados por mês — um por semana", "Resumo do que você levou de cada encontro", "Orações e meditações para cada momento do dia"], popular: true },
   { id: "transformacao", name: "Transformação", tag: "Pra momentos de virada", features: ["Tudo do Direção", "8 encontros guiados por mês — dois por semana", "Prioridade em momentos difíceis", "Orações e meditações para cada momento do dia"], popular: false },
 ];

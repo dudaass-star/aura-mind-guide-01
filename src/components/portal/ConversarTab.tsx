@@ -26,6 +26,7 @@ import { PortalHomeAreas, type HomeArea } from "@/components/portal/PortalHomeAr
 import { HomeMomentBar } from "@/components/portal/HomeMomentBar";
 import { setResumeIntent } from "@/lib/chat-resume-intent";
 import { takeawayFromClosure } from "@/lib/today-hero";
+import { PostSessionScheduleDialog } from "@/components/portal/PostSessionScheduleDialog";
 
 type ChatMessage = {
   id: string;
@@ -389,6 +390,7 @@ export function ConversarTab({
   const [pendingRating, setPendingRating] = useState<PendingSessionRating | null>(null);
   const [ratingSaving, setRatingSaving] = useState(false);
   const [ratingError, setRatingError] = useState("");
+  const [scheduleNextFor, setScheduleNextFor] = useState<string | null>(null);
   const [takeawaySaving, setTakeawaySaving] = useState(false);
   const [takeawaySaved, setTakeawaySaved] = useState<string | null>(null);
   const [takeawayError, setTakeawayError] = useState("");
@@ -521,6 +523,7 @@ export function ConversarTab({
     }
     recordConversationEvent(userId, "rated", { session_id: pendingRating.id, rating, source: "conversation" });
     setPendingRating(null);
+    if (!isDemo) setScheduleNextFor(pendingRating.id);
     setRatingSaving(false);
     if (canOfferGift({ status: profileStatus, isDemo, state: readGiftState(userId), now: Date.now(), trigger: "session", rating })) setShowGiftPrompt(true);
   };
@@ -1553,6 +1556,7 @@ export function ConversarTab({
             <div className="mt-4 max-w-[86%]"><MovementGiftPrompt userId={userId} fullName={fullName} trigger="session" onClose={() => setShowGiftPrompt(false)} /></div>
           )}
           {degustacaoCard && !responding && <div className="mt-4">{degustacaoCard}</div>}
+          {scheduleNextFor && <PostSessionScheduleDialog userId={userId} sessionId={scheduleNextFor} onClose={() => setScheduleNextFor(null)} />}
       </div>
 
       {showNew && (
