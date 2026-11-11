@@ -71,6 +71,13 @@
       "when": 1794427794211,
       "tag": "0009_essencial_duas_sessoes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794439690840,
+      "tag": "0010_essencial_duas_sessoes_marker",
+      "breakpoints": true
     }
   ]
 }

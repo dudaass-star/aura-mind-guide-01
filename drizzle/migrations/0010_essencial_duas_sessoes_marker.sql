@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION public.manage_portal_session_internal(uuid, text, timestamp with time zone, uuid) IS 'Limites mensais de encontros por plano: essencial 2, direcao 4, transformacao 8.';
