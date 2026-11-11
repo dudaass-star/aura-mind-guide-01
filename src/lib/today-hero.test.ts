@@ -79,3 +79,18 @@ describe("Para você levar", () => {
     expect(takeaway("Você decidiu dizer não ao pedido do seu irmão antes de sexta.")).toContain("dizer não");
   });
 });
+
+import { homeBarWithSaved } from "./today-hero";
+describe("Frase guardada na tela inicial", () => {
+  const now = Date.parse("2026-11-11T18:00:00Z");
+  const saved = { id: "m1", created_at: "2026-11-11T10:00:00Z" };
+  test("aparece quando a barra está livre", () => {
+    expect(homeBarWithSaved(null, saved, now)).toEqual({ kind: "saved", itemId: "m1" });
+  });
+  test("fio para retomar mantém a prioridade", () => {
+    expect(homeBarWithSaved({ kind: "thread", sessionId: "s1" }, saved, now)).toEqual({ kind: "thread", sessionId: "s1" });
+  });
+  test("some depois de 48h", () => {
+    expect(homeBarWithSaved(null, { id: "m1", created_at: "2026-11-09T17:00:00Z" }, now)).toBeNull();
+  });
+});

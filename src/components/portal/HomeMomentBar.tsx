@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, MessageCircle, Moon } from "lucide-react";
+import { Bookmark, CalendarDays, MessageCircle, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { getNightPrayer, requestPrayerPlayback } from "@/lib/prayers";
-import { brtDayKey, homeBarFromHero, selectTodayHero } from "@/lib/today-hero";
+import { brtDayKey, homeBarFromHero, homeBarWithSaved, selectTodayHero, type SavedItem } from "@/lib/today-hero";
+import { setPercursoFocus } from "@/lib/percurso-focus";
 import type { TodayDirectionResponse } from "@/lib/today-direction";
 
-type Props = { userId: string; onNavigate: (tab: "sessoes" | "oracoes") => void; onResume: (sessionId: string) => void };
+type Props = { userId: string; onNavigate: (tab: "sessoes" | "oracoes" | "insights") => void; onResume: (sessionId: string) => void };
 
 // Hora do encontro em Brasília: "hoje às 19h" / "hoje às 19h30".
 function timeBrt(iso: string) {
@@ -30,6 +31,16 @@ export function HomeMomentBar({ userId, onNavigate, onResume }: Props) {
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
+  const { data: saved = null } = useQuery({
+    queryKey: ["portal-latest-saved", userId],
+    queryFn: async () => {
+      const { data: row } = await supabasePortal.from("user_milestones").select("id,created_at").eq("user_id", userId).eq("source", "user_saved").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      return (row as SavedItem | null) ?? null;
+    },
+    enabled: Boolean(userId),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const tick = () => setNowMs(Date.now());
@@ -37,8 +48,9 @@ export function HomeMomentBar({ userId, onNavigate, onResume }: Props) {
       if (document.visibilityState !== "visible") return;
       tick();
       void queryClient.invalidateQueries({ queryKey: ["portal-today-direction", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["portal-latest-saved", userId] });
     };
-    const refresh = () => void queryClient.invalidateQueries({ queryKey: ["portal-today-direction", userId] });
+    const refresh = () => { void queryClient.invalidateQueries({ queryKey: ["portal-today-direction", userId] }); void queryClient.invalidateQueries({ queryKey: ["portal-latest-saved", userId] }); void queryClient.invalidateQueries({ queryKey: ["portal-live-journey", userId] }); };
     const timer = window.setInterval(tick, 30_000);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("aura:today-changed", refresh);
@@ -49,20 +61,22 @@ export function HomeMomentBar({ userId, onNavigate, onResume }: Props) {
   let dismissed: string | null = null;
   try { dismissed = localStorage.getItem(`aura-thread-dismissed:${userId}:${brtDayKey(nowMs)}`); } catch { /* sem storage */ }
   const nightPrayer = getNightPrayer(new Date(nowMs));
-  const bar = homeBarFromHero(selectTodayHero({
+  const bar = homeBarWithSaved(homeBarFromHero(selectTodayHero({
     nowMs,
     nextSession: data.heroSignals?.nextSession ?? null,
     lastSession: data.heroSignals?.lastSession ?? null,
     nightAudioAvailable: Boolean(nightPrayer),
     dismissedThreadId: dismissed,
-  }));
+  })), saved, nowMs);
   if (!bar || (bar.kind === "night" && !nightPrayer)) return null;
 
   const content = bar.kind === "session"
     ? { Icon: CalendarDays, text: bar.canEnter || bar.session.status === "in_progress" ? "Seu encontro já está aberto" : `Seu encontro é hoje às ${timeBrt(bar.session.scheduled_at)}`, action: bar.session.status === "in_progress" ? "Continuar encontro" : bar.canEnter ? "Entrar no encontro" : "Preparar encontro", run: () => onNavigate("sessoes") }
     : bar.kind === "night"
       ? { Icon: Moon, text: `Oração da noite · ${Math.max(1, Math.round((nightPrayer!.duration || 0) / 60))} min`, action: "Ouvir agora", run: () => { requestPrayerPlayback(nightPrayer!.id); onNavigate("oracoes"); } }
-      : { Icon: MessageCircle, text: "Da nossa última conversa", action: "Retomar com a AURA", run: () => onResume(bar.sessionId) };
+      : bar.kind === "saved"
+        ? { Icon: Bookmark, text: "Uma frase que você quis guardar", action: "Ver frase", run: () => { setPercursoFocus(bar.itemId); onNavigate("insights"); } }
+      : { Icon: MessageCircle, text: "Da nossa última conversa", action: "Retomar com a AURA", run: () => onResume((bar as { sessionId: string }).sessionId) };
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-border/60 bg-card px-4 py-3 shadow-sm" data-home-moment={bar.kind}>

@@ -480,6 +480,7 @@ export function ConversarTab({
     setTakeawaySaving(false);
     if (error || data?.error || !data?.result?.id) { setTakeawayError("Não consegui guardar agora. Tente mais uma vez."); return; }
     setTakeawaySaved(pendingRating.id);
+    window.dispatchEvent(new Event("aura:today-changed"));
     recordConversationEvent(userId, "takeaway_saved", { session_id: pendingRating.id, milestone_id: data.result.id });
   };
 

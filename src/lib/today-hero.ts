@@ -83,7 +83,18 @@ export function selectTodayHero(input: {
 export type HomeBar =
   | { kind: "session"; session: HeroSession; canEnter: boolean }
   | { kind: "night" }
-  | { kind: "thread"; sessionId: string };
+  | { kind: "thread"; sessionId: string }
+  | { kind: "saved"; itemId: string };
+
+export type SavedItem = { id: string; created_at: string };
+
+// Frase guardada só ocupa a barra quando ela está livre, e apenas nas 48h após guardar.
+export function homeBarWithSaved(bar: HomeBar | null, saved: SavedItem | null, nowMs: number): HomeBar | null {
+  if (bar) return bar;
+  if (!saved) return null;
+  const age = nowMs - new Date(saved.created_at).getTime();
+  return age >= 0 && age < 48 * HOUR ? { kind: "saved", itemId: saved.id } : null;
+}
 
 export function homeBarFromHero(hero: TodayHero): HomeBar | null {
   if (hero.kind === "session") return { kind: "session", session: hero.session, canEnter: hero.canEnter };

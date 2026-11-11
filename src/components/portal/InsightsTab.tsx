@@ -9,6 +9,7 @@ import { EmptyState, PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
+import { takePercursoFocus } from "@/lib/percurso-focus";
 
 type Snapshot = {
   id: string;
@@ -122,6 +123,20 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const savedItems = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.source === "user_saved" && milestone.milestone_text), [data?.milestones]);
   const meaningfulMilestones = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.source !== "user_saved" && milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)).slice(0, 4), [data?.milestones]);
   const lastSession = data?.sessions?.[0] ?? null;
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  // "Ver frase": abre direto o item guardado, mesmo com a aba já montada.
+  useEffect(() => {
+    const check = () => {
+      if (!savedItems.length) return;
+      const id = takePercursoFocus();
+      if (!id) return;
+      setFocusedId(id);
+      requestAnimationFrame(() => document.getElementById(`guardado-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    };
+    check();
+    window.addEventListener("aura:percurso-focus", check);
+    return () => window.removeEventListener("aura:percurso-focus", check);
+  }, [savedItems]);
   const weeklyReports = data?.weeklyReports ?? [];
   const monthlyReports = data?.monthlyReports ?? [];
 
@@ -193,7 +208,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
           <SectionTitle icon={BookMarked} eyebrow="Escolhido por você" title="O que você guardou" />
           <div id="o-que-voce-guardou" className="rounded-2xl border border-primary/30 bg-card divide-y divide-border">
             {savedItems.map((item) => (
-              <article key={item.id} id={`guardado-${item.id}`} className="scroll-mt-24 p-4">
+              <article key={item.id} id={`guardado-${item.id}`} className={cn("scroll-mt-24 p-4 transition-colors", focusedId === item.id && "bg-primary/10")}>
                 <p className="text-[15px] leading-relaxed text-foreground">{sanitizePortalText(item.milestone_text)}</p>
                 {item.milestone_date && <p className="mt-1 text-xs text-muted-foreground">Encontro de {new Date(item.milestone_date).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</p>}
               </article>
