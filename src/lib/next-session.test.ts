@@ -1,3 +1,4 @@
+// @ts-ignore -- executado com bun test, fora do typecheck do app
 import { describe, expect, it } from "bun:test";
 import { planSessionLimit, suggestNextSession } from "./next-session";
 
