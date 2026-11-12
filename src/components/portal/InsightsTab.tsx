@@ -44,7 +44,9 @@ function themesOverlap(a: string, b: string) {
   const aWords = new Set(normalizeWords(a));
   const bWords = new Set(normalizeWords(b));
   if (aWords.size === 0 || bWords.size === 0) return false;
-  const shared = [...aWords].filter((word) => bWords.has(word)).length;
+  const stem = (w: string) => w.slice(0, 5);
+  const bStems = new Set([...bWords].map(stem));
+  const shared = [...aWords].filter((word) => bWords.has(word) || bStems.has(stem(word))).length;
   return shared / Math.min(aWords.size, bWords.size) >= 0.6;
 }
 
@@ -55,6 +57,14 @@ function monthKeyOf(iso: string) {
 
 function monthLabelOf(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+}
+
+// Converte resumo em 3ª pessoa para a voz da AURA falando com a cliente.
+function toAuraVoice(text: string, firstName: string) {
+  let out = sanitizePortalText(text).trim();
+  if (firstName) out = out.replace(new RegExp(`\\b${firstName}\\b`, "gi"), "você");
+  out = out.replace(/\b(o|a) (cliente|usuári[oa]|paciente)\b/gi, "você").replace(/\bvocê demonstrou\b/gi, "você mostrou");
+  return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
 function truncate(text: string, max: number) {
@@ -119,9 +129,18 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
     }
     return result;
   }, [data?.themes]);
-  const recentMovements = useMemo(() => (data?.snapshots ?? []).filter((snapshot) => snapshot.snapshot_change || snapshot.snapshot_before || snapshot.evidence_quote).slice(0, 3), [data?.snapshots]);
+  const recentMovements = useMemo(() => {
+    const out: Snapshot[] = [];
+    for (const s of data?.snapshots ?? []) {
+      if (!(s.snapshot_change || s.snapshot_before || s.evidence_quote)) continue;
+      if (out.some((o) => themesOverlap(o.theme || o.snapshot_change || "", s.theme || s.snapshot_change || ""))) continue;
+      out.push(s);
+      if (out.length === 3) break;
+    }
+    return out;
+  }, [data?.snapshots]);
   const savedItems = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.source === "user_saved" && milestone.milestone_text), [data?.milestones]);
-  const meaningfulMilestones = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.source !== "user_saved" && milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)).slice(0, 4), [data?.milestones]);
+  const meaningfulMilestones = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.source !== "user_saved" && milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)).filter((m, i, all) => all.findIndex((o) => normalizeWords(o.milestone_text || "").slice(0, 6).join(" ") === normalizeWords(m.milestone_text || "").slice(0, 6).join(" ")) === i).slice(0, 4), [data?.milestones]);
   const lastSession = data?.sessions?.[0] ?? null;
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [letterOpen, setLetterOpen] = useState(false);
@@ -215,6 +234,13 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         </section>
       )}
 
+      {savedItems.length === 0 && sessionCount > 0 && (
+        <section className="portal-progress-step space-y-3">
+          <SectionTitle icon={BookMarked} eyebrow="Seu relicário" title="O que você leva dos encontros" />
+          <div className="percurso-invite"><Quote className="percurso-relic-mark" aria-hidden="true" /><p>Ao fim de cada encontro, a AURA te entrega uma frase para levar. As que você guardar ficam reunidas aqui, só suas.</p></div>
+        </section>
+      )}
+
       {latestLetter && (
         <section className="portal-progress-step space-y-3" aria-labelledby="carta-aura">
           <SectionTitle icon={Mail} eyebrow={monthLabelOf(latestLetter.letter_month || latestLetter.created_at || new Date().toISOString())} title="Uma carta da AURA para você" />
@@ -230,9 +256,9 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
 
       {activeThemes.length > 0 ? (
         <section className="portal-progress-step portal-progress-step-current space-y-3" aria-labelledby="momento-atual">
-          <SectionTitle icon={Sparkles} eyebrow="Agora" title="O que está vivo em você agora" />
-          <div className="portal-progress-feature rounded-2xl border bg-card p-5 space-y-4">
-            <p className="text-sm leading-relaxed text-muted-foreground">Pelo que você vem trazendo, estes parecem ser os temas mais presentes. Você pode confirmar ou corrigir a leitura.</p>
+          <SectionTitle icon={Sparkles} eyebrow="Agora" title="Onde sua atenção tem estado" />
+          <div className="percurso-card space-y-4">
+            <p className="text-sm leading-relaxed text-muted-foreground">Pelo que você vem me trazendo, é aqui que sua atenção tem morado. Me diga se eu li certo.</p>
             <div className="space-y-3">
               {activeThemes.map((theme) => (
                 <ReflectionRow key={theme.id} title={sanitizePortalText(theme.theme_name)} feedback={feedbackMap.get(`active_theme:${theme.id}`)} busy={feedbackMutation.isPending}
@@ -243,7 +269,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
           </div>
         </section>
       ) : (
-        <div className="portal-progress-step rounded-2xl border bg-card p-5 space-y-3">
+        <div className="portal-progress-step percurso-card space-y-3">
           <p className="font-display text-lg font-semibold text-foreground">Seu momento vai tomar forma aqui</p>
           <p className="text-sm leading-relaxed text-muted-foreground">Ainda não há material suficiente para uma leitura honesta. Conforme vocês conversarem, a AURA organiza os temas sem presumir o que você sente.</p>
           <Button variant="outline" onClick={() => onOpenConversation("Aura, quero te contar como estou agora.")}><MessageCircle /> Contar como estou</Button>
@@ -255,7 +281,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
           <SectionTitle icon={Quote} eyebrow="Nas suas palavras" title="O que vem mudando em você" />
           <div className="space-y-3">
             {recentMovements.map((snapshot) => (
-              <article key={snapshot.id} className="rounded-2xl border bg-card p-5 space-y-3">
+              <article key={snapshot.id} className="percurso-card space-y-3">
                 {snapshot.theme && !/^(principal|nome)$/i.test(snapshot.theme.trim()) && <p className="text-xs font-bold uppercase text-primary">{sanitizePortalText(snapshot.theme)}</p>}
                 {snapshot.snapshot_before && snapshot.snapshot_change ? (
                   <div className="percurso-shift">
@@ -265,7 +291,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
                 ) : (
                   <p className="text-[15px] leading-relaxed text-foreground">{truncate(snapshot.snapshot_change || snapshot.snapshot_before || "", 260)}</p>
                 )}
-                {snapshot.evidence_quote && <blockquote className="border-l-2 border-primary/40 pl-3 text-sm italic text-muted-foreground">“{sanitizePortalText(snapshot.evidence_quote)}”</blockquote>}
+                {snapshot.evidence_quote && <blockquote className="percurso-quote">“{sanitizePortalText(snapshot.evidence_quote)}”<span>— você, numa conversa</span></blockquote>}
                 <FeedbackActions value={feedbackMap.get(`thematic_snapshot:${snapshot.id}`)} busy={feedbackMutation.isPending}
                   onAgree={() => registerFeedback("thematic_snapshot", snapshot.id, "agrees", snapshot.theme || snapshot.snapshot_change || "essa leitura")}
                   onCorrect={() => registerFeedback("thematic_snapshot", snapshot.id, "corrects", snapshot.theme || snapshot.snapshot_change || "essa leitura")} />
@@ -277,9 +303,10 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
 
       {lastSession && (lastSession.closure_text || lastSession.session_summary || lastSession.focus_topic) && (
         <section className="portal-progress-step space-y-3">
-          <SectionTitle icon={MessageCircle} eyebrow="Fio aberto" title="Para continuar" />
-          <div className="portal-progress-resume rounded-2xl border bg-secondary/70 p-5 space-y-3">
-            <p className="text-sm leading-relaxed text-foreground">{sanitizePortalText(lastSession.closure_text || lastSession.session_summary || lastSession.focus_topic || "")}</p>
+          <SectionTitle icon={MessageCircle} eyebrow="O fio da nossa conversa" title="Do nosso último encontro" />
+          <div className="percurso-thread space-y-4">
+            <p className="percurso-thread-text">{lastSession.closure_text ? sanitizePortalText(lastSession.closure_text) : toAuraVoice(lastSession.session_summary || lastSession.focus_topic || "", firstName)}</p>
+            {lastSession.ended_at && <p className="percurso-relic-date">{new Date(lastSession.ended_at).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</p>}
             <Button onClick={() => onOpenConversation(`Aura, quero retomar o assunto da minha última sessão: ${lastSession.focus_topic || lastSession.theme_label || "o que ficou em aberto"}.`)}>Retomar com a AURA <ArrowRight /></Button>
           </div>
         </section>
@@ -287,21 +314,22 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
 
       {meaningfulMilestones.length > 0 && (
         <section className="portal-progress-step space-y-3">
-          <SectionTitle icon={Trophy} eyebrow="Reconhecer" title="Marcos que importam" />
-          <div className="rounded-2xl border bg-card divide-y divide-border">
+          <SectionTitle icon={Trophy} eyebrow="Reconhecer" title="Viradas que você já viveu" />
+          <ol className="percurso-timeline">
             {meaningfulMilestones.map((milestone) => (
-              <div key={milestone.id} className="p-4">
-                <p className="text-sm leading-relaxed text-foreground">{sanitizePortalText(milestone.milestone_text)}</p>
-                {milestone.context_excerpt && <p className="mt-1 text-xs text-muted-foreground">{truncate(milestone.context_excerpt, 150)}</p>}
-              </div>
+              <li key={milestone.id}>
+                {milestone.milestone_date && <p className="percurso-relic-date">{new Date(milestone.milestone_date).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</p>}
+                <p className="percurso-timeline-text">{sanitizePortalText(milestone.milestone_text)}</p>
+                {milestone.context_excerpt && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{truncate(milestone.context_excerpt, 150)}</p>}
+              </li>
             ))}
-          </div>
+          </ol>
         </section>
       )}
 
       {(weeklyReports.length > 0 || monthlyReports.length > 0) && (
         <section className="portal-progress-step space-y-3" aria-labelledby="relatorios-percurso">
-          <SectionTitle icon={BarChart3} eyebrow="Rever" title="Seus relatórios" />
+          <SectionTitle icon={BarChart3} eyebrow="Rever" title="Suas semanas e meses com a AURA" />
           <div id="relatorios-percurso" className="space-y-3">
              {weeklyReports.map((report, index) => <ReportCard key={report.id} kind="weekly" report={report} featured={index === 0} feedback={feedbackMap.get(`weekly_report:${report.id}`)} busy={feedbackMutation.isPending} onFeedback={(response, context) => registerFeedback("weekly_report", report.id, response, context)} onContinue={onOpenConversation} />)}
              {monthlyReports.map((report) => <ReportCard key={report.id} kind="monthly" report={report} feedback={feedbackMap.get(`monthly_report:${report.id}`)} busy={feedbackMutation.isPending} onFeedback={(response, context) => registerFeedback("monthly_report", report.id, response, context)} onContinue={onOpenConversation} />)}
@@ -313,7 +341,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
 
       {chapters.length > 0 && (
         <section className="portal-progress-step portal-progress-archive space-y-3">
-          <SectionTitle icon={BookMarked} eyebrow="Arquivo" title="Sua história por mês" />
+          <SectionTitle icon={BookMarked} eyebrow="Seu livro" title="Capítulos da sua história" />
           <div className="space-y-3">
             {visibleChapters.map((chapter) => <ChapterCard key={chapter.key} chapter={chapter} expanded={expandedKey === chapter.key} onToggle={() => setExpandedKey((current) => current === chapter.key ? null : chapter.key)} />)}
           </div>
@@ -326,7 +354,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
 }
 
 function SectionTitle({ icon: Icon, eyebrow, title }: { icon: typeof Sparkles; eyebrow: string; title: string }) {
-  return <div className="portal-progress-section-title flex items-center gap-3"><span className="portal-progress-node flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><div><p className="text-[10px] font-bold uppercase text-muted-foreground">{eyebrow}</p><h2 className="font-display text-lg font-semibold text-foreground">{title}</h2></div></div>;
+  return <div className="portal-progress-section-title flex items-center gap-3"><span className="portal-progress-node flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary">{eyebrow}</p><h2 className="percurso-section-title">{title}</h2></div></div>;
 }
 
 function ReflectionRow({ title, feedback, busy, onAgree, onCorrect }: { title: string; feedback?: Feedback["response"]; busy: boolean; onAgree: () => void; onCorrect: () => void }) {
@@ -340,7 +368,7 @@ function FeedbackActions({ value, busy, onAgree, onCorrect }: { value?: Feedback
 
 function ChapterCard({ chapter, expanded, onToggle }: { chapter: Chapter; expanded: boolean; onToggle: () => void }) {
   const canExpand = !!chapter.letter?.letter_text || chapter.snapshots.length > 0 || chapter.milestones.length > 0 || chapter.sessions.length > 0;
-  return <article className="overflow-hidden rounded-2xl border bg-card">
+  return <article className="percurso-chapter overflow-hidden">
     <Button variant="ghost" className="h-auto w-full justify-between whitespace-normal rounded-none p-5 text-left" onClick={canExpand ? onToggle : undefined}>
       <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-primary">Capítulo</p><h3 className="mt-0.5 font-display text-xl font-semibold capitalize text-foreground">{chapter.monthLabel}</h3>{chapter.headline && <p className="mt-2 text-sm font-normal leading-relaxed text-muted-foreground">{chapter.headline}</p>}</div>
       {canExpand && (expanded ? <ChevronUp /> : <ChevronDown />)}
@@ -368,7 +396,7 @@ function ReportCard({ kind, report, featured = false, feedback, busy, onFeedback
     ? `${new Date(`${start}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} a ${new Date(`${weekly?.period_end}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}`
     : new Date(`${start}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   const content = sanitizePortalText(weekly?.report_content || monthly?.analysis_text || monthly?.report_html || "Seu relatório está guardado aqui.");
-  return <article className={cn("overflow-hidden rounded-2xl border bg-card", featured && "portal-progress-feature")}>
+  return <article className={cn("percurso-chapter overflow-hidden", featured && "percurso-chapter-featured")}>
     <Button variant="ghost" className="h-auto w-full justify-between whitespace-normal rounded-none p-5 text-left" onClick={() => setExpanded((value) => !value)}>
       <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-primary">{kind === "weekly" ? "Sua semana" : "Seu mês em perspectiva"}</p><h3 className="mt-1 font-display text-lg font-semibold capitalize text-foreground">{label}</h3></div>
       {expanded ? <ChevronUp /> : <ChevronDown />}
