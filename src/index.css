@@ -1210,3 +1210,40 @@ hsl(152 17% 36%);
 .percurso-chapter { border-radius: 1.25rem; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); box-shadow: 0 10px 26px -22px hsl(var(--foreground) / .35); }
 .percurso-chapter-featured { border-color: hsl(var(--primary) / .35); }
 .percurso-chapter h3 { font-family: var(--font-display); font-weight: 500; }
+
+/* Seu Percurso — superfícies em vidro escuro (mesma linguagem de "Sobre você") */
+.portal-progress-page .percurso-card,
+.portal-progress-page .percurso-chapter,
+.portal-progress-page .percurso-thread,
+.portal-progress-page .percurso-relic,
+.portal-progress-page .percurso-letter {
+  --foreground: 30 30% 97%;
+  --muted-foreground: 220 15% 76%;
+  --primary: 140 30% 72%;
+  --primary-foreground: 153 25% 12%;
+  --border: 0 0% 100% / 0.12;
+  --secondary: 220 30% 18%;
+  --card: 220 32% 14%;
+  color: hsl(var(--foreground));
+  background: linear-gradient(155deg, hsl(153 18% 40% / 0.22), hsl(220 32% 14% / 0.55)) !important;
+  border: 1px solid hsl(140 30% 72% / 0.18) !important;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 24px 48px -32px hsl(222 40% 5% / 0.9);
+}
+.portal-progress-page .percurso-relic-text,
+.portal-progress-page .percurso-letter-text,
+.portal-progress-page .percurso-shift-now { color: hsl(30 30% 97%); }
+.portal-progress-page .percurso-relic-date,
+.portal-progress-page .percurso-letter-sign,
+.portal-progress-page .percurso-shift-label-now { color: hsl(140 30% 72%); }
+.portal-progress-page .percurso-shift-before { color: hsl(220 15% 70%); }
+.portal-progress-page .percurso-card .border-t { border-color: hsl(0 0% 100% / 0.1); }
+.portal-progress-page .percurso-chapter .bg-secondary\/40 { background: hsl(0 0% 100% / 0.04) !important; }
+.portal-progress-page .percurso-chapter .bg-card { background: hsl(0 0% 100% / 0.05) !important; color: hsl(30 30% 97%); }
+.portal-progress-page .percurso-card button[class*="border"],
+.portal-progress-page .percurso-chapter button[class*="border"] {
+  background: hsl(153 18% 40% / 0.2) !important; color: hsl(140 30% 82%) !important; border-color: hsl(140 30% 72% / 0.35) !important; border-radius: 999px;
+}
+.portal-progress-page .percurso-card button:not([class*="border"]),
+.portal-progress-page .percurso-chapter button:not([class*="border"]) { color: hsl(30 30% 97% / 0.75); }
+.portal-progress-page .percurso-chapter > button:hover { background: hsl(0 0% 100% / 0.04); }

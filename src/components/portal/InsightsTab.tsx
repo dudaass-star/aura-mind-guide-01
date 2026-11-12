@@ -67,6 +67,12 @@ function toAuraVoice(text: string, firstName: string) {
   return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
+// Remove o rótulo técnico do extrator ("Um tema seu deu sinal de virada:").
+function milestoneText(text: string | null) {
+  const clean = sanitizePortalText(text || "").trim().replace(/^um tema seu deu sinal de virada:\s*/i, "");
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
 function truncate(text: string, max: number) {
   const clean = sanitizePortalText(text).trim().replace(/\s+/g, " ");
   return clean.length > max ? `${clean.slice(0, max).trimEnd()}…` : clean;
@@ -181,7 +187,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
     });
     return Array.from(map.values()).filter((chapter) => chapter.letter || chapter.snapshots.length || chapter.milestones.length).map((chapter) => {
       const best = [...chapter.snapshots].sort((a, b) => (CONF_ORDER[b.confidence ?? ""] ?? 0) - (CONF_ORDER[a.confidence ?? ""] ?? 0))[0];
-      chapter.headline = truncate(chapter.letter?.preview_text || best?.snapshot_change || best?.snapshot_before || chapter.milestones[0]?.milestone_text || "", 180);
+      chapter.headline = truncate(chapter.letter?.preview_text || best?.snapshot_change || best?.snapshot_before || milestoneText(chapter.milestones[0]?.milestone_text ?? null), 180);
       chapter.quote = best?.evidence_quote ? sanitizePortalText(best.evidence_quote) : null;
       chapter.themes = Array.from(new Set(chapter.snapshots.map((snapshot) => snapshot.theme?.trim()).filter(Boolean) as string[])).slice(0, 3);
       return chapter;
@@ -319,7 +325,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
             {meaningfulMilestones.map((milestone) => (
               <li key={milestone.id}>
                 {milestone.milestone_date && <p className="percurso-relic-date">{new Date(milestone.milestone_date).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</p>}
-                <p className="percurso-timeline-text">{sanitizePortalText(milestone.milestone_text)}</p>
+                <p className="percurso-timeline-text">{milestoneText(milestone.milestone_text)}</p>
                 {milestone.context_excerpt && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{truncate(milestone.context_excerpt, 150)}</p>}
               </li>
             ))}
@@ -377,7 +383,7 @@ function ChapterCard({ chapter, expanded, onToggle }: { chapter: Chapter; expand
       {chapter.quote && <blockquote className="border-l-2 border-primary/40 pl-3 text-sm italic text-muted-foreground">“{chapter.quote}”</blockquote>}
       {chapter.letter?.letter_text && <ChapterSection icon={Mail} title="Carta do mês"><p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{sanitizePortalText(chapter.letter.letter_text)}</p></ChapterSection>}
       {chapter.snapshots.length > 0 && <ChapterSection icon={Sparkles} title="O que mudou">{chapter.snapshots.map((snapshot) => <div key={snapshot.id} className="rounded-lg border bg-card p-3 text-sm leading-relaxed text-foreground">{sanitizePortalText(snapshot.snapshot_change || snapshot.snapshot_before || "")}</div>)}</ChapterSection>}
-      {chapter.milestones.length > 0 && <ChapterSection icon={Trophy} title="Marcos"><ul className="space-y-2">{chapter.milestones.map((milestone) => <li key={milestone.id} className="text-sm text-foreground">• {sanitizePortalText(milestone.milestone_text)}</li>)}</ul></ChapterSection>}
+      {chapter.milestones.length > 0 && <ChapterSection icon={Trophy} title="Marcos"><ul className="space-y-2">{chapter.milestones.map((milestone) => <li key={milestone.id} className="text-sm text-foreground">• {milestoneText(milestone.milestone_text)}</li>)}</ul></ChapterSection>}
       {chapter.sessions.length > 0 && <ChapterSection icon={Calendar} title="Sessões do mês"><ul className="space-y-1">{chapter.sessions.map((session) => <li key={session.id} className="text-sm text-muted-foreground">{session.theme_label || session.focus_topic || "Sessão"}</li>)}</ul></ChapterSection>}
     </div>}
   </article>;
