@@ -41,3 +41,15 @@ it("relatório com aviso no mesmo parágrafo mantém a reflexão e remove teleme
   const b = cb2(raw);
   expect(b.map((x) => x.text)).toEqual(["Você atravessou outubro com coragem.", "Percebi meu limite"]);
 });
+
+import { chapterBlocks as cb2 } from "./percurso-story";
+describe("relatório legado do WhatsApp", () => {
+  it("sem reflexão, não gera texto", () => {
+    const raw = "📊 *Seu Relatório Mensal, Eduardo!*\n\n━━━━━━━━━\n\n📈 *Seus Números do Mês*\n💬 1341 mensagens\n🧠 114 insights salvos sobre você\n\n━━━━━━━━━\n\n✨ Continue assim, Eduardo! Estou orgulhosa de você 💜";
+    expect(cb2(raw)).toEqual([]);
+  });
+  it("mantém só Sua Evolução", () => {
+    const raw = "📊 *Seu Relatório Mensal*\n\n━━━━\n\n🧠 4 insights\n\n━━━━\n\n🌱 *Sua Evolução*\nVocê explorou a ansiedade.\n\n━━━━\n\n✨ Continue assim 💜";
+    expect(cb2(raw)).toEqual([{ kind: "paragraph", text: "Você explorou a ansiedade." }]);
+  });
+});

@@ -34,6 +34,7 @@ const DISCLAIMER = /(leitura da aura, não uma conclusão|confirmar ou corrigir 
  */
 export function chapterBlocks(raw: string, clean: (s: string) => string = (s) => s): ChapterBlock[] {
   const blocks: ChapterBlock[] = [];
+  raw = stripLegacyWhatsAppReport(raw);
   const sections = (raw || "").replace(/\r/g, "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
   const isTelemetry = (l: string) => /^[📊📈📉📅💬🗓️⏱️🔢✅]/u.test(l) || /\d+\s*(mensagens|sessões concluídas|minutos de áudio)/i.test(l) || /•/.test(l);
   for (const section of sections) {
@@ -53,4 +54,17 @@ export function chapterBlocks(raw: string, clean: (s: string) => string = (s) =>
     flush();
   }
   return blocks;
+}
+
+/**
+ * Relatório mensal legado do WhatsApp (números, barras, divisórias e frase pronta):
+ * preserva só a reflexão "Sua Evolução"; sem ela, não há texto de capítulo.
+ */
+export function stripLegacyWhatsAppReport(raw: string): string {
+  const text = (raw || "").replace(/\r/g, "");
+  if (!/Seu Relat[óo]rio Mensal|Seus N[úu]meros do M[êe]s|━{3,}/i.test(text)) return text;
+  const parts = text.split(/━{3,}/).map((p) => p.trim());
+  const evo = parts.find((p) => /Sua Evolu[çc][ãa]o/i.test(p));
+  if (!evo) return "";
+  return evo.replace(/^.*Sua Evolu[çc][ãa]o\*?\s*/i, "").trim();
 }
