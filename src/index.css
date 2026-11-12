@@ -1261,3 +1261,11 @@ hsl(152 17% 36%);
 .portal-progress-page .percurso-book-year { font-size: .7rem; opacity: .6; }
 .portal-progress-page .percurso-chapter-reading { animation: percurso-fade .35s ease; }
 @keyframes percurso-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Percurso no mobile: largura contida e sem haste lateral; só a estante desliza */
+.portal-progress-page .portal-progress-flow { display: flex; flex-direction: column; min-width: 0; max-width: 100%; overflow-x: clip; }
+.portal-progress-page .portal-progress-flow::before { display: none; }
+.portal-progress-page .portal-progress-step { padding-left: 0; min-width: 0; max-width: 100%; }
+.portal-progress-page .portal-progress-section-title { margin-left: 0; margin-bottom: .75rem; }
+.portal-progress-page .portal-progress-node { border: none; box-shadow: none; }
+.portal-progress-page .percurso-shelf { width: 100%; min-width: 0; max-width: 100%; }
