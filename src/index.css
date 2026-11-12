@@ -1122,3 +1122,37 @@ hsl(152 17% 36%);
   color: hsl(0 0% 100%);
   box-shadow: 0 0 0 1px hsl(140 45% 80% / 0.35);
 }
+
+/* Sobre você — vidro escuro intimista sobre o fundo navy do App. */
+.portal-area-page { --sobre-ink: 222 32% 11%; --sobre-text: 30 30% 97%; }
+.sobre-glass {
+  background: linear-gradient(160deg, hsl(var(--sobre-ink) / 0.82), hsl(var(--sobre-ink) / 0.6));
+  border: 1px solid hsl(var(--sage-light) / 0.22);
+  box-shadow: 0 24px 48px -32px hsl(var(--sobre-ink) / 0.9), inset 0 1px 0 hsl(var(--sobre-text) / 0.06);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: hsl(var(--sobre-text));
+}
+.sobre-glass-hero { position: relative; overflow: hidden; }
+.sobre-glass-hero::before {
+  content: ""; position: absolute; top: -40%; right: -25%; width: 70%; height: 120%;
+  background: radial-gradient(circle, hsl(var(--sage) / 0.35), transparent 65%); pointer-events: none;
+}
+.sobre-glass-hero::after {
+  content: ""; position: absolute; bottom: -50%; left: -20%; width: 60%; height: 100%;
+  background: radial-gradient(circle, hsl(var(--accent) / 0.18), transparent 65%); pointer-events: none;
+}
+.sobre-eyebrow { color: hsl(var(--sage-light)); letter-spacing: 0.14em; }
+.sobre-muted { color: hsl(var(--sobre-text) / 0.66); }
+.sobre-soft { color: hsl(var(--sobre-text) / 0.5); }
+.sobre-chip { background: hsl(var(--sage) / 0.18); color: hsl(var(--sage-light)); border: 1px solid hsl(var(--sage-light) / 0.25); }
+.sobre-icon { background: hsl(var(--sage) / 0.22); color: hsl(var(--sage-light)); border: 1px solid hsl(var(--sage-light) / 0.3); }
+.sobre-btn-confirm { background: hsl(var(--sage) / 0.2) !important; color: hsl(var(--sage-light)) !important; border-color: hsl(var(--sage-light) / 0.35) !important; }
+.sobre-btn-confirm:hover { background: hsl(var(--sage) / 0.32) !important; }
+.sobre-btn-ghost { color: hsl(var(--sobre-text) / 0.7) !important; }
+.sobre-btn-ghost:hover { background: hsl(var(--sobre-text) / 0.08) !important; color: hsl(var(--sobre-text)) !important; }
+.sobre-field { background: hsl(var(--sobre-text) / 0.06) !important; border-color: hsl(var(--sage-light) / 0.22) !important; color: hsl(var(--sobre-text)) !important; }
+.sobre-field::placeholder { color: hsl(var(--sobre-text) / 0.42); }
+.sobre-inset { background: hsl(var(--sobre-text) / 0.05); border: 1px solid hsl(var(--sobre-text) / 0.08); }
+.sobre-quote-mark { color: hsl(var(--sage-light) / 0.55); font-family: var(--font-display); }
+.sobre-text { color: hsl(var(--sobre-text)); }
