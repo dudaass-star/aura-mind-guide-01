@@ -13,10 +13,10 @@ const groups = [
     { label: "Hoje", detail: "O que te acompanha agora", tab: "hoje", icon: Sun, tone: "portal-area-today" },
     { label: "Sessões", detail: "Seus encontros com a AURA", tab: "sessoes", icon: CalendarDays, tone: "portal-area-sessions" },
     { label: "Percurso", detail: "O que vem mudando", tab: "insights", icon: Sparkles, tone: "portal-area-journey" },
+    { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound, tone: "portal-area-profile" },
   ] },
   { title: "Para explorar", areas: [
     { label: "Jornadas", detail: "Conteúdos para acompanhar você", tab: "jornadas", icon: BookOpen, tone: "portal-area-content" },
-    { label: "Sobre você", detail: "Sua história reunida", tab: "sobre", icon: UserRound, tone: "portal-area-profile" },
   ] },
 ] as const;
 const practices = [
