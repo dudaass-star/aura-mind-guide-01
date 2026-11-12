@@ -1291,3 +1291,56 @@ hsl(152 17% 36%);
 .percurso-prose { font-size: .98rem; line-height: 1.75; color: hsl(var(--foreground) / .92); }
 .percurso-prose-first { font-size: 1.05rem; }
 .percurso-takeaway { font-family: var(--font-display); font-size: 1rem; line-height: 1.5; padding-left: .9rem; border-left: 2px solid hsl(var(--primary) / .5); color: hsl(var(--foreground)); }
+
+/* Percurso: materiais distintos por seção (fim do efeito monocromático) */
+.portal-progress-page .percurso-relic {
+  --foreground: 222 40% 14%;
+  background: linear-gradient(165deg, hsl(40 45% 95%), hsl(35 35% 88%)) !important;
+  border: 1px solid hsl(38 40% 70% / .6) !important;
+  box-shadow: 0 22px 44px -26px hsl(30 40% 5% / .9), inset 0 1px 0 hsl(0 0% 100% / .7);
+  backdrop-filter: none;
+}
+.portal-progress-page .percurso-relic-text { color: hsl(222 40% 14%) !important; }
+.portal-progress-page .percurso-relic-mark { color: hsl(32 55% 48%) !important; }
+.portal-progress-page .percurso-relic-date { color: hsl(32 40% 38%) !important; }
+.portal-progress-page .percurso-relic .italic,
+.portal-progress-page .percurso-relic p { color: hsl(222 30% 24%); }
+
+.portal-progress-page .percurso-thread {
+  background: linear-gradient(160deg, hsl(255 25% 30% / .45), hsl(225 35% 14% / .7)) !important;
+  border-color: hsl(260 40% 80% / .22) !important;
+}
+.portal-progress-page .percurso-pill:nth-child(3n+1) { background: hsl(140 30% 72% / .16); border-color: hsl(140 30% 72% / .38); }
+.portal-progress-page .percurso-pill:nth-child(3n+2) { background: hsl(265 40% 78% / .16); border-color: hsl(265 40% 78% / .38); }
+.portal-progress-page .percurso-pill:nth-child(3n) { background: hsl(25 60% 72% / .16); border-color: hsl(25 60% 72% / .38); }
+
+.portal-progress-page .percurso-timeline li::before { background: hsl(40 70% 70%); border-color: hsl(40 70% 85%); box-shadow: 0 0 10px hsl(40 80% 65% / .7); }
+.portal-progress-page .percurso-timeline::before { background: linear-gradient(hsl(40 70% 70% / .6), hsl(40 70% 70% / .05)); }
+
+/* Estante: capas colecionáveis com cores nobres alternadas */
+.portal-progress-page .percurso-book { box-shadow: inset 6px 0 8px -6px hsl(0 0% 0% / .6), 0 10px 20px -14px hsl(0 0% 0% / .9); }
+.portal-progress-page .percurso-book:nth-child(5n+1) { background: linear-gradient(160deg, hsl(150 28% 34%), hsl(155 35% 16%)); border-left-color: hsl(145 35% 60%); }
+.portal-progress-page .percurso-book:nth-child(5n+2) { background: linear-gradient(160deg, hsl(18 45% 42%), hsl(15 45% 20%)); border-left-color: hsl(25 60% 65%); }
+.portal-progress-page .percurso-book:nth-child(5n+3) { background: linear-gradient(160deg, hsl(215 40% 36%), hsl(222 45% 15%)); border-left-color: hsl(210 50% 70%); }
+.portal-progress-page .percurso-book:nth-child(5n+4) { background: linear-gradient(160deg, hsl(290 22% 36%), hsl(285 28% 16%)); border-left-color: hsl(290 30% 72%); }
+.portal-progress-page .percurso-book:nth-child(5n) { background: linear-gradient(160deg, hsl(345 30% 34%), hsl(345 35% 15%)); border-left-color: hsl(350 40% 70%); }
+.portal-progress-page .percurso-book-title { color: hsl(40 45% 92%); }
+.portal-progress-page .percurso-book-open { border-color: hsl(40 60% 75% / .8) !important; box-shadow: 0 16px 28px -14px hsl(40 70% 60% / .55); }
+
+/* Capítulo aberto: página nobre */
+.portal-progress-page .percurso-chapter-reading {
+  --foreground: 222 40% 14%;
+  --muted-foreground: 222 15% 38%;
+  --primary: 150 30% 32%;
+  background: linear-gradient(170deg, hsl(42 40% 96%), hsl(36 30% 90%)) !important;
+  border: 1px solid hsl(38 30% 72% / .6) !important;
+  color: hsl(222 40% 14%) !important;
+  backdrop-filter: none;
+}
+.portal-progress-page .percurso-chapter-reading * { color: inherit; }
+.portal-progress-page .percurso-chapter-reading h2,
+.portal-progress-page .percurso-chapter-reading h3 { color: hsl(222 45% 12%); }
+.portal-progress-page .percurso-chapter-reading button { color: hsl(150 30% 28%) !important; }
+.portal-progress-page .percurso-chapter-reading .percurso-pill { background: hsl(150 25% 40% / .12); border-color: hsl(150 25% 40% / .3); }
+
+.portal-progress-page .percurso-next { background: hsl(40 60% 70% / .06); border-color: hsl(40 60% 75% / .45); }
