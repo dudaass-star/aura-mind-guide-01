@@ -1247,3 +1247,17 @@ hsl(152 17% 36%);
 .portal-progress-page .percurso-card button:not([class*="border"]),
 .portal-progress-page .percurso-chapter button:not([class*="border"]) { color: hsl(30 30% 97% / 0.75); }
 .portal-progress-page .percurso-chapter > button:hover { background: hsl(0 0% 100% / 0.04); }
+
+/* Percurso: pílulas e estante de capítulos */
+.portal-progress-page .percurso-pill { display: inline-flex; border-radius: 999px; padding: .4rem .85rem; font-size: .85rem; background: hsl(var(--primary) / .14); border: 1px solid hsl(var(--primary) / .3); color: hsl(30 30% 97%); }
+.portal-progress-page .percurso-soft-link { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; font-weight: 500; color: hsl(var(--primary)); }
+.portal-progress-page .percurso-shelf-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: hsl(30 30% 97% / .55); }
+.portal-progress-page .percurso-shelf { display: flex; gap: .65rem; overflow-x: auto; padding: .25rem .1rem .75rem; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.portal-progress-page .percurso-shelf::-webkit-scrollbar { display: none; }
+.portal-progress-page .percurso-book { flex: 0 0 auto; scroll-snap-align: start; width: 5.5rem; height: 7.5rem; border-radius: .35rem .9rem .9rem .35rem; padding: .7rem .6rem; display: flex; flex-direction: column; justify-content: space-between; text-align: left; background: linear-gradient(160deg, hsl(var(--primary) / .22), hsl(220 40% 14% / .9)); border: 1px solid hsl(var(--primary) / .22); border-left: 4px solid hsl(var(--primary) / .55); color: hsl(30 30% 97%); transition: transform .25s ease, border-color .25s ease; }
+.portal-progress-page .percurso-book-open { transform: translateY(-4px); border-color: hsl(var(--primary) / .7); box-shadow: 0 12px 24px -14px hsl(var(--primary) / .6); }
+.portal-progress-page .percurso-book-num { font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; opacity: .65; }
+.portal-progress-page .percurso-book-title { font-family: var(--font-display); font-size: 1.05rem; text-transform: capitalize; line-height: 1.1; }
+.portal-progress-page .percurso-book-year { font-size: .7rem; opacity: .6; }
+.portal-progress-page .percurso-chapter-reading { animation: percurso-fade .35s ease; }
+@keyframes percurso-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

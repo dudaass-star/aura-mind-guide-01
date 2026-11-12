@@ -28,7 +28,7 @@ type SessionRow = { id: string; ended_at: string | null; focus_topic: string | n
 type ActiveTheme = { id: string; theme_name: string | null; status: string | null; session_count: number | null; last_mentioned_at: string | null };
 type Feedback = { source_kind: string; source_id: string; response: "agrees" | "corrects" };
 type FeedbackSource = "thematic_snapshot" | "active_theme" | "weekly_report" | "monthly_report";
-type Chapter = { key: string; monthLabel: string; anchorDate: string; headline: string; quote: string | null; themes: string[]; sessions: SessionRow[]; snapshots: Snapshot[]; letter: Letter | null; milestones: Milestone[] };
+type Chapter = { key: string; monthLabel: string; anchorDate: string; headline: string; quote: string | null; themes: string[]; sessions: SessionRow[]; snapshots: Snapshot[]; letter: Letter | null; milestones: Milestone[]; report: MonthlyReport | null };
 type WeeklyReport = { id: string; period_start: string; period_end: string; metrics_json: unknown; highlights_json: unknown; analysis_text: string | null; continuation_text: string | null; report_content: string | null };
 type MonthlyReport = { id: string; report_month: string; metrics_json: unknown; analysis_text: string | null; report_html: string | null; created_at: string };
 
@@ -173,21 +173,22 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       const key = monthKeyOf(iso);
       const existing = map.get(key);
       if (existing) return existing;
-      const chapter: Chapter = { key, monthLabel: monthLabelOf(iso), anchorDate: iso, headline: "", quote: null, themes: [], sessions: [], snapshots: [], letter: null, milestones: [] };
+      const chapter: Chapter = { key, monthLabel: monthLabelOf(iso), anchorDate: iso, headline: "", quote: null, themes: [], sessions: [], snapshots: [], letter: null, milestones: [], report: null };
       map.set(key, chapter);
       return chapter;
     };
     data.letters.forEach((letter) => { const iso = letter.letter_month || letter.created_at; if (iso) ensure(iso).letter = letter; });
     data.snapshots.forEach((snapshot) => { const iso = snapshot.evidence_date || snapshot.period_end; if (iso) ensure(iso).snapshots.push(snapshot); });
+    data.monthlyReports.forEach((report) => { if (report.report_month) ensure(`${report.report_month.slice(0, 10)}T12:00:00`).report = report; });
     data.sessions.forEach((session) => { if (session.ended_at) ensure(session.ended_at).sessions.push(session); });
     data.milestones.forEach((milestone) => {
       if (milestone.milestone_date && milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)) {
         ensure(milestone.milestone_date).milestones.push(milestone);
       }
     });
-    return Array.from(map.values()).filter((chapter) => chapter.letter || chapter.snapshots.length || chapter.milestones.length).map((chapter) => {
+    return Array.from(map.values()).filter((chapter) => chapter.letter || chapter.report || chapter.snapshots.length || chapter.milestones.length).map((chapter) => {
       const best = [...chapter.snapshots].sort((a, b) => (CONF_ORDER[b.confidence ?? ""] ?? 0) - (CONF_ORDER[a.confidence ?? ""] ?? 0))[0];
-      chapter.headline = truncate(chapter.letter?.preview_text || best?.snapshot_change || best?.snapshot_before || milestoneText(chapter.milestones[0]?.milestone_text ?? null), 180);
+      chapter.headline = truncate(chapter.letter?.preview_text || best?.snapshot_change || best?.snapshot_before || milestoneText(chapter.milestones[0]?.milestone_text ?? null) || sanitizePortalText(chapter.report?.analysis_text || ""), 180);
       chapter.quote = best?.evidence_quote ? sanitizePortalText(best.evidence_quote) : null;
       chapter.themes = Array.from(new Set(chapter.snapshots.map((snapshot) => snapshot.theme?.trim()).filter(Boolean) as string[])).slice(0, 3);
       return chapter;
@@ -197,7 +198,10 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   if (isLoading) return <PortalLoadingInline />;
 
   const hasLiveMaterial = activeThemes.length > 0 || recentMovements.length > 0 || !!lastSession || meaningfulMilestones.length > 0;
-  const visibleChapters = showOlder ? chapters : chapters.slice(0, 12);
+  const deepId = new URLSearchParams(window.location.search).get("id");
+  const featuredWeek = weeklyReports.find((r) => r.id === deepId) ?? weeklyReports[0] ?? null;
+  const deepChapter = chapters.find((c) => c.report?.id === deepId);
+  const openChapter = chapters.find((c) => c.key === (expandedKey ?? deepChapter?.key)) ?? chapters[0] ?? null;
   const firstName = typeof profile?.name === "string" ? profile.name.trim().split(/\s+/)[0] : "";
   const sessionCount = data?.sessions?.length ?? 0;
   const latestLetter = data?.letters?.find((letter) => letter.letter_text) ?? null;
@@ -264,14 +268,11 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         <section className="portal-progress-step portal-progress-step-current space-y-3" aria-labelledby="momento-atual">
           <SectionTitle icon={Sparkles} eyebrow="Agora" title="Onde sua atenção tem estado" />
           <div className="percurso-card space-y-4">
-            <p className="text-sm leading-relaxed text-muted-foreground">Pelo que você vem me trazendo, é aqui que sua atenção tem morado. Me diga se eu li certo.</p>
-            <div className="space-y-3">
-              {activeThemes.map((theme) => (
-                <ReflectionRow key={theme.id} title={sanitizePortalText(theme.theme_name)} feedback={feedbackMap.get(`active_theme:${theme.id}`)} busy={feedbackMutation.isPending}
-                  onAgree={() => registerFeedback("active_theme", theme.id, "agrees", theme.theme_name || "essa leitura")}
-                  onCorrect={() => registerFeedback("active_theme", theme.id, "corrects", theme.theme_name || "essa leitura")} />
-              ))}
+            <p className="text-sm leading-relaxed text-muted-foreground">Pelo que você vem me trazendo, é aqui que sua atenção tem morado.</p>
+            <div className="flex flex-wrap gap-2">
+              {activeThemes.map((theme) => <span key={theme.id} className="percurso-pill">{sanitizePortalText(theme.theme_name)}</span>)}
             </div>
+            <button type="button" className="percurso-soft-link" onClick={() => onOpenConversation("Aura, quero conversar sobre o que tem ocupado minha atenção.")}>Conversar sobre isso <ArrowRight className="h-3.5 w-3.5" /></button>
           </div>
         </section>
       ) : (
@@ -298,9 +299,6 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
                   <p className="text-[15px] leading-relaxed text-foreground">{truncate(snapshot.snapshot_change || snapshot.snapshot_before || "", 260)}</p>
                 )}
                 {snapshot.evidence_quote && <blockquote className="percurso-quote">“{sanitizePortalText(snapshot.evidence_quote)}”<span>— você, numa conversa</span></blockquote>}
-                <FeedbackActions value={feedbackMap.get(`thematic_snapshot:${snapshot.id}`)} busy={feedbackMutation.isPending}
-                  onAgree={() => registerFeedback("thematic_snapshot", snapshot.id, "agrees", snapshot.theme || snapshot.snapshot_change || "essa leitura")}
-                  onCorrect={() => registerFeedback("thematic_snapshot", snapshot.id, "corrects", snapshot.theme || snapshot.snapshot_change || "essa leitura")} />
               </article>
             ))}
           </div>
@@ -333,25 +331,29 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         </section>
       )}
 
-      {(weeklyReports.length > 0 || monthlyReports.length > 0) && (
-        <section className="portal-progress-step space-y-3" aria-labelledby="relatorios-percurso">
-          <SectionTitle icon={BarChart3} eyebrow="Rever" title="Suas semanas e meses com a AURA" />
-          <div id="relatorios-percurso" className="space-y-3">
-             {weeklyReports.map((report, index) => <ReportCard key={report.id} kind="weekly" report={report} featured={index === 0} feedback={feedbackMap.get(`weekly_report:${report.id}`)} busy={feedbackMutation.isPending} onFeedback={(response, context) => registerFeedback("weekly_report", report.id, response, context)} onContinue={onOpenConversation} />)}
-             {monthlyReports.map((report) => <ReportCard key={report.id} kind="monthly" report={report} feedback={feedbackMap.get(`monthly_report:${report.id}`)} busy={feedbackMutation.isPending} onFeedback={(response, context) => registerFeedback("monthly_report", report.id, response, context)} onContinue={onOpenConversation} />)}
-          </div>
-        </section>
-      )}
+      {!hasLiveMaterial && chapters.length === 0 && !featuredWeek && <EmptyState icon={BookMarked} title="Seu Percurso está começando" description="Não vamos inventar uma história antes da hora. A primeira leitura aparece quando houver algo real para reconhecer." />}
 
-      {!hasLiveMaterial && chapters.length === 0 && <EmptyState icon={BookMarked} title="Seu Percurso está começando" description="Não vamos inventar uma história antes da hora. A primeira leitura aparece quando houver algo real para reconhecer." />}
-
-      {chapters.length > 0 && (
-        <section className="portal-progress-step portal-progress-archive space-y-3">
-          <SectionTitle icon={BookMarked} eyebrow="Seu livro" title="Capítulos da sua história" />
-          <div className="space-y-3">
-            {visibleChapters.map((chapter) => <ChapterCard key={chapter.key} chapter={chapter} expanded={expandedKey === chapter.key} onToggle={() => setExpandedKey((current) => current === chapter.key ? null : chapter.key)} />)}
-          </div>
-          {chapters.length > 12 && !showOlder && <Button variant="outline" className="w-full" onClick={() => setShowOlder(true)}>Ver capítulos anteriores ({chapters.length - 12})</Button>}
+      {(featuredWeek || chapters.length > 0) && (
+        <section className="portal-progress-step portal-progress-archive space-y-4" aria-labelledby="livro-percurso">
+          <SectionTitle icon={BookMarked} eyebrow="Seu livro" title="A história que vocês vêm escrevendo" />
+          {featuredWeek && <WeekReading report={featuredWeek} onContinue={onOpenConversation} />}
+          {chapters.length > 0 && (
+            <div className="space-y-3">
+              <p className="percurso-shelf-label">Capítulos · toque para abrir</p>
+              <div id="livro-percurso" className="percurso-shelf" role="tablist">
+                {chapters.map((chapter, index) => (
+                  <button key={chapter.key} type="button" role="tab" aria-selected={openChapter?.key === chapter.key}
+                    className={cn("percurso-book", openChapter?.key === chapter.key && "percurso-book-open")}
+                    onClick={() => setExpandedKey(chapter.key)}>
+                    <span className="percurso-book-num">Cap. {chapters.length - index}</span>
+                    <span className="percurso-book-title">{chapter.monthLabel.split(" ")[0]}</span>
+                    <span className="percurso-book-year">{chapter.monthLabel.split(" ").slice(-1)[0]}</span>
+                  </button>
+                ))}
+              </div>
+              {openChapter && <ChapterReading chapter={openChapter} onContinue={onOpenConversation} />}
+            </div>
+          )}
         </section>
       )}
       </div>
@@ -363,50 +365,40 @@ function SectionTitle({ icon: Icon, eyebrow, title }: { icon: typeof Sparkles; e
   return <div className="portal-progress-section-title flex items-center gap-3"><span className="portal-progress-node flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary">{eyebrow}</p><h2 className="percurso-section-title">{title}</h2></div></div>;
 }
 
-function ReflectionRow({ title, feedback, busy, onAgree, onCorrect }: { title: string; feedback?: Feedback["response"]; busy: boolean; onAgree: () => void; onCorrect: () => void }) {
-  return <div className="border-t border-border pt-3 first:border-0 first:pt-0"><p className="font-display text-base font-semibold text-foreground">{title}</p><FeedbackActions value={feedback} busy={busy} onAgree={onAgree} onCorrect={onCorrect} /></div>;
+function ChapterReading({ chapter, onContinue }: { chapter: Chapter; onContinue: (message?: string) => void }) {
+  const [full, setFull] = useState(false);
+  const body = chapter.letter?.letter_text || chapter.report?.analysis_text || chapter.report?.report_html || "";
+  return <article className="percurso-chapter percurso-chapter-reading space-y-4 p-5" key={chapter.key}>
+    <div><p className="percurso-kicker">Capítulo de</p><h3 className="font-display text-2xl capitalize text-foreground">{chapter.monthLabel}</h3></div>
+    {chapter.headline && <p className="percurso-thread-text">{chapter.headline}</p>}
+    {chapter.quote && <blockquote className="percurso-quote">“{chapter.quote}”<span>— você, neste mês</span></blockquote>}
+    {chapter.themes.length > 0 && <div className="flex flex-wrap gap-2">{chapter.themes.map((t) => <span key={t} className="percurso-pill">{sanitizePortalText(t)}</span>)}</div>}
+    {full && <>
+      {body && <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{sanitizePortalText(body)}</p>}
+      {chapter.milestones.length > 0 && <ChapterSection icon={Trophy} title="Viradas do mês"><ul className="space-y-2">{chapter.milestones.slice(0, 4).map((m) => <li key={m.id} className="text-sm text-foreground">{milestoneText(m.milestone_text)}</li>)}</ul></ChapterSection>}
+    </>}
+    <div className="flex flex-wrap items-center gap-4">
+      {(body || chapter.milestones.length > 0) && <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Fechar o capítulo" : "Ler o capítulo inteiro"}</button>}
+      <button type="button" className="percurso-soft-link" onClick={() => onContinue(`Aura, quero revisitar o que vivi em ${chapter.monthLabel}.`)}>Revisitar com a AURA <ArrowRight className="h-3.5 w-3.5" /></button>
+    </div>
+  </article>;
 }
 
-function FeedbackActions({ value, busy, onAgree, onCorrect }: { value?: Feedback["response"]; busy: boolean; onAgree: () => void; onCorrect: () => void }) {
-  if (value) return <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary"><Check className="h-3.5 w-3.5" />{value === "agrees" ? "Confirmado por você" : "Correção enviada à conversa"}</p>;
-  return <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={onAgree}><Check /> Faz sentido</Button><Button size="sm" variant="ghost" disabled={busy} onClick={onCorrect}><CircleHelp /> Não foi bem assim</Button></div>;
-}
-
-function ChapterCard({ chapter, expanded, onToggle }: { chapter: Chapter; expanded: boolean; onToggle: () => void }) {
-  const canExpand = !!chapter.letter?.letter_text || chapter.snapshots.length > 0 || chapter.milestones.length > 0 || chapter.sessions.length > 0;
-  return <article className="percurso-chapter overflow-hidden">
-    <Button variant="ghost" className="h-auto w-full justify-between whitespace-normal rounded-none p-5 text-left" onClick={canExpand ? onToggle : undefined}>
-      <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-primary">Capítulo</p><h3 className="mt-0.5 font-display text-xl font-semibold capitalize text-foreground">{chapter.monthLabel}</h3>{chapter.headline && <p className="mt-2 text-sm font-normal leading-relaxed text-muted-foreground">{chapter.headline}</p>}</div>
-      {canExpand && (expanded ? <ChevronUp /> : <ChevronDown />)}
-    </Button>
-    {expanded && <div className="space-y-5 border-t bg-secondary/40 p-5">
-      {chapter.quote && <blockquote className="border-l-2 border-primary/40 pl-3 text-sm italic text-muted-foreground">“{chapter.quote}”</blockquote>}
-      {chapter.letter?.letter_text && <ChapterSection icon={Mail} title="Carta do mês"><p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{sanitizePortalText(chapter.letter.letter_text)}</p></ChapterSection>}
-      {chapter.snapshots.length > 0 && <ChapterSection icon={Sparkles} title="O que mudou">{chapter.snapshots.map((snapshot) => <div key={snapshot.id} className="rounded-lg border bg-card p-3 text-sm leading-relaxed text-foreground">{sanitizePortalText(snapshot.snapshot_change || snapshot.snapshot_before || "")}</div>)}</ChapterSection>}
-      {chapter.milestones.length > 0 && <ChapterSection icon={Trophy} title="Marcos"><ul className="space-y-2">{chapter.milestones.map((milestone) => <li key={milestone.id} className="text-sm text-foreground">• {milestoneText(milestone.milestone_text)}</li>)}</ul></ChapterSection>}
-      {chapter.sessions.length > 0 && <ChapterSection icon={Calendar} title="Sessões do mês"><ul className="space-y-1">{chapter.sessions.map((session) => <li key={session.id} className="text-sm text-muted-foreground">{session.theme_label || session.focus_topic || "Sessão"}</li>)}</ul></ChapterSection>}
-    </div>}
+function WeekReading({ report, onContinue }: { report: WeeklyReport; onContinue: (message?: string) => void }) {
+  const [full, setFull] = useState(() => new URLSearchParams(window.location.search).get("id") === report.id);
+  const fmt = (d: string) => new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
+  const content = sanitizePortalText(report.report_content || report.analysis_text || "");
+  if (!content) return null;
+  return <article className="percurso-thread space-y-3">
+    <p className="percurso-kicker">Esta semana · {fmt(report.period_start)} a {fmt(report.period_end)}</p>
+    <p className={cn("whitespace-pre-line text-[15px] leading-relaxed text-foreground", !full && "percurso-letter-clamp")}>{content}</p>
+    <div className="flex flex-wrap items-center gap-4">
+      <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Recolher" : "Ler a semana inteira"}</button>
+      <button type="button" className="percurso-soft-link" onClick={() => onContinue("Aura, quero conversar sobre o que apareceu na minha semana.")}>Continuar com a AURA <ArrowRight className="h-3.5 w-3.5" /></button>
+    </div>
   </article>;
 }
 
 function ChapterSection({ icon: Icon, title, children }: { icon: typeof Sparkles; title: string; children: React.ReactNode }) {
   return <section className="space-y-2"><div className="flex items-center gap-2 text-primary"><Icon className="h-4 w-4" /><h4 className="text-xs font-bold uppercase">{title}</h4></div>{children}</section>;
-}
-
-function ReportCard({ kind, report, featured = false, feedback, busy, onFeedback, onContinue }: { kind: "weekly" | "monthly"; report: WeeklyReport | MonthlyReport; featured?: boolean; feedback?: Feedback["response"]; busy: boolean; onFeedback: (response: "agrees" | "corrects", context: string) => void; onContinue: (message?: string) => void }) {
-  const [expanded, setExpanded] = useState(() => new URLSearchParams(window.location.search).get("id") === report.id || (new URLSearchParams(window.location.search).get("report") === kind && featured));
-  const weekly = kind === "weekly" ? report as WeeklyReport : null;
-  const monthly = kind === "monthly" ? report as MonthlyReport : null;
-  const start = weekly?.period_start || monthly?.report_month || "";
-  const label = kind === "weekly"
-    ? `${new Date(`${start}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} a ${new Date(`${weekly?.period_end}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}`
-    : new Date(`${start}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  const content = sanitizePortalText(weekly?.report_content || monthly?.analysis_text || monthly?.report_html || "Seu relatório está guardado aqui.");
-  return <article className={cn("percurso-chapter overflow-hidden", featured && "percurso-chapter-featured")}>
-    <Button variant="ghost" className="h-auto w-full justify-between whitespace-normal rounded-none p-5 text-left" onClick={() => setExpanded((value) => !value)}>
-      <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-primary">{kind === "weekly" ? "Sua semana" : "Seu mês em perspectiva"}</p><h3 className="mt-1 font-display text-lg font-semibold capitalize text-foreground">{label}</h3></div>
-      {expanded ? <ChevronUp /> : <ChevronDown />}
-    </Button>
-    {expanded && <div className="space-y-4 border-t bg-secondary/40 p-5"><p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{content}</p><FeedbackActions value={feedback} busy={busy} onAgree={() => onFeedback("agrees", kind === "weekly" ? "a leitura do meu resumo semanal" : "a leitura do meu relatório mensal")} onCorrect={() => onFeedback("corrects", kind === "weekly" ? "a leitura do meu resumo semanal" : "a leitura do meu relatório mensal")} /><Button variant="outline" className="w-full" onClick={() => onContinue(kind === "weekly" ? "Aura, quero conversar sobre o que apareceu no meu resumo desta semana." : "Aura, quero conversar sobre o que apareceu no meu relatório deste mês.")}>Continuar com a AURA <ArrowRight /></Button></div>}
-  </article>;
 }
