@@ -1145,6 +1145,7 @@ hsl(152 17% 36%);
 .sobre-eyebrow { color: hsl(var(--sage-light)); letter-spacing: 0.14em; }
 .sobre-muted { color: hsl(var(--sobre-text) / 0.66); }
 .sobre-soft { color: hsl(var(--sobre-text) / 0.5); }
+.sobre-glass-sage { background: linear-gradient(135deg, hsl(var(--sage) / 0.38), hsl(var(--sage) / 0.14)); border-color: hsl(var(--sage-light) / 0.35); }
 .sobre-chip { background: hsl(var(--sage) / 0.18); color: hsl(var(--sage-light)); border: 1px solid hsl(var(--sage-light) / 0.25); }
 .sobre-icon { background: hsl(var(--sage) / 0.22); color: hsl(var(--sage-light)); border: 1px solid hsl(var(--sage-light) / 0.3); }
 .sobre-btn-confirm { background: hsl(var(--sage) / 0.2) !important; color: hsl(var(--sage-light)) !important; border-color: hsl(var(--sage-light) / 0.35) !important; }
