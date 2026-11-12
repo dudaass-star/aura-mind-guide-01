@@ -15,7 +15,7 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
 const PORTRAIT_CACHE_HOURS = 24 * 7;
 // Bump quando mudar prompt/normalize pra invalidar caches antigos.
-const PROMPT_VERSION = "v3-2026-09-24";
+const PROMPT_VERSION = "v4-2026-11-12";
 
 type Insight = {
   category: string;
@@ -53,6 +53,8 @@ REGRAS DUROS:
 - Cada item de o_que_te_move/padroes/preferencias deve ser UMA FRASE inteira humana, sem rótulo-chave artificial
 - Máx 4 itens por seção. Menos é mais.
 - Se não tem sinal pra uma seção, devolve array vazio. Não invente.
+- NUNCA copie falas do usuário. Tudo é escrito pela Aura em 2ª pessoa ("você"); jamais em 1ª pessoa do usuário ("eu", "meu", "minha", "estou", "sinto").
+- "names" só recebe nomes próprios reais. Papéis (mãe, esposa), sinônimos e pronomes ("ele") ficam fora; se não houver nome, devolve [].
 - "intro": 1 frase curta (até 140 char) sintetizando quem é a pessoa hoje, usando somente fatos presentes nos dados recebidos.
 - "pessoas": SÓ relações humanas reais da vida do usuário (família, parceira, filhos, amigos, colegas, terapeuta humano).
   * NUNCA inclua: "Aura", "aura", "mentor" (referência à própria IA), "terapeuta" (quando se referir à Aura), "coach", "assistente", "IA", "bot".
@@ -115,8 +117,13 @@ export function normalize(parsed: any) {
   const FORBIDDEN_PERSON = /^(aura|mentor|terapeuta|coach|assistente|ia|bot|chatbot)$/i;
   const isEpisodicNota = (s: string) =>
     /\b(ficou|ficaram|disse|falou|mandou|escreveu|ontem|hoje|agora|esse dia|nesse dia|naquele dia)\b/i.test(s);
+  // Descarta trechos colados do chat em 1ª pessoa do usuário.
+  const firstPerson = (s: string) => /(^|[\s,.;])(eu|meu|minha|meus|minhas|estou|sinto|comigo|me sinto|tenho)\b/i.test(s);
+  const voiced = (list: string[]) => list.filter((s) => !firstPerson(s));
+  const GENERIC = /^(ele|ela|eles|elas|m[aã]e|pai|irm[aã]o?|filh[oa]s?|esposo|esposa|marido|mulher|companheir[oa]|parceir[oa]|namorad[oa]|cunhad[oa]|ti[oa]|gerente|patr[oõ]es|chefe|amig[oa]s?|colegas?)$/i;
+  const introRaw = cleanStr(parsed.intro);
   return {
-    intro: cleanStr(parsed.intro) || null,
+    intro: introRaw && !firstPerson(introRaw) ? introRaw : null,
     pessoas: arr(parsed.pessoas)
       .filter((p: any) => p && typeof p.label === "string")
       .map((p: any) => {
@@ -125,7 +132,7 @@ export function normalize(parsed: any) {
           ? p.names
               .filter((n: any) => typeof n === "string")
               .map((n: string) => n.trim())
-              .filter((n: string) => n.length > 0 && !FORBIDDEN_PERSON.test(n))
+              .filter((n: string) => n.length > 0 && !FORBIDDEN_PERSON.test(n) && !GENERIC.test(n))
           : [];
         let nota = cleanStr(p.nota);
         if (nota && isEpisodicNota(nota)) nota = ""; // descarta nota episódica
@@ -136,13 +143,13 @@ export function normalize(parsed: any) {
         // precisa ter pelo menos nome real OU nota relacional estável
         return p.names.length > 0 || (p.nota && p.nota.length > 0);
       }),
-    o_que_te_move: cleanList(parsed.o_que_te_move, 4),
-    padroes: cleanList(parsed.padroes, 4),
-    preferencias: cleanList(parsed.preferencias, 4),
+    o_que_te_move: voiced(cleanList(parsed.o_que_te_move, 4)),
+    padroes: voiced(cleanList(parsed.padroes, 4)),
+    preferencias: voiced(cleanList(parsed.preferencias, 4)),
     conquistas: cleanList(parsed.conquistas, 6).map((s: string) =>
       s.length > 0 && !/[.!?]$/.test(s) ? s + "." : s,
     ),
-    sensiveis: cleanList(parsed.sensiveis, 4),
+    sensiveis: voiced(cleanList(parsed.sensiveis, 4)),
   };
 }
 

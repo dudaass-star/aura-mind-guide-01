@@ -193,9 +193,27 @@ function HypothesisContent({ item, feedbackMap, busy, onConfirm, onReview, perso
   const display = feedback?.status === "corrected" && feedback.corrected_text ? feedback.corrected_text : item.text;
   const showPerson = person && display === item.text;
   const edit = () => { if (!busy) onReview(item); };
-  const textNode = <p className={lead ? "text-[1.6rem] leading-snug sobre-text" : quote ? "text-[1.15rem] leading-relaxed sobre-text" : mode === "hypothesis" ? "text-[1.05rem] leading-relaxed sobre-text" : "text-sm leading-relaxed sobre-text"} style={lead || quote || mode === "hypothesis" ? { fontFamily: "var(--font-display)" } : undefined}>{lead && firstName ? `${firstName}, ${sanitizePortalText(display).replace(/^./, (c) => c.toLowerCase())}` : sanitizePortalText(display)}</p>;
-  const body = showPerson ? <div className="space-y-2"><div className="flex items-center gap-3"><span aria-hidden className="sobre-avatar flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg" style={{ fontFamily: "var(--font-display)" }}>{(person.names?.[0] ?? person.label).charAt(0).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-lg leading-tight sobre-text" style={{ fontFamily: "var(--font-display)" }}>{person.names?.length ? person.names.join(" e ") : person.label}</p>{person.names?.length ? <p className="sobre-eyebrow text-[10px] font-bold uppercase">{person.label}</p> : null}</div></div>{person.nota ? <p className="sobre-muted text-sm leading-relaxed">{sanitizePortalText(person.nota)}</p> : null}</div> : textNode;
+  const textNode = <p className={lead ? "text-[1.6rem] leading-snug sobre-text" : quote ? "text-[1.15rem] leading-relaxed sobre-text" : mode === "hypothesis" ? "text-[1.05rem] leading-relaxed sobre-text" : "text-sm leading-relaxed sobre-text"} style={lead || quote || mode === "hypothesis" ? { fontFamily: "var(--font-display)" } : undefined}>{leadText(sanitizePortalText(display), lead ? firstName : undefined)}</p>;
+  const body = showPerson ? <div className="space-y-2"><div className="flex items-center gap-3"><span aria-hidden className="sobre-avatar flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg" style={{ fontFamily: "var(--font-display)" }}>{personTitle(person).charAt(0).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-lg leading-tight sobre-text" style={{ fontFamily: "var(--font-display)" }}>{personTitle(person)}</p>{personTitle(person) !== person.label ? <p className="sobre-eyebrow text-[10px] font-bold uppercase">{person.label}</p> : null}</div></div>{person.nota ? <p className="sobre-muted text-sm leading-relaxed">{sanitizePortalText(person.nota)}</p> : null}</div> : textNode;
   return <div className="space-y-2"><button type="button" onClick={edit} aria-label="Toque para ajustar" className="block w-full rounded-xl text-left transition-opacity active:opacity-70">{body}</button>{mode === "hypothesis" ? (feedback ? <p className="sobre-eyebrow flex items-center gap-1 text-[11px] font-semibold"><Heart className="h-3 w-3 fill-current" />{feedback.status === "confirmed" ? "Ressoa com você" : "Na sua versão"}</p> : <button type="button" disabled={busy} onClick={() => onConfirm("confirm", item)} className="sobre-resonate inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"><Heart className="h-3 w-3" /> Ressoa</button>) : null}</div>;
+}
+
+// Prefixa o nome só quando a frase ainda não começa com ele.
+export function leadText(text: string, firstName?: string) {
+  if (!firstName) return text;
+  const head = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const name = firstName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (head.startsWith(name) || /^(ol[aá]|oi)\b/i.test(text)) return text;
+  return `${firstName}, ${text.replace(/^./, (c) => c.toLowerCase())}`;
+}
+
+const GENERIC_NAME = /^(ele|ela|eles|elas|m[aã]e|pai|irm[aã]o?|filh[oa]s?|esposo|esposa|marido|mulher|companheir[oa]|parceir[oa]|namorad[oa]|cunhad[oa]|ti[oa]|av[oó]|sogr[oa]|gerente|patr[oõ]es|chefe|maridão|amig[oa]s?|colegas?)$/i;
+// Mostra só nomes próprios reais; sinônimos de papel caem para o rótulo.
+export function personTitle(person: { label: string; names?: string[] }) {
+  const real = (person.names ?? []).map((n) => n.trim()).filter((n) => n && !GENERIC_NAME.test(n) && n.toLowerCase() !== person.label.toLowerCase());
+  const unique = [...new Set(real)].slice(0, 2);
+  if (!unique.length) return person.label.charAt(0).toUpperCase() + person.label.slice(1);
+  return unique.join(" e ");
 }
 
 function FactContribution({ facts, busy, onAction }: { facts: UserFact[]; busy: boolean; onAction: (body: Record<string, unknown>) => Promise<boolean> }) {
