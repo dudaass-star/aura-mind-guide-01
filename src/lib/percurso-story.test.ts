@@ -21,3 +21,16 @@ describe("isFreshlySealed", () => {
     expect(isFreshlySealed("2026-10-15T12:00:00", new Date(2026, 10, 8))).toBe(false);
   });
 });
+
+import { chapterBlocks } from "./percurso-story";
+
+describe("chapterBlocks", () => {
+  const raw = "Outubro de travessia\n\nVocê começou o mês assim.\n\nNas suas palavras\n“O limite quem coloca sou eu”\n\nSeu uso da Olá Aura\nVocê manteve seu espaço • 4 sessões concluídas\n\nEsta é uma leitura da AURA, não uma conclusão sobre você. Você pode confirmar ou corrigir o que não fizer sentido.";
+  it("remove telemetria de uso e aviso defensivo", () => {
+    const text = chapterBlocks(raw).map((b) => b.text).join(" ");
+    expect(text).not.toMatch(/Seu uso|sessões concluídas|não uma conclusão/);
+  });
+  it("transforma falas entre aspas em citação", () => {
+    expect(chapterBlocks(raw)).toContainEqual({ kind: "quote", text: "O limite quem coloca sou eu" });
+  });
+});

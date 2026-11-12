@@ -10,7 +10,7 @@ import { sanitizePortalText } from "./sanitize";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 import { takePercursoFocus } from "@/lib/percurso-focus";
-import { isFreshlySealed, pickEvolution } from "@/lib/percurso-story";
+import { chapterBlocks, isFreshlySealed, pickEvolution } from "@/lib/percurso-story";
 
 type Snapshot = {
   id: string;
@@ -416,18 +416,35 @@ function SectionTitle({ icon: Icon, eyebrow, title }: { icon: typeof Sparkles; e
 function ChapterReading({ chapter, onContinue }: { chapter: Chapter; onContinue: (message?: string) => void }) {
   const [full, setFull] = useState(false);
   const body = chapter.letter?.letter_text || chapter.report?.analysis_text || chapter.report?.report_html || "";
-  return <article className="percurso-chapter percurso-chapter-reading space-y-4 p-5" key={chapter.key}>
-    <div><p className="percurso-kicker">Capítulo de</p><h3 className="font-display text-2xl capitalize text-foreground">{chapter.monthLabel}</h3></div>
-    {chapter.headline && <p className="percurso-thread-text">{chapter.headline}</p>}
+  const blocks = chapterBlocks(sanitizePortalText(body));
+  const steps = [...chapter.sessions].filter((s) => s.ended_at).sort((a, b) => (a.ended_at! < b.ended_at! ? -1 : 1)).slice(-6);
+  const stepDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "numeric", month: "short", timeZone: "America/Sao_Paulo" }).replace(".", "");
+  const hasMore = blocks.length > 0 || steps.length > 0 || chapter.milestones.length > 0;
+  return <article className="percurso-chapter percurso-chapter-reading space-y-5 p-5" key={chapter.key}>
+    <header className="percurso-chapter-cover space-y-2">
+      <p className="percurso-kicker">Capítulo de</p>
+      <h3 className="font-display text-3xl capitalize text-foreground">{chapter.monthLabel}</h3>
+      {chapter.headline && <p className="percurso-chapter-lede">{chapter.headline}</p>}
+    </header>
     {chapter.quote && <blockquote className="percurso-quote">“{chapter.quote}”<span>— você, neste mês</span></blockquote>}
     {chapter.themes.length > 0 && <div className="flex flex-wrap gap-2">{chapter.themes.map((t) => <span key={t} className="percurso-pill">{sanitizePortalText(t)}</span>)}</div>}
     {full && <>
-      {body && <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{sanitizePortalText(body)}</p>}
-      {chapter.milestones.length > 0 && <ChapterSection icon={Trophy} title="Viradas do mês"><ul className="space-y-2">{chapter.milestones.slice(0, 4).map((m) => <li key={m.id} className="text-sm text-foreground">{milestoneText(m.milestone_text)}</li>)}</ul></ChapterSection>}
+      {steps.length > 0 && <section className="space-y-3">
+        <p className="percurso-kicker">Os passos deste mês</p>
+        <ol className="percurso-steps">{steps.map((s) => <li key={s.id}><span className="percurso-step-date">{stepDate(s.ended_at!)}</span><span className="percurso-step-text">{sanitizePortalText(s.theme_label || s.focus_topic || "Um encontro com a AURA")}</span></li>)}</ol>
+      </section>}
+      {blocks.length > 0 && <section className="percurso-chapter-prose space-y-4">{blocks.map((b, i) =>
+        b.kind === "heading" ? <p key={i} className="percurso-kicker pt-2">{b.text}</p>
+        : b.kind === "quote" ? <blockquote key={i} className="percurso-quote">“{b.text}”</blockquote>
+        : <p key={i} className={cn("percurso-prose", i === 0 && "percurso-prose-first")}>{b.text}</p>)}</section>}
+      {chapter.milestones.length > 0 && <section className="space-y-3">
+        <p className="percurso-kicker">O que você levou deste mês</p>
+        <ul className="space-y-2">{chapter.milestones.slice(0, 4).map((m) => <li key={m.id} className="percurso-takeaway">{milestoneText(m.milestone_text)}</li>)}</ul>
+      </section>}
     </>}
     <div className="flex flex-wrap items-center gap-4">
-      {(body || chapter.milestones.length > 0) && <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Fechar o capítulo" : "Ler o capítulo inteiro"}</button>}
-      <button type="button" className="percurso-soft-link" onClick={() => onContinue(`Aura, quero revisitar o que vivi em ${chapter.monthLabel}.`)}>Revisitar com a AURA <ArrowRight className="h-3.5 w-3.5" /></button>
+      {hasMore && <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Fechar o capítulo" : "Ler o capítulo inteiro"}</button>}
+      <button type="button" className="percurso-soft-link" onClick={() => onContinue(`Aura, quero continuar a partir do que vivi em ${chapter.monthLabel}.`)}>Continuar a partir daqui <ArrowRight className="h-3.5 w-3.5" /></button>
     </div>
   </article>;
 }

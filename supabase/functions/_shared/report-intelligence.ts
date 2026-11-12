@@ -92,8 +92,6 @@ export function formatReport(analysis: ReportAnalysis, metrics: PeriodMetrics) {
   const sections = [analysis.title, analysis.observation];
   if (analysis.movement) sections.push(`Um possível movimento\n${analysis.movement}`);
   if (analysis.evidence.length) sections.push(`Nas suas palavras\n${analysis.evidence.map((item) => `“${item.quote}”`).join("\n")}`);
-  sections.push(`Seu uso da Olá Aura\n${activityLine(metrics)}`);
   sections.push(`Um fio para continuar\n${analysis.continuation}`);
-  sections.push("Esta é uma leitura da AURA, não uma conclusão sobre você. Você pode confirmar ou corrigir o que não fizer sentido.");
   return sections.join("\n\n");
 }

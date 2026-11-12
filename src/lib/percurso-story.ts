@@ -20,3 +20,32 @@ export function isFreshlySealed(chapterMonthIso: string, now = new Date()) {
   const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   return d.getFullYear() === prev.getFullYear() && d.getMonth() === prev.getMonth() && now.getDate() <= 7;
 }
+
+/** Bloco editorial de leitura de um capítulo. */
+export type ChapterBlock = { kind: "heading" | "quote" | "paragraph"; text: string };
+
+const CHAPTER_HEADINGS = /^(um possível movimento|nas suas palavras|um fio para continuar)$/i;
+const TELEMETRY_SECTION = /^seu uso da ol[áa] aura/i;
+const DISCLAIMER = /(leitura da aura, não uma conclusão|confirmar ou corrigir o que não fizer sentido)/i;
+
+/**
+ * Converte o texto cru do relatório/carta em blocos de leitura editorial,
+ * removendo telemetria de uso e avisos defensivos herdados de capítulos antigos.
+ */
+export function chapterBlocks(raw: string): ChapterBlock[] {
+  const blocks: ChapterBlock[] = [];
+  const sections = raw.replace(/\r/g, "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+  for (const section of sections) {
+    if (TELEMETRY_SECTION.test(section) || DISCLAIMER.test(section)) continue;
+    const lines = section.split("\n").map((l) => l.trim()).filter(Boolean);
+    let paragraph: string[] = [];
+    const flush = () => { if (paragraph.length) blocks.push({ kind: "paragraph", text: paragraph.join(" ") }); paragraph = []; };
+    for (const line of lines) {
+      if (CHAPTER_HEADINGS.test(line)) { flush(); blocks.push({ kind: "heading", text: line }); }
+      else if (/^[“"].+[”"]$/.test(line)) { flush(); blocks.push({ kind: "quote", text: line.replace(/^[“"]|[”"]$/g, "") }); }
+      else if (!DISCLAIMER.test(line) && !/•/.test(line)) paragraph.push(line);
+    }
+    flush();
+  }
+  return blocks;
+}

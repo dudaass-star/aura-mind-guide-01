@@ -1281,3 +1281,13 @@ hsl(152 17% 36%);
 .portal-progress-page .percurso-sealed, .portal-progress-page .percurso-next { display: flex; flex-direction: column; gap: .5rem; text-align: left; padding: 1.2rem 1.25rem; border-radius: 1.25rem; border: 1px dashed hsl(var(--primary) / .45); background: hsl(var(--primary) / .08); color: hsl(30 30% 97%); }
 .portal-progress-page .percurso-sealed { border-style: solid; box-shadow: 0 14px 30px -18px hsl(var(--primary) / .7); }
 .portal-progress-page .percurso-sealed-title { font-family: var(--font-display); font-size: 1.15rem; line-height: 1.35; }
+
+/* Percurso — leitura editorial do capítulo */
+.percurso-chapter-lede { font-family: var(--font-display); font-style: italic; font-size: 1.05rem; line-height: 1.55; color: hsl(var(--foreground) / .85); }
+.percurso-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
+.percurso-steps li { display: grid; grid-template-columns: 3.6rem 1fr; gap: .75rem; align-items: baseline; }
+.percurso-step-date { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: hsl(var(--primary)); }
+.percurso-step-text { font-size: .9rem; line-height: 1.45; color: hsl(var(--foreground) / .9); }
+.percurso-prose { font-size: .98rem; line-height: 1.75; color: hsl(var(--foreground) / .92); }
+.percurso-prose-first::first-letter { font-family: var(--font-display); font-size: 2.6em; float: left; line-height: .9; margin: .08em .12em 0 0; color: hsl(var(--primary)); }
+.percurso-takeaway { font-family: var(--font-display); font-size: 1rem; line-height: 1.5; padding-left: .9rem; border-left: 2px solid hsl(var(--primary) / .5); color: hsl(var(--foreground)); }
