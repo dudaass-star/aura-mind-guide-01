@@ -34,3 +34,10 @@ describe("chapterBlocks", () => {
     expect(chapterBlocks(raw)).toContainEqual({ kind: "quote", text: "O limite quem coloca sou eu" });
   });
 });
+
+import { chapterBlocks as cb2 } from "./percurso-story";
+it("relatório com aviso no mesmo parágrafo mantém a reflexão e remove telemetria", () => {
+  const raw = "📊 Seu mês: 42 mensagens\n\nVocê atravessou outubro com coragem. Esta é uma leitura da AURA, não uma conclusão sobre você.\n\n“Percebi meu limite”";
+  const b = cb2(raw);
+  expect(b.map((x) => x.text)).toEqual(["Você atravessou outubro com coragem.", "Percebi meu limite"]);
+});

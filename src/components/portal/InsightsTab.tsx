@@ -416,7 +416,7 @@ function SectionTitle({ icon: Icon, eyebrow, title }: { icon: typeof Sparkles; e
 function ChapterReading({ chapter, onContinue }: { chapter: Chapter; onContinue: (message?: string) => void }) {
   const [full, setFull] = useState(false);
   const body = chapter.letter?.letter_text || chapter.report?.analysis_text || chapter.report?.report_html || "";
-  const blocks = chapterBlocks(sanitizePortalText(body));
+  const blocks = chapterBlocks(body, sanitizePortalText);
   const steps = [...chapter.sessions].filter((s) => s.ended_at).sort((a, b) => (a.ended_at! < b.ended_at! ? -1 : 1)).slice(-6);
   const stepDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "numeric", month: "short", timeZone: "America/Sao_Paulo" }).replace(".", "");
   const hasMore = blocks.length > 0 || steps.length > 0 || chapter.milestones.length > 0;

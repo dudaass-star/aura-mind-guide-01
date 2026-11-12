@@ -32,18 +32,23 @@ const DISCLAIMER = /(leitura da aura, não uma conclusão|confirmar ou corrigir 
  * Converte o texto cru do relatório/carta em blocos de leitura editorial,
  * removendo telemetria de uso e avisos defensivos herdados de capítulos antigos.
  */
-export function chapterBlocks(raw: string): ChapterBlock[] {
+export function chapterBlocks(raw: string, clean: (s: string) => string = (s) => s): ChapterBlock[] {
   const blocks: ChapterBlock[] = [];
-  const sections = raw.replace(/\r/g, "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+  const sections = (raw || "").replace(/\r/g, "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+  const isTelemetry = (l: string) => /^[📊📈📉📅💬🗓️⏱️🔢✅]/u.test(l) || /\d+\s*(mensagens|sessões concluídas|minutos de áudio)/i.test(l) || /•/.test(l);
   for (const section of sections) {
-    if (TELEMETRY_SECTION.test(section) || DISCLAIMER.test(section)) continue;
-    const lines = section.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (TELEMETRY_SECTION.test(section)) continue;
+    const lines = section.split("\n").map((l) => clean(l.replace(/^#+\s*/, "")).trim()).filter(Boolean);
     let paragraph: string[] = [];
     const flush = () => { if (paragraph.length) blocks.push({ kind: "paragraph", text: paragraph.join(" ") }); paragraph = []; };
-    for (const line of lines) {
-      if (CHAPTER_HEADINGS.test(line)) { flush(); blocks.push({ kind: "heading", text: line }); }
+    for (const original of lines) {
+      if (TELEMETRY_SECTION.test(original) || isTelemetry(original)) continue;
+      // Remove só a frase defensiva, preservando o restante da reflexão.
+      const line = original.split(/(?<=[.!?])\s+/).filter((f) => !DISCLAIMER.test(f)).join(" ").trim();
+      if (!line) continue;
+      if (CHAPTER_HEADINGS.test(line.replace(/:$/, ""))) { flush(); blocks.push({ kind: "heading", text: line.replace(/:$/, "") }); }
       else if (/^[“"].+[”"]$/.test(line)) { flush(); blocks.push({ kind: "quote", text: line.replace(/^[“"]|[”"]$/g, "") }); }
-      else if (!DISCLAIMER.test(line) && !/•/.test(line)) paragraph.push(line);
+      else paragraph.push(line);
     }
     flush();
   }
