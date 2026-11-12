@@ -71,6 +71,11 @@ function toAuraVoice(text: string, firstName: string) {
   let out = sanitizePortalText(text).trim();
   if (firstName) out = out.replace(new RegExp(`\\b${firstName}\\b`, "gi"), "você");
   out = out.replace(/\b(o|a) (cliente|usuári[oa]|paciente)\b/gi, "você").replace(/\bvocê demonstrou\b/gi, "você mostrou");
+  // Tira o tom de prontuário: "Sessão focada em X - discutimos..." vira fala da AURA.
+  out = out.replace(/^sess[aã]o (focada|centrada) em\s*/i, "A gente mergulhou em ")
+    .replace(/\s+-\s+discutimos\s+/i, ". Pensamos juntos em ")
+    .replace(/\bdiscutimos\b/gi, "falamos sobre").replace(/\bConversamos\b/g, "Falamos")
+    .replace(/\.\s+(você)/g, (_m, v) => `. ${v.charAt(0).toUpperCase()}${v.slice(1)}`);
   return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
@@ -209,7 +214,9 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
 
   const hasLiveMaterial = activeThemes.length > 0 || recentMovements.length > 0 || !!lastSession || meaningfulMilestones.length > 0;
   const deepId = new URLSearchParams(window.location.search).get("id");
-  const featuredWeek = weeklyReports.find((r) => r.id === deepId) ?? weeklyReports[0] ?? null;
+  // Semana sem atividade não ganha destaque: ausência não deve abrir o livro.
+  const isSilentWeek = (r: any) => /mais silencioso por aqui|não permitem concluir sozinhos|Nenhuma atividade registrada|insufficient_data/i.test(JSON.stringify(r ?? ""));
+  const featuredWeek = weeklyReports.find((r) => r.id === deepId) ?? weeklyReports.find((r) => !isSilentWeek(r)) ?? null;
   const deepChapter = chapters.find((c) => c.report?.id === deepId);
   const openChapter = chapters.find((c) => c.key === (expandedKey ?? deepChapter?.key)) ?? chapters[0] ?? null;
   const firstName = typeof profile?.name === "string" ? profile.name.trim().split(/\s+/)[0] : "";
@@ -293,7 +300,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       {savedItems.length === 0 && sessionCount > 0 && (
         <section className="portal-progress-step space-y-3">
           <SectionTitle icon={BookMarked} eyebrow="Seu relicário" title="O que você leva dos encontros" />
-          <div className="percurso-invite"><Quote className="percurso-relic-mark" aria-hidden="true" /><p>Ao fim de cada encontro, a AURA te entrega uma frase para levar. As que você guardar ficam reunidas aqui, só suas.</p></div>
+          <div className="percurso-invite percurso-invite-compact"><Quote className="percurso-relic-mark" aria-hidden="true" /><p>Sua primeira frase guardada aparece aqui.</p></div>
         </section>
       )}
 
@@ -417,6 +424,17 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         <section className="percurso-next" aria-label="Próximo capítulo">
           <p className="percurso-kicker">Em escrita agora</p>
           <p className="percurso-sealed-title">O capítulo de <span className="capitalize">{fmtMonth(new Date().toISOString())}</span> ainda está sendo escrito.</p>
+          {(() => {
+            const now = new Date();
+            const total = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            const left = total - now.getDate();
+            return (
+              <div className="percurso-progress" aria-label={`Faltam ${left} dias para selar o capítulo`}>
+                <div className="percurso-progress-track"><div className="percurso-progress-fill" style={{ width: `${Math.round((now.getDate() / total) * 100)}%` }} /></div>
+                <p className="percurso-progress-label">{left === 0 ? "Sela hoje à noite" : `Sela em ${left} ${left === 1 ? "dia" : "dias"}`}</p>
+              </div>
+            );
+          })()}
           <p className="text-sm leading-relaxed text-muted-foreground">
             {monthSessions > 0 ? `${monthSessions} ${monthSessions === 1 ? "encontro já entrou" : "encontros já entraram"} nele. ` : "As primeiras páginas esperam por você. "}
             {nextSessionAt ? `A próxima página: ${new Date(nextSessionAt).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}, às ${new Date(nextSessionAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : "O que você viver daqui pra frente vira a continuação desta história."}

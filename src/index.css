@@ -1366,3 +1366,14 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .percurso-sheet .percurso-chapter-reading h3 { color: hsl(0 0% 100%); }
 .percurso-sheet .percurso-chapter-reading button { color: hsl(140 35% 78%) !important; }
 .percurso-sheet .percurso-prose { color: hsl(0 0% 100% / .88); }
+
+/* Percurso — acabamento final de retenção */
+.percurso-invite-compact { display: flex; align-items: center; gap: .75rem; padding: .85rem 1rem; font-size: .9rem; }
+.percurso-invite-compact .percurso-relic-mark { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
+.portal-progress-page .percurso-book { position: relative; overflow: hidden; }
+.portal-progress-page .percurso-book::before { content: ""; position: absolute; inset: 0 auto 0 .45rem; width: 2px; background: linear-gradient(180deg, hsl(0 0% 100% / .05), hsl(0 0% 100% / .22), hsl(0 0% 100% / .05)); box-shadow: 2px 0 3px hsl(0 0% 0% / .35); pointer-events: none; }
+.portal-progress-page .percurso-book::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, hsl(0 0% 100% / .14) 0%, transparent 38%, transparent 70%, hsl(0 0% 100% / .05) 100%); pointer-events: none; }
+.percurso-progress { display: flex; flex-direction: column; gap: .4rem; margin: .25rem 0 .5rem; }
+.percurso-progress-track { height: .4rem; border-radius: 999px; background: hsl(var(--primary) / .15); overflow: hidden; }
+.percurso-progress-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, hsl(var(--primary) / .6), hsl(var(--primary))); box-shadow: 0 0 10px hsl(var(--primary) / .5); }
+.percurso-progress-label { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: hsl(var(--primary)); }
