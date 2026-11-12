@@ -51,6 +51,11 @@ function themesOverlap(a: string, b: string) {
   return shared / Math.min(aWords.size, bWords.size) >= 0.6;
 }
 
+// Mês sem substância: relatório "insufficient_data" ou texto de preenchimento não vira capítulo.
+function isEmptyMonthReport(report: { metrics_json?: any; analysis_text?: string | null }) {
+  return report.metrics_json?.confidence === "insufficient_data" || /não permitem concluir sozinhos/i.test(report.analysis_text || "");
+}
+
 function monthKeyOf(iso: string) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -182,7 +187,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
     };
     data.letters.forEach((letter) => { const iso = letter.letter_month || letter.created_at; if (iso) ensure(iso).letter = letter; });
     data.snapshots.forEach((snapshot) => { const iso = snapshot.evidence_date || snapshot.period_end; if (iso) ensure(iso).snapshots.push(snapshot); });
-    data.monthlyReports.forEach((report) => { if (report.report_month) ensure(`${report.report_month.slice(0, 10)}T12:00:00`).report = report; });
+    data.monthlyReports.forEach((report) => { if (report.report_month && !isEmptyMonthReport(report)) ensure(`${report.report_month.slice(0, 10)}T12:00:00`).report = report; });
     data.sessions.forEach((session) => { if (session.ended_at) ensure(session.ended_at).sessions.push(session); });
     data.milestones.forEach((milestone) => {
       if (milestone.milestone_date && milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)) {
@@ -416,7 +421,9 @@ function SectionTitle({ icon: Icon, eyebrow, title }: { icon: typeof Sparkles; e
 function ChapterReading({ chapter, onContinue }: { chapter: Chapter; onContinue: (message?: string) => void }) {
   const [full, setFull] = useState(false);
   const body = chapter.letter?.letter_text || chapter.report?.analysis_text || chapter.report?.report_html || "";
-  const blocks = chapterBlocks(body, sanitizePortalText);
+  // Evita eco: o primeiro parágrafo não repete o subtítulo do capítulo.
+  const ledeStart = normalizeWords(chapter.headline.replace(/…$/, "")).slice(0, 8).join(" ");
+  const blocks = chapterBlocks(body, sanitizePortalText).filter((b) => !(ledeStart && b.kind === "paragraph" && normalizeWords(b.text).slice(0, 8).join(" ") === ledeStart));
   const steps = [...chapter.sessions].filter((s) => s.ended_at).sort((a, b) => (a.ended_at! < b.ended_at! ? -1 : 1)).slice(-6);
   const stepDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "numeric", month: "short", timeZone: "America/Sao_Paulo" }).replace(".", "");
   const hasMore = blocks.length > 0 || steps.length > 0 || chapter.milestones.length > 0;
