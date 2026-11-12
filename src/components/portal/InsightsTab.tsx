@@ -431,7 +431,7 @@ function ChapterReading({ chapter, onContinue }: { chapter: Chapter; onContinue:
     <header className="percurso-chapter-cover space-y-2">
       <p className="percurso-kicker">Capítulo de</p>
       <h3 className="font-display text-3xl capitalize text-foreground">{chapter.monthLabel}</h3>
-      {chapter.headline && <p className="percurso-chapter-lede">{chapter.headline}</p>}
+      {chapter.headline && !full && <p className="percurso-chapter-lede">{chapter.headline}</p>}
     </header>
     {chapter.quote && <blockquote className="percurso-quote">“{chapter.quote}”<span>— você, neste mês</span></blockquote>}
     {chapter.themes.length > 0 && <div className="flex flex-wrap gap-2">{chapter.themes.map((t) => <span key={t} className="percurso-pill">{sanitizePortalText(t)}</span>)}</div>}
@@ -459,11 +459,16 @@ function ChapterReading({ chapter, onContinue }: { chapter: Chapter; onContinue:
 function WeekReading({ report, onContinue }: { report: WeeklyReport; onContinue: (message?: string) => void }) {
   const [full, setFull] = useState(() => new URLSearchParams(window.location.search).get("id") === report.id);
   const fmt = (d: string) => new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
-  const content = sanitizePortalText(report.report_content || report.analysis_text || "");
-  if (!content) return null;
+  // Mesma leitura editorial dos capítulos: sem telemetria nem saudação de relatório.
+  const blocks = chapterBlocks(report.report_content || report.analysis_text || "", sanitizePortalText)
+    .filter((b) => !/^Sua semana,|Nenhuma atividade registrada|^Seu uso da Ol[áa] Aura/i.test(b.text));
+  if (!blocks.length) return null;
   return <article className="percurso-thread space-y-3">
     <p className="percurso-kicker">Esta semana · {fmt(report.period_start)} a {fmt(report.period_end)}</p>
-    <p className={cn("whitespace-pre-line text-[15px] leading-relaxed text-foreground", !full && "percurso-letter-clamp")}>{content}</p>
+    <div className={cn("space-y-3 text-[15px] leading-relaxed text-foreground", !full && "percurso-letter-clamp")}>{blocks.map((b, i) =>
+      b.kind === "heading" ? <p key={i} className="percurso-kicker pt-1">{b.text}</p>
+      : b.kind === "quote" ? <blockquote key={i} className="percurso-quote">“{b.text}”</blockquote>
+      : <p key={i}>{b.text}</p>)}</div>
     <div className="flex flex-wrap items-center gap-4">
       <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Recolher" : "Ler a semana inteira"}</button>
       <button type="button" className="percurso-soft-link" onClick={() => onContinue("Aura, quero conversar sobre o que apareceu na minha semana.")}>Continuar com a AURA <ArrowRight className="h-3.5 w-3.5" /></button>
