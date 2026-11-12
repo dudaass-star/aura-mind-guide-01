@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeNotification } from "../_shared/notification-router.ts";
+import { hasMonthlySubstance } from "../_shared/monthly-report-eligibility.ts";
 import { formatReport, generateReportAnalysis, type PeriodMetrics as Metrics } from "../_shared/report-intelligence.ts";
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const BATCH_SIZE = 20;
@@ -38,6 +39,8 @@ Deno.serve(async (req) => {
     const results: unknown[] = [];
     for (const profile of profiles || []) try {
       const [current, previous] = await Promise.all([getMetrics(db, profile.user_id, periods.start, periods.end), getMetrics(db, profile.user_id, periods.previous, periods.start)]);
+      // Mês sem substância: nada de relatório, capítulo vazio ou notificação.
+      if (!hasMonthlySubstance(current)) { results.push({ user_id: profile.user_id, skipped: "no_substance" }); continue; }
       const name = profile.name?.trim().split(/\s+/)[0] || "você", reportMonth = day(periods.start);
       const analysis = await generateReportAnalysis(db, { kind: "monthly", userId: profile.user_id, firstName: name, start: periods.start, end: periods.end, previousStart: periods.previous, metrics: { current, previous } });
       const report = formatReport(analysis, current);
