@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { pickEvolution, isFreshlySealed } from "./percurso-story";
 
 const s = (id: string, date: string, before: string | null, change: string | null) => ({ id, snapshot_before: before, snapshot_change: change, evidence_date: date, period_end: null });

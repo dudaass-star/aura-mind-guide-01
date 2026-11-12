@@ -193,7 +193,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       const best = [...chapter.snapshots].sort((a, b) => (CONF_ORDER[b.confidence ?? ""] ?? 0) - (CONF_ORDER[a.confidence ?? ""] ?? 0))[0];
       chapter.headline = truncate(chapter.letter?.preview_text || best?.snapshot_change || best?.snapshot_before || milestoneText(chapter.milestones[0]?.milestone_text ?? null) || sanitizePortalText(chapter.report?.analysis_text || ""), 180);
       chapter.quote = best?.evidence_quote ? sanitizePortalText(best.evidence_quote) : null;
-      chapter.themes = Array.from(new Set(chapter.snapshots.map((snapshot) => snapshot.theme?.trim()).filter(Boolean) as string[])).slice(0, 3);
+      chapter.themes = Array.from(new Set([...chapter.snapshots.map((snapshot) => snapshot.theme?.trim()), ...chapter.sessions.map((session) => session.theme_label?.trim())].filter((t): t is string => !!t && !OPERATIONAL_THEME.test(t)))).slice(0, 3);
       return chapter;
     }).sort((a, b) => new Date(b.anchorDate).getTime() - new Date(a.anchorDate).getTime());
   }, [data]);
@@ -208,7 +208,12 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const firstName = typeof profile?.name === "string" ? profile.name.trim().split(/\s+/)[0] : "";
   const sessionCount = data?.sessions?.length ?? 0;
   const latestLetter = data?.letters?.find((letter) => letter.letter_text) ?? null;
-  const evolution = pickEvolution(data?.snapshots ?? []);
+  // Sem snapshots, a evolução usa o tema do primeiro encontro contra o fechamento do mais recente.
+  const firstSession = [...(data?.sessions ?? [])].reverse().find((x) => x.ended_at && (x.focus_topic || x.theme_label));
+  const lastClosed = data?.sessions?.find((x) => x.ended_at && x.closure_text?.trim()) ?? null;
+  const evolution = pickEvolution(data?.snapshots ?? []) ?? (firstSession && lastClosed && lastClosed.id !== firstSession.id
+    ? pickEvolution([{ id: "a", snapshot_before: firstSession.focus_topic || firstSession.theme_label, snapshot_change: null, evidence_date: firstSession.ended_at, period_end: null }, { id: "b", snapshot_before: null, snapshot_change: sanitizePortalText(lastClosed.closure_text), evidence_date: lastClosed.ended_at, period_end: null }])
+    : null);
   const currentKey = monthKeyOf(new Date().toISOString());
   const currentChapter = chapters.find((c) => c.key === currentKey) ?? null;
   const sealedChapter = chapters.find((c) => c.key !== currentKey && isFreshlySealed(c.anchorDate)) ?? null;
@@ -251,9 +256,9 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         <section className="portal-progress-step space-y-3" aria-labelledby="sua-evolucao">
           <SectionTitle icon={Sparkles} eyebrow="Quem você está se tornando" title="Olha o caminho que você fez" />
           <article id="sua-evolucao" className="percurso-evolution">
-            <div className="percurso-evolution-then"><p className="percurso-shift-label">Em <span className="capitalize">{fmtMonth(evolution.beforeDate)}</span>, você trazia</p><p className="percurso-evolution-before">“{truncate(evolution.beforeText, 200)}”</p></div>
+            <div className="percurso-evolution-then"><p className="percurso-shift-label">Em {fmtMonth(evolution.beforeDate)}, você trazia</p><p className="percurso-evolution-before">“{truncate(evolution.beforeText, 200)}”</p></div>
             <div className="percurso-evolution-line" aria-hidden="true" />
-            <div><p className="percurso-shift-label percurso-shift-label-now">Em <span className="capitalize">{fmtMonth(evolution.nowDate)}</span>, você chegou aqui</p><p className="percurso-evolution-now">{truncate(evolution.nowText, 240)}</p></div>
+            <div><p className="percurso-shift-label percurso-shift-label-now">Em {fmtMonth(evolution.nowDate)}, você chegou aqui</p><p className="percurso-evolution-now">{truncate(evolution.nowText, 240)}</p></div>
             <p className="percurso-evolution-note">Isso não aconteceu sozinho. Foi você, encontro após encontro.</p>
           </article>
         </section>
