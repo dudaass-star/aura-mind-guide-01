@@ -5,6 +5,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { EmptyState, PortalLoadingInline } from "./shared";
 import { sanitizePortalText } from "./sanitize";
 import { reportPushConversion } from "@/lib/push-notifications";
@@ -87,6 +88,7 @@ function truncate(text: string, max: number) {
 export function InsightsTab({ userId, profile, onOpenConversation }: { userId: string; profile: any; onOpenConversation: (prefilledMessage?: string) => void }) {
   const queryClient = useQueryClient();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [showOlder, setShowOlder] = useState(false);
 
   useEffect(() => {
@@ -242,15 +244,19 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
           {firstName ? `${firstName}, o caminho` : "O caminho"} que você vem construindo.
         </h2>
         <p className="percurso-lead">{hasLiveMaterial || savedItems.length ? "O que você trouxe, o que guardou e o que começou a mudar — reunido com cuidado, nas suas palavras." : "Ainda é o começo. Conforme vocês conversarem, este espaço guarda o que for real para você."}</p>
-        {(sessionCount > 0 || savedItems.length > 0 || chapters.length > 0) && (
-          <p className="percurso-meta">{[sessionCount > 0 && `${sessionCount} ${sessionCount === 1 ? "encontro" : "encontros"}`, savedItems.length > 0 && `${savedItems.length} ${savedItems.length === 1 ? "frase guardada" : "frases guardadas"}`, chapters.length > 0 && `${chapters.length} ${chapters.length === 1 ? "capítulo" : "capítulos"}`].filter(Boolean).join(" · ")}</p>
+        {(sessionCount > 0 || chapters.length > 0) && (
+          <div className="percurso-stats">
+            <div className="percurso-stat"><span className="percurso-stat-value">{sessionCount}</span><span className="percurso-stat-label">{sessionCount === 1 ? "encontro" : "encontros"}</span></div>
+            <div className="percurso-stat"><span className="percurso-stat-value">{chapters.length}</span><span className="percurso-stat-label">{chapters.length === 1 ? "capítulo" : "capítulos"}</span></div>
+            <div className="percurso-stat"><span className="percurso-stat-value">{meaningfulMilestones.length}</span><span className="percurso-stat-label">{meaningfulMilestones.length === 1 ? "virada" : "viradas"}</span></div>
+          </div>
         )}
       </section>
 
       <div className="portal-progress-flow">
 
       {sealedChapter && (
-        <button type="button" className="percurso-sealed" onClick={() => { setExpandedKey(sealedChapter.key); requestAnimationFrame(() => document.getElementById("livro-percurso")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}>
+        <button type="button" className="percurso-sealed" onClick={() => { setExpandedKey(sealedChapter.key); setSheetOpen(true); requestAnimationFrame(() => document.getElementById("livro-percurso")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}>
           <span className="percurso-kicker">Capítulo selado</span>
           <span className="percurso-sealed-title">Seu capítulo de <span className="capitalize">{fmtMonth(sealedChapter.anchorDate)}</span> está pronto.</span>
           <span className="percurso-soft-link">Abrir o capítulo <ArrowRight className="h-3.5 w-3.5" /></span>
@@ -359,15 +365,17 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       {meaningfulMilestones.length > 0 && (
         <section className="portal-progress-step space-y-3">
           <SectionTitle icon={Trophy} eyebrow="Reconhecer" title="Viradas que você já viveu" />
-          <ol className="percurso-timeline">
+          <div className="percurso-turns">
             {meaningfulMilestones.map((milestone) => (
-              <li key={milestone.id}>
-                {milestone.milestone_date && <p className="percurso-relic-date">{new Date(milestone.milestone_date).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</p>}
-                <p className="percurso-timeline-text">{milestoneText(milestone.milestone_text)}</p>
-                {milestone.context_excerpt && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{truncate(milestone.context_excerpt, 150)}</p>}
-              </li>
+              <article key={milestone.id} className="percurso-turn">
+                <span className="percurso-turn-icon"><Trophy className="h-4 w-4" /></span>
+                <div className="space-y-1">
+                  {milestone.milestone_date && <p className="percurso-turn-date">{new Date(milestone.milestone_date).toLocaleDateString("pt-BR", { day: "numeric", month: "short" }).replace(".", "")}</p>}
+                  <p className="percurso-turn-text">{truncate(milestoneText(milestone.milestone_text), 110)}</p>
+                </div>
+              </article>
             ))}
-          </ol>
+          </div>
         </section>
       )}
 
@@ -382,9 +390,9 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
               <p className="percurso-shelf-label">Capítulos · toque para abrir</p>
               <div id="livro-percurso" className="percurso-shelf" role="tablist">
                 {chapters.map((chapter, index) => (
-                  <button key={chapter.key} type="button" role="tab" aria-selected={openChapter?.key === chapter.key}
-                    className={cn("percurso-book", openChapter?.key === chapter.key && "percurso-book-open")}
-                    onClick={() => setExpandedKey(chapter.key)}>
+                  <button key={chapter.key} type="button" role="tab" aria-selected={sheetOpen && openChapter?.key === chapter.key}
+                    className="percurso-book"
+                    onClick={() => { setExpandedKey(chapter.key); setSheetOpen(true); }}>
                     <span className="percurso-book-num">Cap. {chapters.length - index}</span>
                     <span className="percurso-book-title">{chapter.monthLabel.split(" ")[0]}</span>
                     {chapter.themes[0] && <span className="percurso-book-theme">{truncate(chapter.themes[0], 42)}</span>}
@@ -392,7 +400,14 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
                   </button>
                 ))}
               </div>
-              {openChapter && <ChapterReading chapter={openChapter} onContinue={onOpenConversation} />}
+              <Drawer open={sheetOpen && !!openChapter} onOpenChange={setSheetOpen}>
+                <DrawerContent className="percurso-sheet portal-progress-page">
+                  <DrawerTitle className="sr-only">{openChapter ? `Capítulo de ${openChapter.monthLabel}` : "Capítulo"}</DrawerTitle>
+                  <div className="percurso-sheet-scroll">
+                    {openChapter && <ChapterReading key={openChapter.key} chapter={openChapter} startOpen onContinue={(m) => { setSheetOpen(false); onOpenConversation(m); }} />}
+                  </div>
+                </DrawerContent>
+              </Drawer>
             </div>
           )}
         </section>
@@ -418,8 +433,8 @@ function SectionTitle({ icon: Icon, eyebrow, title }: { icon: typeof Sparkles; e
   return <div className="portal-progress-section-title flex items-center gap-3"><span className="portal-progress-node flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary">{eyebrow}</p><h2 className="percurso-section-title">{title}</h2></div></div>;
 }
 
-function ChapterReading({ chapter, onContinue }: { chapter: Chapter; onContinue: (message?: string) => void }) {
-  const [full, setFull] = useState(false);
+function ChapterReading({ chapter, onContinue, startOpen = false }: { chapter: Chapter; onContinue: (message?: string) => void; startOpen?: boolean }) {
+  const [full, setFull] = useState(startOpen);
   const body = chapter.letter?.letter_text || chapter.report?.analysis_text || chapter.report?.report_html || "";
   // Evita eco: o primeiro parágrafo não repete o subtítulo do capítulo.
   const ledeStart = normalizeWords(chapter.headline.replace(/…$/, "")).slice(0, 8).join(" ");
@@ -450,7 +465,7 @@ function ChapterReading({ chapter, onContinue }: { chapter: Chapter; onContinue:
       </section>}
     </>}
     <div className="flex flex-wrap items-center gap-4">
-      {hasMore && <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Fechar o capítulo" : "Ler o capítulo inteiro"}</button>}
+      {hasMore && !startOpen && <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Fechar o capítulo" : "Ler o capítulo inteiro"}</button>}
       <button type="button" className="percurso-soft-link" onClick={() => onContinue(`Aura, quero continuar a partir do que vivi em ${chapter.monthLabel}.`)}>Continuar a partir daqui <ArrowRight className="h-3.5 w-3.5" /></button>
     </div>
   </article>;
