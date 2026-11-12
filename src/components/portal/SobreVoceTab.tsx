@@ -120,17 +120,6 @@ export function SobreVoceTab({ userId, profile, onOpenConversation }: { userId: 
   if (isLoading) return <PortalLoadingInline />;
 
   return <div className="portal-area-page space-y-7">
-    <section className="sobre-glass sobre-glass-hero rounded-3xl p-6 sm:p-7">
-      <div className="relative z-10 flex items-start justify-between gap-4">
-        <div>
-                    <h2 className="mt-2 text-[1.8rem] leading-tight" style={{ fontFamily: "var(--font-display)" }}>O que a AURA leva em conta</h2>
-        </div>
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center sobre-icon rounded-full"><UserRound className="h-5 w-5" /></span>
-      </div>
-      <p className="sobre-muted relative z-10 mt-3 text-sm leading-relaxed">Revise e ajuste quando quiser — a AURA passa a usar a sua versão nas próximas conversas.</p>
-    </section>
-
-
     {!hasPortrait ? <EmptyState icon={Heart} title="A AURA ainda está te conhecendo" description="Quando houver material suficiente, as primeiras leituras aparecem aqui para você confirmar." /> : <>
       {(portrait?.intro || portrait?.o_que_te_move?.length) ? <section className="sobre-glass sobre-glass-sage space-y-4 rounded-3xl p-6"><div className="flex items-center gap-2"><Compass className="sobre-eyebrow h-4 w-4" /><p className="sobre-eyebrow text-[11px] font-bold uppercase">O que importa para você agora</p></div>{portrait?.intro && <HypothesisContent mode="adjust" lead firstName={firstName} item={{ section: "intro", text: portrait.intro }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />}{portrait?.o_que_te_move?.map((text) => <div key={text} className="border-t border-white/10 pt-3"><HypothesisContent mode="adjust" item={{ section: "o_que_te_move", text }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} /></div>)}</section> : null}
       {portrait?.pessoas?.length ? <Section title="Pessoas da sua vida" icon={Users}>{portrait.pessoas.map((person, index) => {
@@ -139,7 +128,7 @@ export function SobreVoceTab({ userId, profile, onOpenConversation }: { userId: 
       })}</Section> : null}
       {portrait?.padroes?.length ? <Section title="O que a AURA percebeu" icon={Sparkles}>{portrait.padroes.map((text) => <HypothesisRow key={text} item={{ section: "padroes", text }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />)}</Section> : null}
       {portrait?.preferencias?.length ? <Section title="Preferências e rotina" icon={Heart}>{portrait.preferencias.map((text) => <HypothesisRow mode="fact" key={text} item={{ section: "preferencias", text }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />)}</Section> : null}
-      {portrait?.sensiveis?.length ? <section className="space-y-3"><Button variant="ghost" className="h-auto w-full justify-start gap-2 px-0 text-left" onClick={() => setSensitiveOpen((open) => !open)}><ShieldAlert className="sobre-eyebrow h-4 w-4" /><span className="flex-1 text-sm font-semibold sobre-text">Pontos sensíveis</span>{sensitiveOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>{sensitiveOpen && <div className="space-y-3">{portrait.sensiveis.map((text) => <HypothesisRow key={text} item={{ section: "sensiveis", text }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />)}</div>}</section> : null}
+      {portrait?.sensiveis?.length ? <section className="space-y-3"><Button variant="ghost" className="h-auto w-full justify-start gap-2 px-0 text-left" onClick={() => setSensitiveOpen((open) => !open)}><ShieldAlert className="sobre-eyebrow h-4 w-4" /><span className="flex-1 text-sm font-semibold sobre-text">Pontos sensíveis</span>{sensitiveOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>{sensitiveOpen && <div className="sobre-glass sobre-group rounded-3xl px-5 py-1">{portrait.sensiveis.map((text) => <HypothesisRow key={text} item={{ section: "sensiveis", text }} feedbackMap={feedbackMap} busy={mutation.isPending} onConfirm={reviewMutation} onReview={(item) => { setReview(item); setCorrection(""); }} />)}</div>}</section> : null}
     </>}
 
     {addOpen ? <>
@@ -174,13 +163,13 @@ export function SobreVoceTab({ userId, profile, onOpenConversation }: { userId: 
 }
 
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
-  return <section className="space-y-3"><div className="flex items-center gap-2.5"><span className="sobre-icon flex h-8 w-8 items-center justify-center rounded-full"><Icon className="h-4 w-4" /></span><h3 className="text-xl sobre-text" style={{ fontFamily: "var(--font-display)" }}>{title}</h3></div><div className="space-y-3">{children}</div></section>;
+  return <section className="space-y-3"><div className="flex items-center gap-2.5"><span className="sobre-icon flex h-8 w-8 items-center justify-center rounded-full"><Icon className="h-4 w-4" /></span><h3 className="text-xl sobre-text" style={{ fontFamily: "var(--font-display)" }}>{title}</h3></div><div className="sobre-glass sobre-group rounded-3xl px-5 py-1">{children}</div></section>;
 }
 
 function HypothesisCard(props: HypothesisProps & { title: string }) {
   return <section className="sobre-glass sobre-glass-hero rounded-3xl p-6"><div className="relative z-10"><div className="mb-3 flex items-center gap-2"><Sparkles className="sobre-eyebrow h-4 w-4" /><p className="sobre-eyebrow text-[11px] font-bold uppercase">{props.title}</p></div><span aria-hidden className="sobre-quote-mark block text-5xl leading-none">“</span><HypothesisContent {...props} quote /></div></section>;
 }
-function HypothesisRow(props: HypothesisProps) { return <article className="sobre-glass rounded-2xl p-4"><HypothesisContent {...props} /></article>; }
+function HypothesisRow(props: HypothesisProps) { return <article className="sobre-group-row py-4"><HypothesisContent {...props} /></article>; }
 type Person = { label: string; names: string[]; nota?: string | null };
 type HypothesisProps = { mode?: "hypothesis" | "fact" | "adjust"; lead?: boolean; firstName?: string; person?: Person; quote?: boolean; item: ReviewItem; feedbackMap: Map<string, Feedback>; busy: boolean; onConfirm: (action: "confirm", item: ReviewItem) => void; onReview: (item: ReviewItem) => void };
 function HypothesisContent({ item, feedbackMap, busy, onConfirm, onReview, person, quote, mode = "hypothesis", lead, firstName }: HypothesisProps) {

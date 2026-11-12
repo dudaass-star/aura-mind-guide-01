@@ -1156,4 +1156,6 @@ hsl(152 17% 36%);
 .sobre-field::placeholder { color: hsl(var(--sobre-text) / 0.42); }
 .sobre-inset { background: hsl(var(--sobre-text) / 0.05); border: 1px solid hsl(var(--sobre-text) / 0.08); }
 .sobre-quote-mark { color: hsl(var(--sage-light) / 0.55); font-family: var(--font-display); }
+.sobre-group-row + .sobre-group-row { border-top: 1px solid hsl(var(--sobre-text) / 0.09); }
+.sobre-group-row:empty { display: none; }
 .sobre-text { color: hsl(var(--sobre-text)); }
