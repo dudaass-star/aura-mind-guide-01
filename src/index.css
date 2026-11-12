@@ -1170,3 +1170,25 @@ hsl(152 17% 36%);
 .sobre-resonate { color: hsl(var(--sobre-text) / 0.7); border: 1px solid hsl(var(--sobre-text) / 0.15); }
 .sobre-resonate:hover { color: hsl(var(--sage-light)); border-color: hsl(var(--sage-light) / 0.5); }
 .sobre-pref { background: hsl(var(--sobre-text) / 0.05); border: 1px solid hsl(var(--sobre-text) / 0.1); color: hsl(var(--sobre-text)); }
+
+/* Seu Percurso — relicário pessoal */
+.percurso-hero { position: relative; overflow: hidden; border-radius: 1.5rem; padding: 1.75rem 1.5rem; color: hsl(0 0% 100%);
+  background: radial-gradient(120% 90% at 0% 0%, hsl(145 18% 45% / .55), transparent 60%), radial-gradient(90% 80% at 100% 100%, hsl(260 35% 70% / .25), transparent 60%), hsl(222 40% 14%); }
+.percurso-kicker { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: hsl(130 22% 75%); }
+.percurso-title { margin-top: .6rem; font-family: "Fraunces", serif; font-size: 1.7rem; line-height: 1.2; font-weight: 500; }
+.percurso-lead { margin-top: .75rem; font-size: .9rem; line-height: 1.6; color: hsl(0 0% 100% / .78); }
+.percurso-meta { margin-top: 1.1rem; display: inline-block; border-radius: 999px; padding: .35rem .8rem; font-size: 12px; background: hsl(0 0% 100% / .1); color: hsl(0 0% 100% / .9); }
+.percurso-relic { position: relative; border-radius: 1.25rem; padding: 1.4rem 1.25rem 1.1rem 1.25rem; background: linear-gradient(160deg, hsl(140 20% 96%), hsl(0 0% 100%)); border: 1px solid hsl(145 18% 45% / .22); box-shadow: 0 10px 28px -18px hsl(222 40% 14% / .35); transition: background .4s; }
+.percurso-relic-focus { background: linear-gradient(160deg, hsl(140 25% 90%), hsl(0 0% 100%)); border-color: hsl(145 18% 45% / .6); }
+.percurso-relic-mark { width: 1.4rem; height: 1.4rem; color: hsl(145 18% 45% / .55); }
+.percurso-relic-text { margin-top: .5rem; font-family: "Fraunces", serif; font-size: 1.12rem; line-height: 1.55; color: hsl(222 40% 14%); }
+.percurso-relic-date { margin-top: .8rem; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: hsl(145 18% 38%); }
+.percurso-letter { border-radius: 1.25rem; padding: 1.5rem 1.35rem; background: hsl(40 30% 98%); border: 1px solid hsl(222 20% 85%); box-shadow: 0 14px 32px -22px hsl(222 40% 14% / .4); }
+.percurso-letter-text { white-space: pre-line; font-family: "Fraunces", serif; font-size: 1rem; line-height: 1.75; color: hsl(222 35% 18%); }
+.percurso-letter-clamp { display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
+.percurso-letter-sign { font-family: "Fraunces", serif; font-style: italic; color: hsl(145 18% 38%); }
+.percurso-shift { display: grid; gap: .9rem; }
+.percurso-shift-label { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: hsl(222 10% 55%); }
+.percurso-shift-label-now { color: hsl(145 18% 38%); }
+.percurso-shift-before { margin-top: .25rem; font-size: .85rem; line-height: 1.55; color: hsl(222 10% 50%); }
+.percurso-shift-now { margin-top: .25rem; padding-left: .75rem; border-left: 2px solid hsl(145 18% 45%); font-size: .95rem; line-height: 1.6; color: hsl(222 40% 14%); }

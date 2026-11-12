@@ -124,6 +124,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const meaningfulMilestones = useMemo(() => (data?.milestones ?? []).filter((milestone) => milestone.source !== "user_saved" && milestone.milestone_text && !ACTIVITY_MILESTONE.test(milestone.milestone_text)).slice(0, 4), [data?.milestones]);
   const lastSession = data?.sessions?.[0] ?? null;
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [letterOpen, setLetterOpen] = useState(false);
   // "Ver frase": abre direto o item guardado, mesmo com a aba já montada.
   useEffect(() => {
     const check = () => {
@@ -173,7 +174,8 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const hasLiveMaterial = activeThemes.length > 0 || recentMovements.length > 0 || !!lastSession || meaningfulMilestones.length > 0;
   const visibleChapters = showOlder ? chapters : chapters.slice(0, 12);
   const firstName = typeof profile?.name === "string" ? profile.name.trim().split(/\s+/)[0] : "";
-  const journeySignals = activeThemes.length + recentMovements.length + meaningfulMilestones.length;
+  const sessionCount = data?.sessions?.length ?? 0;
+  const latestLetter = data?.letters?.find((letter) => letter.letter_text) ?? null;
 
   const registerFeedback = (sourceKind: FeedbackSource, sourceId: string, response: "agrees" | "corrects", context: string) => {
     feedbackMutation.mutate({ sourceKind, sourceId, response }, {
@@ -185,19 +187,14 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
 
   return (
     <div className="portal-area-page portal-progress-page space-y-8">
-      <section className="portal-progress-intro" aria-labelledby="percurso-vivo">
-        <div className="portal-progress-intro-mark"><Sparkles className="h-5 w-5" /></div>
-        <p className="portal-progress-kicker">Sua história em movimento</p>
-        <h2 id="percurso-vivo" className="portal-progress-headline">
-          {hasLiveMaterial ? `${firstName ? `${firstName}, sua` : "Sua"} história já está ganhando forma.` : `${firstName ? `${firstName}, este` : "Este"} é o começo do seu percurso.`}
+      <section className="percurso-hero" aria-labelledby="percurso-vivo">
+        <p className="percurso-kicker">Seu Percurso</p>
+        <h2 id="percurso-vivo" className="percurso-title">
+          {firstName ? `${firstName}, o caminho` : "O caminho"} que você vem construindo.
         </h2>
-        <p className="portal-progress-lead">O que antes eram conversas soltas começa a revelar continuidade — sem conclusões prontas e sempre com a sua confirmação.</p>
-        {hasLiveMaterial && (
-          <div className="portal-progress-summary" aria-label="Resumo do seu percurso">
-            <div><strong>{activeThemes.length}</strong><span>{activeThemes.length === 1 ? "tema presente" : "temas presentes"}</span></div>
-            <div><strong>{journeySignals}</strong><span>{journeySignals === 1 ? "ponto do percurso" : "pontos do percurso"}</span></div>
-            <div><strong>{chapters.length}</strong><span>{chapters.length === 1 ? "capítulo" : "capítulos"}</span></div>
-          </div>
+        <p className="percurso-lead">{hasLiveMaterial || savedItems.length ? "O que você trouxe, o que guardou e o que começou a mudar — reunido com cuidado, nas suas palavras." : "Ainda é o começo. Conforme vocês conversarem, este espaço guarda o que for real para você."}</p>
+        {(sessionCount > 0 || savedItems.length > 0 || chapters.length > 0) && (
+          <p className="percurso-meta">{[sessionCount > 0 && `${sessionCount} ${sessionCount === 1 ? "encontro" : "encontros"}`, savedItems.length > 0 && `${savedItems.length} ${savedItems.length === 1 ? "frase guardada" : "frases guardadas"}`, chapters.length > 0 && `${chapters.length} ${chapters.length === 1 ? "capítulo" : "capítulos"}`].filter(Boolean).join(" · ")}</p>
         )}
       </section>
 
@@ -205,21 +202,35 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
 
       {savedItems.length > 0 && (
         <section className="portal-progress-step space-y-3" aria-labelledby="o-que-voce-guardou">
-          <SectionTitle icon={BookMarked} eyebrow="Escolhido por você" title="O que você guardou" />
-          <div id="o-que-voce-guardou" className="rounded-2xl border border-primary/30 bg-card divide-y divide-border">
+          <SectionTitle icon={BookMarked} eyebrow="Escolhido por você" title="O que você levou dos encontros" />
+          <div id="o-que-voce-guardou" className="space-y-3">
             {savedItems.map((item) => (
-              <article key={item.id} id={`guardado-${item.id}`} className={cn("scroll-mt-24 p-4 transition-colors", focusedId === item.id && "bg-primary/10")}>
-                <p className="text-[15px] leading-relaxed text-foreground">{sanitizePortalText(item.milestone_text)}</p>
-                {item.milestone_date && <p className="mt-1 text-xs text-muted-foreground">Encontro de {new Date(item.milestone_date).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</p>}
+              <article key={item.id} id={`guardado-${item.id}`} className={cn("percurso-relic scroll-mt-24", focusedId === item.id && "percurso-relic-focus")}>
+                <Quote className="percurso-relic-mark" aria-hidden="true" />
+                <p className="percurso-relic-text">{sanitizePortalText(item.milestone_text)}</p>
+                {item.milestone_date && <p className="percurso-relic-date">Encontro de {new Date(item.milestone_date).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</p>}
               </article>
             ))}
           </div>
         </section>
       )}
 
+      {latestLetter && (
+        <section className="portal-progress-step space-y-3" aria-labelledby="carta-aura">
+          <SectionTitle icon={Mail} eyebrow={monthLabelOf(latestLetter.letter_month || latestLetter.created_at || new Date().toISOString())} title="Uma carta da AURA para você" />
+          <article id="carta-aura" className="percurso-letter">
+            <p className={cn("percurso-letter-text", !letterOpen && "percurso-letter-clamp")}>{sanitizePortalText(latestLetter.letter_text)}</p>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <span className="percurso-letter-sign">— AURA</span>
+              <Button variant="ghost" size="sm" onClick={() => setLetterOpen((value) => !value)}>{letterOpen ? "Recolher" : "Ler a carta inteira"}</Button>
+            </div>
+          </article>
+        </section>
+      )}
+
       {activeThemes.length > 0 ? (
         <section className="portal-progress-step portal-progress-step-current space-y-3" aria-labelledby="momento-atual">
-          <SectionTitle icon={Sparkles} eyebrow="Agora" title="Seu momento agora" />
+          <SectionTitle icon={Sparkles} eyebrow="Agora" title="O que está vivo em você agora" />
           <div className="portal-progress-feature rounded-2xl border bg-card p-5 space-y-4">
             <p className="text-sm leading-relaxed text-muted-foreground">Pelo que você vem trazendo, estes parecem ser os temas mais presentes. Você pode confirmar ou corrigir a leitura.</p>
             <div className="space-y-3">
@@ -241,14 +252,19 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
 
       {recentMovements.length > 0 && (
         <section className="portal-progress-step space-y-3" aria-labelledby="movimentos-recentes">
-          <SectionTitle icon={Quote} eyebrow="Nas suas palavras" title="Movimentos recentes" />
+          <SectionTitle icon={Quote} eyebrow="Nas suas palavras" title="O que vem mudando em você" />
           <div className="space-y-3">
             {recentMovements.map((snapshot) => (
               <article key={snapshot.id} className="rounded-2xl border bg-card p-5 space-y-3">
-                <div>
-                  {snapshot.theme && <p className="text-xs font-bold uppercase text-primary">{sanitizePortalText(snapshot.theme)}</p>}
-                  <p className="mt-1 text-[15px] leading-relaxed text-foreground">Talvez exista um movimento aqui: {sanitizePortalText(snapshot.snapshot_change || snapshot.snapshot_before || "")}</p>
-                </div>
+                {snapshot.theme && !/^(principal|nome)$/i.test(snapshot.theme.trim()) && <p className="text-xs font-bold uppercase text-primary">{sanitizePortalText(snapshot.theme)}</p>}
+                {snapshot.snapshot_before && snapshot.snapshot_change ? (
+                  <div className="percurso-shift">
+                    <div><p className="percurso-shift-label">Antes</p><p className="percurso-shift-before">{truncate(snapshot.snapshot_before, 220)}</p></div>
+                    <div><p className="percurso-shift-label percurso-shift-label-now">Agora</p><p className="percurso-shift-now">{truncate(snapshot.snapshot_change, 260)}</p></div>
+                  </div>
+                ) : (
+                  <p className="text-[15px] leading-relaxed text-foreground">{truncate(snapshot.snapshot_change || snapshot.snapshot_before || "", 260)}</p>
+                )}
                 {snapshot.evidence_quote && <blockquote className="border-l-2 border-primary/40 pl-3 text-sm italic text-muted-foreground">“{sanitizePortalText(snapshot.evidence_quote)}”</blockquote>}
                 <FeedbackActions value={feedbackMap.get(`thematic_snapshot:${snapshot.id}`)} busy={feedbackMutation.isPending}
                   onAgree={() => registerFeedback("thematic_snapshot", snapshot.id, "agrees", snapshot.theme || snapshot.snapshot_change || "essa leitura")}
@@ -293,7 +309,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         </section>
       )}
 
-      {!hasLiveMaterial && chapters.length === 0 && <EmptyState icon={BookMarked} title="Seu percurso está começando" description="Não vamos inventar uma história antes da hora. A primeira leitura aparece quando houver algo real para reconhecer." />}
+      {!hasLiveMaterial && chapters.length === 0 && <EmptyState icon={BookMarked} title="Seu Percurso está começando" description="Não vamos inventar uma história antes da hora. A primeira leitura aparece quando houver algo real para reconhecer." />}
 
       {chapters.length > 0 && (
         <section className="portal-progress-step portal-progress-archive space-y-3">

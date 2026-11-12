@@ -282,7 +282,7 @@ const MessageTimeline = memo(function MessageTimeline({
                 <div className="portal-chat-report-card w-[min(18rem,74vw)] max-w-full space-y-3">
                   <div className="flex items-center gap-2 text-primary"><Sparkles className="h-4 w-4" /><span className="text-[10px] font-bold uppercase">{reportCard.report_type === "weekly" ? "Resumo semanal" : "Relatório mensal"}</span></div>
                   <div><p className="font-display text-lg font-semibold text-foreground">{reportCard.title || (reportCard.report_type === "weekly" ? "Sua semana na Olá Aura" : "Seu mês em perspectiva")}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{message.content}</p></div>
-                  <Button type="button" size="sm" className="w-full justify-between" onClick={() => onOpenReport(reportCard)}>{reportCard.cta || "Ver no Percurso"}<ArrowRight className="h-4 w-4" /></Button>
+                  <Button type="button" size="sm" className="w-full justify-between" onClick={() => onOpenReport(reportCard)}>{reportCard.cta || "Ver no Seu Percurso"}<ArrowRight className="h-4 w-4" /></Button>
                 </div>
               ) : (!message.is_audio || !message.audio_url) && (mine
                 ? <p className="whitespace-pre-wrap break-words">{message.content}</p>

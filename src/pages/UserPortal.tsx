@@ -58,7 +58,7 @@ const APP_AREA_META: Record<Exclude<TabId, "conversar">, { label: string; eyebro
   hoje: { label: "Hoje", eyebrow: "Seu momento", icon: Sun, tone: "portal-area-today" },
   sessoes: { label: "Sessões", eyebrow: "Seus encontros", icon: Calendar, tone: "portal-area-sessions" },
   jornadas: { label: "Jornadas", eyebrow: "Conteúdos para você", icon: BookOpen, tone: "portal-area-content" },
-  insights: { label: "Percurso", eyebrow: "Sua evolução", icon: Sparkles, tone: "portal-area-journey" },
+  insights: { label: "Seu Percurso", eyebrow: "Sua evolução", icon: Sparkles, tone: "portal-area-journey" },
   oracoes: { label: "Orações", eyebrow: "Sua fé", icon: Moon, tone: "portal-area-journey" },
   meditacoes: { label: "Meditações", eyebrow: "Sua pausa", icon: Headphones, tone: "portal-area-audio" },
   sobre: { label: "Sobre você", eyebrow: "Sua história", icon: User, tone: "portal-area-profile" },
