@@ -1254,7 +1254,7 @@ hsl(152 17% 36%);
 .portal-progress-page .percurso-shelf-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: hsl(30 30% 97% / .55); }
 .portal-progress-page .percurso-shelf { display: flex; gap: .65rem; overflow-x: auto; padding: .25rem .1rem .75rem; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .portal-progress-page .percurso-shelf::-webkit-scrollbar { display: none; }
-.portal-progress-page .percurso-book { flex: 0 0 auto; scroll-snap-align: start; width: 5.5rem; height: 7.5rem; border-radius: .35rem .9rem .9rem .35rem; padding: .7rem .6rem; display: flex; flex-direction: column; justify-content: space-between; text-align: left; background: linear-gradient(160deg, hsl(var(--primary) / .22), hsl(220 40% 14% / .9)); border: 1px solid hsl(var(--primary) / .22); border-left: 4px solid hsl(var(--primary) / .55); color: hsl(30 30% 97%); transition: transform .25s ease, border-color .25s ease; }
+.portal-progress-page .percurso-book { flex: 0 0 auto; scroll-snap-align: start; width: 7rem; height: 9.5rem; border-radius: .35rem .9rem .9rem .35rem; padding: .7rem .6rem; display: flex; flex-direction: column; justify-content: space-between; text-align: left; background: linear-gradient(160deg, hsl(var(--primary) / .22), hsl(220 40% 14% / .9)); border: 1px solid hsl(var(--primary) / .22); border-left: 4px solid hsl(var(--primary) / .55); color: hsl(30 30% 97%); transition: transform .25s ease, border-color .25s ease; }
 .portal-progress-page .percurso-book-open { transform: translateY(-4px); border-color: hsl(var(--primary) / .7); box-shadow: 0 12px 24px -14px hsl(var(--primary) / .6); }
 .portal-progress-page .percurso-book-num { font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; opacity: .65; }
 .portal-progress-page .percurso-book-title { font-family: var(--font-display); font-size: 1.05rem; text-transform: capitalize; line-height: 1.1; }
@@ -1269,3 +1269,15 @@ hsl(152 17% 36%);
 .portal-progress-page .portal-progress-section-title { margin-left: 0; margin-bottom: .75rem; }
 .portal-progress-page .portal-progress-node { border: none; box-shadow: none; }
 .portal-progress-page .percurso-shelf { width: 100%; min-width: 0; max-width: 100%; }
+
+/* Percurso: biografia viva */
+.portal-progress-page .percurso-book-theme { font-size: .62rem; line-height: 1.25; opacity: .8; font-style: italic; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.portal-progress-page .percurso-evolution { position: relative; padding: 1.4rem 1.25rem; border-radius: 1.25rem; background: linear-gradient(165deg, hsl(220 40% 14% / .85), hsl(var(--primary) / .18)); border: 1px solid hsl(var(--primary) / .3); color: hsl(30 30% 97%); display: flex; flex-direction: column; gap: .9rem; }
+.portal-progress-page .percurso-evolution-then { opacity: .72; }
+.portal-progress-page .percurso-evolution-before { font-family: var(--font-display); font-style: italic; font-size: 1rem; line-height: 1.45; }
+.portal-progress-page .percurso-evolution-line { height: 2.2rem; width: 2px; margin-left: .5rem; background: linear-gradient(hsl(30 30% 97% / .2), hsl(var(--primary))); border-radius: 2px; }
+.portal-progress-page .percurso-evolution-now { font-family: var(--font-display); font-size: 1.2rem; line-height: 1.4; }
+.portal-progress-page .percurso-evolution-note { font-size: .78rem; opacity: .65; border-top: 1px solid hsl(30 30% 97% / .12); padding-top: .8rem; }
+.portal-progress-page .percurso-sealed, .portal-progress-page .percurso-next { display: flex; flex-direction: column; gap: .5rem; text-align: left; padding: 1.2rem 1.25rem; border-radius: 1.25rem; border: 1px dashed hsl(var(--primary) / .45); background: hsl(var(--primary) / .08); color: hsl(30 30% 97%); }
+.portal-progress-page .percurso-sealed { border-style: solid; box-shadow: 0 14px 30px -18px hsl(var(--primary) / .7); }
+.portal-progress-page .percurso-sealed-title { font-family: var(--font-display); font-size: 1.15rem; line-height: 1.35; }

@@ -10,6 +10,7 @@ import { sanitizePortalText } from "./sanitize";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 import { takePercursoFocus } from "@/lib/percurso-focus";
+import { isFreshlySealed, pickEvolution } from "@/lib/percurso-story";
 
 type Snapshot = {
   id: string;
@@ -92,7 +93,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const { data, isLoading } = useQuery({
     queryKey: ["portal-live-journey", userId],
     queryFn: async () => {
-      const [sessionsRes, snapshotsRes, lettersRes, milestonesRes, themesRes, feedbackRes, weeklyReportsRes, monthlyReportsRes] = await Promise.all([
+      const [sessionsRes, snapshotsRes, lettersRes, milestonesRes, themesRes, feedbackRes, weeklyReportsRes, monthlyReportsRes, nextRes] = await Promise.all([
         supabasePortal.from("sessions").select("id, ended_at, focus_topic, closure_text, session_summary, theme_label").eq("user_id", userId).eq("status", "completed").order("ended_at", { ascending: false }).limit(80),
         supabasePortal.from("thematic_snapshots").select("id, theme, snapshot_before, snapshot_change, evidence_quote, evidence_date, confidence, period_end").eq("user_id", userId).in("confidence", ["high", "low"]).order("period_end", { ascending: false }).limit(60),
         supabasePortal.from("monthly_letters").select("id, letter_month, letter_text, preview_text, created_at").eq("user_id", userId).order("letter_month", { ascending: false }).limit(24),
@@ -101,11 +102,13 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         supabasePortal.from("journey_reflection_feedback").select("source_kind, source_id, response").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
         supabasePortal.from("weekly_reports").select("id, period_start, period_end, metrics_json, highlights_json, analysis_text, continuation_text, report_content").eq("user_id", userId).order("period_start", { ascending: false }).limit(12),
         supabasePortal.from("monthly_reports").select("id, report_month, metrics_json, analysis_text, report_html, created_at").eq("user_id", userId).order("report_month", { ascending: false }).limit(12),
+        supabasePortal.from("sessions").select("scheduled_at").eq("user_id", userId).eq("status", "scheduled").gte("scheduled_at", new Date().toISOString()).order("scheduled_at", { ascending: true }).limit(1),
       ]);
       return {
         sessions: (sessionsRes.data ?? []) as SessionRow[], snapshots: (snapshotsRes.data ?? []) as Snapshot[], letters: (lettersRes.data ?? []) as Letter[],
         milestones: (milestonesRes.data ?? []) as Milestone[], themes: (themesRes.data ?? []) as ActiveTheme[], feedback: (feedbackRes.data ?? []) as Feedback[],
         weeklyReports: (weeklyReportsRes.data ?? []) as WeeklyReport[], monthlyReports: (monthlyReportsRes.data ?? []) as MonthlyReport[],
+        nextSessionAt: ((nextRes.data ?? [])[0]?.scheduled_at as string | undefined) ?? null,
       };
     },
     enabled: !!userId,
@@ -205,6 +208,13 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const firstName = typeof profile?.name === "string" ? profile.name.trim().split(/\s+/)[0] : "";
   const sessionCount = data?.sessions?.length ?? 0;
   const latestLetter = data?.letters?.find((letter) => letter.letter_text) ?? null;
+  const evolution = pickEvolution(data?.snapshots ?? []);
+  const currentKey = monthKeyOf(new Date().toISOString());
+  const currentChapter = chapters.find((c) => c.key === currentKey) ?? null;
+  const sealedChapter = chapters.find((c) => c.key !== currentKey && isFreshlySealed(c.anchorDate)) ?? null;
+  const monthSessions = currentChapter?.sessions.length ?? 0;
+  const nextSessionAt = data?.nextSessionAt ?? null;
+  const fmtMonth = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { month: "long" });
 
   const registerFeedback = (sourceKind: FeedbackSource, sourceId: string, response: "agrees" | "corrects", context: string) => {
     feedbackMutation.mutate({ sourceKind, sourceId, response }, {
@@ -228,6 +238,26 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       </section>
 
       <div className="portal-progress-flow">
+
+      {sealedChapter && (
+        <button type="button" className="percurso-sealed" onClick={() => { setExpandedKey(sealedChapter.key); requestAnimationFrame(() => document.getElementById("livro-percurso")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}>
+          <span className="percurso-kicker">Capítulo selado</span>
+          <span className="percurso-sealed-title">Seu capítulo de <span className="capitalize">{fmtMonth(sealedChapter.anchorDate)}</span> está pronto.</span>
+          <span className="percurso-soft-link">Abrir o capítulo <ArrowRight className="h-3.5 w-3.5" /></span>
+        </button>
+      )}
+
+      {evolution && (
+        <section className="portal-progress-step space-y-3" aria-labelledby="sua-evolucao">
+          <SectionTitle icon={Sparkles} eyebrow="Quem você está se tornando" title="Olha o caminho que você fez" />
+          <article id="sua-evolucao" className="percurso-evolution">
+            <div className="percurso-evolution-then"><p className="percurso-shift-label">Em <span className="capitalize">{fmtMonth(evolution.beforeDate)}</span>, você trazia</p><p className="percurso-evolution-before">“{truncate(evolution.beforeText, 200)}”</p></div>
+            <div className="percurso-evolution-line" aria-hidden="true" />
+            <div><p className="percurso-shift-label percurso-shift-label-now">Em <span className="capitalize">{fmtMonth(evolution.nowDate)}</span>, você chegou aqui</p><p className="percurso-evolution-now">{truncate(evolution.nowText, 240)}</p></div>
+            <p className="percurso-evolution-note">Isso não aconteceu sozinho. Foi você, encontro após encontro.</p>
+          </article>
+        </section>
+      )}
 
       {savedItems.length > 0 && (
         <section className="portal-progress-step space-y-3" aria-labelledby="o-que-voce-guardou">
@@ -347,6 +377,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
                     onClick={() => setExpandedKey(chapter.key)}>
                     <span className="percurso-book-num">Cap. {chapters.length - index}</span>
                     <span className="percurso-book-title">{chapter.monthLabel.split(" ")[0]}</span>
+                    {chapter.themes[0] && <span className="percurso-book-theme">{truncate(chapter.themes[0], 42)}</span>}
                     <span className="percurso-book-year">{chapter.monthLabel.split(" ").slice(-1)[0]}</span>
                   </button>
                 ))}
@@ -354,6 +385,18 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
               {openChapter && <ChapterReading chapter={openChapter} onContinue={onOpenConversation} />}
             </div>
           )}
+        </section>
+      )}
+
+      {sessionCount > 0 && (
+        <section className="percurso-next" aria-label="Próximo capítulo">
+          <p className="percurso-kicker">Em escrita agora</p>
+          <p className="percurso-sealed-title">O capítulo de <span className="capitalize">{fmtMonth(new Date().toISOString())}</span> ainda está sendo escrito.</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {monthSessions > 0 ? `${monthSessions} ${monthSessions === 1 ? "encontro já entrou" : "encontros já entraram"} nele. ` : "As primeiras páginas esperam por você. "}
+            {nextSessionAt ? `A próxima página: ${new Date(nextSessionAt).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}, às ${new Date(nextSessionAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : "O que você viver daqui pra frente vira a continuação desta história."}
+          </p>
+          <button type="button" className="percurso-soft-link" onClick={() => onOpenConversation("Aura, quero continuar a minha história deste mês.")}>Escrever a próxima página <ArrowRight className="h-3.5 w-3.5" /></button>
         </section>
       )}
       </div>
