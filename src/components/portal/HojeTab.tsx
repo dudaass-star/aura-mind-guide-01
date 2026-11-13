@@ -144,7 +144,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab, onOpenConve
     if (direction.target === "meditacoes") return onNavigateTab("meditacoes");
     if (direction.target === "insights") return onNavigateTab("insights");
     if (direction.target === "episode" && direction.targetId) return navigate(`/episodio/${direction.targetId}?u=${userId}`);
-    if (direction.action === "continuity") return onOpenConversation(undefined, { resumeSessionId: data.heroSignals?.lastSession?.id });
+    if (direction.action === "continuity") return onOpenConversation(undefined, { resumeSessionId: data.heroSignals?.lastSession?.id, resumeLabel: (data.heroSignals?.lastSession as { theme_label?: string | null } | null)?.theme_label || undefined });
     return onOpenConversation();
   };
   const nightPrayer = getNightPrayer(new Date(nowMs));

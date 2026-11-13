@@ -90,7 +90,7 @@ function truncate(text: string, max: number) {
   return clean.length > max ? `${clean.slice(0, max).trimEnd()}…` : clean;
 }
 
-export function InsightsTab({ userId, profile, onOpenConversation }: { userId: string; profile: any; onOpenConversation: (prefilledMessage?: string) => void }) {
+export function InsightsTab({ userId, profile, onOpenConversation }: { userId: string; profile: any; onOpenConversation: (prefilledMessage?: string, options?: { resumeSessionId?: string; resumeLabel?: string }) => void }) {
   const queryClient = useQueryClient();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -237,6 +237,9 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const nextSessionAt = data?.nextSessionAt ?? null;
   const fmtMonth = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { month: "long" });
 
+  // Retomada padrão: campo limpo, banner com o assunto, contexto do último encontro no 1º envio.
+  const resumeFrom = (label?: string) => onOpenConversation(undefined, lastSession ? { resumeSessionId: lastSession.id, resumeLabel: label } : undefined);
+
   const registerFeedback = (sourceKind: FeedbackSource, sourceId: string, response: "agrees" | "corrects", context: string) => {
     feedbackMutation.mutate({ sourceKind, sourceId, response }, {
       onSuccess: () => {
@@ -327,14 +330,14 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
             <div className="flex flex-wrap gap-2">
               {activeThemes.map((theme) => <span key={theme.id} className="percurso-pill">{sanitizePortalText(theme.theme_name)}</span>)}
             </div>
-            <button type="button" className="percurso-soft-link" onClick={() => onOpenConversation("Aura, quero conversar sobre o que tem ocupado minha atenção.")}>Conversar sobre isso <ArrowRight className="h-3.5 w-3.5" /></button>
+            <button type="button" className="percurso-soft-link" onClick={() => onOpenConversation()}>Conversar sobre isso <ArrowRight className="h-3.5 w-3.5" /></button>
           </div>
         </section>
       ) : (
         <div className="portal-progress-step percurso-card space-y-3">
           <p className="font-display text-lg font-semibold text-foreground">Seu momento vai tomar forma aqui</p>
           <p className="text-sm leading-relaxed text-muted-foreground">Ainda não há material suficiente para uma leitura honesta. Conforme vocês conversarem, a AURA organiza os temas sem presumir o que você sente.</p>
-          <Button variant="outline" onClick={() => onOpenConversation("Aura, quero te contar como estou agora.")}><MessageCircle /> Contar como estou</Button>
+          <Button variant="outline" onClick={() => onOpenConversation()}><MessageCircle /> Contar como estou</Button>
         </div>
       )}
 
@@ -366,7 +369,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
           <div className="percurso-thread space-y-4">
             <p className="percurso-thread-text">{lastSession.closure_text ? sanitizePortalText(lastSession.closure_text) : toAuraVoice(lastSession.session_summary || lastSession.focus_topic || "", firstName)}</p>
             {lastSession.ended_at && <p className="percurso-relic-date">{new Date(lastSession.ended_at).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</p>}
-            <Button onClick={() => onOpenConversation(`Aura, quero retomar o assunto da minha última sessão: ${lastSession.focus_topic || lastSession.theme_label || "o que ficou em aberto"}.`)}>Retomar com a AURA <ArrowRight /></Button>
+            <Button onClick={() => onOpenConversation(undefined, { resumeSessionId: lastSession.id, resumeLabel: lastSession.theme_label || lastSession.focus_topic || undefined })}>Retomar com a AURA <ArrowRight /></Button>
           </div>
         </section>
       )}
@@ -393,7 +396,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       {(featuredWeek || chapters.length > 0) && (
         <section className="portal-progress-step portal-progress-archive space-y-4" aria-labelledby="livro-percurso">
           <SectionTitle icon={BookMarked} eyebrow="Seu livro" title="A história que vocês vêm escrevendo" />
-          {featuredWeek && <WeekReading report={featuredWeek} onContinue={onOpenConversation} />}
+          {featuredWeek && <WeekReading report={featuredWeek} onContinue={resumeFrom} />}
           {sealedShelf.length > 0 && (
             <div className="space-y-3">
               <p className="percurso-shelf-label">Capítulos · toque para abrir</p>
@@ -413,7 +416,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
                 <DrawerContent className="percurso-sheet portal-progress-page">
                   <DrawerTitle className="sr-only">{openChapter ? `Capítulo de ${openChapter.monthLabel}` : "Capítulo"}</DrawerTitle>
                   <div className="percurso-sheet-scroll">
-                    {openChapter && <ChapterReading key={openChapter.key} chapter={openChapter} startOpen onContinue={(m) => { setSheetOpen(false); onOpenConversation(m); }} />}
+                    {openChapter && <ChapterReading key={openChapter.key} chapter={openChapter} startOpen onContinue={(label) => { setSheetOpen(false); resumeFrom(label); }} />}
                   </div>
                 </DrawerContent>
               </Drawer>
@@ -441,7 +444,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
             {monthSessions > 0 ? `${monthSessions} ${monthSessions === 1 ? "encontro já entrou" : "encontros já entraram"} nele. ` : "As primeiras páginas esperam por você. "}
             {nextSessionAt ? `A próxima página: ${new Date(nextSessionAt).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}, às ${new Date(nextSessionAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : "O que você viver daqui pra frente vira a continuação desta história."}
           </p>
-          <button type="button" className="percurso-soft-link" onClick={() => onOpenConversation("Aura, quero continuar a minha história deste mês.")}>Escrever a próxima página <ArrowRight className="h-3.5 w-3.5" /></button>
+          <button type="button" className="percurso-soft-link" onClick={() => onOpenConversation()}>Escrever a próxima página <ArrowRight className="h-3.5 w-3.5" /></button>
         </section>
       )}
       </div>
@@ -462,17 +465,17 @@ function splitThread(blocks: ChapterBlock[]) {
   return { body: [...blocks.slice(0, i), ...blocks.slice(thread ? i + 2 : i + 1)], thread };
 }
 
-function ThreadInvite({ question, onContinue }: { question: string; onContinue: (message?: string) => void }) {
+function ThreadInvite({ question, onContinue }: { question: string; onContinue: (label?: string) => void }) {
   return <aside className="percurso-fio space-y-3">
     <p className="percurso-fio-eyebrow"><Sparkles className="h-3.5 w-3.5" /> Fio aberto com a AURA</p>
     <p className="percurso-fio-question">{question}</p>
-    <button type="button" className="percurso-fio-cta" onClick={() => onContinue(`Aura, quero continuar deste fio: ${question}`)}>Conversar com a AURA sobre isso <ArrowRight className="h-4 w-4" /></button>
+    <button type="button" className="percurso-fio-cta" onClick={() => onContinue(question)}>Conversar com a AURA sobre isso <ArrowRight className="h-4 w-4" /></button>
   </aside>;
 }
 
 const isTitleLike = (t: string) => t.length <= 90 && !/[.!?…]$/.test(t.trim());
 
-function ChapterReading({ chapter, onContinue, startOpen = false }: { chapter: Chapter; onContinue: (message?: string) => void; startOpen?: boolean }) {
+function ChapterReading({ chapter, onContinue, startOpen = false }: { chapter: Chapter; onContinue: (label?: string) => void; startOpen?: boolean }) {
   const [full, setFull] = useState(startOpen);
   const body = chapter.letter?.letter_text || chapter.report?.analysis_text || chapter.report?.report_html || "";
   // Evita eco: o primeiro parágrafo não repete o subtítulo do capítulo.
@@ -508,12 +511,12 @@ function ChapterReading({ chapter, onContinue, startOpen = false }: { chapter: C
     </>}
     <div className="flex flex-wrap items-center gap-4">
       {hasMore && !startOpen && <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Fechar o capítulo" : "Ler o capítulo inteiro"}</button>}
-      {!(full && split.thread) && <button type="button" className="percurso-soft-link" onClick={() => onContinue(`Aura, quero continuar a partir do que vivi em ${chapter.monthLabel}.`)}>Continuar a partir daqui <ArrowRight className="h-3.5 w-3.5" /></button>}
+      {!(full && split.thread) && <button type="button" className="percurso-soft-link" onClick={() => onContinue()}>Continuar a partir daqui <ArrowRight className="h-3.5 w-3.5" /></button>}
     </div>
   </article>;
 }
 
-function WeekReading({ report, onContinue }: { report: WeeklyReport; onContinue: (message?: string) => void }) {
+function WeekReading({ report, onContinue }: { report: WeeklyReport; onContinue: (label?: string) => void }) {
   const fmt = (d: string) => new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
   // Mesma leitura editorial dos capítulos: sem telemetria nem saudação de relatório.
   const blocks = breatheBlocks(chapterBlocks(report.report_content || report.analysis_text || "", sanitizePortalText))
@@ -529,7 +532,7 @@ function WeekReading({ report, onContinue }: { report: WeeklyReport; onContinue:
       : <p key={i} className="percurso-prose">{b.text}</p>)}</div>
     {split.thread && <ThreadInvite question={split.thread} onContinue={onContinue} />}
     {!split.thread && <div className="flex flex-wrap items-center gap-4">
-      <button type="button" className="percurso-soft-link" onClick={() => onContinue("Aura, quero conversar sobre o que apareceu na minha semana.")}>Continuar com a AURA <ArrowRight className="h-3.5 w-3.5" /></button>
+      <button type="button" className="percurso-soft-link" onClick={() => onContinue()}>Continuar com a AURA <ArrowRight className="h-3.5 w-3.5" /></button>
     </div>}
   </article>;
 }
