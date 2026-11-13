@@ -514,7 +514,6 @@ function ChapterReading({ chapter, onContinue, startOpen = false }: { chapter: C
 }
 
 function WeekReading({ report, onContinue }: { report: WeeklyReport; onContinue: (message?: string) => void }) {
-  const [full, setFull] = useState(() => new URLSearchParams(window.location.search).get("id") === report.id);
   const fmt = (d: string) => new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
   // Mesma leitura editorial dos capítulos: sem telemetria nem saudação de relatório.
   const blocks = breatheBlocks(chapterBlocks(report.report_content || report.analysis_text || "", sanitizePortalText))
@@ -523,16 +522,15 @@ function WeekReading({ report, onContinue }: { report: WeeklyReport; onContinue:
   const split = splitThread(blocks);
   return <article className="percurso-thread space-y-3">
     <p className="percurso-kicker">Esta semana · {fmt(report.period_start)} a {fmt(report.period_end)}</p>
-    <div className={cn("space-y-3 text-[15px] leading-relaxed text-foreground", !full && "percurso-letter-clamp")}>{split.body.map((b, i) =>
+    <div className={cn("space-y-3 text-[15px] leading-relaxed text-foreground")}>{split.body.map((b, i) =>
       b.kind === "heading" ? <p key={i} className="percurso-kicker pt-1">{b.text}</p>
       : b.kind === "quote" ? <blockquote key={i} className="percurso-quote">“{b.text}”</blockquote>
       : i === 0 && isTitleLike(b.text) ? <h4 key={i} className="percurso-read-title">{b.text}</h4>
       : <p key={i} className="percurso-prose">{b.text}</p>)}</div>
     {split.thread && <ThreadInvite question={split.thread} onContinue={onContinue} />}
-    <div className="flex flex-wrap items-center gap-4">
-      <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Recolher" : "Ler a semana inteira"}</button>
-      {!split.thread && <button type="button" className="percurso-soft-link" onClick={() => onContinue("Aura, quero conversar sobre o que apareceu na minha semana.")}>Continuar com a AURA <ArrowRight className="h-3.5 w-3.5" /></button>}
-    </div>
+    {!split.thread && <div className="flex flex-wrap items-center gap-4">
+      <button type="button" className="percurso-soft-link" onClick={() => onContinue("Aura, quero conversar sobre o que apareceu na minha semana.")}>Continuar com a AURA <ArrowRight className="h-3.5 w-3.5" /></button>
+    </div>}
   </article>;
 }
 
