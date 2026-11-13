@@ -606,6 +606,13 @@ export function ConversarTab({
     window.dispatchEvent(new CustomEvent("aura:chat-state", { detail: { open: chatOpen } }));
   }, [chatOpen]);
 
+  // Reconsulta a sessão ativa ao abrir a conversa ou voltar para a aba.
+  useEffect(() => {
+    if (!isActive) return;
+    void refreshActiveSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatOpen, isActive, userId]);
+
   useEffect(() => {
     if (!chatOpen || !isActive) return;
     const key = `aura-conversation-opened:${userId}:${dayKeyBrt()}`;
@@ -799,6 +806,8 @@ export function ConversarTab({
                 });
               }
               window.setTimeout(() => void refreshPendingRating(), 1200);
+              // Sessão pode ter começado neste turno: reconsulta sem depender do Realtime.
+              void refreshActiveSession();
             }
           }
           if (nearBottomRef.current) setTimeout(() => scrollToBottom(), 0);

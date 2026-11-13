@@ -155,9 +155,10 @@
   --portal-profile-foreground: 350 34% 45%;
   --portal-movement: 42 58% 88%;
   --portal-movement-foreground: 18 42% 37%;
-  --portal-session-header: 153 25% 91%;
-  --portal-session-canvas: 153 18% 93%;
-  --portal-session-composer: 153 22% 95%;
+  /* Modo sessão no tema escuro: navy com leve tom sálvia */
+  --portal-session-header: 165 24% 15%;
+  --portal-session-canvas: 170 22% 11%;
+  --portal-session-composer: 165 20% 16%;
   font-family: "Figtree", ui-sans-serif, system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 

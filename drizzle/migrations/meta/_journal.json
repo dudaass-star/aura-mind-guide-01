@@ -78,6 +78,13 @@
       "when": 1794439690840,
       "tag": "0010_essencial_duas_sessoes_marker",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794611020069,
+      "tag": "0011_sessions_realtime",
+      "breakpoints": true
     }
   ]
 }
