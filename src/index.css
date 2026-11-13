@@ -1395,3 +1395,12 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .portal-progress-page .percurso-takeaway, .percurso-sheet .percurso-takeaway { position: relative; border-left: none !important; padding-left: 1.4rem !important; color: hsl(30 30% 97% / .9); }
 .portal-progress-page .percurso-takeaway::before, .percurso-sheet .percurso-takeaway::before { content: ""; position: absolute; left: .2rem; top: .6em; width: .45rem; height: .45rem; border-radius: 999px; background: hsl(140 38% 70%); box-shadow: 0 0 8px hsl(140 40% 65% / .7); }
 .portal-progress-page .percurso-prose + .percurso-prose { margin-top: .9rem; }
+
+/* Percurso — teste: herói e fio no sálvia profundo da AURA (padrão do card principal) */
+.percurso-hero { background: radial-gradient(120% 90% at 100% 0%, hsl(270 40% 78% / .22), transparent 60%), linear-gradient(155deg, hsl(153 14% 31%), hsl(153 16% 20%)) !important; border: 1px solid hsl(140 30% 75% / .2); }
+.percurso-hero .percurso-kicker { color: hsl(140 35% 85%); }
+.percurso-hero .percurso-lead { color: hsl(140 20% 94% / .88); }
+.percurso-hero .percurso-stat { background: hsl(153 25% 12% / .28); border-color: hsl(140 30% 85% / .18); }
+.percurso-fio { background: radial-gradient(120% 100% at 100% 0%, hsl(270 40% 78% / .2), transparent 60%), linear-gradient(155deg, hsl(153 14% 31%), hsl(153 16% 20%)) !important; border-color: hsl(140 30% 75% / .3) !important; }
+.percurso-fio-eyebrow { color: hsl(140 35% 85%); }
+.percurso-fio-cta { background: hsl(0 0% 100%) !important; color: hsl(153 25% 18%) !important; font-weight: 700; box-shadow: 0 8px 20px -10px hsl(153 30% 8% / .7); }
