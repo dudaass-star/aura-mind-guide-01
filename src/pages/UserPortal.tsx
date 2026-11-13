@@ -23,6 +23,7 @@ import { rememberPushAttribution, reportPushPresence } from "@/lib/push-notifica
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { isAppStandalone } from "@/components/portal/InstallAppMenuItem";
 import { PixRenewalBanner } from "@/components/portal/PixRenewalBanner";
+import { PortalBottomNav, type NavTarget } from "@/components/portal/PortalBottomNav";
 
 type TabId = "conversar" | "hoje" | "sessoes" | "jornadas" | "insights" | "sobre" | "meditacoes" | "oracoes" | "movimento";
 
@@ -88,6 +89,12 @@ const UserPortal = () => {
   const [pushGate, setPushGate] = useState<{ open: boolean; message: string }>({ open: false, message: "Quero começar meu encontro agora" });
   const [justScheduledAt, setJustScheduledAt] = useState<string | null>(null);
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
+  const [chatIsOpen, setChatIsOpen] = useState(false);
+  useEffect(() => {
+    const onState = (e: Event) => setChatIsOpen(Boolean((e as CustomEvent).detail?.open));
+    window.addEventListener("aura:chat-state", onState);
+    return () => window.removeEventListener("aura:chat-state", onState);
+  }, []);
   const [degustacaoWelcomeOpen, setDegustacaoWelcomeOpen] = useState(() => searchParams.get("onboarding") === "degustacao");
 
   const userId = session?.user?.id;
@@ -692,7 +699,7 @@ const UserPortal = () => {
         </div>
 
         {/* Rodapé institucional; ações da conta ficam no menu da tela inicial. */}
-        {activeTab !== "conversar" && <footer className="border-t border-border/40 py-6 text-center">
+        {activeTab !== "conversar" && <footer className="border-t border-border/40 py-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] text-center">
           <p className="text-sm text-muted-foreground font-body">Conteúdo exclusivo da AURA</p>
           <a
             href="https://olaaura.com.br"
@@ -705,6 +712,17 @@ const UserPortal = () => {
         </footer>}
       </div>
 
+      {userId && !chatIsOpen && !(isDegustacao && degustacaoCardNode && activeTab !== "conversar") && (
+        <PortalBottomNav
+          active={(activeTab === "conversar" ? "inicio" : activeTab === "sessoes" || activeTab === "insights" ? activeTab : "explorar") as NavTarget}
+          onSelect={(target) => {
+            if (target === "inicio") { handleTabClick("conversar"); window.dispatchEvent(new Event("aura:close-chat")); }
+            else if (target === "conversar") { handleTabClick("conversar"); window.setTimeout(() => window.dispatchEvent(new Event("aura:open-chat")), 0); }
+            else handleTabClick(target);
+          }}
+          onExplore={(tab) => handleTabClick(tab)}
+        />
+      )}
       {userId && (
         <DegustacaoWelcomeDialog
           open={degustacaoWelcomeOpen}

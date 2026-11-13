@@ -596,6 +596,16 @@ export function ConversarTab({
     return () => window.removeEventListener("aura:open-chat", openChat);
   }, []);
 
+  // Barra do rodapé: sabe se a conversa está aberta e pode voltar ao Início.
+  useEffect(() => {
+    const closeChat = () => setChatOpen(false);
+    window.addEventListener("aura:close-chat", closeChat);
+    return () => window.removeEventListener("aura:close-chat", closeChat);
+  }, []);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("aura:chat-state", { detail: { open: chatOpen } }));
+  }, [chatOpen]);
+
   useEffect(() => {
     if (!chatOpen || !isActive) return;
     const key = `aura-conversation-opened:${userId}:${dayKeyBrt()}`;
@@ -1428,7 +1438,7 @@ export function ConversarTab({
         })()}
       </div>
 
-      <div className="shrink-0 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <div className="shrink-0 px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
         <PortalHomeAreas onNavigate={navigateFromConversation} onPrefetch={onPrefetch} hasJoinedMovement={hasJoinedMovement} movementIsNew={movementIsNew} isActive={isActive && !chatOpen} />
       </div>
     </aside>
