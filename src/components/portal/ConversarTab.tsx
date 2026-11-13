@@ -27,6 +27,7 @@ import { HomeMomentBar } from "@/components/portal/HomeMomentBar";
 import { setResumeIntent } from "@/lib/chat-resume-intent";
 import { takeawayFromClosure } from "@/lib/today-hero";
 import { PostSessionScheduleDialog } from "@/components/portal/PostSessionScheduleDialog";
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
 type ChatMessage = {
   id: string;
@@ -390,6 +391,8 @@ export function ConversarTab({
   const [pendingRating, setPendingRating] = useState<PendingSessionRating | null>(null);
   const [ratingSaving, setRatingSaving] = useState(false);
   const [ratingError, setRatingError] = useState("");
+  // Folha de aterrissagem: some só quando a pessoa avalia ou toca "Agora não" (por sessão).
+  const [landingDismissed, setLandingDismissed] = useState<string | null>(null);
   const [scheduleNextFor, setScheduleNextFor] = useState<string | null>(null);
   const [takeawaySaving, setTakeawaySaving] = useState(false);
   const [takeawaySaved, setTakeawaySaved] = useState<string | null>(null);
@@ -1563,43 +1566,45 @@ export function ConversarTab({
               <p className="mt-1 text-sm leading-relaxed text-foreground">{sanitizePortalText(pendingRating.continuity_thread)}</p>
             </div>
           )}
-          {pendingRating && !responding && takeawayFromClosure(pendingRating.closure_text) && (
-            <section className="mt-4 max-w-[86%] rounded-lg border border-primary/30 bg-card p-4 shadow-sm" aria-label="Para você levar">
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary">Para você levar</p>
-              <p className="mt-2 text-sm leading-relaxed text-foreground">{takeawayFromClosure(pendingRating.closure_text)}</p>
-              {takeawaySaved === pendingRating.id ? (
-                <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-primary"><Check className="h-4 w-4" />Guardado no seu Percurso</p>
-              ) : (
-                <Button type="button" variant="outline" size="sm" className="mt-3" disabled={takeawaySaving} onClick={() => void saveTakeaway()}>
-                  <Bookmark className="h-4 w-4" />{takeawaySaving ? "Guardando…" : "Guardar no meu Percurso"}
-                </Button>
+          {pendingRating && !responding && landingDismissed === pendingRating.id && (
+            <Button type="button" variant="outline" size="sm" className="mt-4 rounded-full" onClick={() => setLandingDismissed(null)}>
+              <Star className="h-4 w-4" />Avaliar nosso encontro
+            </Button>
+          )}
+          <Drawer open={Boolean(pendingRating && !responding && landingDismissed !== pendingRating.id)} onOpenChange={(open) => { if (!open && pendingRating) setLandingDismissed(pendingRating.id); }}>
+            <DrawerContent className="portal-landing-sheet border-none pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+              {pendingRating && (
+                <div className="mx-auto w-full max-w-md px-5 pt-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Encontro concluído</p>
+                  <DrawerTitle className="mt-2 font-display text-2xl leading-tight">Como foi nosso encontro hoje?</DrawerTitle>
+                  <DrawerDescription className="mt-1 text-sm">Sua nota ajuda a AURA a preparar o próximo.</DrawerDescription>
+                  <div className="mt-4 flex justify-between gap-1" role="group" aria-label="Nota da sessão">
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <Button key={rating} type="button" variant="ghost" className="h-14 flex-1 rounded-2xl hover:bg-primary/15" disabled={ratingSaving} onClick={() => void saveSessionRating(rating)} aria-label={`Dar nota ${rating}`}>
+                        <Star className="!h-8 !w-8 text-primary" />
+                      </Button>
+                    ))}
+                  </div>
+                  {ratingError && <p className="mt-2 text-xs text-destructive">{ratingError}</p>}
+                  {takeawayFromClosure(pendingRating.closure_text) && (
+                    <section className="mt-5 rounded-2xl border border-primary/25 bg-primary/10 p-4" aria-label="Para você levar">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-primary">Para você levar</p>
+                      <p className="mt-2 text-sm leading-relaxed">{takeawayFromClosure(pendingRating.closure_text)}</p>
+                      {takeawaySaved === pendingRating.id ? (
+                        <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-primary"><Check className="h-4 w-4" />Guardado no seu Percurso</p>
+                      ) : (
+                        <Button type="button" variant="outline" size="sm" className="mt-3 rounded-full" disabled={takeawaySaving} onClick={() => void saveTakeaway()}>
+                          <Bookmark className="h-4 w-4" />{takeawaySaving ? "Guardando…" : "Guardar no meu Percurso"}
+                        </Button>
+                      )}
+                      {takeawayError && <p className="mt-2 text-xs text-destructive">{takeawayError}</p>}
+                    </section>
+                  )}
+                  <Button type="button" variant="ghost" className="mt-3 w-full text-muted-foreground" onClick={() => setLandingDismissed(pendingRating.id)}>Agora não</Button>
+                </div>
               )}
-              {takeawayError && <p className="mt-2 text-xs text-destructive">{takeawayError}</p>}
-            </section>
-          )}
-          {pendingRating && !responding && (
-            <section className="mt-4 max-w-[86%] rounded-lg border border-border bg-card p-4 shadow-sm" aria-label="Avaliar sessão">
-              <p className="text-sm font-semibold text-foreground">Antes de fechar, como foi nossa sessão hoje?</p>
-              <p className="mt-1 text-xs text-muted-foreground">Sua resposta ajuda a AURA a melhorar os próximos encontros.</p>
-              <div className="mt-3 flex gap-1" role="group" aria-label="Nota da sessão">
-                {[1, 2, 3, 4, 5].map((rating) => (
-                  <Button
-                    key={rating}
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-10 w-10"
-                    disabled={ratingSaving}
-                    onClick={() => void saveSessionRating(rating)}
-                    aria-label={`Dar nota ${rating}`}
-                  >
-                    <Star className="h-5 w-5 text-primary" />
-                  </Button>
-                ))}
-              </div>
-              {ratingError && <p className="mt-2 text-xs text-destructive">{ratingError}</p>}
-            </section>
-          )}
+            </DrawerContent>
+          </Drawer>
           {showGiftPrompt && !responding && (
             <div className="mt-4 max-w-[86%]"><MovementGiftPrompt userId={userId} fullName={fullName} trigger="session" onClose={() => setShowGiftPrompt(false)} /></div>
           )}

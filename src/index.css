@@ -1501,3 +1501,11 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
   border: 1px solid hsl(0 0% 100% / 0.08);
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Folha de aterrissagem pós-encontro: vidro navy com brilho sálvia */
+.portal-landing-sheet {
+  background: linear-gradient(180deg, hsl(152 22% 22% / 0.96), hsl(220 38% 12% / 0.98));
+  color: hsl(40 25% 96%);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 -20px 60px hsl(220 50% 4% / 0.55);
+}
