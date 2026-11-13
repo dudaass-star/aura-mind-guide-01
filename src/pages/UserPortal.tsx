@@ -257,7 +257,12 @@ const UserPortal = () => {
   const handleOpenConversation = (prefilledMessage?: string, options?: { resumeSessionId?: string; resumeLabel?: string }) => {
     if (!userId) return;
     // Retomada da aba Hoje: só abre o chat; o fio viaja como contexto no 1º envio.
-    if (options?.resumeSessionId) setResumeIntent(userId, options.resumeSessionId, options.resumeLabel);
+    if (options?.resumeSessionId) {
+      // Retomada nunca herda rascunho antigo: campo vazio e microfone livre.
+      localStorage.removeItem(`aura-chat-draft:${userId}`);
+      setConversationDraftRequest(undefined);
+      setResumeIntent(userId, options.resumeSessionId, options.resumeLabel);
+    }
     else clearResumeIntent(userId);
     if (prefilledMessage?.trim()) {
       const nextDraft = prefilledMessage.trim();

@@ -404,8 +404,9 @@ export function ConversarTab({
   useEffect(() => {
     const sync = () => setResumeLabel(readResumeLabel(userId));
     sync();
-    window.addEventListener("aura:resume-intent", sync);
-    return () => window.removeEventListener("aura:resume-intent", sync);
+    const onResume = () => { sync(); if (readResumeLabel(userId) !== null) setDraft(""); };
+    window.addEventListener("aura:resume-intent", onResume);
+    return () => window.removeEventListener("aura:resume-intent", onResume);
   }, [userId, chatOpen]);
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
   const [showInstallInvite, setShowInstallInvite] = useState(false);
