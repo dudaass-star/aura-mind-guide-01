@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, CalendarDays, Compass, Headphones, HeartHandshake, Home, MessageCircle, Moon, Sparkles, Sun, UserRound } from "lucide-react";
+import { BookOpen, ChevronRight, CalendarDays, Compass, Headphones, HeartHandshake, Home, MessageCircle, Moon, Sparkles, Sun, UserRound } from "lucide-react";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 
@@ -8,12 +8,15 @@ type ExploreArea = "hoje" | "oracoes" | "meditacoes" | "jornadas" | "movimento" 
 
 const EXPLORE: { tab: ExploreArea; label: string; detail: string; icon: React.ElementType }[] = [
   { tab: "hoje", label: "Hoje", detail: "O que te acompanha agora", icon: Sun },
-  { tab: "oracoes", label: "Orações", detail: "Um momento com Deus", icon: Moon },
-  { tab: "meditacoes", label: "Meditações", detail: "Pausas guiadas", icon: Headphones },
+  { tab: "oracoes", label: "Orações", detail: "Um momento com Deus, na voz da AURA", icon: Moon },
+  { tab: "meditacoes", label: "Meditações", detail: "Pausas guiadas para respirar e voltar a si", icon: Headphones },
   { tab: "jornadas", label: "Jornadas", detail: "Conteúdos para você", icon: BookOpen },
   { tab: "movimento", label: "Movimento", detail: "Algo maior", icon: HeartHandshake },
   { tab: "sobre", label: "Sobre você", detail: "Sua história reunida", icon: UserRound },
 ];
+
+/** Práticas de retenção ganham vitrine no topo do Explorar. */
+const FEATURED: ExploreArea[] = ["oracoes", "meditacoes"];
 
 const ITEMS: { id: NavTarget; label: string; icon: React.ElementType }[] = [
   { id: "inicio", label: "Início", icon: Home },
@@ -55,8 +58,21 @@ export function PortalBottomNav({ active, onSelect, onExplore }: Props) {
       <Drawer open={exploreOpen} onOpenChange={setExploreOpen}>
         <DrawerContent className="pb-[max(1rem,env(safe-area-inset-bottom))]">
           <DrawerTitle className="px-5 pt-2 font-display text-xl">Explorar</DrawerTitle>
-          <div className="grid grid-cols-2 gap-3 p-5">
-            {EXPLORE.map(({ tab, label, detail, icon: Icon }) => (
+          <div className="space-y-3 px-5 pt-4">
+            {EXPLORE.filter((e) => FEATURED.includes(e.tab)).map(({ tab, label, detail, icon: Icon }) => (
+              <button key={tab} type="button" onClick={() => { setExploreOpen(false); onExplore(tab); }} className="flex w-full items-center gap-4 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/20 via-primary/10 to-accent/10 p-4 text-left shadow-card">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary"><Icon className="h-6 w-6" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-display text-base font-semibold text-foreground">{label}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span>
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-primary" />
+              </button>
+            ))}
+          </div>
+          <p className="px-5 pt-5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Outras áreas</p>
+          <div className="grid grid-cols-2 gap-3 px-5 pb-5 pt-2">
+            {EXPLORE.filter((e) => !FEATURED.includes(e.tab)).map(({ tab, label, detail, icon: Icon }) => (
               <button key={tab} type="button" onClick={() => { setExploreOpen(false); onExplore(tab); }} className="rounded-2xl border border-border/60 bg-secondary/40 p-4 text-left">
                 <Icon className="h-5 w-5 text-primary" />
                 <span className="mt-2 block text-sm font-semibold text-foreground">{label}</span>
