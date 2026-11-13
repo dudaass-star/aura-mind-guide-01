@@ -3,7 +3,7 @@ import { BookOpen, ChevronRight, CalendarDays, Compass, Headphones, HeartHandsha
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import prayerImage from "@/assets/prayer-night.jpg";
-import meditationImage from "@/assets/v3/hero-mulher-noite.jpg";
+import meditationImage from "@/assets/meditation-breath.jpg";
 
 const FEATURED_MEDIA: Partial<Record<string, { image: string; tag: string }>> = {
   oracoes: { image: prayerImage, tag: "Voz da AURA" },

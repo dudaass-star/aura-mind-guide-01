@@ -1,7 +1,7 @@
 import { ArrowRight, BookOpen, CalendarDays, ChevronRight, Headphones, HeartHandshake, Moon, Sparkles, Sun, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import prayerImage from "@/assets/prayer-night.jpg";
-import meditationImage from "@/assets/v3/hero-mulher-noite.jpg";
+import meditationImage from "@/assets/meditation-breath.jpg";
 import movementImage from "@/assets/movimento-grupo-abraco-logo-real.jpg";
 import { trackMovement, useMovementVisibility } from "@/lib/movement-analytics";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ const groups = [
 ] as const;
 const practices = [
   { label: "Orações", detail: "Um momento com Deus.", tag: "Voz da AURA", action: "Ouvir", tab: "oracoes", image: prayerImage, alt: "Um lago tranquilo ao anoitecer", icon: Moon, tone: "portal-practice-prayer" },
-  { label: "Meditações", detail: "Pausas guiadas para você.", tag: "3 a 10 min", action: "Respirar", tab: "meditacoes", image: meditationImage, alt: "Um momento tranquilo ao fim do dia", icon: Headphones, tone: "portal-practice-meditation" },
+  { label: "Meditações", detail: "Pausas guiadas para você.", tag: "3 a 10 min", action: "Respirar", tab: "meditacoes", image: meditationImage, alt: "Mulher de olhos fechados respirando com calma", icon: Headphones, tone: "portal-practice-meditation" },
 ] as const;
 
 export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, movementIsNew, isActive = true }: Props) {
