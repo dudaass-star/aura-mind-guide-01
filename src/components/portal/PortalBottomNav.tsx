@@ -33,8 +33,8 @@ export function PortalBottomNav({ active, onSelect, onExplore }: Props) {
   const [exploreOpen, setExploreOpen] = useState(false);
   return (
     <>
-      <nav aria-label="Navegação principal" className="portal-bottom-nav fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-card/95 backdrop-blur-xl" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <ul className="mx-auto grid max-w-2xl grid-cols-5">
+      <nav aria-label="Navegação principal" className="portal-bottom-nav fixed inset-x-3 z-40 mx-auto max-w-md rounded-full" style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}>
+        <ul className="grid grid-cols-5 px-1.5 py-1">
           {ITEMS.map(({ id, label, icon: Icon }) => {
             const isActive = active === id;
             return (
@@ -56,11 +56,11 @@ export function PortalBottomNav({ active, onSelect, onExplore }: Props) {
         </ul>
       </nav>
       <Drawer open={exploreOpen} onOpenChange={setExploreOpen}>
-        <DrawerContent className="pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <DrawerContent className="portal-explore-sheet pb-[max(1rem,env(safe-area-inset-bottom))]">
           <DrawerTitle className="px-5 pt-2 font-display text-xl">Explorar</DrawerTitle>
           <div className="space-y-3 px-5 pt-4">
             {EXPLORE.filter((e) => FEATURED.includes(e.tab)).map(({ tab, label, detail, icon: Icon }) => (
-              <button key={tab} type="button" onClick={() => { setExploreOpen(false); onExplore(tab); }} className="flex w-full items-center gap-4 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/20 via-primary/10 to-accent/10 p-4 text-left shadow-card">
+              <button key={tab} type="button" onClick={() => { setExploreOpen(false); onExplore(tab); }} className="portal-explore-featured flex w-full items-center gap-4 rounded-2xl border p-4 text-left">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary"><Icon className="h-6 w-6" /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-display text-base font-semibold text-foreground">{label}</span>
@@ -73,7 +73,7 @@ export function PortalBottomNav({ active, onSelect, onExplore }: Props) {
           <p className="px-5 pt-5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Outras áreas</p>
           <div className="grid grid-cols-2 gap-3 px-5 pb-5 pt-2">
             {EXPLORE.filter((e) => !FEATURED.includes(e.tab)).map(({ tab, label, detail, icon: Icon }) => (
-              <button key={tab} type="button" onClick={() => { setExploreOpen(false); onExplore(tab); }} className="rounded-2xl border border-border/60 bg-secondary/40 p-4 text-left">
+              <button key={tab} type="button" onClick={() => { setExploreOpen(false); onExplore(tab); }} className="portal-explore-tile rounded-2xl border p-4 text-left">
                 <Icon className="h-5 w-5 text-primary" />
                 <span className="mt-2 block text-sm font-semibold text-foreground">{label}</span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span>

@@ -43,7 +43,6 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
   );
   return (
     <div ref={trackingRef} className="space-y-7">
-      {renderGroup(groups[0])}
       <section aria-label="Um momento para você">
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Um momento para você</h2>
         <div className="grid grid-cols-2 gap-3">
