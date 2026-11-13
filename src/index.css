@@ -1408,3 +1408,7 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .percurso-hero, .percurso-fio { background: hsl(153 14% 27%) !important; box-shadow: none !important; }
 /* Fio: texto do botão sempre escuro, vencendo regras de botão do capítulo */
 .percurso-sheet .percurso-chapter-reading button.percurso-fio-cta, .portal-progress-page .percurso-chapter-reading button.percurso-fio-cta, button.percurso-fio-cta, button.percurso-fio-cta * { color: hsl(153 30% 16%) !important; }
+/* Capítulo: hierarquia com cor — rótulo sálvia, mês claro, subtítulo lavanda */
+.percurso-sheet .percurso-chapter-reading .percurso-kicker, .portal-progress-page .percurso-chapter-reading .percurso-kicker { color: hsl(140 35% 72%) !important; }
+.percurso-sheet .percurso-chapter-reading .percurso-chapter-cover h3 { color: hsl(140 38% 82%) !important; }
+.percurso-sheet .percurso-chapter-reading .percurso-read-title, .percurso-sheet .percurso-chapter-reading .percurso-chapter-lede { color: hsl(270 45% 84%) !important; font-style: italic; }
