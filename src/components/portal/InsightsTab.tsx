@@ -11,7 +11,7 @@ import { sanitizePortalText } from "./sanitize";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 import { takePercursoFocus } from "@/lib/percurso-focus";
-import { chapterBlocks, isFreshlySealed, pickEvolution } from "@/lib/percurso-story";
+import { chapterBlocks, isFreshlySealed, pickEvolution, type ChapterBlock } from "@/lib/percurso-story";
 
 type Snapshot = {
   id: string;
@@ -451,6 +451,25 @@ function SectionTitle({ icon: Icon, eyebrow, title }: { icon: typeof Sparkles; e
   return <div className="portal-progress-section-title flex items-center gap-3"><span className="portal-progress-node flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary">{eyebrow}</p><h2 className="percurso-section-title">{title}</h2></div></div>;
 }
 
+/** Separa o "fio para continuar" do corpo para virar convite de ação. */
+function splitThread(blocks: ChapterBlock[]) {
+  const i = blocks.findIndex((b) => b.kind === "heading" && /fio para continuar/i.test(b.text));
+  if (i < 0) return { body: blocks, thread: null as string | null };
+  const next = blocks[i + 1];
+  const thread = next && next.kind !== "heading" ? next.text : null;
+  return { body: [...blocks.slice(0, i), ...blocks.slice(thread ? i + 2 : i + 1)], thread };
+}
+
+function ThreadInvite({ question, onContinue }: { question: string; onContinue: (message?: string) => void }) {
+  return <aside className="percurso-fio space-y-3">
+    <p className="percurso-fio-eyebrow"><Sparkles className="h-3.5 w-3.5" /> Fio aberto com a AURA</p>
+    <p className="percurso-fio-question">{question}</p>
+    <button type="button" className="percurso-fio-cta" onClick={() => onContinue(`Aura, quero continuar deste fio: ${question}`)}>Conversar com a AURA sobre isso <ArrowRight className="h-4 w-4" /></button>
+  </aside>;
+}
+
+const isTitleLike = (t: string) => t.length <= 90 && !/[.!?…]$/.test(t.trim());
+
 function ChapterReading({ chapter, onContinue, startOpen = false }: { chapter: Chapter; onContinue: (message?: string) => void; startOpen?: boolean }) {
   const [full, setFull] = useState(startOpen);
   const body = chapter.letter?.letter_text || chapter.report?.analysis_text || chapter.report?.report_html || "";
@@ -459,6 +478,7 @@ function ChapterReading({ chapter, onContinue, startOpen = false }: { chapter: C
   const blocks = chapterBlocks(body, sanitizePortalText).filter((b) => !(ledeStart && b.kind === "paragraph" && normalizeWords(b.text).slice(0, 8).join(" ") === ledeStart));
   const steps = [...chapter.sessions].filter((s) => s.ended_at).sort((a, b) => (a.ended_at! < b.ended_at! ? -1 : 1)).slice(-6);
   const stepDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "numeric", month: "short", timeZone: "America/Sao_Paulo" }).replace(".", "");
+  const split = splitThread(blocks);
   const hasMore = blocks.length > 0 || steps.length > 0 || chapter.milestones.length > 0;
   return <article className="percurso-chapter percurso-chapter-reading space-y-5 p-5" key={chapter.key}>
     <header className="percurso-chapter-cover space-y-2">
@@ -473,10 +493,12 @@ function ChapterReading({ chapter, onContinue, startOpen = false }: { chapter: C
         <p className="percurso-kicker">Os passos deste mês</p>
         <ol className="percurso-steps">{steps.map((s) => <li key={s.id}><span className="percurso-step-date">{stepDate(s.ended_at!)}</span><span className="percurso-step-text">{sanitizePortalText(s.theme_label || s.focus_topic || "Um encontro com a AURA")}</span></li>)}</ol>
       </section>}
-      {blocks.length > 0 && <section className="percurso-chapter-prose space-y-4">{blocks.map((b, i) =>
+      {split.body.length > 0 && <section className="percurso-chapter-prose space-y-4">{split.body.map((b, i) =>
         b.kind === "heading" ? <p key={i} className="percurso-kicker pt-2">{b.text}</p>
         : b.kind === "quote" ? <blockquote key={i} className="percurso-quote">“{b.text}”</blockquote>
-        : <p key={i} className={cn("percurso-prose", i === 0 && "percurso-prose-first")}>{b.text}</p>)}</section>}
+        : i === 0 && isTitleLike(b.text) ? <h4 key={i} className="percurso-read-title">{b.text}</h4>
+        : <p key={i} className={cn("percurso-prose", (i === 0 || (i === 1 && isTitleLike(split.body[0].text))) && "percurso-prose-first")}>{b.text}</p>)}</section>}
+      {split.thread && <ThreadInvite question={split.thread} onContinue={onContinue} />}
       {chapter.milestones.length > 0 && <section className="space-y-3">
         <p className="percurso-kicker">O que você levou deste mês</p>
         <ul className="space-y-2">{chapter.milestones.slice(0, 4).map((m) => <li key={m.id} className="percurso-takeaway">{milestoneText(m.milestone_text)}</li>)}</ul>
@@ -496,15 +518,18 @@ function WeekReading({ report, onContinue }: { report: WeeklyReport; onContinue:
   const blocks = chapterBlocks(report.report_content || report.analysis_text || "", sanitizePortalText)
     .filter((b) => !/^Sua semana,|Nenhuma atividade registrada|^Seu uso da Ol[áa] Aura/i.test(b.text));
   if (!blocks.length) return null;
+  const split = splitThread(blocks);
   return <article className="percurso-thread space-y-3">
     <p className="percurso-kicker">Esta semana · {fmt(report.period_start)} a {fmt(report.period_end)}</p>
-    <div className={cn("space-y-3 text-[15px] leading-relaxed text-foreground", !full && "percurso-letter-clamp")}>{blocks.map((b, i) =>
+    <div className={cn("space-y-3 text-[15px] leading-relaxed text-foreground", !full && "percurso-letter-clamp")}>{split.body.map((b, i) =>
       b.kind === "heading" ? <p key={i} className="percurso-kicker pt-1">{b.text}</p>
       : b.kind === "quote" ? <blockquote key={i} className="percurso-quote">“{b.text}”</blockquote>
-      : <p key={i}>{b.text}</p>)}</div>
+      : i === 0 && isTitleLike(b.text) ? <h4 key={i} className="percurso-read-title">{b.text}</h4>
+      : <p key={i} className="percurso-prose">{b.text}</p>)}</div>
+    {split.thread && <ThreadInvite question={split.thread} onContinue={onContinue} />}
     <div className="flex flex-wrap items-center gap-4">
       <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Recolher" : "Ler a semana inteira"}</button>
-      <button type="button" className="percurso-soft-link" onClick={() => onContinue("Aura, quero conversar sobre o que apareceu na minha semana.")}>Continuar com a AURA <ArrowRight className="h-3.5 w-3.5" /></button>
+      {!split.thread && <button type="button" className="percurso-soft-link" onClick={() => onContinue("Aura, quero conversar sobre o que apareceu na minha semana.")}>Continuar com a AURA <ArrowRight className="h-3.5 w-3.5" /></button>}
     </div>
   </article>;
 }
