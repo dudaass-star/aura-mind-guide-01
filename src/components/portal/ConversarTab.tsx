@@ -602,10 +602,10 @@ export function ConversarTab({
 
   // Barra do rodapé: sabe se a conversa está aberta e pode voltar ao Início.
   useEffect(() => {
-    const closeChat = () => setChatOpen(false);
+    const closeChat = () => { clearResumeIntent(userId); setChatOpen(false); };
     window.addEventListener("aura:close-chat", closeChat);
     return () => window.removeEventListener("aura:close-chat", closeChat);
-  }, []);
+  }, [userId]);
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("aura:chat-state", { detail: { open: chatOpen } }));
   }, [chatOpen]);
@@ -1425,7 +1425,7 @@ export function ConversarTab({
         <Button
           type="button"
           variant="ghost"
-          onClick={() => setChatOpen(true)}
+          onClick={() => { clearResumeIntent(userId); setChatOpen(true); }}
           className="portal-primary-conversation group h-auto w-full justify-start gap-3 rounded-2xl border px-4 py-5 text-left transition-transform active:scale-[0.99]"
           aria-label="Abrir conversa com a AURA"
         >
@@ -1464,7 +1464,7 @@ export function ConversarTab({
       chatOpen ? "flex" : "hidden",
     )}>
       <header className={cn("portal-chat-header relative flex min-h-[calc(4.5rem+env(safe-area-inset-top))] shrink-0 items-center gap-3 border-b border-border/70 bg-card/90 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur-xl transition-colors duration-500 md:min-h-[4.5rem] md:px-5 md:pt-0", activeSession && "portal-session-header")}>
-         <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => setChatOpen(false)} aria-label="Voltar para conversas">
+         <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => { clearResumeIntent(userId); setChatOpen(false); }} aria-label="Voltar para conversas">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="relative shrink-0">

@@ -717,7 +717,7 @@ const UserPortal = () => {
           active={(activeTab === "conversar" ? "inicio" : activeTab === "sessoes" || activeTab === "insights" ? activeTab : "explorar") as NavTarget}
           onSelect={(target) => {
             if (target === "inicio") { handleTabClick("conversar"); window.dispatchEvent(new Event("aura:close-chat")); }
-            else if (target === "conversar") { handleTabClick("conversar"); window.setTimeout(() => window.dispatchEvent(new Event("aura:open-chat")), 0); }
+            else if (target === "conversar") { if (userId) clearResumeIntent(userId); handleTabClick("conversar"); window.setTimeout(() => window.dispatchEvent(new Event("aura:open-chat")), 0); }
             else handleTabClick(target);
           }}
           onExplore={(tab) => handleTabClick(tab)}
