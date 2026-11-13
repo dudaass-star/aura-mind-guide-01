@@ -20,8 +20,8 @@ const groups = [
   ] },
 ] as const;
 const practices = [
-  { label: "Orações", detail: "Um momento com Deus.", action: "Encontre sua oração", tab: "oracoes", image: prayerImage, alt: "Um lago tranquilo ao anoitecer", icon: Moon, tone: "portal-area-journey" },
-  { label: "Meditações", detail: "Pausas guiadas para você.", action: "Escolha sua pausa", tab: "meditacoes", image: meditationImage, alt: "Um momento tranquilo ao fim do dia", icon: Headphones, tone: "portal-area-audio" },
+  { label: "Orações", detail: "Um momento com Deus.", tag: "Voz da AURA", action: "Ouvir", tab: "oracoes", image: prayerImage, alt: "Um lago tranquilo ao anoitecer", icon: Moon, tone: "portal-practice-prayer" },
+  { label: "Meditações", detail: "Pausas guiadas para você.", tag: "3 a 10 min", action: "Respirar", tab: "meditacoes", image: meditationImage, alt: "Um momento tranquilo ao fim do dia", icon: Headphones, tone: "portal-practice-meditation" },
 ] as const;
 
 export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, movementIsNew, isActive = true }: Props) {
@@ -46,10 +46,17 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
       <section aria-label="Um momento para você">
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Um momento para você</h2>
         <div className="grid grid-cols-2 gap-3">
-          {practices.map(({ label, detail, action, tab, image, alt, icon: Icon, tone }) => (
-            <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className={cn("group block h-auto min-w-0 overflow-hidden rounded-2xl p-0 text-left shadow-sm whitespace-normal hover:opacity-90", tone)}>
-              <img src={image} alt={alt} className="aspect-[1.85/1] w-full object-cover" loading="lazy" />
-              <span className="block p-3"><span className="flex min-h-6 items-center gap-1.5"><Icon className="h-4 w-4 shrink-0" /><span className="text-base font-semibold">{label}</span></span><span className="mt-2 block min-h-9 text-xs font-normal leading-[18px]">{detail}</span><span className="mt-3 flex min-h-5 items-center justify-between gap-1 text-[11px] font-semibold"><span>{action}</span><ArrowRight className="h-4 w-4 shrink-0" /></span></span>
+          {practices.map(({ label, detail, tag, action, tab, image, alt, icon: Icon, tone }) => (
+            <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className={cn("portal-practice group relative block h-auto aspect-[3/4] min-w-0 overflow-hidden rounded-3xl p-0 text-left whitespace-normal", tone)}>
+              <img src={image} alt={alt} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
+              <span className="portal-practice-veil absolute inset-0" aria-hidden />
+              <span className="portal-practice-tag absolute left-3 top-3 rounded-full px-2.5 py-1 text-[10px] font-semibold">{tag}</span>
+              <span className="absolute inset-x-0 bottom-0 block p-3.5">
+                <span className="portal-practice-icon mb-2 flex h-8 w-8 items-center justify-center rounded-full"><Icon className="h-4 w-4" /></span>
+                <span className="block font-display text-lg font-semibold leading-tight">{label}</span>
+                <span className="mt-1 block text-xs leading-snug opacity-80">{detail}</span>
+                <span className="portal-practice-cta mt-3 inline-flex items-center gap-1 text-[11px] font-semibold">{action}<ArrowRight className="h-3.5 w-3.5" /></span>
+              </span>
             </Button>
           ))}
         </div>

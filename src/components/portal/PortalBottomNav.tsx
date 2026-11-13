@@ -2,6 +2,13 @@ import { useState } from "react";
 import { BookOpen, ChevronRight, CalendarDays, Compass, Headphones, HeartHandshake, Home, MessageCircle, Moon, Sparkles, Sun, UserRound } from "lucide-react";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import prayerImage from "@/assets/prayer-night.jpg";
+import meditationImage from "@/assets/v3/hero-mulher-noite.jpg";
+
+const FEATURED_MEDIA: Partial<Record<string, { image: string; tag: string }>> = {
+  oracoes: { image: prayerImage, tag: "Voz da AURA" },
+  meditacoes: { image: meditationImage, tag: "3 a 10 min" },
+};
 
 export type NavTarget = "inicio" | "conversar" | "sessoes" | "insights" | "explorar";
 type ExploreArea = "hoje" | "oracoes" | "meditacoes" | "jornadas" | "movimento" | "sobre";
@@ -60,9 +67,13 @@ export function PortalBottomNav({ active, onSelect, onExplore }: Props) {
           <DrawerTitle className="px-5 pt-2 font-display text-xl">Explorar</DrawerTitle>
           <div className="space-y-3 px-5 pt-4">
             {EXPLORE.filter((e) => FEATURED.includes(e.tab)).map(({ tab, label, detail, icon: Icon }) => (
-              <button key={tab} type="button" onClick={() => { setExploreOpen(false); onExplore(tab); }} className="portal-explore-featured flex w-full items-center gap-4 rounded-2xl border p-4 text-left">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary"><Icon className="h-6 w-6" /></span>
+              <button key={tab} type="button" onClick={() => { setExploreOpen(false); onExplore(tab); }} className="portal-explore-featured flex w-full items-center gap-4 rounded-2xl border p-3 text-left">
+                <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl">
+                  <img src={FEATURED_MEDIA[tab]?.image} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  <span className="portal-explore-thumb-icon absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-full"><Icon className="h-3.5 w-3.5" /></span>
+                </span>
                 <span className="min-w-0 flex-1">
+                  <span className="portal-practice-tag mb-1 inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold">{FEATURED_MEDIA[tab]?.tag}</span>
                   <span className="block font-display text-base font-semibold text-foreground">{label}</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span>
                 </span>

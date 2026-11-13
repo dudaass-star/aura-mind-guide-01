@@ -1475,3 +1475,15 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
   border-color: hsl(0 0% 100% / 0.08);
   background: hsl(0 0% 100% / 0.05);
 }
+
+/* Cards imersivos de Orações e Meditações */
+.portal-practice { color: hsl(40 25% 96%); box-shadow: 0 16px 34px -18px hsl(220 50% 4% / 0.8); border: 1px solid hsl(0 0% 100% / 0.1); }
+.portal-practice:hover { background: transparent; color: hsl(40 25% 96%); }
+.portal-practice-veil { background: linear-gradient(180deg, hsl(220 40% 8% / 0) 25%, hsl(220 40% 10% / 0.55) 55%, hsl(220 40% 9% / 0.94) 100%); }
+.portal-practice-prayer .portal-practice-veil { background: linear-gradient(180deg, hsl(153 30% 12% / 0) 25%, hsl(153 25% 14% / 0.6) 55%, hsl(160 30% 9% / 0.95) 100%); }
+.portal-practice-meditation .portal-practice-veil { background: linear-gradient(180deg, hsl(265 30% 14% / 0) 25%, hsl(265 25% 18% / 0.6) 55%, hsl(262 30% 11% / 0.95) 100%); }
+.portal-practice-tag { background: hsl(220 40% 10% / 0.55); color: hsl(40 25% 96%); border: 1px solid hsl(0 0% 100% / 0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.portal-practice-icon, .portal-explore-thumb-icon { background: hsl(0 0% 100% / 0.16); color: hsl(40 25% 96%); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.portal-practice-prayer .portal-practice-cta { color: hsl(145 45% 70%); }
+.portal-practice-meditation .portal-practice-cta { color: hsl(265 60% 82%); }
+.portal-explore-featured .portal-practice-tag { background: hsl(0 0% 100% / 0.1); }
