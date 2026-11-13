@@ -1412,3 +1412,14 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .percurso-sheet .percurso-chapter-reading .percurso-kicker, .portal-progress-page .percurso-chapter-reading .percurso-kicker { color: hsl(140 35% 72%) !important; }
 .percurso-sheet .percurso-chapter-reading .percurso-chapter-cover h3 { color: hsl(140 38% 82%) !important; }
 .percurso-sheet .percurso-chapter-reading .percurso-read-title, .percurso-sheet .percurso-chapter-reading .percurso-chapter-lede { color: hsl(270 45% 84%) !important; font-style: italic; }
+/* Estante: livros lisos na família sálvia da AURA, sem brilho nem degradê */
+.portal-progress-page .percurso-book { border: 1px solid hsl(140 30% 80% / .14) !important; border-left: 4px solid hsl(153 18% 18%) !important; box-shadow: 0 10px 18px -14px hsl(0 0% 0% / .8) !important; color: hsl(140 25% 95%); }
+.portal-progress-page .percurso-book::after { display: none; }
+.portal-progress-page .percurso-book::before { background: hsl(0 0% 100% / .12); box-shadow: none; }
+.portal-progress-page .percurso-book:nth-child(4n+1) { background: hsl(153 14% 27%) !important; }
+.portal-progress-page .percurso-book:nth-child(4n+2) { background: hsl(153 16% 34%) !important; }
+.portal-progress-page .percurso-book:nth-child(4n+3) { background: hsl(265 14% 36%) !important; border-left-color: hsl(265 16% 24%) !important; }
+.portal-progress-page .percurso-book:nth-child(4n) { background: hsl(160 12% 22%) !important; }
+.portal-progress-page .percurso-book-title { color: hsl(140 25% 96%) !important; font-size: 1.1rem; }
+.portal-progress-page .percurso-book-num, .portal-progress-page .percurso-book-year { color: hsl(140 35% 82%); opacity: .85; }
+.portal-progress-page .percurso-book-open { border-color: hsl(140 35% 78% / .7) !important; }
