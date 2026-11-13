@@ -1388,6 +1388,8 @@ export function ConversarTab({
 
       <div className="shrink-0 px-4 pb-7">
         {degustacaoCard && <div className="mb-3">{degustacaoCard}</div>}
+        {(() => {
+          const conversationCard = (
         <Button
           type="button"
           variant="ghost"
@@ -1410,7 +1412,11 @@ export function ConversarTab({
             </div>
           </div>
         </Button>
-        {userId && !isDemo && <HomeMomentBar userId={userId} onNavigate={navigateFromConversation} onResume={(id) => { setResumeIntent(userId, id); setChatOpen(true); }} />}
+          );
+          return userId && !isDemo
+            ? <HomeMomentBar userId={userId} onNavigate={navigateFromConversation} onResume={(id) => { setResumeIntent(userId, id); setChatOpen(true); }} fallback={conversationCard} />
+            : conversationCard;
+        })()}
       </div>
 
       <div className="shrink-0 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
