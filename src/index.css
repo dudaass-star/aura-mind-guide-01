@@ -1404,3 +1404,5 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .percurso-fio { background: radial-gradient(120% 100% at 100% 0%, hsl(270 40% 78% / .2), transparent 60%), linear-gradient(155deg, hsl(153 14% 31%), hsl(153 16% 20%)) !important; border-color: hsl(140 30% 75% / .3) !important; }
 .percurso-fio-eyebrow { color: hsl(140 35% 85%); }
 .percurso-fio-cta { background: hsl(0 0% 100%) !important; color: hsl(153 25% 18%) !important; font-weight: 700; box-shadow: 0 8px 20px -10px hsl(153 30% 8% / .7); }
+/* Percurso — teste: sálvia chapado, sem brilho nem degradê */
+.percurso-hero, .percurso-fio { background: hsl(153 14% 27%) !important; box-shadow: none !important; }
