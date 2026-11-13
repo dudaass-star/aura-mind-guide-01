@@ -43,11 +43,16 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
   );
   return (
     <div ref={trackingRef} className="space-y-7">
+      <Button type="button" variant="ghost" {...access("hoje")} aria-label="Abrir Hoje" className="portal-home-feature group h-auto w-full justify-start gap-3 rounded-2xl px-4 py-3.5 text-left whitespace-normal hover:bg-transparent hover:text-[hsl(40_25%_96%)]">
+        <span className="portal-practice-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full"><Sun className="h-5 w-5" strokeWidth={1.6} /></span>
+        <span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold uppercase tracking-wide opacity-70">Seu momento</span><span className="block text-[15px] font-semibold">Hoje com a AURA</span><span className="mt-0.5 block text-xs opacity-75">O que te acompanha agora</span></span>
+        <ChevronRight className="h-4 w-4 shrink-0 opacity-70 transition-transform group-hover:translate-x-0.5" />
+      </Button>
       <section aria-label="Um momento para você">
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Um momento para você</h2>
         <div className="grid grid-cols-2 gap-3">
           {practices.map(({ label, detail, tag, action, tab, image, alt, icon: Icon, tone }) => (
-            <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className={cn("portal-practice group relative block h-auto aspect-[3/4] min-w-0 overflow-hidden rounded-3xl p-0 text-left whitespace-normal", tone)}>
+            <Button key={tab} type="button" variant="ghost" {...access(tab)} aria-label={`Abrir ${label}`} className={cn("portal-practice group hover:bg-transparent hover:text-[hsl(40_25%_96%)] focus-visible:text-[hsl(40_25%_96%)] relative block h-auto aspect-[3/4] min-w-0 overflow-hidden rounded-3xl p-0 text-left whitespace-normal", tone)}>
               <img src={image} alt={alt} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
               <span className="portal-practice-veil absolute inset-0" aria-hidden />
               <span className="portal-practice-tag absolute left-3 top-3 rounded-full px-2.5 py-1 text-[10px] font-semibold">{tag}</span>
@@ -61,6 +66,14 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
           ))}
         </div>
       </section>
+      <section aria-label="Jornadas">
+        <h2 className="mb-3 text-[17px] font-medium text-foreground">Para se aprofundar</h2>
+        <Button type="button" variant="ghost" {...access("jornadas")} aria-label="Abrir Jornadas" className="portal-home-feature portal-home-journeys group h-auto w-full justify-start gap-3 rounded-2xl px-4 py-4 text-left whitespace-normal hover:bg-transparent hover:text-[hsl(40_25%_96%)]">
+          <span className="portal-practice-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full"><BookOpen className="h-5 w-5" strokeWidth={1.6} /></span>
+          <span className="min-w-0 flex-1"><span className="block text-[15px] font-semibold">Jornadas</span><span className="mt-0.5 block text-xs leading-snug opacity-75">8 trilhas com 8 episódios: ansiedade, autoconfiança, relacionamentos e mais.</span></span>
+          <ChevronRight className="h-4 w-4 shrink-0 opacity-70 transition-transform group-hover:translate-x-0.5" />
+        </Button>
+      </section>
       <section aria-label="Faça parte de algo maior">
         <h2 className="mb-3 text-[17px] font-medium text-foreground">Faça parte de algo maior</h2>
         <article data-movement-event="card_viewed" className="overflow-hidden rounded-2xl shadow-sm portal-area-journey">
@@ -73,7 +86,6 @@ export function PortalHomeAreas({ onNavigate, onPrefetch, hasJoinedMovement, mov
           </div>
         </article>
       </section>
-      {renderGroup(groups[1])}
     </div>
   );
 }

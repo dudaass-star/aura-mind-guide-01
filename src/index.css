@@ -1487,3 +1487,9 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .portal-practice-prayer .portal-practice-cta { color: hsl(145 45% 70%); }
 .portal-practice-meditation .portal-practice-cta { color: hsl(265 60% 82%); }
 .portal-explore-featured .portal-practice-tag { background: hsl(0 0% 100% / 0.1); }
+
+/* Atalhos nobres da Home (Hoje, Jornadas) */
+.portal-home-feature { color: hsl(40 25% 96%); background: linear-gradient(135deg, hsl(153 25% 18% / 0.55), hsl(220 38% 14% / 0.7)); border: 1px solid hsl(0 0% 100% / 0.1); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.portal-home-journeys { background: linear-gradient(135deg, hsl(265 25% 22% / 0.55), hsl(220 38% 14% / 0.7)); }
+.portal-home-feature:hover { background: linear-gradient(135deg, hsl(153 25% 22% / 0.6), hsl(220 38% 16% / 0.75)); }
+.portal-home-journeys:hover { background: linear-gradient(135deg, hsl(265 25% 26% / 0.6), hsl(220 38% 16% / 0.75)); }
