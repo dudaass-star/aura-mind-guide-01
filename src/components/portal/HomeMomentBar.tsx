@@ -84,14 +84,14 @@ export function HomeMomentBar({ userId, onNavigate, onResume, fallback }: Props)
   return (
     <div className="space-y-2">
       <button type="button" onClick={content.run} data-home-moment={bar.kind}
-        className="portal-primary-conversation group flex w-full items-center gap-3 rounded-2xl border px-4 py-5 text-left transition-transform active:scale-[0.99]">
-        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/15">
-          <content.Icon className="h-6 w-6 text-primary" strokeWidth={1.7} aria-hidden />
+        className="portal-moment-card group flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-left transition-transform active:scale-[0.99]">
+        <span className="portal-moment-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
+          <content.Icon className="h-5 w-5" strokeWidth={1.7} aria-hidden />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="portal-pc-muted block text-[11px] font-semibold uppercase tracking-wider">{content.eyebrow}</span>
-          <span className={`portal-pc-title mt-0.5 block text-base font-bold leading-snug ${threadQuote && bar.kind === "thread" ? "line-clamp-2" : ""}`}>{content.text}</span>
-          <span className="mt-1.5 inline-flex items-center gap-1 text-sm font-semibold text-primary">{content.action}<ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span>
+          <span className="portal-moment-eyebrow block text-[11px] font-semibold uppercase tracking-wider">{content.eyebrow}</span>
+          <span className={`portal-moment-title mt-0.5 block text-[15px] font-bold leading-snug ${threadQuote && bar.kind === "thread" ? "line-clamp-2" : ""}`}>{content.text}</span>
+          <span className="portal-moment-action mt-1 inline-flex items-center gap-1 text-sm font-semibold">{content.action}<ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span>
         </span>
       </button>
       {fallback}
