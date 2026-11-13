@@ -124,6 +124,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
       };
     },
     enabled: !!userId,
+    staleTime: 60_000,
   });
 
   const feedbackMutation = useMutation({

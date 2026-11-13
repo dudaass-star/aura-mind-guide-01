@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles } from "lucide-react";
 
@@ -124,10 +125,17 @@ export function PortalLoading() {
 }
 
 export function PortalLoadingInline() {
+  // Anti-flash: carregamentos rápidos não mostram esqueleto nenhum.
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), 250);
+    return () => window.clearTimeout(timer);
+  }, []);
+  if (!visible) return <div className="min-h-[18rem]" aria-busy="true" />;
   return (
-    <div className="space-y-4 py-4">
+    <div className="space-y-4 py-4 animate-fade-in" aria-busy="true">
       {[1, 2].map((i) => (
-        <Skeleton key={i} className="h-32 w-full rounded-2xl" />
+        <div key={i} className="portal-skeleton h-32 w-full rounded-2xl" />
       ))}
     </div>
   );

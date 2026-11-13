@@ -164,6 +164,7 @@ export function SessoesTab({
       return (data || []) as PortalSession[];
     },
     enabled: Boolean(userId),
+    staleTime: 60_000,
   });
 
   const { data: ratings = [] } = useQuery({

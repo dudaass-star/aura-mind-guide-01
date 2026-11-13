@@ -1493,3 +1493,10 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .portal-home-journeys { background: linear-gradient(135deg, hsl(265 25% 22% / 0.55), hsl(220 38% 14% / 0.7)); }
 .portal-home-feature:hover { background: linear-gradient(135deg, hsl(153 25% 22% / 0.6), hsl(220 38% 16% / 0.75)); }
 .portal-home-journeys:hover { background: linear-gradient(135deg, hsl(265 25% 26% / 0.6), hsl(220 38% 16% / 0.75)); }
+
+/* Esqueleto do App em vidro escuro, sem clarão sobre o navy. */
+.portal-skeleton {
+  background: hsl(0 0% 100% / 0.05);
+  border: 1px solid hsl(0 0% 100% / 0.08);
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
