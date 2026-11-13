@@ -1388,3 +1388,10 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .percurso-fio-question { font-family: var(--font-display); font-size: 1.2rem; line-height: 1.45; color: hsl(30 30% 98%); }
 .percurso-fio-cta { display: inline-flex; width: 100%; justify-content: center; align-items: center; gap: .5rem; border-radius: 999px; padding: .8rem 1rem; font-size: .92rem; font-weight: 600; background: hsl(140 32% 70%); color: hsl(222 40% 12%) !important; transition: transform .15s; }
 .percurso-fio-cta:active { transform: scale(.98); }
+
+/* Percurso — falas íntimas e marcos refinados */
+.portal-progress-page .percurso-quote, .percurso-sheet .percurso-quote { position: relative; border-left: none !important; border-radius: 1.1rem !important; padding: 1.4rem 1.15rem 1rem 1.15rem !important; background: linear-gradient(150deg, hsl(145 28% 45% / .16), hsl(260 25% 60% / .08)) !important; border: 1px solid hsl(140 30% 72% / .18) !important; font-size: 1.05rem; color: hsl(30 30% 97% / .95) !important; }
+.portal-progress-page .percurso-quote::before, .percurso-sheet .percurso-quote::before { content: "“"; position: absolute; top: -.35rem; left: .8rem; font-family: var(--font-display); font-style: normal; font-size: 3rem; line-height: 1; color: hsl(140 35% 72% / .55); }
+.portal-progress-page .percurso-takeaway, .percurso-sheet .percurso-takeaway { position: relative; border-left: none !important; padding-left: 1.4rem !important; color: hsl(30 30% 97% / .9); }
+.portal-progress-page .percurso-takeaway::before, .percurso-sheet .percurso-takeaway::before { content: ""; position: absolute; left: .2rem; top: .6em; width: .45rem; height: .45rem; border-radius: 999px; background: hsl(140 38% 70%); box-shadow: 0 0 8px hsl(140 40% 65% / .7); }
+.portal-progress-page .percurso-prose + .percurso-prose { margin-top: .9rem; }

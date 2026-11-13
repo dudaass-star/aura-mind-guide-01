@@ -11,7 +11,7 @@ import { sanitizePortalText } from "./sanitize";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 import { takePercursoFocus } from "@/lib/percurso-focus";
-import { chapterBlocks, isFreshlySealed, pickEvolution, type ChapterBlock } from "@/lib/percurso-story";
+import { breatheBlocks, chapterBlocks, isFreshlySealed, pickEvolution, type ChapterBlock } from "@/lib/percurso-story";
 
 type Snapshot = {
   id: string;
@@ -230,6 +230,8 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
     : null);
   const currentKey = monthKeyOf(new Date().toISOString());
   const currentChapter = chapters.find((c) => c.key === currentKey) ?? null;
+  // Estante só guarda capítulos selados; o mês corrente vive na barra "Em escrita agora".
+  const sealedShelf = chapters.filter((c) => c.key !== currentKey);
   const sealedChapter = chapters.find((c) => c.key !== currentKey && isFreshlySealed(c.anchorDate)) ?? null;
   const monthSessions = currentChapter?.sessions.length ?? 0;
   const nextSessionAt = data?.nextSessionAt ?? null;
@@ -254,7 +256,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         {(sessionCount > 0 || chapters.length > 0) && (
           <div className="percurso-stats">
             <div className="percurso-stat"><span className="percurso-stat-value">{sessionCount}</span><span className="percurso-stat-label">{sessionCount === 1 ? "encontro" : "encontros"}</span></div>
-            <div className="percurso-stat"><span className="percurso-stat-value">{chapters.length}</span><span className="percurso-stat-label">{chapters.length === 1 ? "capítulo" : "capítulos"}</span></div>
+            <div className="percurso-stat"><span className="percurso-stat-value">{sealedShelf.length}</span><span className="percurso-stat-label">{sealedShelf.length === 1 ? "capítulo" : "capítulos"}</span></div>
             <div className="percurso-stat"><span className="percurso-stat-value">{meaningfulMilestones.length}</span><span className="percurso-stat-label">{meaningfulMilestones.length === 1 ? "virada" : "viradas"}</span></div>
           </div>
         )}
@@ -392,15 +394,15 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
         <section className="portal-progress-step portal-progress-archive space-y-4" aria-labelledby="livro-percurso">
           <SectionTitle icon={BookMarked} eyebrow="Seu livro" title="A história que vocês vêm escrevendo" />
           {featuredWeek && <WeekReading report={featuredWeek} onContinue={onOpenConversation} />}
-          {chapters.length > 0 && (
+          {sealedShelf.length > 0 && (
             <div className="space-y-3">
               <p className="percurso-shelf-label">Capítulos · toque para abrir</p>
               <div id="livro-percurso" className="percurso-shelf" role="tablist">
-                {chapters.map((chapter, index) => (
+                {sealedShelf.map((chapter, index) => (
                   <button key={chapter.key} type="button" role="tab" aria-selected={sheetOpen && openChapter?.key === chapter.key}
                     className="percurso-book"
                     onClick={() => { setExpandedKey(chapter.key); setSheetOpen(true); }}>
-                    <span className="percurso-book-num">Cap. {chapters.length - index}</span>
+                    <span className="percurso-book-num">Cap. {sealedShelf.length - index}</span>
                     <span className="percurso-book-title">{chapter.monthLabel.split(" ")[0]}</span>
                     {chapter.themes[0] && <span className="percurso-book-theme">{truncate(chapter.themes[0], 42)}</span>}
                     <span className="percurso-book-year">{chapter.monthLabel.split(" ").slice(-1)[0]}</span>
@@ -475,7 +477,7 @@ function ChapterReading({ chapter, onContinue, startOpen = false }: { chapter: C
   const body = chapter.letter?.letter_text || chapter.report?.analysis_text || chapter.report?.report_html || "";
   // Evita eco: o primeiro parágrafo não repete o subtítulo do capítulo.
   const ledeStart = normalizeWords(chapter.headline.replace(/…$/, "")).slice(0, 8).join(" ");
-  const blocks = chapterBlocks(body, sanitizePortalText).filter((b) => !(ledeStart && b.kind === "paragraph" && normalizeWords(b.text).slice(0, 8).join(" ") === ledeStart));
+  const blocks = breatheBlocks(chapterBlocks(body, sanitizePortalText)).filter((b) => !(ledeStart && b.kind === "paragraph" && normalizeWords(b.text).slice(0, 8).join(" ") === ledeStart));
   const steps = [...chapter.sessions].filter((s) => s.ended_at).sort((a, b) => (a.ended_at! < b.ended_at! ? -1 : 1)).slice(-6);
   const stepDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "numeric", month: "short", timeZone: "America/Sao_Paulo" }).replace(".", "");
   const split = splitThread(blocks);
@@ -498,15 +500,15 @@ function ChapterReading({ chapter, onContinue, startOpen = false }: { chapter: C
         : b.kind === "quote" ? <blockquote key={i} className="percurso-quote">“{b.text}”</blockquote>
         : i === 0 && isTitleLike(b.text) ? <h4 key={i} className="percurso-read-title">{b.text}</h4>
         : <p key={i} className={cn("percurso-prose", (i === 0 || (i === 1 && isTitleLike(split.body[0].text))) && "percurso-prose-first")}>{b.text}</p>)}</section>}
-      {split.thread && <ThreadInvite question={split.thread} onContinue={onContinue} />}
       {chapter.milestones.length > 0 && <section className="space-y-3">
         <p className="percurso-kicker">O que você levou deste mês</p>
         <ul className="space-y-2">{chapter.milestones.slice(0, 4).map((m) => <li key={m.id} className="percurso-takeaway">{milestoneText(m.milestone_text)}</li>)}</ul>
       </section>}
+      {split.thread && <ThreadInvite question={split.thread} onContinue={onContinue} />}
     </>}
     <div className="flex flex-wrap items-center gap-4">
       {hasMore && !startOpen && <button type="button" className="percurso-soft-link" onClick={() => setFull((v) => !v)}>{full ? "Fechar o capítulo" : "Ler o capítulo inteiro"}</button>}
-      <button type="button" className="percurso-soft-link" onClick={() => onContinue(`Aura, quero continuar a partir do que vivi em ${chapter.monthLabel}.`)}>Continuar a partir daqui <ArrowRight className="h-3.5 w-3.5" /></button>
+      {!(full && split.thread) && <button type="button" className="percurso-soft-link" onClick={() => onContinue(`Aura, quero continuar a partir do que vivi em ${chapter.monthLabel}.`)}>Continuar a partir daqui <ArrowRight className="h-3.5 w-3.5" /></button>}
     </div>
   </article>;
 }
@@ -515,7 +517,7 @@ function WeekReading({ report, onContinue }: { report: WeeklyReport; onContinue:
   const [full, setFull] = useState(() => new URLSearchParams(window.location.search).get("id") === report.id);
   const fmt = (d: string) => new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
   // Mesma leitura editorial dos capítulos: sem telemetria nem saudação de relatório.
-  const blocks = chapterBlocks(report.report_content || report.analysis_text || "", sanitizePortalText)
+  const blocks = breatheBlocks(chapterBlocks(report.report_content || report.analysis_text || "", sanitizePortalText))
     .filter((b) => !/^Sua semana,|Nenhuma atividade registrada|^Seu uso da Ol[áa] Aura/i.test(b.text));
   if (!blocks.length) return null;
   const split = splitThread(blocks);

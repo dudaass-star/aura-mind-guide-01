@@ -68,3 +68,27 @@ export function stripLegacyWhatsAppReport(raw: string): string {
   if (!evo) return "";
   return evo.replace(/^.*Sua Evolu[çc][ãa]o\*?\s*/i, "").trim();
 }
+
+// Troca expressões de laudo pela fala direta da AURA.
+export function softenClinical(text: string): string {
+  return text
+    .replace(/\bA sess[aã]o explorou\b/gi, "A gente olhou para")
+    .replace(/\bo conte[úu]do sugere\b/gi, "dá para perceber")
+    .replace(/\bO per[íi]odo foi marcado pelo\b/gi, "Esse tempo teve")
+    .replace(/\bParecem coexistir\b/gi, "Convivem em você")
+    .replace(/\bparece refletir\b/gi, "parece carregar")
+    .replace(/\bVocê mencionou\b/g, "Você contou");
+}
+
+/** Quebra parágrafos longos em trechos de até 2 frases, para a leitura respirar no celular. */
+export function breatheBlocks(blocks: ChapterBlock[]): ChapterBlock[] {
+  return blocks.flatMap((b) => {
+    if (b.kind !== "paragraph") return [b];
+    const text = softenClinical(b.text);
+    const sentences = text.split(/(?<=[.!?…])\s+(?=[A-ZÀ-Ú“"])/);
+    if (text.split(/\s+/).length <= 45 || sentences.length < 3) return [{ ...b, text }];
+    const out: ChapterBlock[] = [];
+    for (let i = 0; i < sentences.length; i += 2) out.push({ kind: "paragraph", text: sentences.slice(i, i + 2).join(" ") });
+    return out;
+  });
+}
