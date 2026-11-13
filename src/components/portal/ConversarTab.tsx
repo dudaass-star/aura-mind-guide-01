@@ -125,6 +125,7 @@ type PendingSessionRating = {
   ended_at: string;
   continuity_thread: string | null;
   closure_text?: string | null;
+  closure_type?: string | null;
 };
 
 type ActiveSession = {
@@ -465,7 +466,7 @@ export function ConversarTab({
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: completed } = await supabasePortal
       .from("sessions")
-      .select("id,ended_at,continuity_thread,closure_text")
+      .select("id,ended_at,continuity_thread,closure_text,closure_type")
       .eq("user_id", userId)
       .eq("status", "completed")
       .gte("ended_at", cutoff)
@@ -1586,14 +1587,14 @@ export function ConversarTab({
                     ))}
                   </div>
                   {ratingError && <p className="mt-2 text-xs text-destructive">{ratingError}</p>}
-                  {takeawayFromClosure(pendingRating.closure_text) && (
+                  {pendingRating.closure_type && takeawayFromClosure(pendingRating.closure_text) && (
                     <section className="mt-5 rounded-2xl border border-primary/25 bg-primary/10 p-4" aria-label="Para você levar">
                       <p className="text-xs font-semibold uppercase tracking-wide text-primary">Para você levar</p>
                       <p className="mt-2 text-sm leading-relaxed">{takeawayFromClosure(pendingRating.closure_text)}</p>
                       {takeawaySaved === pendingRating.id ? (
                         <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-primary"><Check className="h-4 w-4" />Guardado no seu Percurso</p>
                       ) : (
-                        <Button type="button" variant="outline" size="sm" className="mt-3 rounded-full" disabled={takeawaySaving} onClick={() => void saveTakeaway()}>
+                        <Button type="button" size="sm" className="mt-3 rounded-full bg-primary font-semibold text-primary-foreground hover:bg-primary/90" disabled={takeawaySaving} onClick={() => void saveTakeaway()}>
                           <Bookmark className="h-4 w-4" />{takeawaySaving ? "Guardando…" : "Guardar no meu Percurso"}
                         </Button>
                       )}

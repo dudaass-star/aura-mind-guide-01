@@ -92,6 +92,7 @@ fechamento (últimas mensagens dela). Se não der pra identificar com clareza, u
   Ex.: "Antes de dormir hoje, escreva uma frase pra você mesma."
 
 REGRAS:
+- MATURIDADE: se a sessão não chegou a um fechamento terapêutico real (teste, interrupção logo no início, encerramento pedido antes de qualquer elaboração, conversa só operacional), closure_type = null e closure_text = null. Pergunta logística ou de condução NÃO é fechamento.
 - closure_text = a frase/pergunta/proposta literal da AURA que fecha o ciclo (até 240 chars).
 - closure_type = qual dos 7 formatos. null se ambíguo ou ausente.
 - reframe_text = a síntese do reframe da sessão (a virada de perspectiva que a AURA devolveu). Pode ser null se a sessão foi puramente exploratória.
@@ -415,6 +416,13 @@ Deno.serve(async (req) => {
         JSON.stringify({ ok: false, error: "extraction_failed" }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    // Maturidade: sem pelo menos 4 falas do usuário não houve percurso clínico até um fechamento.
+    const userTurns = sessionMessages.filter((m: any) => m.role === "user" && String(m.content || "").trim().length > 0).length;
+    if (userTurns < 4) {
+      result.closure_type = null;
+      result.closure_text = null;
     }
 
     // 4) Persiste — sobrescreve sempre (idempotente)
