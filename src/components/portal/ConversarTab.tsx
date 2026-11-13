@@ -1,4 +1,4 @@
-import { consumeResumeIntent, readResumeIntent } from "@/lib/chat-resume-intent";
+import { clearResumeIntent, consumeResumeIntent, readResumeIntent, readResumeLabel } from "@/lib/chat-resume-intent";
 import { MovementGiftPrompt } from "@/components/movement/MovementGiftPrompt";
 import { canOfferGift, readGiftState } from "@/lib/movement-gift-cadence";
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
@@ -399,6 +399,14 @@ export function ConversarTab({
   const [sessionClock, setSessionClock] = useState(Date.now());
   const [activeDiscussionEpisodeId, setActiveDiscussionEpisodeId] = useState(discussionEpisodeId);
   const [chatOpen, setChatOpen] = useState(() => initialChatOpen || localStorage.getItem(`aura-chat-open:${userId}`) === "true");
+  // Aviso de retomada: mostra que a AURA já sabe de onde a conversa continua.
+  const [resumeLabel, setResumeLabel] = useState<string | null>(() => readResumeLabel(userId));
+  useEffect(() => {
+    const sync = () => setResumeLabel(readResumeLabel(userId));
+    sync();
+    window.addEventListener("aura:resume-intent", sync);
+    return () => window.removeEventListener("aura:resume-intent", sync);
+  }, [userId, chatOpen]);
   const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
   const [showInstallInvite, setShowInstallInvite] = useState(false);
   const [showPushDialog, setShowPushDialog] = useState(false);
@@ -1414,7 +1422,7 @@ export function ConversarTab({
         </Button>
           );
           return userId && !isDemo
-            ? <HomeMomentBar userId={userId} onNavigate={navigateFromConversation} onResume={(id) => { setResumeIntent(userId, id); setChatOpen(true); }} fallback={conversationCard} />
+            ? <HomeMomentBar userId={userId} onNavigate={navigateFromConversation} onResume={(id, label) => { setResumeIntent(userId, id, label); setChatOpen(true); }} fallback={conversationCard} />
             : conversationCard;
         })()}
       </div>
@@ -1457,6 +1465,20 @@ export function ConversarTab({
           </div>
         )}
       </header>
+      {resumeLabel !== null && !activeSession && (
+        <div role="status" className="shrink-0 border-b border-primary/20 bg-primary/10 px-4 py-2.5 backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            <RotateCcw className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <p className="min-w-0 flex-1 text-xs leading-snug text-foreground">
+              <span className="block font-semibold text-primary">Retomando</span>
+              <span className="block line-clamp-1 text-muted-foreground">{resumeLabel ? `“${sanitizePortalText(resumeLabel)}”` : "o assunto do seu último encontro"}</span>
+            </p>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-full" aria-label="Não retomar este assunto" onClick={() => clearResumeIntent(userId)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
       {degustacaoAwaitingSession && !activeSession && (
         <div className="shrink-0 border-b border-border/70 bg-primary/5 px-4 py-3">
           <p className="text-sm text-foreground">{degustacaoInterrupted

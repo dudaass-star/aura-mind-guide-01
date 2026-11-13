@@ -8,7 +8,7 @@ import { brtDayKey, homeBarFromHero, homeBarWithSaved, selectTodayHero, type Sav
 import { setPercursoFocus } from "@/lib/percurso-focus";
 import type { TodayDirectionResponse } from "@/lib/today-direction";
 
-type Props = { userId: string; onNavigate: (tab: "sessoes" | "oracoes" | "insights") => void; onResume: (sessionId: string) => void; fallback: ReactNode };
+type Props = { userId: string; onNavigate: (tab: "sessoes" | "oracoes" | "insights") => void; onResume: (sessionId: string, label?: string) => void; fallback: ReactNode };
 
 // Hora do encontro em Brasília: "hoje às 19h" / "hoje às 19h30".
 function timeBrt(iso: string) {
@@ -78,7 +78,7 @@ export function HomeMomentBar({ userId, onNavigate, onResume, fallback }: Props)
       ? { Icon: Moon, eyebrow: "Para desacelerar", text: `Oração da noite · ${Math.max(1, Math.round((nightPrayer!.duration || 0) / 60))} min`, action: "Ouvir agora", run: () => { requestPrayerPlayback(nightPrayer!.id); onNavigate("oracoes"); } }
       : bar.kind === "saved"
         ? { Icon: Bookmark, eyebrow: "Guardado por você", text: "O que você levou do encontro", action: "Rever", run: () => { setPercursoFocus(bar.itemId); onNavigate("insights"); } }
-      : { Icon: MessageCircle, eyebrow: "Da nossa última conversa", text: threadQuote || "Um assunto ficou em aberto", action: "Retomar com a AURA", run: () => onResume((bar as { sessionId: string }).sessionId) };
+      : { Icon: MessageCircle, eyebrow: "Da nossa última conversa", text: threadQuote || "Um assunto ficou em aberto", action: "Retomar com a AURA", run: () => onResume((bar as { sessionId: string }).sessionId, threadQuote || undefined) };
 
   // Card principal da tela inicial: assume o momento; a conversa aberta continua um toque abaixo.
   return (

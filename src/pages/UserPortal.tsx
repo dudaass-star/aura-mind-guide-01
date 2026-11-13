@@ -254,10 +254,10 @@ const UserPortal = () => {
     return () => cancel(task);
   }, []);
 
-  const handleOpenConversation = (prefilledMessage?: string, options?: { resumeSessionId?: string }) => {
+  const handleOpenConversation = (prefilledMessage?: string, options?: { resumeSessionId?: string; resumeLabel?: string }) => {
     if (!userId) return;
     // Retomada da aba Hoje: só abre o chat; o fio viaja como contexto no 1º envio.
-    if (options?.resumeSessionId) setResumeIntent(userId, options.resumeSessionId);
+    if (options?.resumeSessionId) setResumeIntent(userId, options.resumeSessionId, options.resumeLabel);
     else clearResumeIntent(userId);
     if (prefilledMessage?.trim()) {
       const nextDraft = prefilledMessage.trim();
