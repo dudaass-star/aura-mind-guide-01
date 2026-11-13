@@ -1406,3 +1406,5 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .percurso-fio-cta { background: hsl(0 0% 100%) !important; color: hsl(153 25% 18%) !important; font-weight: 700; box-shadow: 0 8px 20px -10px hsl(153 30% 8% / .7); }
 /* Percurso — teste: sálvia chapado, sem brilho nem degradê */
 .percurso-hero, .percurso-fio { background: hsl(153 14% 27%) !important; box-shadow: none !important; }
+/* Fio: texto do botão sempre escuro, vencendo regras de botão do capítulo */
+.percurso-sheet .percurso-chapter-reading button.percurso-fio-cta, .portal-progress-page .percurso-chapter-reading button.percurso-fio-cta, button.percurso-fio-cta, button.percurso-fio-cta * { color: hsl(153 30% 16%) !important; }
