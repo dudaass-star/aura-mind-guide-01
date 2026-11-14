@@ -68,3 +68,19 @@ export function findPaidInstallment(installments: Obj[], cobrId: string): Obj | 
   }
   return null;
 }
+
+/**
+ * Todos os identificadores pelos quais a MESMA parcela pode ter sido gravada:
+ * o `cobr.identifierId` (webhook/auditoria) e os End-to-End do Bacen (varredura
+ * do extrato grava o E2E). Checar só um deles criou registro duplicado do mesmo
+ * dinheiro (caso 14/11/2026: setembro gravado por E2E e de novo por identifierId).
+ */
+export function installmentAliases(installment: Obj | null | undefined, extra: (string | null | undefined)[] = []): string[] {
+  const cobr = (installment?.cobr || {}) as Obj;
+  const ids = [
+    cobr?.identifierId, cobr?.endToEndId,
+    ...((cobr?.tries || []) as Obj[]).filter((t) => String(t?.tryStatus || "").toUpperCase() === "PAID").map((t) => t?.endToEndId),
+    ...extra,
+  ];
+  return [...new Set(ids.filter(Boolean).map(String))];
+}

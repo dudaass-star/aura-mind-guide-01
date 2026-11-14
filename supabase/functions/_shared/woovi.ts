@@ -476,7 +476,8 @@ export async function ensureWooviWebhooks(): Promise<{ created: string[]; missin
   const missing: string[] = [];
   for (const event of WOOVI_REQUIRED_WEBHOOK_EVENTS) {
     if (active.has(event)) continue;
-    const c = await wooviFetch("/api/v1/webhook", {
+    // Criação só aceita o caminho /api/openpix/v1 (o /api/v1 é barrado pelo firewall da Woovi).
+    const c = await wooviFetch("/api/openpix/v1/webhook", {
       method: "POST",
       body: { webhook: { name: `Aura ${event}`, event, url, isActive: true } },
     });

@@ -36,3 +36,8 @@ Deno.test("só confirma parcela concluída com o mesmo identificador", () => {
   assertEquals(findPaidInstallment(installments, "E54811417202610161500LHBHK8vfrKX") !== null, true);
   assertEquals(findPaidInstallment(installments, "FORJADO"), null);
 });
+
+import { installmentAliases } from "./woovi-recurring-payment.ts";
+Deno.test("parcela reconhecida pelo identificador e pelo E2E pago", () => {
+  assertEquals(installmentAliases(installments[1]), ["01M4TJJHXSQJ2BA2NE7P2RBZAH", "E54811417202610161500LHBHK8vfrKX"]);
+});

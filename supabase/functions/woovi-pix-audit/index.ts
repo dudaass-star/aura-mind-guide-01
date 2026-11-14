@@ -26,6 +26,7 @@ import {
 } from "../_shared/woovi.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
+import { installmentAliases } from "../_shared/woovi-recurring-payment.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1108,9 +1109,11 @@ Deno.serve(async (req) => {
         if (!payment.paid) continue;
         const correlationID = payment.id;
         if (!correlationID) continue;
-        const { data: known } = await supabase
+        const { data: knownRows } = await supabase
           .from("woovi_charges").select("id, paid_at")
-          .eq("installment_id", correlationID).maybeSingle();
+          .in("installment_id", installmentAliases(c, [correlationID]))
+          .not("paid_at", "is", null).limit(1);
+        const known = Array.isArray(knownRows) ? knownRows[0] : null;
         if (known?.paid_at) continue;
         if (dryRun) {
           report.recuperados.push({ charge: correlationID, via: "ciclo", dryRun: true });

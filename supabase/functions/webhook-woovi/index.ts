@@ -23,7 +23,7 @@ import { isTasterCorrelationId, TASTER_WINDOW_HOURS, cancelTasterReminders } fro
 import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
 import { markCheckoutAccessPaidByReference } from "../_shared/checkout-access.ts";
 import { localizarEndToEndId } from "../_shared/woovi-dispute-matcher.ts";
-import { extractRecurringPayment, findPaidInstallment } from "../_shared/woovi-recurring-payment.ts";
+import { extractRecurringPayment, findPaidInstallment, installmentAliases } from "../_shared/woovi-recurring-payment.ts";
 import {
   wooviFetch, brtDate, listTransactions, listInstallments,
   WOOVI_APPROVED_STATUSES as APPROVED_STATUSES,
@@ -407,7 +407,7 @@ async function activateTaster(
 async function activateAccess(
   supabase: any,
   sub: Record<string, any>,
-  opts: { isFirstPayment: boolean; valueCents: number; eventId: string; trialEntry?: boolean; cycleDueDate?: string | null },
+  opts: { isFirstPayment: boolean; valueCents: number; eventId: string; trialEntry?: boolean; cycleDueDate?: string | null; paidAt?: string | null },
 ): Promise<boolean> {
   try {
     const plan = sub.plan as string;
@@ -456,9 +456,19 @@ async function activateAccess(
     const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
     // Promo de entrada (trial pago) = 7 dias de acesso; o débito do dia 8 é que
     // estende para o ciclo mensal cheio. Demais pagamentos compram o ciclo todo.
+    // Mensalidade compra o ciclo a partir do dia em que o dinheiro entrou.
+    // Somar ao vencimento atual só vale para quem pagou em dia; pagamento
+    // antigo reconciliado depois (webhook perdido) não pode empilhar um mês a
+    // mais sobre um ciclo seguinte já pago.
+    const paidAtDate = opts.paidAt ? new Date(opts.paidAt) : null;
     const newExpiry = opts.trialEntry
       ? addDaysUTC(base, TRIAL_DAYS).toISOString()
-      : addMonths(base, CYCLE_MONTHS[billing] ?? 1).toISOString();
+      : paidAtDate && !Number.isNaN(paidAtDate.getTime())
+        ? new Date(Math.max(
+          currentExpiry?.getTime() ?? 0,
+          addMonths(paidAtDate, CYCLE_MONTHS[billing] ?? 1).getTime(),
+        )).toISOString()
+        : addMonths(base, CYCLE_MONTHS[billing] ?? 1).toISOString();
     const today = now.toISOString().split("T")[0];
     const sessionsCount = PLAN_SESSIONS[plan] ?? 0;
 
@@ -1207,6 +1217,24 @@ Deno.serve(async (req) => {
               }).eq("id", sub.id);
             }
 
+            // Mesma parcela já gravada por outro identificador (E2E do extrato)?
+            // Então este aviso é o mesmo dinheiro: não cria segunda linha.
+            const inst = (body as Record<string, any>).installment;
+            if (inst) {
+              const aliases = installmentAliases(inst).filter((a) => a !== String(chargeId));
+              if (aliases.length) {
+                const { data: twin } = await supabase.from("woovi_charges").select("id")
+                  .eq("subscription_id", sub.subscription_id).in("installment_id", aliases)
+                  .not("paid_at", "is", null).limit(1);
+                if (Array.isArray(twin) && twin.length) {
+                  console.log(`[webhook-woovi] parcela ${chargeId} já registrada como ${aliases.join(",")} — ignorada`);
+                  await finishEvent(supabase, key);
+                  return new Response(JSON.stringify({ received: true, duplicate: true }), {
+                    headers: { ...corsHeaders, "Content-Type": "application/json" },
+                  });
+                }
+              }
+            }
             const { data: existing } = await supabase.from("woovi_charges")
               .select("id, cycle_index, access_activated_at, due_date")
               .eq("installment_id", String(chargeId)).maybeSingle();
@@ -1269,6 +1297,7 @@ Deno.serve(async (req) => {
                 eventId: `woovi-${chargeId}-purchase`,
                 // Entrada promocional: 7 dias de acesso até o débito do dia 8.
                 trialEntry: isEntryCharge && !!sub.is_trial,
+                paidAt,
                 cycleDueDate: (() => {
                   const raw = charge?.dueDate || (body as any)?.installment?.dateGenerateCharge || null;
                   return raw ? String(raw).slice(0, 10) : null;
