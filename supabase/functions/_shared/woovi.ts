@@ -444,3 +444,44 @@ export async function listTransactions(
     return { items: raw.transactions, hasMore: typeof raw.pageInfo?.hasNextPage === 'boolean' ? raw.pageInfo.hasNextPage : undefined, total: typeof raw.pageInfo?.totalCount === 'number' ? raw.pageInfo.totalCount : undefined };
   }, t => String(t.transactionID || t.id || t.globalID || t.endToEndId || ''));
 }
+
+// ---------------------------------------------------------------------------
+// Eventos obrigatórios cadastrados na Woovi
+//
+// Causa raiz de 16/10/2026: a mensalidade do PIX Automático é avisada por
+// `OPENPIX:TRANSACTION_RECEIVED`, que nunca foi cadastrado — o dinheiro entrava
+// sem nenhum aviso. A auditoria confere e recadastra a cada execução, então um
+// webhook removido ou desativado no painel não volta a deixar o sistema cego.
+// ---------------------------------------------------------------------------
+export const WOOVI_REQUIRED_WEBHOOK_EVENTS = [
+  "OPENPIX:CHARGE_COMPLETED",
+  "OPENPIX:TRANSACTION_RECEIVED",
+  "PIX_AUTOMATIC_APPROVED",
+  "PIX_AUTOMATIC_REJECTED",
+  "PIX_AUTOMATIC_COBR_COMPLETED",
+  "PIX_AUTOMATIC_COBR_REJECTED",
+  "PIX_AUTOMATIC_COBR_TRY_REJECTED",
+];
+
+export async function ensureWooviWebhooks(): Promise<{ created: string[]; missing: string[] }> {
+  const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-woovi`;
+  const r = await wooviFetch<Record<string, any>>("/api/v1/webhook");
+  if (!r.ok) throw new WooviUnavailable(r.status, "/api/v1/webhook", r.raw);
+  const active = new Set(
+    ((r.data?.webhooks || []) as Record<string, any>[])
+      .filter((w) => w?.isActive && String(w?.url || "") === url)
+      .map((w) => String(w?.event || "")),
+  );
+  const created: string[] = [];
+  const missing: string[] = [];
+  for (const event of WOOVI_REQUIRED_WEBHOOK_EVENTS) {
+    if (active.has(event)) continue;
+    const c = await wooviFetch("/api/v1/webhook", {
+      method: "POST",
+      body: { webhook: { name: `Aura ${event}`, event, url, isActive: true } },
+    });
+    if (c.ok) created.push(event);
+    else missing.push(`${event} (HTTP ${c.status})`);
+  }
+  return { created, missing };
+}

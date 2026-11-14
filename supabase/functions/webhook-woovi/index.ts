@@ -23,8 +23,9 @@ import { isTasterCorrelationId, TASTER_WINDOW_HOURS, cancelTasterReminders } fro
 import { recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
 import { markCheckoutAccessPaidByReference } from "../_shared/checkout-access.ts";
 import { localizarEndToEndId } from "../_shared/woovi-dispute-matcher.ts";
+import { extractRecurringPayment, findPaidInstallment } from "../_shared/woovi-recurring-payment.ts";
 import {
-  wooviFetch, brtDate, listTransactions,
+  wooviFetch, brtDate, listTransactions, listInstallments,
   WOOVI_APPROVED_STATUSES as APPROVED_STATUSES,
   WOOVI_REJECTED_STATUSES as REJECTED_STATUSES,
   WOOVI_CANCELED_STATUSES as CANCELED_STATUSES,
@@ -406,7 +407,7 @@ async function activateTaster(
 async function activateAccess(
   supabase: any,
   sub: Record<string, any>,
-  opts: { isFirstPayment: boolean; valueCents: number; eventId: string; trialEntry?: boolean },
+  opts: { isFirstPayment: boolean; valueCents: number; eventId: string; trialEntry?: boolean; cycleDueDate?: string | null },
 ): Promise<boolean> {
   try {
     const plan = sub.plan as string;
@@ -567,9 +568,16 @@ async function activateAccess(
 
     await supabase.from("woovi_subscriptions").update({
       user_id: profileRowId || sub.user_id, status: "ATIVA", last_error: null,
+      // Próximo débito parte do VENCIMENTO da parcela (dia-base do mandato na
+      // Woovi), não do dia em que o dinheiro caiu: retentativa paga 1 dia
+      // depois deslocava a data prevista e a auditoria deixava de enxergar a
+      // parcela seguinte (caso 16/10 vs 18/10).
       next_charge_date: opts.trialEntry
         ? brtDate(addDaysUTC(now, TRIAL_DAYS))
-        : brtDate(addMonths(now, CYCLE_MONTHS[billing] ?? 1)),
+        : brtDate(addMonths(
+          opts.cycleDueDate ? new Date(`${opts.cycleDueDate}T12:00:00Z`) : now,
+          CYCLE_MONTHS[billing] ?? 1,
+        )),
     }).eq("subscription_id", sub.subscription_id);
 
     // Renovação silenciosa: não repete boas-vindas.
@@ -821,6 +829,41 @@ async function handleUnpaidCycle(
   else console.log(`[webhook-woovi] recuperação silenciosa iniciada para ${sub.subscription_id}`);
 }
 
+/**
+ * Acha o mandato e a parcela liquidada de um débito recorrente. Procura pelo
+ * recurrencyId e, na falta, pelos mandatos vivos do CPF pagador; só aceita se
+ * a parcela remota CONCLUÍDA tiver o mesmo identificador (prova na fonte).
+ */
+async function resolveRecurringNotice(
+  supabase: any,
+  notice: { cobrId: string; endToEndId: string | null; payerCpf: string | null; recurrencyId: string | null },
+): Promise<{ subscriptionId: string; installment: Record<string, any> } | null> {
+  const candidates: Record<string, any>[] = [];
+  if (notice.recurrencyId) {
+    const { data } = await supabase.from("woovi_subscriptions").select("subscription_id")
+      .eq("recurrency_id", notice.recurrencyId);
+    candidates.push(...(data || []));
+  }
+  if (candidates.length === 0 && notice.payerCpf) {
+    const { data } = await supabase.from("woovi_subscriptions").select("subscription_id")
+      .eq("customer_cpf", notice.payerCpf).not("subscription_id", "is", null)
+      .order("created_at", { ascending: false }).limit(5);
+    candidates.push(...(data || []));
+  }
+  for (const c of candidates) {
+    try {
+      const list = await listInstallments(String(c.subscription_id));
+      const hit = findPaidInstallment(list as Record<string, any>[], notice.cobrId)
+        || (notice.endToEndId ? findPaidInstallment(list as Record<string, any>[], notice.endToEndId) : null);
+      if (hit) return { subscriptionId: String(c.subscription_id), installment: hit };
+    } catch (e) {
+      // Woovi indisponível: devolve erro para ela reenviar o aviso.
+      throw new Error(`parcelas indisponíveis para ${c.subscription_id}: ${(e as Error)?.message}`);
+    }
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   // A Woovi faz um GET/POST de validação ao registrar a URL.
@@ -840,8 +883,36 @@ Deno.serve(async (req) => {
     console.log("[webhook-woovi] recebido:", JSON.stringify(body).slice(0, 1500));
 
     const event = String(body.event || "");
-    const charge = (body.charge || {}) as Record<string, any>;
-    const subPayload = (body.subscription || {}) as Record<string, any>;
+    let charge = (body.charge || {}) as Record<string, any>;
+    let subPayload = (body.subscription || {}) as Record<string, any>;
+
+    // ---- 0) Débito recorrente do PIX Automático ----------------------------
+    // A mensalidade debitada no banco chega como transação (`subType:
+    // PIX_AUTOMATIC`) ou objeto `cobr` — nunca em `body.charge`. Traduzimos para
+    // o caminho único de cobrança paga, confirmando na parcela remota do mandato.
+    if (!charge.correlationID && !charge.globalID && !charge.identifier) {
+      const notice = extractRecurringPayment(body);
+      if (notice) {
+        const resolved = await resolveRecurringNotice(supabase, notice);
+        if (!resolved) {
+          console.warn(`[webhook-woovi] débito recorrente ${notice.cobrId} sem parcela confirmada — fica com a auditoria`);
+          return new Response(JSON.stringify({ received: true, unmatched: notice.cobrId }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        charge = {
+          correlationID: notice.cobrId,
+          status: "COMPLETED",
+          value: notice.valueCents || resolved.installment?.value,
+          paidAt: resolved.installment?.cobr?.paymentDate || notice.paidAt,
+          dueDate: resolved.installment?.dateGenerateCharge || null,
+          comment: "débito recorrente PIX Automático",
+        };
+        subPayload = { globalID: resolved.subscriptionId, subscriptionId: resolved.subscriptionId };
+        (body as Record<string, any>).installment = resolved.installment;
+        (body as Record<string, any>).__installmentConfirmed = true;
+      }
+    }
     const pixRecurring = (body.pixRecurring || subPayload.pixRecurring || {}) as Record<string, any>;
 
     const subIds = [
@@ -1115,7 +1186,9 @@ Deno.serve(async (req) => {
             await finishEvent(supabase, key);
           } else {
             // Confiança vem da API, não do corpo do webhook.
-            const confirmed = await confirmChargePaid(String(charge.correlationID || chargeId));
+            const confirmed = (body as Record<string, any>).__installmentConfirmed
+              ? "COMPLETED"
+              : await confirmChargePaid(String(charge.correlationID || chargeId));
             if (confirmed !== null && !PAID_STATUSES.includes(confirmed.toUpperCase())) {
               throw new Error(`Woovi não confirma pagamento de ${chargeId} (status ${confirmed})`);
             }
@@ -1196,6 +1269,10 @@ Deno.serve(async (req) => {
                 eventId: `woovi-${chargeId}-purchase`,
                 // Entrada promocional: 7 dias de acesso até o débito do dia 8.
                 trialEntry: isEntryCharge && !!sub.is_trial,
+                cycleDueDate: (() => {
+                  const raw = charge?.dueDate || (body as any)?.installment?.dateGenerateCharge || null;
+                  return raw ? String(raw).slice(0, 10) : null;
+                })(),
               });
               if (!ok) {
                 // Libera a reserva para o reenvio da Woovi tentar de novo.

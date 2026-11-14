@@ -22,7 +22,7 @@ import {
   MANDATE_ACTIVE_STATUSES, WOOVI_PAID_STATUSES,
   findScheduledInstallment, daysUntil, WooviUnavailable,
   findUnpaidInstallment, createInstallmentCobr, normalizeMandateStatus,
-  cycleRetryWindow,
+  cycleRetryWindow, ensureWooviWebhooks,
 } from "../_shared/woovi.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
@@ -292,7 +292,7 @@ Deno.serve(async (req) => {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
     reautorizacao: [], ciclo_sem_cobranca: [], cobertura: [], status_sincronizado: [],
     duplicados: [], vencimento_backfill: [], criacoes_reconciliadas: [],
-    erros: [],
+    webhooks: [], erros: [],
   };
 
   async function allKnownChargeIds(): Promise<Record<string, any>[]> {
@@ -308,6 +308,17 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Avisos da Woovi são a fonte primária: garante que os eventos obrigatórios
+    // (inclusive o débito recorrente) estejam cadastrados antes de qualquer coisa.
+    if (!dryRun && !debugExtrato) {
+      try {
+        const w = await ensureWooviWebhooks();
+        if (w.created.length || w.missing.length) report.webhooks.push(w);
+        if (w.missing.length) console.error("[woovi-pix-audit] webhooks obrigatórios ausentes:", w.missing.join(", "));
+      } catch (e) {
+        report.webhooks.push({ erro: (e as Error).message });
+      }
+    }
     // Inspeção retorna ANTES de quaisquer replays, avisos ou atualizações.
     if (debugExtrato) {
       const days = Math.min(Math.max(Number(body.extrato_days) || 30, 1), 90);
@@ -1064,9 +1075,20 @@ Deno.serve(async (req) => {
       }
 
       // Cobrança do ciclo já vencido (a partir da data prevista de débito).
+      // Janela do ciclo com tolerância de 10 dias antes da data prevista: a
+      // data local pode estar deslocada do dia-base da Woovi (parcela venceu
+      // 16/10, data local 18/10 — a parcela paga era descartada e o acesso
+      // cortado). Parcela PAGA ainda não registrada entra sempre, de qualquer
+      // data: dinheiro que entrou nunca é ignorado (o `paid_at` local impede
+      // reprocessar o que já foi registrado).
+      const windowStart = new Date(`${String(sub.next_charge_date)}T12:00:00Z`);
+      windowStart.setUTCDate(windowStart.getUTCDate() - 10);
+      const windowStartStr = windowStart.toISOString().slice(0, 10);
       const cycleCharges = remoteCharges.filter((c) => {
         const when = String(c?.dateGenerateCharge || c?.cobr?.dueDate || c?.createdAt || "").slice(0, 10);
-        return (!when || when >= String(sub.next_charge_date)) && (!when || when <= today);
+        if (when && when > today) return false;
+        if (installmentPayment(c).paid) return true;
+        return !when || when >= windowStartStr;
       });
 
       if (cycleCharges.length === 0) {
@@ -1114,7 +1136,12 @@ Deno.serve(async (req) => {
       // Rede de segurança da recuperação silenciosa: se nenhuma cobrança do
       // ciclo vencido está paga e o webhook de "ciclo não pago" nunca chegou,
       // a cadência nunca começaria — o cliente pararia de pagar em silêncio.
-      const anyPaid = cycleCharges.some((c) => installmentPayment(c).paid);
+      // Ciclo coberto = parcela paga na janela do ciclo (não meses antigos).
+      const anyPaid = cycleCharges.some((c) => {
+        const p = installmentPayment(c);
+        const when = String(c?.dateGenerateCharge || c?.cobr?.dueDate || "").slice(0, 10);
+        return p.paid && (!when || when >= windowStartStr);
+      });
       if (!anyPaid) {
         // Ciclo vencido sem pagamento não pode conviver com acesso liberado
         // além do que o cliente pagou (caso real: entrada de teste paga, plano
