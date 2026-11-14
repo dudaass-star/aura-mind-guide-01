@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import Stripe from "https://esm.sh/stripe@18.5.0";
-import { normalizePendingActionWording, SERVICE_POLICY } from "./service-policy.ts";
+import { customerRequestedRefund, normalizePendingActionWording, REFUND_TERMS_RE, SERVICE_POLICY } from "./service-policy.ts";
 import { APP_SUPPORT_POLICY, normalizeAppSupportAction } from "./app-policy.ts";
 import { RENEWAL_POLICY } from "./renewal-policy.ts";
 
@@ -185,6 +185,10 @@ serve(async (req) => {
       .select("*")
       .eq("ticket_id", ticket_id)
       .order("created_at", { ascending: true });
+
+    const refundRequested = customerRequestedRefund(
+      (messages || []).filter((m) => m.direction === "inbound").map((m) => m.body_text),
+    ) || customerRequestedRefund([ticket.subject]);
 
     // Build customer context
     const context: Record<string, unknown> = { ticket: { subject: ticket.subject, category: ticket.category } };
@@ -487,6 +491,7 @@ CONTEXTO DO CLIENTE:
 ${JSON.stringify(context, null, 2)}${kbBlock}
 ${recurringCustomer ? `\n⚠️ ATENÇÃO: Cliente RECORRENTE (${RECURRING_CUSTOMER_THRESHOLD}+ tickets em 30 dias). Reconheça o histórico no rascunho, evite respostas genéricas, e sugira escalonar pra revisão humana se for o mesmo problema repetido.\n` : ""}
 
+${refundRequested ? "" : "PEDIDO EXPLÍCITO DE REEMBOLSO PELO CLIENTE: NÃO. É proibido mencionar reembolso, estorno, devolução, garantia de 7 dias ou CDC no draft_response e sugerir ações de reembolso.\n"}
 ${hint ? `INSTRUÇÃO DO ADMIN: ${hint}\n` : ""}
 Analise e responda com a estrutura solicitada.
 REVISÃO FINAL OBRIGATÓRIA:
@@ -500,10 +505,7 @@ REVISÃO FINAL OBRIGATÓRIA:
     const aiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!aiKey) throw new Error("LOVABLE_API_KEY not configured");
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey}` },
-      body: JSON.stringify({
+    const aiRequestBody = JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: FULL_SYSTEM_PROMPT },
@@ -550,7 +552,11 @@ REVISÃO FINAL OBRIGATÓRIA:
           },
         }],
         tool_choice: { type: "function", function: { name: "submit_support_draft" } },
-      }),
+      });
+    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey}` },
+      body: aiRequestBody,
     });
 
     if (!aiResp.ok) {
@@ -561,7 +567,25 @@ REVISÃO FINAL OBRIGATÓRIA:
     const aiJson = await aiResp.json();
     const toolCall = aiJson.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall) throw new Error("No tool call returned");
-    const args = JSON.parse(toolCall.function.arguments);
+    let args = JSON.parse(toolCall.function.arguments);
+
+    // Sem pedido explícito de reembolso, o rascunho não pode tocar no assunto: refaz uma vez com correção.
+    if (!refundRequested && typeof args.draft_response === "string" && REFUND_TERMS_RE.test(args.draft_response)) {
+      const retryBody = JSON.parse(aiRequestBody);
+      retryBody.messages.push({ role: "user", content: "CORREÇÃO: o cliente NÃO pediu reembolso. Reescreva sem mencionar reembolso, estorno, devolução, garantia ou CDC, focando em entender o motivo e mostrar o valor do App." });
+      const retryResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${aiKey}` },
+        body: JSON.stringify(retryBody),
+      });
+      if (retryResp.ok) {
+        const retryCall = (await retryResp.json()).choices?.[0]?.message?.tool_calls?.[0];
+        if (retryCall) {
+          const retryArgs = JSON.parse(retryCall.function.arguments);
+          if (typeof retryArgs.draft_response === "string" && !REFUND_TERMS_RE.test(retryArgs.draft_response)) args = retryArgs;
+        }
+      }
+    }
 
     // ============ HARDENING: preenche IDs faltantes no suggested_action ============
     // O LLM às vezes acerta o `type` mas esquece de copiar o ID concreto do contexto.
@@ -593,6 +617,13 @@ REVISÃO FINAL OBRIGATÓRIA:
       );
 
       args.suggested_actions = args.suggested_actions.map(normalizeAppSupportAction);
+      if (!refundRequested) {
+        // Reembolso só com pedido explícito do cliente: descarta ações de devolução sugeridas por conta própria.
+        args.suggested_actions = (args.suggested_actions as Array<{ type: string }>)
+          .filter((a) => a.type !== "refund_invoice" && a.type !== "refund_asaas_payment");
+        if (args.suggested_actions.length === 0) args.suggested_actions = [{ type: "none", reason: "Aguardando resposta do cliente" }];
+        args.suggested_action = args.suggested_actions[0];
+      }
       if (args.suggested_actions.some((a: { type: string }) => a.type === "send_portal_link") &&
           typeof args.draft_response === "string" && !args.draft_response.includes("https://olaaura.com.br/meu-espaco")) {
         args.draft_response += "\n\nAbra o app Olá Aura: https://olaaura.com.br/meu-espaco";

@@ -1,10 +1,14 @@
 export const SERVICE_POLICY = `
 POSTURA CENTRAL — RESOLVER A EXPERIÊNCIA E ENCANTAR, NÃO SER COMPLACENTE:
+REGRA INVIOLÁVEL — NUNCA OFERECER ESTORNO SEM PEDIDO EXPLÍCITO:
+- Só mencione reembolso, estorno, devolução, garantia de 7 dias ou CDC se o cliente pediu EXPRESSAMENTE o dinheiro de volta ("reembolso", "estorno", "devolução", "quero meu dinheiro de volta") ou houver cobrança indevida/duplicada comprovada. "Cancelar minha compra/assinatura" NÃO é pedido de reembolso.
+- Sem pedido explícito: não cite reembolso no texto e não sugira ação de reembolso.
+- Primeiro pedido de cancelamento sem tentativa de retenção já ENVIADA: não diga que vai encaminhar/processar o cancelamento. Acolha, pergunte com interesse genuíno o que esperava e o que não funcionou, mostre em poucas linhas o valor concreto ligado à dor (conversar com a AURA a qualquer hora, sessões guiadas, orações e meditações em https://olaaura.com.br/meu-espaco), convide a experimentar e deixe claro que, se ainda quiser cancelar, basta responder que a equipe cuida sem atrito. Ação "none".
 - Antes de aceitar desistência, descubra se o cliente chegou a viver a Aura. Relatos como "não consegui acessar", "não sabia onde entrar", "não usei", "esperei mensagem" são PROBLEMA DE EXPERIÊNCIA a resolver, não motivo para encaminhar cancelamento/reembolso de imediato.
 - Estrutura da resposta nesses casos: (1) acolher o susto/frustração em 1-2 linhas, sem concordar que o produto falhou; (2) explicar com transparência e números do contexto/base oficial o que foi cobrado (semana experimental → renovação mensal), sem tom acusatório; (3) destravar o acesso passo a passo: https://olaaura.com.br/meu-espaco, mesmo email da compra, Google ou código de 8 dígitos, sem loja de apps; (4) mostrar em 2-3 linhas concretas o que a pessoa tem lá dentro (conversar/desabafar com a AURA a qualquer hora, sessões guiadas de clareza, orações e meditações em áudio) conectado à dor relatada; (5) convidar a experimentar hoje e responder contando se conseguiu entrar, deixando claro que, se depois de experimentar não fizer sentido, a equipe cuida do cancelamento e da análise da renovação.
 - Tom caloroso, confiante e próximo, como alguém que acredita no produto. Proibido texto burocrático de SAC ("vou encaminhar ao setor financeiro" como primeira e única resposta) quando o cliente nem usou o App.
 - Nesse fluxo use suggested_action "send_portal_link". Não prometa reembolso nem negue: a análise continua garantida se ela mantiver o pedido.
-- Exceções em que vale o protocolo de cancelamento direto abaixo: pedido explícito e definitivo já reiterado, retenção já enviada antes, cobrança duplicada/indevida comprovada, dentro da garantia com pedido claro de reembolso, ameaça jurídica/Procon.
+- Exceções em que vale o protocolo de cancelamento direto abaixo: pedido explícito e definitivo já reiterado, retenção já enviada antes, cobrança duplicada/indevida comprovada, dentro da garantia com pedido EXPLÍCITO de reembolso feito pelo cliente, ameaça jurídica/Procon.
 
 PRECEDÊNCIA DO ATENDIMENTO:
 - Estas regras de condução prevalecem sobre exemplos genéricos de ações e instruções de acesso/cobrança. Havendo pedido inequívoco de cancelar, a investigação de reembolso ou acesso NÃO exige nova confirmação do cancelamento.
@@ -37,3 +41,10 @@ export function normalizePendingActionWording(text: string): string {
     .replace(/\bjá encaminhei\b/gi, "vou encaminhar")
     .replace(/\bjá encaminhamos\b/gi, "vamos encaminhar");
 }
+// Detecta pedido EXPLÍCITO de devolução do dinheiro nas mensagens do cliente.
+// "Cancelar minha compra" não conta: cancelamento e reembolso são pedidos distintos.
+const REFUND_REQUEST_RE = /\b(reembols\w*|estorn\w*|devolu[cç][aã]o|devolv\w*|dinheiro de volta|valor de volta|ressarc\w*|chargeback|contesta\w*)\b/i;
+export function customerRequestedRefund(texts: Array<string | null | undefined>): boolean {
+  return texts.some((t) => !!t && REFUND_REQUEST_RE.test(t));
+}
+export const REFUND_TERMS_RE = /reembols|estorn|devolu[cç][aã]o do valor|garantia de 7 dias|direito de arrependimento|c[oó]digo de defesa/i;

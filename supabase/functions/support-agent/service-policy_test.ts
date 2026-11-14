@@ -17,3 +17,8 @@ Deno.test("política cobre decisão definitiva, garantia e investigação sem tr
     if (!SERVICE_POLICY.includes(rule)) throw new Error(`Regra ausente: ${rule}`);
   }
 });
+import { customerRequestedRefund as crr } from "./service-policy.ts";
+Deno.test("cancelar compra não é pedido de reembolso", () => {
+  if (crr(["Quero cancelar minha compra, o app não era o que imaginei e sei que tenho a opção de cancelamento"])) throw new Error("falso positivo");
+  if (!crr(["Quero meu dinheiro de volta"]) || !crr(["solicito o estorno"])) throw new Error("falso negativo");
+});
