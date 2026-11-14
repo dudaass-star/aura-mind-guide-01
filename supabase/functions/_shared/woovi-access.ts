@@ -24,6 +24,25 @@
  * último PIX cortaria o acesso de um cliente em dia.
  */
 export const ENTRY_ACCESS_DAYS = 8;
+/**
+ * Carência da recuperação silenciosa: débito recusado com mandato vivo (o
+ * cliente não cancelou) mantém o acesso enquanto a Woovi retenta. Paridade com
+ * os Smart Retries do cartão; o encerramento vem do woovi_recovery_final.
+ * Não vale para entrada de teste (quem nunca pagou mensalidade).
+ */
+export const RECOVERY_GRACE_DAYS = 28;
+const DAY_MS = 86400000;
+
+/** Validade a que o cliente tem direito: período pago + carência se o mandato segue vivo. */
+export function entitledAccessUntil(
+  paidAt: string, kind: string, billingPeriod: string | null | undefined, mandateAlive: boolean,
+): { paidUntil: Date; entitledUntil: Date } {
+  const isCycle = String(kind) === "cycle";
+  const days = isCycle ? cycleAccessDays(billingPeriod) : ENTRY_ACCESS_DAYS;
+  const paidUntil = new Date(Date.parse(paidAt) + days * DAY_MS);
+  const grace = isCycle && mandateAlive ? RECOVERY_GRACE_DAYS : 0;
+  return { paidUntil, entitledUntil: new Date(paidUntil.getTime() + grace * DAY_MS) };
+}
 export const CYCLE_ACCESS_DAYS = 31;
 
 /** Dias de acesso comprados por um pagamento de ciclo, por período contratado. */
@@ -94,15 +113,24 @@ export async function enforceWooviAccessCap(
     return { capped: false, reason: `outro gateway (${profile.card_gateway})` };
   }
 
-  const days = String(last.kind) === "cycle"
-    ? cycleAccessDays(profile.billing_cycle)
-    : ENTRY_ACCESS_DAYS;
-  const until = new Date(Date.parse(String(last.paid_at)) + days * 86400000);
+  const { data: mandates } = await supabase
+    .from("woovi_subscriptions")
+    .select("status, replaced_by_subscription_id")
+    .eq("user_id", userId);
+  const mandateAlive = (mandates || []).some((m: any) =>
+    ["APROVADA", "ATIVA"].includes(String(m.status)) && !m.replaced_by_subscription_id);
+
+  const { paidUntil, entitledUntil: until } = entitledAccessUntil(
+    String(last.paid_at), String(last.kind), profile.billing_cycle, mandateAlive,
+  );
 
   const current = profile.plan_expires_at ? Date.parse(String(profile.plan_expires_at)) : 0;
-  // Só encurta. Acesso mais curto que o pago segue como está (pode vir de
-  // cancelamento pedido pelo cliente).
-  if (!current || current <= until.getTime()) {
+  // Encurta o que passou do direito. Só estende para devolver a carência a
+  // quem foi cortado no fim do período pago com mandato vivo (validade antiga
+  // menor que o pago pode vir de cancelamento pedido e fica como está).
+  const restoreGrace = mandateAlive && current > 0
+    && current >= paidUntil.getTime() - DAY_MS && current < until.getTime();
+  if (!current || (current <= until.getTime() && !restoreGrace)) {
     return { capped: false, reason: "validade já compatível com o pago" };
   }
 
@@ -111,5 +139,5 @@ export async function enforceWooviAccessCap(
     .update({ plan_expires_at: until.toISOString() })
     .eq("id", userId);
 
-  return { capped: true, until: until.toISOString() };
+  return { capped: true, until: until.toISOString(), reason: restoreGrace ? "carência de recuperação" : "alinhado ao pago" };
 }
