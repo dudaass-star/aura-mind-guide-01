@@ -1180,7 +1180,11 @@ const CheckoutV2 = () => {
     try {
       await navigator.clipboard.writeText(pixData.copyPaste);
       pixCopiedRef.current = true;
-      toast.success("Código PIX copiado!");
+      toast.success("Código copiado! Cole no app do seu banco.", {
+        description: pixMode === "subscription" && pixData?.trial
+          ? "O banco vai mostrar a autorização mensal — é normal. Hoje só sai o valor da semana."
+          : undefined,
+      });
       logFunnel("pix_copy", {
         plan: selectedPlan,
         billing: billingPeriod,
@@ -2199,6 +2203,22 @@ const CheckoutV2 = () => {
                     />
                   </div>
 
+                  {pixMode === "subscription" && pixData.trial && pixData.recurringAmount ? (
+                    <div className="rounded-xl border border-[hsl(140_30%_60%)]/40 bg-[hsl(140_30%_45%)]/15 p-3 text-xs text-white space-y-2">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-white/80">Hoje <span className="text-white/50">(único débito agora)</span></span>
+                        <strong className="text-sm">R$ {pixData.amount.toFixed(2).replace(".", ",")}</strong>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-white/80">Daqui a 7 dias <span className="text-white/50">(se continuar)</span></span>
+                        <strong className="text-sm">R$ {pixData.recurringAmount.toFixed(2).replace(".", ",")}/mês</strong>
+                      </div>
+                      <p className="border-t border-white/10 pt-2 text-white/80">
+                        Cancelou na primeira semana? <strong className="text-white">Nada a mais é cobrado</strong> — nem o mensal, nem qualquer outro valor.
+                      </p>
+                    </div>
+                  ) : null}
+
                   <div>
                     <Label className="text-white/80 text-sm">Código copia-e-cola</Label>
                     <div className="mt-1.5 flex gap-2">
@@ -2249,33 +2269,24 @@ const CheckoutV2 = () => {
                   </div>
 
                   {pixMode === "subscription" && (
-                    <div className="bg-[hsl(35_70%_60%)]/15 border border-[hsl(35_70%_60%)]/40 rounded-xl p-3 text-xs space-y-2">
-                      <p className="font-semibold text-[hsl(35_70%_75%)]">
-                        ⚠️ O passo que a maioria esquece
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs space-y-2">
+                      <p className="font-semibold text-white">
+                        É normal o banco mostrar o valor mensal
                       </p>
                       <p className="text-white/80">
-                        O app do banco vai pedir <strong>duas confirmações</strong>: o pagamento e a{" "}
-                        <strong>autorização da cobrança automática</strong> (pode aparecer como
-                        "Pix Automático" ou "autorizar cobranças recorrentes"). Sem marcar a segunda,
-                        a assinatura não é ativada.
+                        O app do banco pede <strong>duas confirmações</strong> no mesmo código: o pagamento
+                        de hoje e a autorização do <strong>Pix Automático</strong>. Siga até o fim — sem a
+                        segunda, a assinatura não é ativada.
                       </p>
                       {pixData.trial && pixData.recurringAmount ? (
-                        <details className="group">
-                          <summary className="cursor-pointer text-white/70 underline decoration-white/30 underline-offset-2 list-none">
-                            Como aparece no seu banco
-                          </summary>
-                          <p className="text-white/80 mt-2">
-                            A ordem das telas muda de banco pra banco: alguns mostram o valor de hoje
-                            (<strong>R$ {pixData.amount.toFixed(2).replace(".", ",")}</strong>) e a
-                            recorrência (<strong>R$ {pixData.recurringAmount.toFixed(2).replace(".", ",")}/mês</strong>)
-                            juntos; outros, como o Nubank, mostram primeiro a autorização mensal e só
-                            na tela seguinte a cobrança de hoje. <strong>Siga até o fim</strong> — as
-                            duas etapas fazem parte do mesmo QR.
-                          </p>
-                        </details>
+                        <p className="text-white/80">
+                          O valor de <strong>R$ {pixData.recurringAmount.toFixed(2).replace(".", ",")}</strong> que
+                          aparece lá só é agendado para daqui a 7 dias. Hoje sai da sua conta apenas{" "}
+                          <strong>R$ {pixData.amount.toFixed(2).replace(".", ",")}</strong>.
+                        </p>
                       ) : null}
                       <p className="text-white/60">
-                        Você cancela essa autorização quando quiser, no próprio app do banco.
+                        Você cancela a autorização quando quiser, no app Olá Aura ou no próprio banco.
                       </p>
                     </div>
                   )}
