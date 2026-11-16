@@ -76,8 +76,14 @@ const Option = ({ label, onClick }: { label: string; onClick: () => void }) => (
 export default function Quiz() {
   useLandingEngagement(V);
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>("intro");
-  const [chosen, setChosen] = useState<{ plan: string; billing: "monthly" | "yearly" } | null>(null);
+  // Estado inicial vem da URL: se já há plano escolhido, abre direto no pagamento (sobrevive a remontagem/refresh)
+  const initialChosen = (() => {
+    const q = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const plan = q.get("plan"); const b = q.get("billing");
+    return plan && (b === "monthly" || b === "yearly") ? { plan, billing: b as "monthly" | "yearly" } : null;
+  })();
+  const [step, setStep] = useState<Step>(initialChosen ? "checkout" : "intro");
+  const [chosen, setChosen] = useState<{ plan: string; billing: "monthly" | "yearly" } | null>(initialChosen);
   // A escolha vai para o endereço do próprio /quiz: o pagamento lê plano e ciclo dali.
   const goCheckout = (plan: string, b: "monthly" | "yearly") => {
     setChosen({ plan, billing: b });
