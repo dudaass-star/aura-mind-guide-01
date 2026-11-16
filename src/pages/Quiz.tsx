@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import "@/styles/v2-theme.css";
 import "@/styles/v5-hero.css";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, MessageCircle, CalendarHeart, Moon, Send, Star } from "lucide-react";
+import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { THEMES, BARRIERS, STARTS, composeReading, type ThemeId } from "@/lib/quiz/content";
@@ -32,9 +32,22 @@ const Loading = () => {
     return () => clearInterval(t);
   }, []);
   return (
-    <div className="flex flex-col items-center justify-center py-32 animate-fade-in">
-      <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-      <p key={i} className="mt-5 text-muted-foreground animate-fade-in">{LOADING_STEPS[i]}</p>
+    <div className="flex flex-col items-center justify-center py-24 animate-fade-in">
+      <div className="relative h-24 w-24">
+        <div className="v5-halo" />
+        <img src={avatarAura} alt="" className="relative h-24 w-24 rounded-full object-cover ring-2 ring-primary/60" />
+      </div>
+      <div className="mt-8 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+        <div className="h-full bg-primary transition-all duration-700" style={{ width: `${((i + 1) / LOADING_STEPS.length) * 100}%` }} />
+      </div>
+      <ul className="mt-6 space-y-3 text-sm">
+        {LOADING_STEPS.map((s, n) => (
+          <li key={s} className={`flex items-center gap-2 transition-opacity duration-500 ${n <= i ? "opacity-100" : "opacity-30"}`}>
+            {n < i ? <Check className="h-4 w-4 text-primary" /> : <Sparkles className={`h-4 w-4 text-primary ${n === i ? "animate-pulse" : ""}`} />}
+            <span className={n <= i ? "text-foreground" : "text-muted-foreground"}>{s}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 };
@@ -43,9 +56,10 @@ const Option = ({ label, onClick }: { label: string; onClick: () => void }) => (
   <button
     type="button"
     onClick={onClick}
-    className="w-full text-left rounded-2xl border border-border bg-card px-5 py-4 text-[15px] leading-snug text-foreground transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.99]"
+    className="group flex w-full items-center gap-3 text-left rounded-2xl border border-border bg-card px-5 py-4 text-[15px] leading-snug text-foreground transition-all hover:border-primary hover:bg-primary/15 hover:shadow-[0_0_22px_-6px_hsl(var(--primary)/0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98]"
   >
-    {label}
+    <span className="flex-1">{label}</span>
+    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
   </button>
 );
 
@@ -123,21 +137,30 @@ export default function Quiz() {
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
       </Helmet>
-      <div className="theme-v2 theme-v5-night min-h-screen bg-background text-foreground antialiased">
-        <header className="container mx-auto max-w-xl px-5 pt-6 pb-2">
+      <div className="theme-v2 theme-v5-night relative min-h-screen overflow-hidden bg-background text-foreground antialiased">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[640px] overflow-hidden [mask-image:linear-gradient(to_bottom,black_55%,transparent)]">
+          <div className="v5-orb v5-orb-a" />
+          <div className="v5-orb v5-orb-b" />
+          <div className="v5-orb v5-orb-c" />
+          <div className="v5-grain" />
+        </div>
+        <header className="relative container mx-auto max-w-xl px-5 pt-6 pb-2">
           <img src={logoHorizontal} alt="Olá Aura" className="h-7 w-auto brightness-0 invert" />
         </header>
-        <main className="container mx-auto max-w-xl px-5 py-8 pb-16">
+        <main className="relative container mx-auto max-w-xl px-5 py-8 pb-16">
           {step === "intro" && (
-            <div className="animate-fade-in pt-6">
-              <h1 className="text-3xl md:text-4xl font-semibold leading-tight">
-                O que está tirando a sua paz — e por onde começar a mudar isso?
+            <div className="animate-fade-in pt-4">
+              <span className="v5-chip">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Leitura personalizada · menos de 1 min
+              </span>
+              <h1 className="mt-5 text-[2.1rem] md:text-5xl font-semibold leading-[1.08]">
+                O que está tirando a sua paz — <span className="v5-gradient-text">e por onde começar a mudar isso?</span>
               </h1>
               <p className="mt-5 text-lg text-muted-foreground leading-relaxed">
                 Tem situações que a gente vive tantas vezes que acaba se acostumando. Mas isso não significa que precisam continuar assim.
               </p>
               <p className="mt-3 text-lg text-muted-foreground">Responda a 4 perguntas e veja por onde começar.</p>
-              <Button variant="sage" size="xl" className="mt-8 w-full rounded-2xl" onClick={() => setStep("theme")}>
+              <Button variant="sage" size="xl" className="v5-shimmer mt-8 w-full rounded-2xl shadow-lg" onClick={() => setStep("theme")}>
                 Começar
               </Button>
               <p className="mt-3 text-center text-xs text-muted-foreground">
@@ -184,7 +207,7 @@ export default function Quiz() {
             <div className="animate-fade-in space-y-10">
               <section>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Sua leitura com a AURA</p>
-                <h1 className="mt-3 text-2xl md:text-3xl font-semibold leading-tight">{reading.title}</h1>
+                <h1 className="mt-3 text-2xl md:text-3xl font-semibold leading-tight v5-gradient-text">{reading.title}</h1>
                 <ul className="mt-6 space-y-3">
                   {[
                     { k: "O que está acontecendo", v: reading.living },
@@ -199,18 +222,20 @@ export default function Quiz() {
                 </ul>
               </section>
 
-              <section aria-label="Prévia da sua primeira conversa" className="overflow-hidden rounded-3xl border border-border bg-card">
+              <div className="relative">
+              <div className="v5-halo" />
+              <section aria-label="Prévia da sua primeira conversa" className="relative overflow-hidden rounded-3xl border border-primary/40 bg-card shadow-[0_30px_60px_-24px_hsl(var(--primary)/0.5)]">
                 <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-                  <img src={avatarAura} alt="" className="h-9 w-9 rounded-full object-cover" />
+                  <img src={avatarAura} alt="" className="h-9 w-9 rounded-full object-cover ring-2 ring-primary/60" />
                   <div>
                     <p className="text-sm font-semibold leading-none">AURA</p>
                     <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="h-2 w-2 rounded-full bg-primary" /> online agora
+                      <span className="h-2 w-2 rounded-full bg-primary animate-pulse" /> online agora
                     </p>
                   </div>
                 </div>
                 <div className="px-4 py-5">
-                  <div className="max-w-[88%] rounded-2xl rounded-tl-sm bg-muted px-4 py-3 text-[15px] leading-relaxed">
+                  <div className="max-w-[88%] rounded-2xl rounded-tl-sm border border-primary/25 bg-primary/15 px-4 py-3 v5-pop text-[15px] leading-relaxed">
                     {reading.opening}
                   </div>
                 </div>
@@ -223,10 +248,11 @@ export default function Quiz() {
                   <Send className="h-4 w-4 text-primary" />
                 </Link>
               </section>
+              </div>
 
               <div>
                 <Link to={ctaHref} onClick={() => trackLandingCta("hero", "Continuar a conversa (quiz)", V)} className="block">
-                  <Button variant="sage" size="xl" className="w-full rounded-2xl">Continuar essa conversa</Button>
+                  <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Continuar essa conversa</Button>
                 </Link>
                 <p className="mt-2 text-center text-xs text-muted-foreground">7 dias por R$ 6,90 · cancele quando quiser</p>
               </div>
@@ -265,7 +291,7 @@ export default function Quiz() {
                   </p>
                 </div>
                 <Link to={ctaHref} onClick={() => trackLandingCta("final", "Quero começar com a AURA (quiz)", V)} className="block mt-6">
-                  <Button variant="sage" size="xl" className="w-full rounded-2xl">Começar meus 7 dias</Button>
+                  <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Começar meus 7 dias</Button>
                 </Link>
                 <p className="mt-3 text-center text-xs text-muted-foreground">
                   A AURA é uma inteligência artificial e não substitui psicoterapia.
