@@ -14,6 +14,8 @@ export type FunnelStep =
   | "landing_scroll_100"
   | "landing_cta_click"
   | "landing_exit"
+  /** Etapa do quiz alcançada (só o nome da etapa, nunca a resposta). */
+  | "quiz_step"
   | "form_submit"
   | "form_invalid"
   | "cta_empty_form"

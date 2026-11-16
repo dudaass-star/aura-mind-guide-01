@@ -218,7 +218,7 @@ const CheckoutV2 = () => {
    */
   const backHref = (() => {
     const raw = (searchParams.get("lp") || "").trim().toLowerCase();
-    if (/^v\d+$/.test(raw)) return `/${raw}`;
+    if (/^v\d+$/.test(raw) || raw === "quiz") return `/${raw}`;
     try {
       const ref = document.referrer;
       if (ref) {

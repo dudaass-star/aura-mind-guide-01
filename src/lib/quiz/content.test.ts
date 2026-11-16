@@ -1,0 +1,15 @@
+import { describe, it, expect } from "vitest";
+import { THEMES, BARRIERS, STARTS, composeReading } from "./content";
+
+describe("quiz", () => {
+  it("todo caminho da pergunta 2 tem 4 opções", () => {
+    for (const t of THEMES) expect(t.patterns).toHaveLength(4);
+  });
+  it("toda combinação gera uma leitura", () => {
+    for (const t of THEMES) for (const p of t.patterns) for (const b of BARRIERS) for (const s of STARTS)
+      expect(composeReading({ theme: t.id, pattern: p.id, barrier: b.id, start: s.id })).not.toBeNull();
+  });
+  it("combinação inválida não gera leitura", () => {
+    expect(composeReading({ theme: "relacoes", pattern: "sim", barrier: "guarda", start: "encontro" })).toBeNull();
+  });
+});
