@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import "@/styles/v2-theme.css";
 import "@/styles/v5-hero.css";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, MessageCircle, CalendarHeart, Moon } from "lucide-react";
+import { ArrowLeft, MessageCircle, CalendarHeart, Moon, Send, Star } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { THEMES, BARRIERS, STARTS, composeReading, type ThemeId } from "@/lib/quiz/content";
@@ -16,6 +16,28 @@ import { logFunnel } from "@/lib/checkout-funnel";
 // à Meta e ao funil vão apenas eventos de etapa, nunca o conteúdo escolhido.
 const V = "quiz" as const;
 type Step = "intro" | "theme" | "pattern" | "barrier" | "start" | "loading" | "result";
+
+// Mesmos depoimentos já publicados na /v5.
+const TESTIMONIALS = [
+  { q: "Percebi que eu sempre me colocava por último. O encontro mudou como eu converso com meu marido.", n: "R., 41 anos" },
+  { q: "Pela primeira vez consegui dormir sem ficar remoendo o dia. Ela me ajudou a enxergar o que eu evitava.", n: "M., 34 anos" },
+];
+const ctaHref = `${checkoutHref("final", "quiz")}&plan=essencial&billing=monthly`;
+const LOADING_STEPS = ["Lendo suas respostas…", "Entendendo o que mais tem te afetado…", "Preparando por onde começar com a AURA…"];
+
+const Loading = () => {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((n) => Math.min(n + 1, LOADING_STEPS.length - 1)), 800);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="flex flex-col items-center justify-center py-32 animate-fade-in">
+      <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      <p key={i} className="mt-5 text-muted-foreground animate-fade-in">{LOADING_STEPS[i]}</p>
+    </div>
+  );
+};
 
 const Option = ({ label, onClick }: { label: string; onClick: () => void }) => (
   <button
@@ -43,7 +65,7 @@ export default function Quiz() {
     window.scrollTo({ top: 0 });
     if (step !== "intro") logFunnel("quiz_step", { detail: `quiz_${step}`, meta: { lp: V } });
     if (step === "loading") {
-      const t = setTimeout(() => setStep("result"), 900);
+      const t = setTimeout(() => setStep("result"), 2400);
       return () => clearTimeout(t);
     }
   }, [step]);
@@ -156,37 +178,67 @@ export default function Quiz() {
             </Question>
           )}
 
-          {step === "loading" && (
-            <div className="flex flex-col items-center justify-center py-32 animate-fade-in">
-              <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-              <p className="mt-5 text-muted-foreground">Preparando sua leitura…</p>
-            </div>
-          )}
+          {step === "loading" && <Loading />}
 
           {step === "result" && reading && (
             <div className="animate-fade-in space-y-10">
               <section>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Sua leitura com a AURA</p>
                 <h1 className="mt-3 text-2xl md:text-3xl font-semibold leading-tight">{reading.title}</h1>
-                <div className="mt-5 space-y-4 text-[16px] leading-relaxed text-muted-foreground">
-                  <p>{reading.living}</p>
-                  <p>{reading.barrier}</p>
-                </div>
-                <h2 className="mt-7 text-lg font-semibold">Como você pode começar</h2>
-                <p className="mt-2 text-[16px] leading-relaxed text-muted-foreground">{reading.start}</p>
+                <ul className="mt-6 space-y-3">
+                  {[
+                    { k: "O que está acontecendo", v: reading.living },
+                    { k: "Onde você trava", v: reading.barrier },
+                    { k: "O que pode ajudar agora", v: reading.start },
+                  ].map((x) => (
+                    <li key={x.k} className="rounded-2xl border border-border bg-card px-4 py-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{x.k}</p>
+                      <p className="mt-1.5 text-[15px] leading-relaxed text-foreground">{x.v}</p>
+                    </li>
+                  ))}
+                </ul>
               </section>
 
-              <section aria-label="Exemplo de como a conversa pode começar">
-                <p className="mb-3 text-sm text-muted-foreground">Exemplo de como seu primeiro encontro pode começar</p>
-                <div className="flex gap-3">
-                  <img src={avatarAura} alt="AURA" className="h-9 w-9 rounded-full object-cover shrink-0" />
-                  <div className="rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-3 text-[15px] leading-relaxed">
+              <section aria-label="Prévia da sua primeira conversa" className="overflow-hidden rounded-3xl border border-border bg-card">
+                <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+                  <img src={avatarAura} alt="" className="h-9 w-9 rounded-full object-cover" />
+                  <div>
+                    <p className="text-sm font-semibold leading-none">AURA</p>
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="h-2 w-2 rounded-full bg-primary" /> online agora
+                    </p>
+                  </div>
+                </div>
+                <div className="px-4 py-5">
+                  <div className="max-w-[88%] rounded-2xl rounded-tl-sm bg-muted px-4 py-3 text-[15px] leading-relaxed">
                     {reading.opening}
                   </div>
                 </div>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Sua conversa pode começar por aqui. No seu ritmo, sem precisar explicar tudo de novo.
-                </p>
+                <Link
+                  to={ctaHref}
+                  onClick={() => trackLandingCta("demo", "Responder à AURA (quiz)", V)}
+                  className="mx-4 mb-4 flex items-center justify-between rounded-full border border-border bg-background px-4 py-3 text-sm text-muted-foreground hover:border-primary"
+                >
+                  Responder à AURA…
+                  <Send className="h-4 w-4 text-primary" />
+                </Link>
+              </section>
+
+              <div>
+                <Link to={ctaHref} onClick={() => trackLandingCta("hero", "Continuar a conversa (quiz)", V)} className="block">
+                  <Button variant="sage" size="xl" className="w-full rounded-2xl">Continuar essa conversa</Button>
+                </Link>
+                <p className="mt-2 text-center text-xs text-muted-foreground">7 dias por R$ 6,90 · cancele quando quiser</p>
+              </div>
+
+              <section aria-label="Quem já começou" className="space-y-3">
+                {TESTIMONIALS.map((t) => (
+                  <figure key={t.n} className="rounded-2xl border border-border bg-card px-4 py-4">
+                    <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="h-3.5 w-3.5 fill-primary text-primary" />)}</div>
+                    <blockquote className="mt-2 text-[15px] italic leading-relaxed">“{t.q}”</blockquote>
+                    <figcaption className="mt-2 text-xs text-muted-foreground">{t.n}</figcaption>
+                  </figure>
+                ))}
               </section>
 
               <section className="rounded-3xl border border-border bg-card p-6">
@@ -196,21 +248,27 @@ export default function Quiz() {
                   <li className="flex gap-3"><MessageCircle className="h-5 w-5 text-primary shrink-0" />Conversa por áudio ou texto, a qualquer hora</li>
                   <li className="flex gap-3"><Moon className="h-5 w-5 text-primary shrink-0" />Orações e meditações guiadas</li>
                 </ul>
+                <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-2xl border border-border px-3 py-3">
+                    <p className="text-muted-foreground">Uma sessão de terapia</p>
+                    <p className="mt-1 font-semibold">R$ 150 a 250</p>
+                  </div>
+                  <div className="rounded-2xl border border-primary px-3 py-3">
+                    <p className="text-muted-foreground">AURA, o mês todo</p>
+                    <p className="mt-1 font-semibold">cerca de R$ 1 por dia</p>
+                  </div>
+                </div>
                 <div className="mt-6 border-t border-border pt-5">
                   <p className="text-2xl font-semibold">7 dias por R$ 6,90</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Depois, R$ 29,90/mês no plano Essencial, renovado mensalmente. Cancele quando quiser no seu espaço, sem precisar falar com ninguém.
                   </p>
                 </div>
-                <Link
-                  to={`${checkoutHref("final", "quiz")}&plan=essencial&billing=monthly`}
-                  onClick={() => trackLandingCta("final", "Quero começar com a AURA (quiz)", V)}
-                  className="block mt-6"
-                >
-                  <Button variant="sage" size="xl" className="w-full rounded-2xl">Quero começar com a AURA</Button>
+                <Link to={ctaHref} onClick={() => trackLandingCta("final", "Quero começar com a AURA (quiz)", V)} className="block mt-6">
+                  <Button variant="sage" size="xl" className="w-full rounded-2xl">Começar meus 7 dias</Button>
                 </Link>
-                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                  <Check className="h-3.5 w-3.5" /> A AURA é uma inteligência artificial e não substitui psicoterapia.
+                <p className="mt-3 text-center text-xs text-muted-foreground">
+                  A AURA é uma inteligência artificial e não substitui psicoterapia.
                 </p>
               </section>
             </div>

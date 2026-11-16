@@ -239,6 +239,6 @@ export function composeReading(a: QuizAnswers): QuizReading | null {
     living: `Você contou que ${pattern.mirror}. ${theme.insight}`,
     barrier: barrier.text,
     start: start.text,
-    opening: `Você me contou que ${pattern.mirror}. Quero começar entendendo uma coisa: ${pattern.opening.charAt(0).toLowerCase()}${pattern.opening.slice(1)}`,
+    opening: `Vamos começar por aqui. ${pattern.opening}`,
   };
 }
