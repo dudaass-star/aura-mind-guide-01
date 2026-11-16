@@ -253,7 +253,12 @@ export default function Quiz() {
                   const label = c
                     ? chosen.billing === "yearly" ? `${c.name} Anual · R$ ${c.yearlyMonth}/mês (R$ ${c.yearlyTotal} por ano)` : `${c.name} Mensal · 7 dias por R$ ${c.trial}, depois R$ ${c.monthly}/mês`
                     : "Transformação Mensal";
-                  return <p className="mt-3 rounded-2xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm"><span className="text-foreground/70">Plano escolhido: </span><strong className="font-semibold">{label}</strong></p>;
+                  return <p className="mt-3 rounded-2xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm"><span className="text-foreground/70">Plano escolhido: </span><strong className="font-semibold">{label}</strong>
+                    <span className="mt-3 block space-y-1.5 text-xs text-foreground/80">
+                      {[c ? c.sessions : "8 encontros guiados por mês", "Conversa por áudio e texto a qualquer hora", "Orações e meditações guiadas para desacelerar e descansar"].map((b) => (
+                        <span key={b} className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 shrink-0 text-primary" /> {b}</span>
+                      ))}
+                    </span></p>;
                 })()}
               </div>
               <Suspense fallback={<div className="py-16 text-center text-sm text-muted-foreground">Carregando pagamento…</div>}>
@@ -298,7 +303,11 @@ export default function Quiz() {
                         </div>
                         <p className="mt-2 text-2xl font-semibold">{o.price}</p>
                         <p className="mt-1 text-sm text-foreground/75">{o.note}</p>
-                        <p className="mt-2 flex items-center gap-1.5 text-xs text-foreground/75"><Check className="h-3.5 w-3.5 text-primary" /> {c.sessions} + conversa a qualquer hora</p>
+                        <ul className="mt-3 space-y-1.5 text-xs text-foreground/80">
+                          {[c.sessions, "Conversa por áudio e texto a qualquer hora", "Todas as orações e meditações guiadas"].map((b) => (
+                            <li key={b} className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 shrink-0 text-primary" /> {b}</li>
+                          ))}
+                        </ul>
                       </button>
                     ))}
                     <Button variant="sage" size="xl" className="v5-shimmer mt-2 w-full rounded-2xl shadow-lg" onClick={() => { trackLandingCta("final", `Paywall ${c.plan} ${billing} (quiz)`, V); goCheckout(c.plan, billing); }}>{billing === "monthly" ? "Começar meus 7 dias" : "Garantir o plano anual"}</Button>
