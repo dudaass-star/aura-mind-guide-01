@@ -199,7 +199,8 @@ function isValidCpf(cpf: string): boolean {
   return d2 === parseInt(c[10]);
 }
 
-const CheckoutV2 = () => {
+// `embedded`: renderizado dentro do /quiz, sem cabeçalho nem re-escolha de plano.
+const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -1387,7 +1388,7 @@ const CheckoutV2 = () => {
 
   return (
     <>
-      <Helmet>
+      {!embedded && <Helmet>
         <title>Checkout - AURA</title>
         <meta
           name="description"
@@ -1398,20 +1399,20 @@ const CheckoutV2 = () => {
         <meta property="og:title" content="Checkout - AURA" />
         <meta property="og:description" content="Finalize sua assinatura da AURA e comece sua jornada de evolução emocional." />
         <meta property="og:type" content="website" />
-      </Helmet>
+      </Helmet>}
 
-      <div className="v2-theme checkout-dark min-h-screen bg-[hsl(var(--ck-bg))] text-white">
+      <div className={embedded ? "v2-theme checkout-dark text-white" : "v2-theme checkout-dark min-h-screen bg-[hsl(var(--ck-bg))] text-white"}>
         {/* Glow decorativo no topo */}
-        <div
+        {!embedded && <div
           className="pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-60"
           style={{
             background:
               "radial-gradient(60% 60% at 50% 0%, hsl(140 22% 35% / 0.35) 0%, transparent 70%)",
           }}
           aria-hidden
-        />
+        />}
 
-        <header className="relative py-5 border-b border-white/10">
+        {!embedded && <header className="relative py-5 border-b border-white/10">
           <div className="container mx-auto px-6 flex items-center justify-between">
             <Link
               to={backHref}
@@ -1429,9 +1430,9 @@ const CheckoutV2 = () => {
             </Link>
             <div className="w-16" />
           </div>
-        </header>
+        </header>}
 
-        <div className="relative container mx-auto px-4 py-8 md:py-12 pb-28 lg:pb-12">
+        <div className={embedded ? "relative pb-28" : "relative container mx-auto px-4 py-8 md:py-12 pb-28 lg:pb-12"}>
           <div
             className={
               embeddedClientSecret || asaasCardOpen ? "max-w-xl mx-auto" : "max-w-5xl mx-auto"
@@ -1628,10 +1629,10 @@ const CheckoutV2 = () => {
               />
             ) : (
               <>
-            <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8 lg:gap-10 items-start">
+            <div className={embedded ? "grid gap-8" : "grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8 lg:gap-10 items-start"}>
               <div className="min-w-0 max-w-xl w-full mx-auto lg:mx-0">
             {/* Cabeçalho enxuto */}
-            <div className="text-center lg:text-left mb-6">
+            {!embedded && <div className="text-center lg:text-left mb-6">
               <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
                 Comece em 2 minutos
               </h1>
@@ -1640,7 +1641,7 @@ const CheckoutV2 = () => {
                   ? `Pagamento único à vista no PIX • economia de ${currentDiscount}%`
                   : `7 dias por R$ ${currentPlan.trialPrice} • cancele quando quiser`}
               </p>
-            </div>
+            </div>}
 
             <form
               id="checkout-form"
@@ -1648,7 +1649,7 @@ const CheckoutV2 = () => {
               className="space-y-5"
             >
               {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
-              <CycleTabs
+              {!embedded && <><CycleTabs
                 items={cycleItems}
                 value={billingPeriod}
                 onChange={(id) => setBillingPeriod(id as BillingPeriod)}
@@ -1740,7 +1741,7 @@ const CheckoutV2 = () => {
                     </label>
                   );
                 })}
-              </RadioGroup>
+              </RadioGroup></>}
 
               {/* Confiança acima da dobra, colada na escolha do plano. */}
               <TrustRow />

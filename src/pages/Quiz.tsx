@@ -1,6 +1,6 @@
 import { Helmet } from "react-helmet-async";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import "@/styles/v2-theme.css";
 import "@/styles/v5-hero.css";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,13 @@ import { trackLandingCta, checkoutHref, useLandingEngagement } from "@/lib/landi
 import { trackMetaViewContent } from "@/lib/meta-pixel";
 import { logFunnel } from "@/lib/checkout-funnel";
 
+// Pagamento embutido no próprio quiz (mesmo fluxo do CheckoutV2, sem sair da página).
+const CheckoutV2 = lazy(() => import("@/pages/CheckoutV2"));
+
 // Quiz de aquisição (teste A/B contra /v5). As respostas ficam só no aparelho:
 // à Meta e ao funil vão apenas eventos de etapa, nunca o conteúdo escolhido.
 const V = "quiz" as const;
-type Step = "intro" | "theme" | "pattern" | "barrier" | "start" | "loading" | "result" | "plans";
+type Step = "intro" | "theme" | "pattern" | "barrier" | "start" | "loading" | "result" | "plans" | "checkout";
 
 // Mesmos depoimentos já publicados na /v5.
 const TESTIMONIALS = [
@@ -29,7 +32,7 @@ const PAYWALL = {
   quinzenal: { plan: "essencial", name: "Essencial", sessions: "2 encontros guiados por mês", trial: "6,90", monthly: "29,90", yearlyMonth: "9,90", yearlyTotal: "118,80", off: 67 },
   semanal: { plan: "direcao", name: "Direção", sessions: "4 encontros guiados por mês", trial: "9,90", monthly: "49,90", yearlyMonth: "16,90", yearlyTotal: "202,80", off: 66 },
 } as const;
-const planHref = (plan: string, billing: "monthly" | "yearly") => `${checkoutHref("final", "quiz")}&plan=${plan}&billing=${billing}`;
+const planQuery = (plan: string, billing: "monthly" | "yearly") => `?${checkoutHref("final", "quiz").split("?")[1] ?? "lp=quiz"}&plan=${plan}&billing=${billing}`;
 const LOADING_STEPS = ["Lendo suas respostas…", "Entendendo o que mais tem te afetado…", "Preparando por onde começar com a AURA…"];
 
 const Loading = () => {
@@ -72,7 +75,16 @@ const Option = ({ label, onClick }: { label: string; onClick: () => void }) => (
 
 export default function Quiz() {
   useLandingEngagement(V);
+  const navigate = useNavigate();
   const [step, setStep] = useState<Step>("intro");
+  const [chosen, setChosen] = useState<{ plan: string; billing: "monthly" | "yearly" } | null>(null);
+  // A escolha vai para o endereço do próprio /quiz: o pagamento lê plano e ciclo dali.
+  const goCheckout = (plan: string, b: "monthly" | "yearly") => {
+    setChosen({ plan, billing: b });
+    navigate(`/quiz${planQuery(plan, b)}`, { replace: true });
+    setStep("checkout");
+    window.scrollTo({ top: 0 });
+  };
   const [theme, setTheme] = useState<ThemeId | null>(null);
   const [pattern, setPattern] = useState<string | null>(null);
   const [barrier, setBarrier] = useState<string | null>(null);
@@ -224,6 +236,26 @@ export default function Quiz() {
 
           {step === "loading" && <Loading />}
 
+          {step === "checkout" && chosen && (
+            <div className="animate-fade-in space-y-6 pt-2">
+              <button onClick={() => { navigate("/quiz", { replace: true }); setStep("plans"); }} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Trocar plano</button>
+              <div>
+                <span className="v5-chip"><ShieldCheck className="h-3.5 w-3.5 text-primary" /> Último passo</span>
+                <h1 className="mt-4 text-2xl font-semibold leading-tight v5-gradient-text">Ative seu espaço com a AURA</h1>
+                {(() => {
+                  const c = chosen.plan === "direcao" ? PAYWALL.semanal : chosen.plan === "essencial" ? PAYWALL.quinzenal : null;
+                  const label = c
+                    ? chosen.billing === "yearly" ? `${c.name} Anual · R$ ${c.yearlyMonth}/mês (R$ ${c.yearlyTotal} por ano)` : `${c.name} Mensal · 7 dias por R$ ${c.trial}, depois R$ ${c.monthly}/mês`
+                    : "Transformação Mensal";
+                  return <p className="mt-3 rounded-2xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm"><span className="text-foreground/70">Plano escolhido: </span><strong className="font-semibold">{label}</strong></p>;
+                })()}
+              </div>
+              <Suspense fallback={<div className="py-16 text-center text-sm text-muted-foreground">Carregando pagamento…</div>}>
+                <CheckoutV2 embedded />
+              </Suspense>
+            </div>
+          )}
+
           {step === "plans" && (
             <div className="animate-fade-in space-y-6 pt-2">
               <button onClick={() => setStep("result")} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Voltar</button>
@@ -263,13 +295,11 @@ export default function Quiz() {
                         <p className="mt-2 flex items-center gap-1.5 text-xs text-foreground/75"><Check className="h-3.5 w-3.5 text-primary" /> {c.sessions} + conversa a qualquer hora</p>
                       </button>
                     ))}
-                    <Link to={planHref(c.plan, billing)} onClick={() => trackLandingCta("final", `Paywall ${c.plan} ${billing} (quiz)`, V)} className="block pt-2">
-                      <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">{billing === "monthly" ? "Começar meus 7 dias" : "Garantir o plano anual"}</Button>
-                    </Link>
+                    <Button variant="sage" size="xl" className="v5-shimmer mt-2 w-full rounded-2xl shadow-lg" onClick={() => { trackLandingCta("final", `Paywall ${c.plan} ${billing} (quiz)`, V); goCheckout(c.plan, billing); }}>{billing === "monthly" ? "Começar meus 7 dias" : "Garantir o plano anual"}</Button>
                     <p className="flex items-center justify-center gap-1.5 text-xs text-foreground/80"><ShieldCheck className="h-4 w-4 text-primary" /> Pagamento seguro · cancele em 1 clique</p>
-                    <Link to={planHref("transformacao", "monthly")} onClick={() => trackLandingCta("final", "Paywall transformacao (quiz)", V)} className="block text-center text-xs text-muted-foreground underline underline-offset-4">
+                    <button type="button" onClick={() => { trackLandingCta("final", "Paywall transformacao (quiz)", V); goCheckout("transformacao", "monthly"); }} className="block w-full text-center text-xs text-muted-foreground underline underline-offset-4">
                       Precisa de 2 encontros por semana? Veja o plano Transformação
-                    </Link>
+                    </button>
                   </div>
                 );
               })()}
