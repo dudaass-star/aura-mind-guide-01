@@ -1,7 +1,7 @@
 // Conteúdo do quiz de aquisição (/quiz). Texto fixo e revisado por combinação;
 // nada aqui é gerado por IA nem enviado à Meta.
 
-export type ThemeId = "relacoes" | "limites" | "mente" | "sobrecarga" | "rumo";
+export type ThemeId = "relacoes" | "limites" | "mente" | "sobrecarga";
 
 export interface PatternOption {
   id: string;
@@ -24,7 +24,7 @@ export interface Theme {
 export const THEMES: Theme[] = [
   {
     id: "relacoes",
-    label: "Sentir mais segurança nos meus relacionamentos e parar de me anular para caber no outro.",
+    label: "Parar de me anular para agradar os outros.",
     bridge: "Quando isso acontece com frequência, pode ser difícil pensar em outra coisa.",
     title: "Você está tentando encontrar segurança em algo que não consegue controlar.",
     insight:
@@ -58,7 +58,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "limites",
-    label: "Conseguir dizer não sem culpa e parar de engolir o que sinto para não criar atrito.",
+    label: "Conseguir dizer não sem engolir o que sinto.",
     bridge: "Nem sempre é fácil falar o que você precisa, principalmente quando está acostumada a ceder.",
     title: "Você cuida de todo mundo com tanto cuidado que acaba ficando por último.",
     insight:
@@ -92,7 +92,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "mente",
-    label: "Conseguir desacelerar a cabeça e parar de repassar conversas e preocupações o tempo todo.",
+    label: "Desacelerar pensamentos e preocupações constantes.",
     bridge: "E muitas vezes esses pensamentos aparecem justamente quando você tenta descansar.",
     title: "Sua cabeça continua trabalhando mesmo quando o dia já acabou.",
     insight:
@@ -126,7 +126,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: "sobrecarga",
-    label: "Aliviar o cansaço de ter que dar conta de tudo sozinha e estar sempre no meu limite.",
+    label: "Aliviar o cansaço de carregar tudo sozinha.",
     bridge: "Com tanta coisa para resolver, encontrar um momento para você acaba ficando para depois.",
     title: "Você virou a pessoa que segura tudo — e ninguém segura você.",
     insight:
@@ -158,40 +158,6 @@ export const THEMES: Theme[] = [
       },
     ],
   },
-  {
-    id: "rumo",
-    label: "Sair do piloto automático e reencontrar clareza sobre o que eu realmente quero.",
-    bridge: "Quando os dias ficam parecidos, pode ser difícil perceber o que você realmente quer mudar.",
-    title: "Você está cumprindo os dias, mas sente falta de saber para onde está indo.",
-    insight:
-      "O piloto automático protege de decisões difíceis, mas cobra um preço: a sensação de que a vida está passando sem que você escolha de verdade o caminho.",
-    patterns: [
-      {
-        id: "repete",
-        label: "Continuo repetindo atitudes e escolhas que eu já sei que vão me machucar depois.",
-        mirror: "continua repetindo escolhas que já sabe que vão te machucar depois",
-        opening: "Qual escolha você mais se pega repetindo? O que ela te dá na hora, mesmo sabendo o custo depois?",
-      },
-      {
-        id: "clareza",
-        label: "Perdi a clareza do que eu realmente quero para os próximos meses.",
-        mirror: "perdeu a clareza do que realmente quer para os próximos meses",
-        opening: "Houve algum momento recente, mesmo pequeno, em que você se sentiu um pouco mais você?",
-      },
-      {
-        id: "desanimo",
-        label: "Faço minhas obrigações diárias, mas no fundo sinto um desânimo constante.",
-        mirror: "cumpre as obrigações do dia a dia, mas sente um desânimo constante no fundo",
-        opening: "Se esse desânimo pudesse falar, o que você acha que ele diria que está faltando?",
-      },
-      {
-        id: "sobrevivendo",
-        label: "Sinto que os dias estão passando e eu estou apenas sobrevivendo, não vivendo.",
-        mirror: "sente que os dias estão passando e você só está sobrevivendo",
-        opening: "Como seria, na prática, um dia em que você sentisse que está vivendo — e não só sobrevivendo?",
-      },
-    ],
-  },
 ];
 
 export interface SimpleOption {
@@ -203,28 +169,23 @@ export interface SimpleOption {
 export const BARRIERS: SimpleOption[] = [
   {
     id: "guarda",
-    label: "Guardo tudo para mim. Não sinto segurança de me abrir sem ser julgada ou incompreendida.",
+    label: "Guardo tudo para mim, com medo de ser julgada.",
     text: "Você também contou que costuma guardar tudo para si, porque não se sente segura para se abrir sem julgamento. Faz sentido que tudo fique girando por dentro quando não há onde colocar.",
   },
   {
     id: "incomoda",
-    label: "Até tento desabafar com amigos ou família, mas sinto que estou incomodando ou ouço conselhos do tipo \"deixa pra lá\".",
+    label: "Tento desabafar, mas sinto que incomodo ou ouço \"deixa pra lá\".",
     text: "Você contou que até tenta falar com quem está por perto, mas sente que incomoda ou ouve um \"deixa pra lá\". Isso faz a gente desistir de falar — não de sentir.",
   },
   {
     id: "sozinha",
-    label: "Tento resolver tudo sozinha na minha cabeça, mas acabo voltando sempre para os mesmos pensamentos.",
+    label: "Tento resolver sozinha, mas volto sempre aos mesmos pensamentos.",
     text: "Você contou que tenta resolver tudo sozinha na cabeça e acaba voltando aos mesmos pensamentos. É difícil enxergar saída de dentro do próprio labirinto.",
   },
   {
     id: "acesso",
-    label: "Queria ter um acompanhamento regular, mas hoje não cabe no meu bolso ou na minha rotina.",
+    label: "Queria acompanhamento, mas não cabe no bolso ou na rotina.",
     text: "Você contou que gostaria de um acompanhamento regular, mas hoje ele não cabe no bolso ou na rotina. Isso não deveria significar ficar sem nenhum espaço para cuidar disso.",
-  },
-  {
-    id: "complemento",
-    label: "Já tenho algum apoio, mas sinto falta de ter com quem falar no exato momento em que a angústia aparece.",
-    text: "Você contou que já tem algum apoio, mas sente falta de alguém no exato momento em que a angústia aparece — que quase nunca é no horário marcado.",
   },
 ];
 

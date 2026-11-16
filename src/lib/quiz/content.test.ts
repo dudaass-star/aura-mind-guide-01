@@ -3,7 +3,8 @@ import { describe, it, expect } from "bun:test";
 import { THEMES, BARRIERS, STARTS, composeReading } from "./content";
 
 describe("quiz", () => {
-  it("todo caminho da pergunta 2 tem 4 opções", () => {
+  it("todo caminho tem 4 opções", () => {
+    expect(THEMES).toHaveLength(4); expect(BARRIERS).toHaveLength(4); expect(STARTS).toHaveLength(4);
     for (const t of THEMES) expect(t.patterns).toHaveLength(4);
   });
   it("toda combinação gera uma leitura", () => {
