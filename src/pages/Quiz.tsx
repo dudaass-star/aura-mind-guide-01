@@ -27,10 +27,11 @@ const TESTIMONIALS = [
 ];
 // Paywall do quiz: ritmo escolhe o plano (quinzenal=Essencial, semanal=Direção); só Mensal e Anual.
 // Valores devem acompanhar a tabela do CheckoutV2.
-type Rhythm = "quinzenal" | "semanal";
+type Rhythm = "quinzenal" | "semanal" | "intensivo";
 const PAYWALL = {
   quinzenal: { plan: "essencial", name: "Essencial", sessions: "2 encontros guiados por mês", trial: "6,90", monthly: "29,90", yearlyMonth: "9,90", yearlyTotal: "118,80", off: 67 },
   semanal: { plan: "direcao", name: "Direção", sessions: "4 encontros guiados por mês", trial: "9,90", monthly: "49,90", yearlyMonth: "16,90", yearlyTotal: "202,80", off: 66 },
+  intensivo: { plan: "transformacao", name: "Transformação", sessions: "8 encontros guiados por mês", trial: "19,90", monthly: "79,90", yearlyMonth: "26,90", yearlyTotal: "322,80", off: 66 },
 } as const;
 const planQuery = (plan: string, billing: "monthly" | "yearly") => `?${checkoutHref("final", "quiz").split("?")[1] ?? "lp=quiz"}&plan=${plan}&billing=${billing}`;
 const LOADING_STEPS = ["Lendo suas respostas…", "Entendendo o que mais tem te afetado…", "Preparando por onde começar com a AURA…"];
@@ -249,7 +250,7 @@ export default function Quiz() {
                 <span className="v5-chip"><ShieldCheck className="h-3.5 w-3.5 text-primary" /> Último passo</span>
                 <h1 className="mt-4 text-2xl font-semibold leading-tight v5-gradient-text">Ative seu espaço com a AURA</h1>
                 {(() => {
-                  const c = chosen.plan === "direcao" ? PAYWALL.semanal : chosen.plan === "essencial" ? PAYWALL.quinzenal : null;
+                  const c = chosen.plan === "direcao" ? PAYWALL.semanal : chosen.plan === "transformacao" ? PAYWALL.intensivo : PAYWALL.quinzenal;
                   const label = c
                     ? chosen.billing === "yearly" ? `${c.name} Anual · R$ ${c.yearlyMonth}/mês (R$ ${c.yearlyTotal} por ano)` : `${c.name} Mensal · 7 dias por R$ ${c.trial}, depois R$ ${c.monthly}/mês`
                     : "Transformação Mensal";
@@ -276,12 +277,12 @@ export default function Quiz() {
               </div>
               <div>
                 <p className="mb-2 text-sm font-semibold">Qual ritmo de encontros você prefere?</p>
-                <div className="grid grid-cols-2 gap-2" role="radiogroup">
-                  {(["quinzenal", "semanal"] as Rhythm[]).map((r) => (
+                <div className="grid grid-cols-3 gap-2" role="radiogroup">
+                  {(["quinzenal", "semanal", "intensivo"] as Rhythm[]).map((r) => (
                     <button key={r} role="radio" aria-checked={rhythm === r} onClick={() => setRhythm(r)}
                       className={`rounded-2xl border px-3 py-3 text-left transition ${rhythm === r ? "border-primary bg-primary/15" : "border-border bg-card/60"}`}>
-                      <span className="block text-sm font-semibold">{r === "quinzenal" ? "A cada 15 dias" : "Toda semana"}</span>
-                      <span className="block text-xs text-foreground/70">{r === "quinzenal" ? "2 encontros/mês" : "4 encontros/mês"}</span>
+                      <span className="block text-sm font-semibold">{r === "quinzenal" ? "A cada 15 dias" : r === "semanal" ? "Toda semana" : "2x por semana"}</span>
+                      <span className="block text-xs text-foreground/70">{r === "quinzenal" ? "2 encontros/mês" : r === "semanal" ? "4 encontros/mês" : "8 encontros/mês"}</span>
                     </button>
                   ))}
                 </div>
@@ -312,9 +313,7 @@ export default function Quiz() {
                     ))}
                     <Button variant="sage" size="xl" className="v5-shimmer mt-2 w-full rounded-2xl shadow-lg" onClick={() => { trackLandingCta("final", `Paywall ${c.plan} ${billing} (quiz)`, V); goCheckout(c.plan, billing); }}>{billing === "monthly" ? "Começar meus 7 dias" : "Garantir o plano anual"}</Button>
                     <p className="flex items-center justify-center gap-1.5 text-xs text-foreground/80"><ShieldCheck className="h-4 w-4 text-primary" /> Pagamento seguro · cancele em 1 clique</p>
-                    <button type="button" onClick={() => { trackLandingCta("final", "Paywall transformacao (quiz)", V); goCheckout("transformacao", "monthly"); }} className="block w-full text-center text-xs text-muted-foreground underline underline-offset-4">
-                      Precisa de 2 encontros por semana? Veja o plano Transformação
-                    </button>
+                    
                   </div>
                 );
               })()}
