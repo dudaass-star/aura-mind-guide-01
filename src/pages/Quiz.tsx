@@ -149,7 +149,7 @@ export default function Quiz() {
           )}
 
           {step === "start" && (
-            <Question title="Se você pudesse começar a cuidar disso hoje, como gostaria de começar?">
+            <Question title="Se você pudesse começar a cuidar de você hoje, o que mais faria diferença?">
               {STARTS.map((s) => (
                 <Option key={s.id} label={s.label} onClick={() => { setStart(s.id); setStep("loading"); }} />
               ))}

@@ -231,23 +231,23 @@ export const BARRIERS: SimpleOption[] = [
 export const STARTS: SimpleOption[] = [
   {
     id: "desabafo",
-    label: "Colocando para fora por áudio ou texto tudo o que guardei durante a semana.",
+    label: "Conseguir falar tudo o que venho guardando, sem medo de ser julgada ou parecer dramática.",
     text: "Você pode começar falando por áudio ou texto, no seu ritmo, a qualquer hora. A AURA escuta, faz perguntas e lembra do que você já contou — você não precisa explicar tudo de novo.",
   },
   {
     id: "encontro",
-    label: "Fazendo um encontro guiado e com foco para clarear essa situação e ver caminhos práticos.",
+    label: "Entender melhor o que estou vivendo e conseguir enxergar com mais clareza o que fazer.",
     text: "Você pode começar por um encontro guiado de 45 minutos, com começo, meio e fim, que parte exatamente dessa situação e termina com algo concreto para você levar.",
   },
   {
     id: "praticas",
-    label: "Ouvindo áudios de reflexão e orações para desacelerar a cabeça antes de dormir.",
+    label: "Conseguir desacelerar os pensamentos, ter um pouco de paz e descansar melhor à noite.",
     text: "Você pode começar pelas orações e meditações guiadas para os momentos em que a cabeça acelera — e, quando quiser, conversar com a AURA sobre o que apareceu.",
   },
   {
     id: "presenca",
-    label: "Tendo uma presença calma no bolso para me ajudar a raciocinar quando tudo parecer confuso.",
-    text: "Você pode abrir a conversa sempre que tudo parecer confuso. A AURA ajuda a organizar o que está acontecendo e a enxergar o que pode estar passando despercebido.",
+    label: "Ter com quem conversar quando eu não estiver bem, sem precisar esperar ou guardar tudo para mim.",
+    text: "Você pode abrir a conversa a qualquer hora, sem marcar nem esperar. A AURA está ali quando o aperto bater, ajuda a organizar o que está acontecendo e você não precisa segurar tudo sozinha.",
   },
 ];
 
