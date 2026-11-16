@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import "@/styles/v2-theme.css";
 import "@/styles/v5-hero.css";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star } from "lucide-react";
+import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { THEMES, BARRIERS, STARTS, composeReading, type ThemeId } from "@/lib/quiz/content";
@@ -213,8 +213,8 @@ export default function Quiz() {
                     { k: "O que está acontecendo", v: reading.living },
                     { k: "Onde você trava", v: reading.barrier },
                     { k: "O que pode ajudar agora", v: reading.start },
-                  ].map((x) => (
-                    <li key={x.k} className="rounded-2xl border border-border bg-card px-4 py-4">
+                  ].map((x, i) => (
+                    <li key={x.k} className={i === 2 ? "rounded-2xl border border-primary/50 bg-primary/10 px-4 py-4 shadow-[0_0_40px_-12px_hsl(var(--primary)/0.6)]" : "rounded-2xl border border-border bg-card px-4 py-4"}>
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{x.k}</p>
                       <p className="mt-1.5 text-[15px] leading-relaxed text-foreground">{x.v}</p>
                     </li>
@@ -286,14 +286,17 @@ export default function Quiz() {
                 </div>
                 <div className="mt-6 border-t border-border pt-5">
                   <p className="text-2xl font-semibold">7 dias por R$ 6,90</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-1 text-sm text-foreground/80">
                     Depois, R$ 29,90/mês no plano Essencial, renovado mensalmente. Cancele quando quiser no seu espaço, sem precisar falar com ninguém.
                   </p>
                 </div>
                 <Link to={ctaHref} onClick={() => trackLandingCta("final", "Quero começar com a AURA (quiz)", V)} className="block mt-6">
                   <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Começar meus 7 dias</Button>
                 </Link>
-                <p className="mt-3 text-center text-xs text-muted-foreground">
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80">
+                  <ShieldCheck className="h-4 w-4 text-primary" /> Pagamento seguro · cancele em 1 clique
+                </p>
+                <p className="mt-2 text-center text-xs text-muted-foreground">
                   A AURA é uma inteligência artificial e não substitui psicoterapia.
                 </p>
               </section>
