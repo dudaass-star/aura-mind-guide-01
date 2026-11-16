@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import "@/styles/v2-theme.css";
 import "@/styles/v5-hero.css";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck, Mic } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { THEMES, BARRIERS, STARTS, composeReading, type ThemeId } from "@/lib/quiz/content";
@@ -19,8 +19,8 @@ type Step = "intro" | "theme" | "pattern" | "barrier" | "start" | "loading" | "r
 
 // Mesmos depoimentos já publicados na /v5.
 const TESTIMONIALS = [
-  { q: "Percebi que eu sempre me colocava por último. O encontro mudou como eu converso com meu marido.", n: "R., 41 anos" },
-  { q: "Pela primeira vez consegui dormir sem ficar remoendo o dia. Ela me ajudou a enxergar o que eu evitava.", n: "M., 34 anos" },
+  { h: "Parei de me colocar sempre por último.", q: "Percebi que eu sempre me colocava por último. O encontro mudou como eu converso com meu marido.", n: "R., 41 anos", i: "R" },
+  { h: "Voltei a dormir sem remoer o dia.", q: "Pela primeira vez consegui dormir sem ficar remoendo o dia. Ela me ajudou a enxergar o que eu evitava.", n: "M., 34 anos", i: "M" },
 ];
 const ctaHref = `${checkoutHref("final", "quiz")}&plan=essencial&billing=monthly`;
 const LOADING_STEPS = ["Lendo suas respostas…", "Entendendo o que mais tem te afetado…", "Preparando por onde começar com a AURA…"];
@@ -248,18 +248,23 @@ export default function Quiz() {
                     </p>
                   </div>
                 </div>
-                <div className="px-4 py-5">
-                  <div className="max-w-[88%] rounded-2xl rounded-tl-sm border border-primary/25 bg-primary/15 px-4 py-3 v5-pop text-[15px] leading-relaxed">
+                <div className="bg-secondary/40 px-4 py-5">
+                  <p className="mb-3 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Hoje</p>
+                  <div className="max-w-[86%] rounded-2xl rounded-tl-sm border border-border/70 bg-card px-3 py-2 shadow-sm v5-pop text-[15px] leading-relaxed">
                     {reading.opening}
+                    <span className="mt-0.5 flex justify-end text-[10px] text-muted-foreground">agora</span>
                   </div>
                 </div>
                 <Link
                   to={ctaHref}
                   onClick={() => trackLandingCta("demo", "Responder à AURA (quiz)", V)}
-                  className="mx-4 mb-4 flex items-center justify-between rounded-full border border-border bg-background px-4 py-3 text-sm text-muted-foreground hover:border-primary"
+                  className="flex items-center gap-2 border-t border-border/60 bg-card/95 p-3"
                 >
-                  Responder à AURA…
-                  <Send className="h-4 w-4 text-primary" />
+                  <span className="flex flex-1 items-center gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner">
+                    <span className="flex-1 px-2 py-2 text-base text-muted-foreground">Mensagem...</span>
+                    <span className="flex h-10 w-10 items-center justify-center text-foreground"><Mic className="h-5 w-5" /></span>
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"><Send className="h-4 w-4" /></span>
+                  </span>
                 </Link>
               </section>
               </div>
@@ -273,21 +278,27 @@ export default function Quiz() {
               </div>
 
               <section aria-label="Quem já começou" className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Quem já começou</p>
                 {TESTIMONIALS.map((t) => (
-                  <figure key={t.n} className="rounded-2xl border border-border bg-card px-4 py-4">
+                  <figure key={t.n} className="rounded-2xl border border-border bg-card/80 px-4 py-4 backdrop-blur">
                     <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="h-3.5 w-3.5 fill-primary text-primary" />)}</div>
-                    <blockquote className="mt-2 text-[15px] italic leading-relaxed">“{t.q}”</blockquote>
-                    <figcaption className="mt-2 text-xs text-muted-foreground">{t.n}</figcaption>
+                    <p className="mt-2 text-base font-semibold leading-snug text-foreground">{t.h}</p>
+                    <blockquote className="mt-1.5 text-[15px] leading-relaxed text-foreground/80">“{t.q}”</blockquote>
+                    <figcaption className="mt-3 flex items-center gap-2.5 text-xs text-muted-foreground">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-sm font-semibold text-primary">{t.i}</span>
+                      <span><span className="block font-semibold text-foreground">{t.n}</span>Cliente Olá Aura</span>
+                    </figcaption>
                   </figure>
                 ))}
               </section>
 
-              <section className="rounded-3xl border border-border bg-card p-6">
+              <section className="relative rounded-3xl border border-primary/40 bg-card p-6 shadow-[0_30px_60px_-28px_hsl(var(--primary)/0.5)]">
+                <span className="v5-chip mb-4"><Sparkles className="h-3.5 w-3.5 text-primary" /> Experiência inicial recomendada</span>
                 <p className="text-lg font-semibold">Você não precisa continuar resolvendo tudo sozinha na sua cabeça.</p>
                 <ul className="mt-5 space-y-3 text-[15px]">
-                  <li className="flex gap-3"><CalendarHeart className="h-5 w-5 text-primary shrink-0" />2 encontros guiados de 45 minutos por mês</li>
-                  <li className="flex gap-3"><MessageCircle className="h-5 w-5 text-primary shrink-0" />Conversa por áudio ou texto, a qualquer hora</li>
-                  <li className="flex gap-3"><Moon className="h-5 w-5 text-primary shrink-0" />Orações e meditações guiadas</li>
+                  <li className="flex gap-3"><CalendarHeart className="h-5 w-5 text-primary shrink-0" /><span><strong className="font-semibold">2 encontros guiados por mês</strong><span className="block text-sm text-foreground/70">45 minutos com foco para clarear o rumo e decidir o que fazer.</span></span></li>
+                  <li className="flex gap-3"><MessageCircle className="h-5 w-5 text-primary shrink-0" /><span><strong className="font-semibold">Conversa por áudio ou texto, a qualquer hora</strong><span className="block text-sm text-foreground/70">Desabafe e organize os pensamentos no momento em que precisar.</span></span></li>
+                  <li className="flex gap-3"><Moon className="h-5 w-5 text-primary shrink-0" /><span><strong className="font-semibold">Orações e meditações guiadas</strong><span className="block text-sm text-foreground/70">Para desacelerar a cabeça e descansar melhor à noite.</span></span></li>
                 </ul>
                 <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
                   <div className="rounded-2xl border border-border px-3 py-3">
@@ -300,7 +311,8 @@ export default function Quiz() {
                   </div>
                 </div>
                 <div className="mt-6 border-t border-border pt-5">
-                  <p className="text-2xl font-semibold">7 dias por R$ 6,90</p>
+                  <p className="text-sm text-foreground/80">7 dias de acesso completo</p>
+                  <p className="mt-1 text-4xl font-semibold v5-gradient-text">R$ 6,90</p>
                   <p className="mt-1 text-sm text-foreground/80">
                     Depois, R$ 29,90/mês no plano Essencial, renovado mensalmente. Cancele quando quiser no seu espaço, sem precisar falar com ninguém.
                   </p>

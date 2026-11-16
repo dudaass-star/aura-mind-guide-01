@@ -240,26 +240,26 @@ export const STARTS: SimpleOption[] = [
   {
     id: "desabafo",
     label: "Conseguir falar tudo o que venho guardando, sem medo de ser julgada ou parecer dramática.",
-    head: "Um lugar sem julgamento.",
-    text: "Falar por áudio ou texto na hora em que o aperto bater, sem precisar parecer forte.",
+    head: "Falar sem filtro e sair com a cabeça no lugar.",
+    text: "Por áudio ou texto, a AURA escuta sem julgar, organiza o que você está sentindo e te mostra o que está por trás disso.",
   },
   {
     id: "encontro",
     label: "Entender melhor o que estou vivendo e conseguir enxergar com mais clareza o que fazer.",
-    head: "Clareza com começo, meio e fim.",
+    head: "Sair do círculo com um caminho prático.",
     text: "Um encontro guiado de 45 minutos que parte da sua situação e termina com algo concreto para levar.",
   },
   {
     id: "praticas",
     label: "Conseguir desacelerar os pensamentos, ter um pouco de paz e descansar melhor à noite.",
-    head: "Desacelerar antes de dormir.",
-    text: "Orações e meditações guiadas para quando a cabeça acelera, e a AURA para conversar sobre o que aparecer.",
+    head: "Paz para a mente desligar à noite.",
+    text: "Orações e meditações guiadas para desacelerar, e a AURA para organizar o que ficou rodando na cabeça.",
   },
   {
     id: "presenca",
     label: "Ter com quem conversar quando eu não estiver bem, sem precisar esperar ou guardar tudo para mim.",
-    head: "Com quem contar, a qualquer hora.",
-    text: "Abrir a conversa quando não estiver bem, sem marcar nem esperar e sem segurar tudo sozinha.",
+    head: "Escuta lúcida na hora em que o aperto bater.",
+    text: "Sem marcar nem esperar: a AURA te ajuda a entender o que está acontecendo e a decidir o próximo passo.",
   },
 ];
 
