@@ -123,6 +123,7 @@ export default function Quiz() {
   }, [step]);
 
   const [rhythm, setRhythm] = useState<Rhythm>("quinzenal");
+  const [moreRhythms, setMoreRhythms] = useState(false);
   const [billing, setBilling] = useState<"monthly" | "yearly">("yearly");
   const currentTheme = THEMES.find((t) => t.id === theme);
   const reading = useMemo(
@@ -275,7 +276,7 @@ export default function Quiz() {
                 <span className="v5-chip"><Sparkles className="h-3.5 w-3.5 text-primary" /> Ativação do seu espaço</span>
                 <h1 className="mt-4 text-2xl font-semibold leading-tight v5-gradient-text">Escolha como quer começar com a AURA</h1>
               </div>
-              <div>
+              {moreRhythms && (<div>
                 <p className="mb-2 text-sm font-semibold">Qual ritmo de encontros você prefere?</p>
                 <div className="grid grid-cols-3 gap-2" role="radiogroup">
                   {(["quinzenal", "semanal", "intensivo"] as Rhythm[]).map((r) => (
@@ -286,7 +287,7 @@ export default function Quiz() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </div>)}
               {(() => {
                 const c = PAYWALL[rhythm];
                 const opts = [
@@ -313,7 +314,9 @@ export default function Quiz() {
                     ))}
                     <Button variant="sage" size="xl" className="v5-shimmer mt-2 w-full rounded-2xl shadow-lg" onClick={() => { trackLandingCta("final", `Paywall ${c.plan} ${billing} (quiz)`, V); goCheckout(c.plan, billing); }}>{billing === "monthly" ? "Começar meus 7 dias" : "Garantir o plano anual"}</Button>
                     <p className="flex items-center justify-center gap-1.5 text-xs text-foreground/80"><ShieldCheck className="h-4 w-4 text-primary" /> Pagamento seguro · cancele em 1 clique</p>
-                    
+                    {!moreRhythms && (
+                      <button onClick={() => setMoreRhythms(true)} className="block w-full pt-2 text-center text-sm text-foreground/70 underline underline-offset-4">Precisa de encontros toda semana? Veja os planos semanais</button>
+                    )}
                   </div>
                 );
               })()}
