@@ -1,5 +1,5 @@
 import { Helmet } from "react-helmet-async";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import "@/styles/v2-theme.css";
 import "@/styles/v5-hero.css";
@@ -84,6 +84,18 @@ export default function Quiz() {
     }
   }, [step]);
 
+  const firstCta = useRef<HTMLDivElement>(null);
+  const [showSticky, setShowSticky] = useState(false);
+  useEffect(() => {
+    if (step !== "result") return setShowSticky(false);
+    const onScroll = () => {
+      const el = firstCta.current;
+      setShowSticky(!!el && el.getBoundingClientRect().bottom < 0);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [step]);
+
   const currentTheme = THEMES.find((t) => t.id === theme);
   const reading = useMemo(
     () => (theme && pattern && barrier && start ? composeReading({ theme, pattern, barrier, start }) : null),
@@ -147,7 +159,7 @@ export default function Quiz() {
         <header className="relative container mx-auto max-w-xl px-5 pt-6 pb-2">
           <img src={logoHorizontal} alt="Olá Aura" className="h-7 w-auto brightness-0 invert" />
         </header>
-        <main className="relative container mx-auto max-w-xl px-5 py-8 pb-16">
+        <main className="relative container mx-auto max-w-xl px-5 py-8 pb-28">
           {step === "intro" && (
             <div className="animate-fade-in pt-4">
               <span className="v5-chip">
@@ -207,6 +219,7 @@ export default function Quiz() {
             <div className="animate-fade-in space-y-10">
               <section>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Sua leitura com a AURA</p>
+                <span className="v5-chip mt-3"><Sparkles className="h-3.5 w-3.5 text-primary" /> Padrão identificado: <strong className="font-semibold text-foreground">{reading.patternName}</strong></span>
                 <h1 className="mt-3 text-2xl md:text-3xl font-semibold leading-tight v5-gradient-text">{reading.title}</h1>
                 <ul className="mt-6 space-y-3">
                   {[
@@ -249,8 +262,9 @@ export default function Quiz() {
                 </Link>
               </section>
               </div>
+              <p className="-mt-6 text-center text-xs text-foreground/80">Na sua primeira conversa no App, você pode começar exatamente por esse ponto.</p>
 
-              <div>
+              <div ref={firstCta}>
                 <Link to={ctaHref} onClick={() => trackLandingCta("hero", "Continuar a conversa (quiz)", V)} className="block">
                   <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Continuar essa conversa</Button>
                 </Link>
@@ -303,6 +317,16 @@ export default function Quiz() {
             </div>
           )}
         </main>
+        {step === "result" && showSticky && (
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur animate-fade-in">
+            <div className="container mx-auto flex max-w-xl items-center gap-3 px-5 py-3">
+              <p className="flex-1 text-sm leading-tight"><span className="font-semibold">7 dias por R$ 6,90</span><br /><span className="text-xs text-muted-foreground">cancele quando quiser</span></p>
+              <Link to={ctaHref} onClick={() => trackLandingCta("final", "Barra fixa (quiz)", V)}>
+                <Button variant="sage" className="rounded-xl">Começar</Button>
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

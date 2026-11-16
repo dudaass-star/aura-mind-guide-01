@@ -16,6 +16,8 @@ export interface Theme {
   id: ThemeId;
   label: string;
   bridge: string;
+  /** Nome curto do padrão mostrado na pílula do resultado. */
+  patternName: string;
   title: string;
   insight: string;
   patterns: PatternOption[];
@@ -26,6 +28,7 @@ export const THEMES: Theme[] = [
     id: "relacoes",
     label: "Parar de me anular para agradar os outros.",
     bridge: "Quando isso acontece com frequência, pode ser difícil pensar em outra coisa.",
+    patternName: "Buscar paz no outro",
     title: "Você está tentando encontrar segurança em algo que não consegue controlar.",
     insight:
       "Talvez o mais desgastante não seja só o medo de perder alguém. É quanto espaço essa preocupação passou a ocupar no seu dia — e quão pouco sobra para perceber o que você mesma precisa.",
@@ -60,6 +63,7 @@ export const THEMES: Theme[] = [
     id: "limites",
     label: "Conseguir dizer não sem engolir o que sinto.",
     bridge: "Nem sempre é fácil falar o que você precisa, principalmente quando está acostumada a ceder.",
+    patternName: "Ficar sempre por último",
     title: "Você cuida de todo mundo com tanto cuidado que acaba ficando por último.",
     insight:
       "Ceder às vezes evita um desconforto na hora. Mas, quando vira regra, a conta chega depois — em cansaço, irritação ou na sensação de que ninguém percebe o que você faz.",
@@ -94,6 +98,7 @@ export const THEMES: Theme[] = [
     id: "mente",
     label: "Desacelerar pensamentos e preocupações constantes.",
     bridge: "E muitas vezes esses pensamentos aparecem justamente quando você tenta descansar.",
+    patternName: "Mente que não desliga",
     title: "Sua cabeça continua trabalhando mesmo quando o dia já acabou.",
     insight:
       "Pensar muito não é defeito. O difícil é quando os mesmos pensamentos voltam sem levar a lugar nenhum — e ocupam o tempo que deveria ser de descanso.",
@@ -128,6 +133,7 @@ export const THEMES: Theme[] = [
     id: "sobrecarga",
     label: "Aliviar o cansaço de carregar tudo sozinha.",
     bridge: "Com tanta coisa para resolver, encontrar um momento para você acaba ficando para depois.",
+    patternName: "Carregar tudo sozinha",
     title: "Você virou a pessoa que segura tudo — e ninguém segura você.",
     insight:
       "Dar conta de tudo pode parecer força por fora. Por dentro, costuma ser uma rotina sem pausa, em que as suas próprias necessidades ficam sempre para amanhã.",
@@ -220,6 +226,7 @@ export interface QuizAnswers {
 }
 
 export interface QuizReading {
+  patternName: string;
   title: string;
   living: string;
   barrier: string;
@@ -235,6 +242,7 @@ export function composeReading(a: QuizAnswers): QuizReading | null {
   const start = STARTS.find((s) => s.id === a.start);
   if (!theme || !pattern || !barrier || !start) return null;
   return {
+    patternName: theme.patternName,
     title: theme.title,
     living: `Você contou que ${pattern.mirror}. ${theme.insight}`,
     barrier: barrier.text,
