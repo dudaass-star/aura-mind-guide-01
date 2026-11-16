@@ -416,7 +416,7 @@ const CheckoutV2 = () => {
   // Abas de ciclo com preço/mês, total do ciclo e economia em reais (do plano selecionado).
   const cycleItems: CycleTabItem[] = useMemo(
     () =>
-      (["monthly", "quarterly", "semestral", "yearly"] as BillingPeriod[]).map((p) => {
+      ((searchParams.get("lp") === "quiz" ? ["monthly", "yearly"] : ["monthly", "quarterly", "semestral", "yearly"]) as BillingPeriod[]).map((p) => {
         const total = getPeriodPrice(currentPlan, p);
         const monthlyEquiv = getPeriodMonthlyEquivalent(currentPlan, p) || currentPlan.monthlyPrice;
         const months = periodMonthsMap[p];

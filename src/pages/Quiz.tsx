@@ -15,14 +15,21 @@ import { logFunnel } from "@/lib/checkout-funnel";
 // Quiz de aquisição (teste A/B contra /v5). As respostas ficam só no aparelho:
 // à Meta e ao funil vão apenas eventos de etapa, nunca o conteúdo escolhido.
 const V = "quiz" as const;
-type Step = "intro" | "theme" | "pattern" | "barrier" | "start" | "loading" | "result";
+type Step = "intro" | "theme" | "pattern" | "barrier" | "start" | "loading" | "result" | "plans";
 
 // Mesmos depoimentos já publicados na /v5.
 const TESTIMONIALS = [
   { h: "Parei de me colocar sempre por último.", q: "Percebi que eu sempre me colocava por último. O encontro mudou como eu converso com meu marido.", n: "R., 41 anos", i: "R" },
   { h: "Voltei a dormir sem remoer o dia.", q: "Pela primeira vez consegui dormir sem ficar remoendo o dia. Ela me ajudou a enxergar o que eu evitava.", n: "M., 34 anos", i: "M" },
 ];
-const ctaHref = `${checkoutHref("final", "quiz")}&plan=essencial&billing=monthly`;
+// Paywall do quiz: ritmo escolhe o plano (quinzenal=Essencial, semanal=Direção); só Mensal e Anual.
+// Valores devem acompanhar a tabela do CheckoutV2.
+type Rhythm = "quinzenal" | "semanal";
+const PAYWALL = {
+  quinzenal: { plan: "essencial", name: "Essencial", sessions: "2 encontros guiados por mês", trial: "6,90", monthly: "29,90", yearlyMonth: "9,90", yearlyTotal: "118,80", off: 67 },
+  semanal: { plan: "direcao", name: "Direção", sessions: "4 encontros guiados por mês", trial: "9,90", monthly: "49,90", yearlyMonth: "16,90", yearlyTotal: "202,80", off: 66 },
+} as const;
+const planHref = (plan: string, billing: "monthly" | "yearly") => `${checkoutHref("final", "quiz")}&plan=${plan}&billing=${billing}`;
 const LOADING_STEPS = ["Lendo suas respostas…", "Entendendo o que mais tem te afetado…", "Preparando por onde começar com a AURA…"];
 
 const Loading = () => {
@@ -96,6 +103,8 @@ export default function Quiz() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [step]);
 
+  const [rhythm, setRhythm] = useState<Rhythm>("quinzenal");
+  const [billing, setBilling] = useState<"monthly" | "yearly">("yearly");
   const currentTheme = THEMES.find((t) => t.id === theme);
   const reading = useMemo(
     () => (theme && pattern && barrier && start ? composeReading({ theme, pattern, barrier, start }) : null),
@@ -215,6 +224,59 @@ export default function Quiz() {
 
           {step === "loading" && <Loading />}
 
+          {step === "plans" && (
+            <div className="animate-fade-in space-y-6 pt-2">
+              <button onClick={() => setStep("result")} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Voltar</button>
+              <div>
+                <span className="v5-chip"><Sparkles className="h-3.5 w-3.5 text-primary" /> Ativação do seu espaço</span>
+                <h1 className="mt-4 text-2xl font-semibold leading-tight v5-gradient-text">Escolha como quer começar com a AURA</h1>
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-semibold">Qual ritmo de encontros você prefere?</p>
+                <div className="grid grid-cols-2 gap-2" role="radiogroup">
+                  {(["quinzenal", "semanal"] as Rhythm[]).map((r) => (
+                    <button key={r} role="radio" aria-checked={rhythm === r} onClick={() => setRhythm(r)}
+                      className={`rounded-2xl border px-3 py-3 text-left transition ${rhythm === r ? "border-primary bg-primary/15" : "border-border bg-card/60"}`}>
+                      <span className="block text-sm font-semibold">{r === "quinzenal" ? "A cada 15 dias" : "Toda semana"}</span>
+                      <span className="block text-xs text-foreground/70">{r === "quinzenal" ? "2 encontros/mês" : "4 encontros/mês"}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {(() => {
+                const c = PAYWALL[rhythm];
+                const opts = [
+                  { id: "yearly" as const, title: "Anual", tag: `${c.off}% OFF`, price: `R$ ${c.yearlyMonth}/mês`, note: `R$ ${c.yearlyTotal} cobrados uma vez por ano` },
+                  { id: "monthly" as const, title: "Mensal", tag: "7 dias por R$ " + c.trial, price: `R$ ${c.trial} hoje`, note: `Depois, R$ ${c.monthly}/mês · cancele quando quiser` },
+                ];
+                return (
+                  <div className="space-y-3" role="radiogroup" aria-label={`Plano ${c.name}`}>
+                    {opts.map((o) => (
+                      <button key={o.id} role="radio" aria-checked={billing === o.id} onClick={() => setBilling(o.id)}
+                        className={`relative w-full rounded-3xl border p-5 text-left transition ${billing === o.id ? "border-primary bg-card shadow-[0_20px_50px_-24px_hsl(var(--primary)/0.6)]" : "border-border bg-card/60"}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-base font-semibold">{c.name} {o.title}</span>
+                          <span className="rounded-full bg-primary/20 px-2.5 py-1 text-xs font-semibold text-primary">{o.tag}</span>
+                        </div>
+                        <p className="mt-2 text-2xl font-semibold">{o.price}</p>
+                        <p className="mt-1 text-sm text-foreground/75">{o.note}</p>
+                        <p className="mt-2 flex items-center gap-1.5 text-xs text-foreground/75"><Check className="h-3.5 w-3.5 text-primary" /> {c.sessions} + conversa a qualquer hora</p>
+                      </button>
+                    ))}
+                    <Link to={planHref(c.plan, billing)} onClick={() => trackLandingCta("final", `Paywall ${c.plan} ${billing} (quiz)`, V)} className="block pt-2">
+                      <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">{billing === "monthly" ? "Começar meus 7 dias" : "Garantir o plano anual"}</Button>
+                    </Link>
+                    <p className="flex items-center justify-center gap-1.5 text-xs text-foreground/80"><ShieldCheck className="h-4 w-4 text-primary" /> Pagamento seguro · cancele em 1 clique</p>
+                    <Link to={planHref("transformacao", "monthly")} onClick={() => trackLandingCta("final", "Paywall transformacao (quiz)", V)} className="block text-center text-xs text-muted-foreground underline underline-offset-4">
+                      Precisa de 2 encontros por semana? Veja o plano Transformação
+                    </Link>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+
           {step === "result" && reading && (
             <div className="animate-fade-in space-y-10">
               <section>
@@ -256,8 +318,7 @@ export default function Quiz() {
                   </div>
                 </div>
                 <Link
-                  to={ctaHref}
-                  onClick={() => trackLandingCta("demo", "Responder à AURA (quiz)", V)}
+                  to="#planos" onClick={(e) => { e.preventDefault(); setStep("plans"); trackLandingCta("demo", "Responder à AURA (quiz)", V); }}
                   className="flex items-center gap-2 border-t border-border/60 bg-card/95 p-3"
                 >
                   <span className="flex flex-1 items-center gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner">
@@ -271,7 +332,7 @@ export default function Quiz() {
               <p className="-mt-6 text-center text-xs text-foreground/80">Na sua primeira conversa no App, você pode começar exatamente por esse ponto.</p>
 
               <div ref={firstCta}>
-                <Link to={ctaHref} onClick={() => trackLandingCta("hero", "Continuar a conversa (quiz)", V)} className="block">
+                <Link to="#planos" onClick={(e) => { e.preventDefault(); setStep("plans"); trackLandingCta("hero", "Continuar a conversa (quiz)", V); }} className="block">
                   <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Continuar essa conversa</Button>
                 </Link>
                 <p className="mt-2 text-center text-xs text-muted-foreground">7 dias por R$ 6,90 · cancele quando quiser</p>
@@ -317,7 +378,7 @@ export default function Quiz() {
                     Depois, R$ 29,90/mês no plano Essencial, renovado mensalmente. Cancele quando quiser no seu espaço, sem precisar falar com ninguém.
                   </p>
                 </div>
-                <Link to={ctaHref} onClick={() => trackLandingCta("final", "Quero começar com a AURA (quiz)", V)} className="block mt-6">
+                <Link to="#planos" onClick={(e) => { e.preventDefault(); setStep("plans"); trackLandingCta("final", "Quero começar com a AURA (quiz)", V); }} className="block mt-6">
                   <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Começar meus 7 dias</Button>
                 </Link>
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80">
@@ -334,7 +395,7 @@ export default function Quiz() {
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur animate-fade-in">
             <div className="container mx-auto flex max-w-xl items-center gap-3 px-5 py-3">
               <p className="flex-1 text-sm leading-tight"><span className="font-semibold">7 dias por R$ 6,90</span><br /><span className="text-xs text-muted-foreground">cancele quando quiser</span></p>
-              <Link to={ctaHref} onClick={() => trackLandingCta("final", "Barra fixa (quiz)", V)}>
+              <Link to="#planos" onClick={(e) => { e.preventDefault(); setStep("plans"); trackLandingCta("final", "Barra fixa (quiz)", V); }}>
                 <Button variant="sage" className="rounded-xl">Começar</Button>
               </Link>
             </div>
