@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+// @ts-ignore -- executado com bun test, fora do typecheck do app
+import { describe, it, expect } from "bun:test";
 import { THEMES, BARRIERS, STARTS, composeReading } from "./content";
 
 describe("quiz", () => {
