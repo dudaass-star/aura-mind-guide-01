@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import "@/styles/v2-theme.css";
 import "@/styles/v5-hero.css";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck, Mic } from "lucide-react";
+import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck, Mic, Award } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { THEMES, BARRIERS, STARTS, composeReading, type ThemeId } from "@/lib/quiz/content";
@@ -191,8 +191,9 @@ export default function Quiz() {
         <main className="relative container mx-auto max-w-xl px-5 py-8 pb-28">
           {step === "intro" && (
             <div className="animate-fade-in pt-4">
-              <span className="v5-chip">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Plataforma nº 1 do Brasil · leitura em 1 min
+              <span className="v5-chip v5-chip-active text-[13px]">
+                <Award className="h-4 w-4 text-primary" />
+                <span>Plataforma <strong className="font-semibold">nº 1 do Brasil</strong></span>
               </span>
               <h1 className="mt-5 text-[2.1rem] md:text-5xl font-semibold leading-[1.08]">
                 O que está tirando a sua paz — <span className="v5-gradient-text">e por onde começar a mudar isso?</span>
