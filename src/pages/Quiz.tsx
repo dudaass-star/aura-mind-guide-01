@@ -192,7 +192,7 @@ export default function Quiz() {
           {step === "intro" && (
             <div className="animate-fade-in pt-4">
               <span className="v5-chip">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Leitura personalizada · menos de 1 min
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Plataforma nº 1 do Brasil · leitura em 1 min
               </span>
               <h1 className="mt-5 text-[2.1rem] md:text-5xl font-semibold leading-[1.08]">
                 O que está tirando a sua paz — <span className="v5-gradient-text">e por onde começar a mudar isso?</span>
@@ -385,6 +385,10 @@ export default function Quiz() {
                 <p className="mt-2 text-center text-xs text-muted-foreground">7 dias por R$ 6,90 · cancele quando quiser</p>
               </div>
 
+              <div className="flex items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-center text-sm font-medium text-foreground">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
+                <span>A plataforma nº 1 do Brasil para entender o que sente e mudar sua vida.</span>
+              </div>
               <section aria-label="Quem já começou" className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Quem já começou</p>
                 {TESTIMONIALS.map((t) => (
