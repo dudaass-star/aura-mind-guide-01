@@ -103,7 +103,7 @@ export default function Quiz() {
       </Helmet>
       <div className="theme-v2 theme-v5-night min-h-screen bg-background text-foreground antialiased">
         <header className="container mx-auto max-w-xl px-5 pt-6 pb-2">
-          <img src={logoHorizontal} alt="Olá Aura" className="h-7 w-auto" />
+          <img src={logoHorizontal} alt="Olá Aura" className="h-7 w-auto brightness-0 invert" />
         </header>
         <main className="container mx-auto max-w-xl px-5 py-8 pb-16">
           {step === "intro" && (
