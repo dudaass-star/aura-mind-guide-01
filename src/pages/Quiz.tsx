@@ -229,7 +229,8 @@ export default function Quiz() {
                   ].map((x, i) => (
                     <li key={x.k} className={i === 2 ? "rounded-2xl border border-primary/50 bg-primary/10 px-4 py-4 shadow-[0_0_40px_-12px_hsl(var(--primary)/0.6)]" : "rounded-2xl border border-border bg-card px-4 py-4"}>
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{x.k}</p>
-                      <p className="mt-1.5 text-[15px] leading-relaxed text-foreground">{x.v}</p>
+                      <p className="mt-1.5 text-base font-semibold leading-snug text-foreground">{x.v.head}</p>
+                      <p className="mt-1 text-[15px] leading-relaxed text-foreground/80">{x.v.text}</p>
                     </li>
                   ))}
                 </ul>
