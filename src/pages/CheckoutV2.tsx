@@ -1666,8 +1666,8 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                           active ? "bg-[hsl(140_22%_45%)] text-white shadow-[0_6px_18px_-10px_hsl(140_22%_45%)]" : "text-white/75 hover:text-white"
                         }`}
                       >
-                        <span className="block text-[13px] font-semibold">{id === "direcao" ? <span className="text-[hsl(var(--champagne))]">★ </span> : null}{plan.name}</span>
-                        <span className={`block text-[10px] ${active ? "text-white/90" : "text-white/55"}`}>{plan.sessions} encontros/mês</span>
+                        <span className="block text-[14px] font-semibold">{id === "direcao" ? <span className="text-[hsl(var(--champagne))]">★ </span> : null}{plan.name}</span>
+                        <span className={`block text-[11px] tracking-tight ${active ? "text-white/90" : "text-white/55"}`}>{plan.sessions} encontros/mês</span>
                       </button>
                     );
                   })}
