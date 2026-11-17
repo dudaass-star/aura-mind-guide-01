@@ -357,7 +357,7 @@ export default function Quiz() {
               <section>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Sua leitura com a AURA</p>
                 <span className="v5-chip mt-3"><Sparkles className="h-3.5 w-3.5 text-primary" /> Padrão identificado: <strong className="font-semibold text-foreground">{reading.patternName}</strong></span>
-                <h1 className="mt-3 text-2xl md:text-3xl font-semibold leading-tight v5-gradient-text">{reading.title}</h1>
+                <h1 className="mt-4 text-[26px] md:text-3xl font-semibold leading-tight text-foreground">{reading.title}</h1>
                 <ul className="mt-6 space-y-3">
                   {[
                     { k: "O que está acontecendo", v: reading.living },
