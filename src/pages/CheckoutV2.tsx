@@ -1492,7 +1492,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
 
             {/* Progresso — barra fina em vez de stepper discreto: comunica de longe
                 que o fluxo tem só 2 passos e que já está na metade. */}
-            <div className="mb-2 md:mb-6 max-w-sm mx-auto">
+            {(embeddedClientSecret || asaasCardOpen) && <div className="mb-2 md:mb-6 max-w-sm mx-auto">
               <div className="flex items-baseline justify-between text-[11px] mb-1.5">
                 <span className="font-medium text-[hsl(var(--ck-text))]">
                   {embeddedClientSecret || asaasCardOpen ? "Passo 2 de 2 · Pagamento" : "Passo 1 de 2 · Seus dados"}
@@ -1513,7 +1513,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                   style={{ width: embeddedClientSecret || asaasCardOpen ? "100%" : "50%" }}
                 />
               </div>
-            </div>
+            </div>}
 
             {embeddedClientSecret && stripePromise && embeddedOptions ? (
               /* PaymentView — tela dedicada de pagamento.
