@@ -205,8 +205,9 @@ export default function Quiz() {
             <>
               <span className="v5-chip v5-chip-active mb-6 text-[13px]">
                 <Award className="h-4 w-4 text-primary" />
-                <span>Plataforma <strong className="font-semibold">nº 1 do Brasil</strong></span>
+                <span>App <strong className="font-semibold">nº 1 do Brasil</strong></span>
               </span>
+              <p className="mb-2 text-sm font-medium text-primary">Leitura pessoal em 1 minuto</p>
               <Question title="Se você pudesse mudar uma coisa na sua vida hoje, o que faria mais diferença?">
                 {THEMES.map((t) => (
                   <Option key={t.id} label={t.label} onClick={() => { setTheme(t.id); setPattern(null); setStep("pattern"); }} />
