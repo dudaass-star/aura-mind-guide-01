@@ -1442,7 +1442,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
           </div>
         </header>}
 
-        <div className={embedded ? "relative pb-28" : "relative container mx-auto px-4 pt-3 md:py-12 pb-10 lg:pb-12"}>
+        <div className={embedded ? "relative pb-28" : "relative container mx-auto px-4 pt-3 md:py-12 pb-24 lg:pb-12"}>
           <div
             className={
               embeddedClientSecret || asaasCardOpen ? "max-w-xl mx-auto" : "max-w-5xl mx-auto"
@@ -1926,7 +1926,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
         </div>
 
         {/* CTA fixo no mobile quando o botão principal sai da tela */}
-        {false && !embeddedClientSecret && !asaasCardOpen && (
+        {!embeddedClientSecret && !asaasCardOpen && (
           <StickyMobileCta
             anchorId="checkout-primary-cta"
             todayLabel={`R$ ${todayAmount}`}
