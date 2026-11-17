@@ -128,3 +128,8 @@
 .quiz-dossier-head{color:hsl(222 45% 14%)}
 .quiz-dossier-text{color:hsl(222 25% 28%)}
 .quiz-dossier-act:last-child .quiz-dossier-head{color:hsl(153 20% 28%)}
+
+/* Respostas do Quiz: noite aveludada de bem-estar */
+.quiz-opt{background:linear-gradient(150deg,hsl(222 38% 16%),hsl(205 32% 13%));border-color:hsl(var(--primary)/.22);box-shadow:inset 0 1px 0 hsl(0 0% 100%/.04)}
+.quiz-opt:hover{border-color:hsl(var(--primary)/.5);background:linear-gradient(150deg,hsl(215 34% 18%),hsl(170 22% 15%))}
+.quiz-opt-picked,.quiz-opt-picked:hover{border-color:hsl(var(--primary)/.75);background:linear-gradient(150deg,hsl(190 28% 18%),hsl(150 24% 17%))}

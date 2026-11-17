@@ -90,10 +90,10 @@ const Option = ({ label, onClick }: { label: string; onClick: () => void }) => {
     type="button"
     disabled={picked}
     onClick={() => { setPicked(true); setTimeout(onClick, 320); }}
-    className={`group flex w-full items-center gap-4 text-left rounded-[20px] border px-5 py-[18px] text-base leading-relaxed transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.985] ${picked ? "border-primary/70 bg-primary/15 text-foreground shadow-[0_8px_30px_-12px_hsl(var(--primary)/0.6)]" : "border-foreground/10 bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.02] text-foreground/90 hover:border-primary/50 hover:bg-primary/10 hover:text-foreground"}`}
+    className={`group flex w-full items-center gap-4 text-left quiz-opt rounded-[20px] border px-5 py-3.5 text-[15px] leading-snug transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.985] ${picked ? "quiz-opt-picked text-foreground shadow-[0_8px_30px_-12px_hsl(var(--primary)/0.6)]" : "text-foreground/90 hover:text-foreground"}`}
   >
     <span className="flex-1">{label}</span>
-    <span aria-hidden="true" className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${picked ? "border-primary bg-primary" : "border-foreground/30 group-hover:border-primary"}`}>
+    <span aria-hidden="true" className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${picked ? "border-primary bg-primary" : "border-primary/45 group-hover:border-primary"}`}>
       {picked && <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={3} />}
     </span>
   </button>
@@ -226,7 +226,7 @@ export default function Quiz() {
 
   const Progress = () =>
     idx >= 0 ? (
-      <div className="mb-8 flex items-center gap-4">
+      <div className="mb-5 flex items-center gap-4">
         {idx > 0 ? (
           <button type="button" onClick={back} aria-label="Voltar" className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-5 w-5" />
@@ -243,8 +243,8 @@ export default function Quiz() {
     <div className="animate-fade-in">
       <Progress />
       {bridge && <p className="mb-3 text-sm italic text-muted-foreground">{bridge}</p>}
-      <h1 className="text-2xl md:text-3xl font-semibold leading-tight mb-6">{title}</h1>
-      <div className="space-y-3">{children}</div>
+      <h1 className="text-2xl md:text-3xl font-semibold leading-tight mb-5">{title}</h1>
+      <div className="space-y-2.5">{children}</div>
     </div>
   );
 
@@ -269,10 +269,10 @@ export default function Quiz() {
         <header className="relative container mx-auto max-w-xl px-5 pt-6 pb-2">
           <button type="button" onClick={restart} aria-label="Recomeçar o teste"><img src={logoHorizontal} alt="Olá Aura" className="h-7 w-auto brightness-0 invert" /></button>
         </header>
-        <main className="relative container mx-auto max-w-xl px-5 py-8 pb-28">
+        <main className="relative container mx-auto max-w-xl px-5 py-4 pb-28">
           {step === "theme" && (
             <>
-              <span className="v5-chip v5-chip-active mb-6 text-[13px]">
+              <span className="v5-chip v5-chip-active mb-3 text-[13px]">
                 <Award className="h-4 w-4 text-primary" />
                 <span>App <strong className="font-semibold">nº 1 do Brasil</strong></span>
               </span>
@@ -282,7 +282,7 @@ export default function Quiz() {
                   <Option key={t.id} label={t.label} onClick={() => { setTheme(t.id); setPattern(null); setStep("pattern"); }} />
                 ))}
               </Question>
-              <p className="mt-6 text-center text-xs text-muted-foreground">
+              <p className="mt-4 text-center text-xs text-muted-foreground">
                 Leva menos de 1 minuto · Suas respostas ficam só neste aparelho.
               </p>
             </>
