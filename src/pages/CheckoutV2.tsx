@@ -1706,8 +1706,15 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               </div>
 
               <ul className="space-y-2 pt-3 text-sm text-white/85">
-                {[`${currentPlan.sessions} encontros guiados por mês com a AURA`, "Conversa por áudio e texto, a qualquer hora", "Todas as orações e meditações guiadas"].map((b) => (
-                  <li key={b} className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0 text-[hsl(140_30%_72%)]" /> {b}</li>
+                {([
+                  [`${currentPlan.sessions} encontros guiados`, " por mês com a AURA"],
+                  ["Áudio e texto", " a qualquer hora"],
+                  ["Todas as orações", " e meditações guiadas"],
+                ] as const).map(([forte, resto]) => (
+                  <li key={forte} className="flex items-center gap-2.5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[hsl(140_30%_72%/0.16)]"><Check className="h-3 w-3 text-[hsl(140_30%_72%)]" strokeWidth={3} /></span>
+                    <span><strong className="font-semibold text-[hsl(40_40%_96%)]">{forte}</strong>{resto}</span>
+                  </li>
                 ))}
               </ul>
               </>}
