@@ -37,6 +37,7 @@ import { TrustRow } from "@/components/checkout/TrustRow";
 import { StickyMobileCta } from "@/components/checkout/StickyMobileCta";
 import { PaymentMethodToggle, type PayMethod } from "@/components/checkout/PaymentMethodToggle";
 import { CheckoutObjections } from "@/components/checkout/CheckoutObjections";
+import { CheckoutTestimonials } from "@/components/checkout/CheckoutTestimonials";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
@@ -1901,13 +1902,10 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
 
               <TrustRow className="pt-1" />
 
-              {/* Mini-depoimento (o painel lateral cobre o desktop) */}
-              <p className="lg:hidden text-center text-xs text-white/55 italic max-w-md mx-auto pt-2">
-                "Em 3 dias senti que alguém finalmente me ouvia." — Ana C.
-              </p>
             </form>
 
               {/* Objeções no ponto de decisão (também preenche o vazio do desktop) */}
+              <CheckoutTestimonials className="mt-8" />
               <CheckoutObjections className="mt-8" />
               </div>
 
