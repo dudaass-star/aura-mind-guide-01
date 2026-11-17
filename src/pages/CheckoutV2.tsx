@@ -1672,7 +1672,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                     );
                   })}
                 </div>
-                <p className="mt-2 text-center text-[11px] text-white/65">{PLAN_RHYTHM[selectedPlan].rhythm} · <span className={selectedPlan === "direcao" ? "text-[hsl(var(--champagne))]" : undefined}>{PLAN_RHYTHM[selectedPlan].tag.replace("★ ", "")}</span></p>
+                <p className="mt-2 text-center text-[12px] text-white/65">{PLAN_RHYTHM[selectedPlan].rhythm} · <span className={selectedPlan === "direcao" ? "text-[hsl(var(--champagne))]" : undefined}>{PLAN_RHYTHM[selectedPlan].tag.replace("★ ", "")}</span></p>
               </div>
 
               <p className="pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_30%_72%)]">2. Escolha como entrar</p>
