@@ -136,7 +136,7 @@ export default function Quiz() {
 
   const [rhythm, setRhythm] = useState<Rhythm>("quinzenal");
   const [moreRhythms, setMoreRhythms] = useState(false);
-  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
+  const [billing, setBilling] = useState<"monthly" | "yearly">("yearly");
   const currentTheme = THEMES.find((t) => t.id === theme);
   const reading = useMemo(
     () => (theme && pattern && barrier && start ? composeReading({ theme, pattern, barrier, start }) : null),
@@ -410,31 +410,35 @@ export default function Quiz() {
               <section id="oferta" className="relative scroll-mt-6 rounded-3xl border border-border bg-card p-6 shadow-xl">
                 <span className="v5-chip mb-4"><Sparkles className="h-3.5 w-3.5 text-primary" /> Experiência inicial recomendada</span>
                 <p className="text-lg font-semibold">Você não precisa continuar resolvendo tudo sozinha na sua cabeça.</p>
-                <div className="mt-5 space-y-4" role="radiogroup" aria-label="Plano Essencial">
+                <div className="mt-5 grid grid-cols-2 gap-3" role="radiogroup" aria-label="Plano Essencial">
                   {([
-                    { id: "yearly" as const, tag: "★ Recomendado · 67% OFF", price: "R$ 9,90", unit: "/mês", note: "R$ 118,80 por ano · menos de R$ 0,33 por dia", cta: "Garantir o plano anual" },
-                    { id: "monthly" as const, tag: "Para experimentar", price: "R$ 6,90", unit: "nos 7 primeiros dias", note: "Depois, R$ 29,90/mês · cancele quando quiser", cta: "Começar por R$ 6,90" },
+                    { id: "yearly" as const, tag: "★ -67%", name: "Anual", price: "R$ 9,90", unit: "/mês", note: "R$ 118,80/ano · R$ 0,33/dia" },
+                    { id: "monthly" as const, tag: "7 dias", name: "Mensal", price: "R$ 6,90", unit: "7 dias", note: "Depois R$ 29,90/mês" },
                   ]).map((o) => {
                     const on = billing === o.id;
                     return (
                       <div key={o.id} role="radio" aria-checked={on} tabIndex={0} onClick={() => setBilling(o.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setBilling(o.id); }}
-                        className={`relative cursor-pointer rounded-3xl border-2 p-5 transition ${on ? "border-primary bg-secondary/40 shadow-lg" : "border-border bg-card/60 opacity-90"}`}>
-                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${on ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80"}`}>{o.tag}</span>
-                        <p className="mt-3 flex items-baseline gap-1.5"><span className="text-4xl font-bold tracking-tight">{o.price}</span><span className="text-sm text-foreground/75">{o.unit}</span></p>
-                        <p className="mt-1 text-xs text-foreground/70">{o.note}</p>
-                        <ul className="mt-4 space-y-2 text-sm">
-                          {["2 encontros guiados por mês (45 min)", "Conversa por áudio e texto, a qualquer hora", "Todas as orações e meditações guiadas"].map((t) => (
-                            <li key={t} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="font-medium">{t}</span></li>
-                          ))}
-                        </ul>
-                        <Button variant={on ? "sage" : "outline"} size="lg" className={`mt-5 w-full rounded-2xl ${on ? "v5-shimmer shadow-lg" : ""}`}
-                          onClick={(e) => { e.stopPropagation(); setBilling(o.id); trackLandingCta("final", `Paywall essencial ${o.id} (quiz)`, V); goCheckout("essencial", o.id); }}>
-                          {o.cta}
-                        </Button>
+                        className={`relative cursor-pointer rounded-2xl border-2 px-3 pb-4 pt-6 text-center transition ${on ? "border-primary bg-secondary/40 shadow-lg" : "border-border bg-card/60"}`}>
+                        <span className={`absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${on ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80"}`}>{o.tag}</span>
+                        {on && <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />}
+                        <p className="text-sm font-semibold">{o.name}</p>
+                        <p className="mt-1 text-2xl font-bold tracking-tight">{o.price}</p>
+                        <p className="text-xs text-foreground/75">{o.unit}</p>
+                        <p className="mt-2 text-[11px] leading-snug text-foreground/65">{o.note}</p>
                       </div>
                     );
                   })}
                 </div>
+                <p className="mt-5 text-sm font-semibold">Tudo que está incluso:</p>
+                <ul className="mt-2 space-y-2 text-sm">
+                  {["2 encontros guiados por mês (45 min)", "Conversa por áudio e texto, a qualquer hora", "Todas as orações e meditações guiadas"].map((t) => (
+                    <li key={t} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="font-medium">{t}</span></li>
+                  ))}
+                </ul>
+                <Button variant="sage" size="xl" className="v5-shimmer mt-5 w-full rounded-2xl shadow-lg"
+                  onClick={() => { trackLandingCta("final", `Paywall essencial ${billing} (quiz)`, V); goCheckout("essencial", billing); }}>
+                  {billing === "yearly" ? "Garantir o plano anual" : "Começar por R$ 6,90"}
+                </Button>
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80">
                   <ShieldCheck className="h-4 w-4 text-foreground/60" /> Pagamento seguro · cancele em 1 clique
                 </p>
