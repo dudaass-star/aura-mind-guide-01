@@ -1,4 +1,9 @@
 import { Helmet } from "react-helmet-async";
+import avatarMariana from "@/assets/avatar-mariana.jpg";
+import avatarCarlos from "@/assets/avatar-carlos.jpg";
+import avatarJuliana from "@/assets/avatar-juliana.jpg";
+import avatarPedro from "@/assets/avatar-pedro.jpg";
+import avatarFernanda from "@/assets/avatar-fernanda.jpg";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "@/styles/v2-theme.css";
@@ -20,10 +25,13 @@ const CheckoutV2 = lazy(() => import("@/pages/CheckoutV2"));
 const V = "quiz" as const;
 type Step = "intro" | "theme" | "pattern" | "barrier" | "start" | "loading" | "result" | "plans" | "checkout";
 
-// Mesmos depoimentos já publicados na /v5.
+// Depoimentos do carrossel do resultado (fotos do acervo do projeto).
 const TESTIMONIALS = [
-  { h: "Parei de me colocar sempre por último.", q: "Percebi que eu sempre me colocava por último. O encontro mudou como eu converso com meu marido.", n: "R., 41 anos", i: "R" },
-  { h: "Voltei a dormir sem remoer o dia.", q: "Pela primeira vez consegui dormir sem ficar remoendo o dia. Ela me ajudou a enxergar o que eu evitava.", n: "M., 34 anos", i: "M" },
+  { h: "Parei de me colocar sempre por último.", q: "Percebi que eu sempre engolia o que sentia para não criar atrito. O primeiro encontro já me deu uma clareza que eu não tinha há anos.", n: "Mariana S., 34 anos", m: "Membro há 4 meses", a: avatarMariana },
+  { h: "Voltei a dormir sem remoer o dia na cabeça.", q: "Eu deitava exausto, mas a mente não desligava pensando em trabalho e pendências. A AURA me ajudou a organizar o que realmente importava.", n: "Carlos R., 32 anos", m: "Membro há 3 meses", a: avatarCarlos },
+  { h: "As perguntas certas que eu fugia de me fazer.", q: "Achei que seria superficial, mas ela vai direto na raiz sem rodeios. Não passa a mão na cabeça, mas acolhe de verdade.", n: "Juliana M., 41 anos", m: "Membro há 5 meses", a: avatarJuliana },
+  { h: "Um espaço seguro, sem medo de julgamento.", q: "Sempre tive dificuldade de desabafar e parecer frágil. Poder falar abertamente a qualquer momento mudou o meu ritmo.", n: "Pedro H., 38 anos", m: "Membro há 2 meses", a: avatarPedro },
+  { h: "Presença às 2h da manhã, quando a angústia batia.", q: "Não precisar agendar e ter alguém ali no momento exato em que a mente aperta não tem preço.", n: "Fernanda L., 29 anos", m: "Membro há 6 meses", a: avatarFernanda },
 ];
 // Paywall do quiz: ritmo escolhe o plano (quinzenal=Essencial, semanal=Direção); só Mensal e Anual.
 // Valores devem acompanhar a tabela do CheckoutV2.
@@ -461,19 +469,24 @@ export default function Quiz() {
                   A Olá AURA não substitui acompanhamento médico ou psicológico.
                 </p>
               </section>
-              <section aria-label="Quem já começou" className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Quem já começou</p>
-                {TESTIMONIALS.map((t) => (
-                  <figure key={t.n} className="rounded-2xl border border-border bg-card/80 px-4 py-4 backdrop-blur">
-                    <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="h-3.5 w-3.5 fill-primary text-primary" />)}</div>
-                    <p className="mt-2 text-base font-semibold leading-snug text-foreground">{t.h}</p>
-                    <blockquote className="mt-1.5 text-[15px] leading-relaxed text-foreground/80">“{t.q}”</blockquote>
-                    <figcaption className="mt-3 flex items-center gap-2.5 text-xs text-muted-foreground">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-sm font-semibold text-primary">{t.i}</span>
-                      <span><span className="block font-semibold text-foreground">{t.n}</span>Cliente Olá Aura</span>
-                    </figcaption>
-                  </figure>
-                ))}
+              <section aria-label="Quem já começou" className="-mx-5">
+                <div className="flex items-end justify-between px-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Quem já começou</p>
+                  <p className="text-xs text-muted-foreground">Deslize →</p>
+                </div>
+                <div className="mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {TESTIMONIALS.map((t) => (
+                    <figure key={t.n} className="flex w-[85%] max-w-[340px] shrink-0 snap-center flex-col rounded-2xl border border-border bg-card/80 px-4 py-4 backdrop-blur">
+                      <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="h-3.5 w-3.5 fill-primary text-primary" />)}</div>
+                      <p className="mt-2 text-base font-semibold leading-snug text-foreground">{t.h}</p>
+                      <blockquote className="mt-1.5 flex-1 text-[15px] leading-relaxed text-foreground/80">“{t.q}”</blockquote>
+                      <figcaption className="mt-4 flex items-center gap-3 text-xs text-muted-foreground">
+                        <img src={t.a} alt={t.n} loading="lazy" className="h-10 w-10 rounded-full object-cover ring-2 ring-primary/30" />
+                        <span><span className="block text-sm font-semibold text-foreground">{t.n}</span>{t.m}</span>
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
               </section>
 
             </div>
