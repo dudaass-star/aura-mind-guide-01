@@ -133,6 +133,14 @@ export default function Quiz() {
       try { sessionStorage.setItem("aura_quiz_answers", JSON.stringify({ theme, pattern, barrier, start })); } catch { /* noop */ }
     }
   }, [theme, pattern, barrier, start]);
+  // Recomeça do zero: apaga respostas salvas e o plano do endereço.
+  const restart = () => {
+    try { sessionStorage.removeItem("aura_quiz_answers"); } catch { /* noop */ }
+    setTheme(null); setPattern(null); setBarrier(null); setStart(null); setChosen(null);
+    navigate("/quiz", { replace: true });
+    setStep("theme");
+    window.scrollTo({ top: 0 });
+  };
   const toOffer = () => {
     setStep("result");
     setTimeout(() => document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }), 350);
@@ -259,7 +267,7 @@ export default function Quiz() {
           <div className="v5-grain" />
         </div>
         <header className="relative container mx-auto max-w-xl px-5 pt-6 pb-2">
-          <img src={logoHorizontal} alt="Olá Aura" className="h-7 w-auto brightness-0 invert" />
+          <button type="button" onClick={restart} aria-label="Recomeçar o teste"><img src={logoHorizontal} alt="Olá Aura" className="h-7 w-auto brightness-0 invert" /></button>
         </header>
         <main className="relative container mx-auto max-w-xl px-5 py-8 pb-28">
           {step === "theme" && (
@@ -416,6 +424,7 @@ export default function Quiz() {
                     </div>
                   ))}
                 </article>
+                <p className="mt-4 text-center text-sm text-foreground/70">Quer responder pensando em outro momento? <button type="button" onClick={restart} className="font-medium text-primary hover:underline">Refazer teste →</button></p>
               </section>
 
               <div className="relative">
