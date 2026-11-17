@@ -9,7 +9,7 @@ import { Link, useNavigate } from "react-router-dom";
 import "@/styles/v2-theme.css";
 import "@/styles/v5-hero.css";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck, Mic, Award } from "lucide-react";
+import { ArrowLeft, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck, Mic, Award } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { THEMES, BARRIERS, STARTS, composeReading, type ThemeId } from "@/lib/quiz/content";
@@ -89,11 +89,13 @@ const Option = ({ label, onClick }: { label: string; onClick: () => void }) => {
   <button
     type="button"
     disabled={picked}
-    onClick={() => { setPicked(true); setTimeout(onClick, 180); }}
-    className={`group ${picked ? "!border-primary !bg-primary/20 shadow-[0_0_26px_-6px_hsl(var(--primary)/0.8)] " : ""} flex w-full items-center gap-3 text-left rounded-2xl border border-border bg-card px-5 py-4 text-[15px] leading-snug text-foreground transition-all hover:border-primary hover:bg-primary/15 hover:shadow-[0_0_22px_-6px_hsl(var(--primary)/0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98]`}
+    onClick={() => { setPicked(true); setTimeout(onClick, 320); }}
+    className={`group flex w-full items-center gap-4 text-left rounded-[20px] border px-5 py-[18px] text-base leading-relaxed transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.985] ${picked ? "border-primary/70 bg-primary/15 text-foreground shadow-[0_8px_30px_-12px_hsl(var(--primary)/0.6)]" : "border-foreground/10 bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.02] text-foreground/90 hover:border-primary/50 hover:bg-primary/10 hover:text-foreground"}`}
   >
     <span className="flex-1">{label}</span>
-    {picked ? <Check className="h-4 w-4 shrink-0 text-primary" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />}
+    <span aria-hidden="true" className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${picked ? "border-primary bg-primary" : "border-foreground/30 group-hover:border-primary"}`}>
+      {picked && <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={3} />}
+    </span>
   </button>
   );
 };
