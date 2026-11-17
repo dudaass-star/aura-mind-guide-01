@@ -38,6 +38,11 @@ const LOADING_STEPS = ["Lendo suas respostas…", "Entendendo o que mais tem te 
 
 const Loading = () => {
   const [i, setI] = useState(0);
+  const [pct, setPct] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setPct((n) => Math.min(n + 2, 100)), 44);
+    return () => clearInterval(t);
+  }, []);
   useEffect(() => {
     const t = setInterval(() => setI((n) => Math.min(n + 1, LOADING_STEPS.length - 1)), 800);
     return () => clearInterval(t);
@@ -48,8 +53,9 @@ const Loading = () => {
         <div className="v5-halo" />
         <img src={avatarAura} alt="" className="relative h-24 w-24 rounded-full object-cover ring-2 ring-primary/60" />
       </div>
-      <div className="mt-8 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted">
-        <div className="h-full bg-primary transition-all duration-700" style={{ width: `${((i + 1) / LOADING_STEPS.length) * 100}%` }} />
+      <p className="mt-8 text-4xl font-semibold tabular-nums v5-gradient-text">{pct}%</p>
+      <div className="mt-3 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+        <div className="h-full bg-primary transition-all duration-100" style={{ width: `${pct}%` }} />
       </div>
       <ul className="mt-6 space-y-3 text-sm">
         {LOADING_STEPS.map((s, n) => (
@@ -63,16 +69,20 @@ const Loading = () => {
   );
 };
 
-const Option = ({ label, onClick }: { label: string; onClick: () => void }) => (
+const Option = ({ label, onClick }: { label: string; onClick: () => void }) => {
+  const [picked, setPicked] = useState(false);
+  return (
   <button
     type="button"
-    onClick={onClick}
-    className="group flex w-full items-center gap-3 text-left rounded-2xl border border-border bg-card px-5 py-4 text-[15px] leading-snug text-foreground transition-all hover:border-primary hover:bg-primary/15 hover:shadow-[0_0_22px_-6px_hsl(var(--primary)/0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98]"
+    disabled={picked}
+    onClick={() => { setPicked(true); setTimeout(onClick, 180); }}
+    className={`group ${picked ? "!border-primary !bg-primary/20 shadow-[0_0_26px_-6px_hsl(var(--primary)/0.8)] " : ""} flex w-full items-center gap-3 text-left rounded-2xl border border-border bg-card px-5 py-4 text-[15px] leading-snug text-foreground transition-all hover:border-primary hover:bg-primary/15 hover:shadow-[0_0_22px_-6px_hsl(var(--primary)/0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98]`}
   >
     <span className="flex-1">{label}</span>
-    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+    {picked ? <Check className="h-4 w-4 shrink-0 text-primary" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />}
   </button>
-);
+  );
+};
 
 export default function Quiz() {
   useLandingEngagement(V);
@@ -83,7 +93,7 @@ export default function Quiz() {
     const plan = q.get("plan"); const b = q.get("billing");
     return plan && (b === "monthly" || b === "yearly") ? { plan, billing: b as "monthly" | "yearly" } : null;
   })();
-  const [step, setStep] = useState<Step>(initialChosen ? "checkout" : "intro");
+  const [step, setStep] = useState<Step>(initialChosen ? "checkout" : "theme");
   const [chosen, setChosen] = useState<{ plan: string; billing: "monthly" | "yearly" } | null>(initialChosen);
   // A escolha vai para o endereço do próprio /quiz: o pagamento lê plano e ciclo dali.
   const goCheckout = (plan: string, b: "monthly" | "yearly") => {
@@ -103,7 +113,7 @@ export default function Quiz() {
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
-    if (step !== "intro") logFunnel("quiz_step", { detail: `quiz_${step}`, meta: { lp: V } });
+    logFunnel("quiz_step", { detail: `quiz_${step}`, meta: { lp: V } });
     if (step === "loading") {
       const t = setTimeout(() => setStep("result"), 2400);
       return () => clearTimeout(t);
@@ -124,7 +134,7 @@ export default function Quiz() {
 
   const [rhythm, setRhythm] = useState<Rhythm>("quinzenal");
   const [moreRhythms, setMoreRhythms] = useState(false);
-  const [billing, setBilling] = useState<"monthly" | "yearly">("yearly");
+  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const currentTheme = THEMES.find((t) => t.id === theme);
   const reading = useMemo(
     () => (theme && pattern && barrier && start ? composeReading({ theme, pattern, barrier, start }) : null),
@@ -143,14 +153,16 @@ export default function Quiz() {
 
   const order: Step[] = ["theme", "pattern", "barrier", "start"];
   const idx = order.indexOf(step);
-  const back = () => setStep(idx > 0 ? order[idx - 1] : "intro");
+  const back = () => idx > 0 && setStep(order[idx - 1]);
 
   const Progress = () =>
     idx >= 0 ? (
       <div className="mb-8 flex items-center gap-4">
-        <button type="button" onClick={back} aria-label="Voltar" className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-5 w-5" />
-        </button>
+        {idx > 0 ? (
+          <button type="button" onClick={back} aria-label="Voltar" className="text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        ) : <span className="w-5" />}
         <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
           <div className="h-full bg-primary transition-all duration-500" style={{ width: `${((idx + 1) / 4) * 100}%` }} />
         </div>
@@ -189,34 +201,21 @@ export default function Quiz() {
           <img src={logoHorizontal} alt="Olá Aura" className="h-7 w-auto brightness-0 invert" />
         </header>
         <main className="relative container mx-auto max-w-xl px-5 py-8 pb-28">
-          {step === "intro" && (
-            <div className="animate-fade-in pt-4">
-              <span className="v5-chip v5-chip-active text-[13px]">
+          {step === "theme" && (
+            <>
+              <span className="v5-chip v5-chip-active mb-6 text-[13px]">
                 <Award className="h-4 w-4 text-primary" />
                 <span>Plataforma <strong className="font-semibold">nº 1 do Brasil</strong></span>
               </span>
-              <h1 className="mt-5 text-[2.1rem] md:text-5xl font-semibold leading-[1.08]">
-                O que está tirando a sua paz — <span className="v5-gradient-text">e por onde começar a mudar isso?</span>
-              </h1>
-              <p className="mt-5 text-lg text-muted-foreground leading-relaxed">
-                Tem situações que a gente vive tantas vezes que acaba se acostumando. Mas isso não significa que precisam continuar assim.
+              <Question title="Se você pudesse mudar uma coisa na sua vida hoje, o que faria mais diferença?">
+                {THEMES.map((t) => (
+                  <Option key={t.id} label={t.label} onClick={() => { setTheme(t.id); setPattern(null); setStep("pattern"); }} />
+                ))}
+              </Question>
+              <p className="mt-6 text-center text-xs text-muted-foreground">
+                Leva menos de 1 minuto · Suas respostas ficam só neste aparelho.
               </p>
-              <p className="mt-3 text-lg text-muted-foreground">Responda a 4 perguntas e veja por onde começar.</p>
-              <Button variant="sage" size="xl" className="v5-shimmer mt-8 w-full rounded-2xl shadow-lg" onClick={() => setStep("theme")}>
-                Começar
-              </Button>
-              <p className="mt-3 text-center text-xs text-muted-foreground">
-                Leva menos de 1 minuto · Suas respostas ficam neste aparelho e servem só para montar a sua leitura.
-              </p>
-            </div>
-          )}
-
-          {step === "theme" && (
-            <Question title="Se você pudesse mudar uma coisa na sua vida hoje, o que faria mais diferença?">
-              {THEMES.map((t) => (
-                <Option key={t.id} label={t.label} onClick={() => { setTheme(t.id); setPattern(null); setStep("pattern"); }} />
-              ))}
-            </Question>
+            </>
           )}
 
           {step === "pattern" && currentTheme && (
@@ -272,7 +271,7 @@ export default function Quiz() {
 
           {step === "plans" && (
             <div className="animate-fade-in space-y-6 pt-2">
-              <button onClick={() => setStep("result")} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Voltar</button>
+              <button onClick={() => setStep(reading ? "result" : "theme")} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Voltar</button>
               <div>
                 <span className="v5-chip"><Sparkles className="h-3.5 w-3.5 text-primary" /> Ativação do seu espaço</span>
                 <h1 className="mt-4 text-2xl font-semibold leading-tight v5-gradient-text">Escolha como quer começar com a AURA</h1>
@@ -366,7 +365,7 @@ export default function Quiz() {
                   </div>
                 </div>
                 <Link
-                  to="#planos" onClick={(e) => { e.preventDefault(); setStep("plans"); trackLandingCta("demo", "Responder à AURA (quiz)", V); }}
+                  to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); trackLandingCta("demo", "Responder à AURA (quiz)", V); }}
                   className="flex items-center gap-2 border-t border-border/60 bg-card/95 p-3"
                 >
                   <span className="flex flex-1 items-center gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner">
@@ -380,7 +379,7 @@ export default function Quiz() {
               <p className="-mt-6 text-center text-xs text-foreground/80">Na sua primeira conversa no App, você pode começar exatamente por esse ponto.</p>
 
               <div ref={firstCta}>
-                <Link to="#planos" onClick={(e) => { e.preventDefault(); setStep("plans"); trackLandingCta("hero", "Continuar a conversa (quiz)", V); }} className="block">
+                <Link to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); trackLandingCta("hero", "Continuar a conversa (quiz)", V); }} className="block">
                   <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Continuar essa conversa</Button>
                 </Link>
                 <p className="mt-2 text-center text-xs text-muted-foreground">7 dias por R$ 6,90 · cancele quando quiser</p>
@@ -405,7 +404,7 @@ export default function Quiz() {
                 ))}
               </section>
 
-              <section className="relative rounded-3xl border border-primary/40 bg-card p-6 shadow-[0_30px_60px_-28px_hsl(var(--primary)/0.5)]">
+              <section id="oferta" className="relative scroll-mt-6 rounded-3xl border border-primary/40 bg-card p-6 shadow-[0_30px_60px_-28px_hsl(var(--primary)/0.5)]">
                 <span className="v5-chip mb-4"><Sparkles className="h-3.5 w-3.5 text-primary" /> Experiência inicial recomendada</span>
                 <p className="text-lg font-semibold">Você não precisa continuar resolvendo tudo sozinha na sua cabeça.</p>
                 <ul className="mt-5 space-y-3 text-[15px]">
@@ -423,22 +422,34 @@ export default function Quiz() {
                     <p className="mt-1 font-semibold">cerca de R$ 1 por dia</p>
                   </div>
                 </div>
-                <div className="mt-6 border-t border-border pt-5">
-                  <p className="text-sm text-foreground/80">7 dias de acesso completo</p>
-                  <p className="mt-1 text-4xl font-semibold v5-gradient-text">R$ 6,90</p>
-                  <p className="mt-1 text-sm text-foreground/80">
-                    Depois, R$ 29,90/mês no plano Essencial, renovado mensalmente. Cancele quando quiser no seu espaço, sem precisar falar com ninguém.
-                  </p>
+                <div className="mt-6 space-y-3 border-t border-border pt-5" role="radiogroup" aria-label="Plano Essencial">
+                  {([
+                    { id: "monthly" as const, title: "7 dias por R$ 6,90", tag: "Para experimentar", note: "Depois, R$ 29,90/mês · cancele quando quiser" },
+                    { id: "yearly" as const, title: "Anual · R$ 9,90/mês", tag: "67% OFF", note: "R$ 118,80 cobrados uma vez por ano" },
+                  ]).map((o) => (
+                    <button key={o.id} type="button" role="radio" aria-checked={billing === o.id} onClick={() => setBilling(o.id)}
+                      className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition ${billing === o.id ? "border-primary bg-primary/10 shadow-[0_0_30px_-10px_hsl(var(--primary)/0.7)]" : "border-border bg-card/60"}`}>
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${billing === o.id ? "border-primary" : "border-muted-foreground"}`}>
+                        {billing === o.id && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                      </span>
+                      <span className="flex-1">
+                        <span className="block text-base font-semibold">{o.title}</span>
+                        <span className="block text-xs text-foreground/75">{o.note}</span>
+                      </span>
+                      <span className="rounded-full bg-primary/20 px-2.5 py-1 text-[11px] font-semibold text-primary">{o.tag}</span>
+                    </button>
+                  ))}
                 </div>
-                <Link to="#planos" onClick={(e) => { e.preventDefault(); setStep("plans"); trackLandingCta("final", "Quero começar com a AURA (quiz)", V); }} className="block mt-6">
-                  <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Começar meus 7 dias</Button>
-                </Link>
+                <Button variant="sage" size="xl" className="v5-shimmer mt-6 w-full rounded-2xl shadow-lg" onClick={() => { trackLandingCta("final", `Paywall essencial ${billing} (quiz)`, V); goCheckout("essencial", billing); }}>
+                  {billing === "monthly" ? "Começar meus 7 dias" : "Garantir o plano anual"}
+                </Button>
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80">
                   <ShieldCheck className="h-4 w-4 text-primary" /> Pagamento seguro · cancele em 1 clique
                 </p>
                 <p className="mt-2 text-center text-xs text-muted-foreground">
                   A AURA é uma inteligência artificial e não substitui psicoterapia.
                 </p>
+                <button type="button" onClick={() => { setRhythm("semanal"); setMoreRhythms(true); setStep("plans"); }} className="mt-4 block w-full text-center text-sm text-foreground/70 underline underline-offset-4">Precisa de encontros toda semana? Veja os planos semanais</button>
               </section>
             </div>
           )}
@@ -447,7 +458,7 @@ export default function Quiz() {
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur animate-fade-in">
             <div className="container mx-auto flex max-w-xl items-center gap-3 px-5 py-3">
               <p className="flex-1 text-sm leading-tight"><span className="font-semibold">7 dias por R$ 6,90</span><br /><span className="text-xs text-muted-foreground">cancele quando quiser</span></p>
-              <Link to="#planos" onClick={(e) => { e.preventDefault(); setStep("plans"); trackLandingCta("final", "Barra fixa (quiz)", V); }}>
+              <Link to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); trackLandingCta("final", "Barra fixa (quiz)", V); }}>
                 <Button variant="sage" className="rounded-xl">Começar</Button>
               </Link>
             </div>
