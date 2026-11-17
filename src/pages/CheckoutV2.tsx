@@ -1640,17 +1640,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               <>
             <div className={embedded ? "grid gap-8" : "grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8 lg:gap-10 items-start"}>
               <div className="min-w-0 max-w-xl w-full mx-auto lg:mx-0">
-            {/* Cabeçalho enxuto */}
-            {!embedded && <div className="text-center lg:text-left mb-2">
-              <h1 className="font-display text-xl md:text-3xl font-semibold mb-1 tracking-tight">
-                Comece em 2 minutos
-              </h1>
-              <p className="text-white/65 text-sm">
-                {pixEnabled
-                  ? `Pagamento único à vista no PIX • economia de ${currentDiscount}%`
-                  : `7 dias por R$ ${currentPlan.trialPrice} • cancele quando quiser`}
-              </p>
-            </div>}
+
 
             <form
               id="checkout-form"
