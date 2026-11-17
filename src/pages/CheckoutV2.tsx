@@ -69,6 +69,13 @@ interface PlanConfig {
   highlights: string[];
 }
 
+// Ritmo e selo de cada plano na seleção simplificada do checkout.
+const PLAN_RHYTHM: Record<PlanId, { rhythm: string; tag: string }> = {
+  essencial: { rhythm: "A cada 15 dias", tag: "Para começar" },
+  direcao: { rhythm: "Toda semana", tag: "★ Mais escolhido" },
+  transformacao: { rhythm: "2x por semana", tag: "Momentos de virada" },
+};
+
 const plans: Record<PlanId, PlanConfig> = {
   essencial: {
     name: "Essencial",
@@ -242,7 +249,9 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
   })();
 
   const initialPlan = planFromUrl || planFromState || "essencial";
-  const initialBilling = billingFromUrl || billingFromState || "monthly";
+  const rawBilling = billingFromUrl || billingFromState || "monthly";
+  // Checkout oferece só Mensal e Anual; links antigos de trimestral/semestral abrem no Anual.
+  const initialBilling: BillingPeriod = rawBilling === "monthly" ? "monthly" : "yearly";
 
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(initialBilling);
@@ -1649,99 +1658,78 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               className="space-y-5"
             >
               {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
-              {!embedded && <><CycleTabs
-                items={cycleItems}
-                value={billingPeriod}
-                onChange={(id) => setBillingPeriod(id as BillingPeriod)}
-              />
-
-              {/* Planos slim */}
+              {/* Seleção simplificada: primeiro o ritmo, depois Anual x Mensal (sem trimestral/semestral). */}
+              {!embedded && <>
               <RadioGroup
                 value={selectedPlan}
                 onValueChange={(value) => setSelectedPlan(value as PlanId)}
-                className="space-y-2.5"
+                className="space-y-2"
               >
                 {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
-                  const price = getPeriodPrice(plan, billingPeriod);
-                  const period = periodLabelMap[billingPeriod];
-                  const monthlyEquiv = getPeriodMonthlyEquivalent(plan, billingPeriod);
                   const active = selectedPlan === id;
-                  const isPopular = id === "direcao";
-                  const monthlyForSession = parseBRL(
-                    getPeriodMonthlyEquivalent(plan, billingPeriod) || plan.monthlyPrice,
-                  );
-                  const perSession =
-                    plan.sessions >= 4
-                      ? (monthlyForSession / plan.sessions).toLocaleString("pt-BR", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })
-                      : null;
-
+                  const meta = PLAN_RHYTHM[id];
                   return (
                     <label
                       key={id}
-                      className={`relative flex items-center justify-between gap-3 rounded-xl border cursor-pointer transition-all ${
-                        isPopular ? "p-5 mt-3" : "p-4"
-                      } ${
+                      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 cursor-pointer transition-all ${
                         active
-                          ? "border-[hsl(140_22%_55%)] bg-[hsl(140_22%_45%/0.16)] shadow-[0_0_0_1px_hsl(140_22%_55%/0.5),0_12px_30px_-18px_hsl(140_22%_45%/0.9)]"
-                          : isPopular
-                            ? "border-[hsl(140_22%_45%)]/40 bg-white/[0.05] hover:border-[hsl(140_22%_55%)]/70"
-                            : "border-white/10 bg-white/[0.03] hover:border-white/25"
+                          ? "border-[hsl(140_22%_55%)] bg-[hsl(222_32%_14%)] shadow-[0_0_0_1px_hsl(140_22%_55%/0.5),0_12px_30px_-18px_hsl(140_22%_45%/0.9)]"
+                          : "border-white/12 bg-[hsl(222_30%_12%)] hover:border-white/25"
                       }`}
                     >
-                      {isPopular && (
-                        <div className="absolute -top-2 left-4 px-2 py-0.5 bg-[hsl(140_22%_45%)] text-white text-[10px] font-semibold rounded uppercase tracking-wide">
-                          Recomendado
-                        </div>
-                      )}
                       <div className="flex items-center gap-3 min-w-0">
-                        <RadioGroupItem
-                          value={id}
-                          id={id}
-                          className="border-white/40 text-[hsl(140_22%_55%)] shrink-0"
-                        />
+                        <RadioGroupItem value={id} id={id} className="border-white/40 text-[hsl(140_22%_55%)] shrink-0" />
                         <div className="min-w-0">
-                          <p className="font-medium text-white">{plan.name}</p>
-                          <p className="text-xs text-white/65 truncate">
-                            {plan.sessions > 0
-                              ? `${plan.sessions} ${plan.sessions === 1 ? "encontro" : "encontros"}/mês + chat ilimitado + orações`
-                              : "Chat ilimitado 24/7"}
+                          <p className="flex flex-wrap items-center gap-1.5 font-medium text-white">
+                            {plan.name}
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${id === "direcao" ? "bg-[hsl(140_22%_45%)] text-white" : "border border-white/25 text-white/85"}`}>{meta.tag}</span>
                           </p>
-                          {perSession && (
-                            <p className="text-[11px] text-[hsl(140_30%_72%)] mt-0.5">
-                              R$ {perSession} por sessão
-                              {isPopular ? " · melhor custo por sessão" : ""}
-                            </p>
-                          )}
+                          <p className="text-xs text-white/70">{meta.rhythm} · {plan.sessions} encontros/mês</p>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        {pixEnabled ? (
-                          <>
-                            <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap leading-tight">
-                              R$ {price}
-                            </p>
-                            <p className="text-[11px] text-white/65 leading-tight">
-                              {monthlyEquiv ? `≈ R$ ${monthlyEquiv}/mês` : `por ${period}`}
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap leading-tight">
-                              R$ {plan.trialPrice}
-                            </p>
-                            <p className="text-[11px] text-white/65 leading-tight">
-                              depois R$ {price}/{period}
-                            </p>
-                          </>
-                        )}
+                      <div className="text-right shrink-0 leading-tight">
+                        <p className="text-[11px] text-white/65">a partir de</p>
+                        <p className="ck-num font-display font-semibold text-white whitespace-nowrap">R$ {plan.yearlyMonthlyEquivalent}<span className="text-xs text-white/70">/mês</span></p>
                       </div>
                     </label>
                   );
                 })}
-              </RadioGroup></>}
+              </RadioGroup>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                {(["yearly", "monthly"] as BillingPeriod[]).map((b) => {
+                  const active = billingPeriod === b;
+                  const yearly = b === "yearly";
+                  return (
+                    <button
+                      key={b}
+                      type="button"
+                      onClick={() => setBillingPeriod(b)}
+                      aria-pressed={active}
+                      className={`relative rounded-2xl border px-3 pb-3 pt-4 text-center transition-all ${
+                        active
+                          ? "border-[hsl(140_22%_55%)] bg-[hsl(222_32%_14%)] shadow-[0_0_0_1px_hsl(140_22%_55%/0.5)]"
+                          : "border-white/12 bg-[hsl(222_30%_12%)] hover:border-white/25"
+                      }`}
+                    >
+                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(140_22%_45%)] text-white" : "border border-white/25 bg-[hsl(222_30%_14%)] text-white/85"}`}>
+                        {yearly ? `★ -${currentPlan.yearlyDiscount}%` : "7 dias"}
+                      </span>
+                      <p className="text-sm font-medium text-white">{yearly ? "Anual" : "Mensal"}</p>
+                      <p className="ck-num mt-1 font-display text-2xl font-semibold text-white">R$ {yearly ? currentPlan.yearlyMonthlyEquivalent : currentPlan.trialPrice}</p>
+                      <p className="text-[11px] text-white/70">{yearly ? "/mês" : "nos 7 dias"}</p>
+                      <p className="ck-num mt-1 text-[11px] text-white/65">{yearly ? `R$ ${currentPlan.yearlyPrice}/ano` : `Depois R$ ${currentPlan.monthlyPrice}/mês`}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <ul className="space-y-1.5 pt-1 text-sm text-white/85">
+                {[`${currentPlan.sessions} encontros guiados por mês com a AURA`, "Conversa por áudio e texto, a qualquer hora", "Todas as orações e meditações guiadas"].map((b) => (
+                  <li key={b} className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0 text-[hsl(140_30%_72%)]" /> {b}</li>
+                ))}
+              </ul>
+              </>}
 
               {/* Confiança acima da dobra, colada na escolha do plano. */}
               <TrustRow />
