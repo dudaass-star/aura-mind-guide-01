@@ -1666,13 +1666,13 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                           active ? "bg-[hsl(140_22%_45%)] text-white shadow-[0_6px_18px_-10px_hsl(140_22%_45%)]" : "text-white/75 hover:text-white"
                         }`}
                       >
-                        <span className="block text-[13px] font-semibold">{id === "direcao" ? "★ " : ""}{plan.name}</span>
+                        <span className="block text-[13px] font-semibold">{id === "direcao" ? <span className="text-[hsl(var(--champagne))]">★ </span> : null}{plan.name}</span>
                         <span className={`block text-[10px] ${active ? "text-white/90" : "text-white/55"}`}>{plan.sessions} encontros/mês</span>
                       </button>
                     );
                   })}
                 </div>
-                <p className="mt-2 text-center text-[11px] text-white/65">{PLAN_RHYTHM[selectedPlan].rhythm} · {PLAN_RHYTHM[selectedPlan].tag.replace("★ ", "")}</p>
+                <p className="mt-2 text-center text-[11px] text-white/65">{PLAN_RHYTHM[selectedPlan].rhythm} · <span className={selectedPlan === "direcao" ? "text-[hsl(var(--champagne))]" : undefined}>{PLAN_RHYTHM[selectedPlan].tag.replace("★ ", "")}</span></p>
               </div>
 
               <p className="pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_30%_72%)]">2. Escolha como entrar</p>

@@ -8,6 +8,7 @@
 
 @layer base {
   :root {
+    --champagne: 40 52% 78%;
     /* Pastel therapy palette - calm, mindful, peaceful */
     --background: 30 30% 98%;
     --foreground: 220 25% 20%;
