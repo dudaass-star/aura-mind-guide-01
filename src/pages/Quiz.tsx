@@ -33,6 +33,12 @@ const TESTIMONIALS = [
   { h: "Um espaço seguro, sem medo de julgamento.", q: "Sempre tive dificuldade de desabafar e parecer frágil. Poder falar abertamente a qualquer momento mudou o meu ritmo.", n: "Pedro H., 38 anos", m: "Membro há 2 meses", a: avatarPedro },
   { h: "Presença às 2h da manhã, quando a angústia batia.", q: "Não precisar agendar e ter alguém ali no momento exato em que a mente aperta não tem preço.", n: "Fernanda L., 29 anos", m: "Membro há 6 meses", a: avatarFernanda },
 ];
+// Carrossel em rolagem infinita: a lista se repete em cópias e a rolagem desloca
+// uma cópia inteira ao encostar nas bordas, dando a sensação de depoimentos contínuos.
+const LOOP_COPIES = 3;
+const LOOPED_TESTIMONIALS = Array.from({ length: LOOP_COPIES }, (_, c) =>
+  TESTIMONIALS.map((t) => ({ ...t, k: `${c}-${t.n}` })),
+).flat();
 // Paywall do quiz: ritmo escolhe o plano (quinzenal=Essencial, semanal=Direção); só Mensal e Anual.
 // Valores devem acompanhar a tabela do CheckoutV2.
 type Rhythm = "quinzenal" | "semanal" | "intensivo";
@@ -141,6 +147,34 @@ export default function Quiz() {
       const t = setTimeout(() => setStep("result"), 2400);
       return () => clearTimeout(t);
     }
+  }, [step]);
+
+  // Rolagem infinita do carrossel: começa na cópia do meio e, ao tocar as bordas,
+  // desloca uma cópia inteira sem animação — o que está na tela não muda.
+  const railRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el || step !== "result") return;
+    const n = TESTIMONIALS.length;
+    const unit = () => {
+      const kids = el.children;
+      if (kids.length < n * 2) return 0;
+      return (kids[n] as HTMLElement).offsetLeft - (kids[0] as HTMLElement).offsetLeft;
+    };
+    el.scrollLeft = unit();
+    let busy = false;
+    const onScroll = () => {
+      if (busy) return;
+      const u = unit();
+      if (u <= 0) return;
+      if (el.scrollLeft >= u * (LOOP_COPIES - 1) || el.scrollLeft <= 0) {
+        busy = true;
+        el.scrollLeft += el.scrollLeft <= 0 ? u : -u;
+        requestAnimationFrame(() => { busy = false; });
+      }
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
   }, [step]);
 
   const firstCta = useRef<HTMLDivElement>(null);
@@ -474,9 +508,9 @@ export default function Quiz() {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Quem já começou</p>
                   <p className="text-xs text-muted-foreground">Deslize →</p>
                 </div>
-                <div className="mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {TESTIMONIALS.map((t) => (
-                    <figure key={t.n} className="flex w-[85%] max-w-[340px] shrink-0 snap-center flex-col rounded-2xl border border-border bg-card/80 px-4 py-4 backdrop-blur">
+                <div ref={railRef} className="mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {LOOPED_TESTIMONIALS.map((t) => (
+                    <figure key={t.k} className="flex w-[85%] max-w-[340px] shrink-0 snap-center flex-col rounded-2xl border border-border bg-card/80 px-4 py-4 backdrop-blur">
                       <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="h-3.5 w-3.5 fill-primary text-primary" />)}</div>
                       <p className="mt-2 text-base font-semibold leading-snug text-foreground">{t.h}</p>
                       <blockquote className="mt-1.5 flex-1 text-[15px] leading-relaxed text-foreground/80">“{t.q}”</blockquote>
