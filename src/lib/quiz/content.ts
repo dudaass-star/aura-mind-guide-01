@@ -35,21 +35,21 @@ export const THEMES: Theme[] = [
     patternName: "Buscar paz no outro",
     title: "Você está tentando encontrar segurança em algo que não consegue controlar.",
     insight:
-      "Talvez o mais desgastante não seja só o medo de perder alguém. É quanto espaço essa preocupação passou a ocupar no seu dia — e quão pouco sobra para perceber o que você mesma precisa.",
+      "Talvez o mais desgastante não seja só o medo de perder alguém. É quanto espaço essa preocupação passou a ocupar no seu dia — e quão pouco sobra para perceber o que você precisa de verdade.",
     patterns: [
       {
         id: "atenta",
-        label: "Fico atenta a cada mudança de humor ou atitude da pessoa, e isso consome meu dia.",
+        label: "Fico em alerta a cada mudança de humor ou atitude da pessoa, e isso consome meu dia.",
         head: "Hipervigilância emocional.",
-        short: "Você gasta tanta energia tentando prever o humor do outro que sobra quase nada para o que você mesma precisa.",
-        mirror: "fica atenta a cada mudança de humor ou atitude da pessoa, e isso tem consumido seu dia",
-        opening: "Quando você percebe alguma mudança no jeito dela, o que costuma passar pela sua cabeça naquele momento?",
+        short: "Você gasta tanta energia tentando prever o humor do outro que sobra quase nada para o que você precisa de verdade.",
+        mirror: "fica em alerta a cada mudança de humor ou atitude da pessoa, e isso tem consumido seu dia",
+        opening: "Quando você percebe alguma mudança no jeito da pessoa, o que costuma passar pela sua cabeça naquele momento?",
       },
       {
         id: "cede",
         label: "Abro mão da minha paz e engulo o que penso só para evitar briga ou rejeição.",
         head: "Paz comprada com silêncio.",
-        short: "Engolir o que pensa evita a briga na hora, mas vai te afastando de você mesma.",
+        short: "Engolir o que pensa evita a briga na hora, mas vai te afastando de quem você é.",
         mirror: "costuma engolir o que pensa para evitar briga ou rejeição",
         opening: "Qual foi a última vez que você deixou de dizer algo para não criar atrito? O que você queria ter dito?",
       },
@@ -63,18 +63,18 @@ export const THEMES: Theme[] = [
       },
       {
         id: "invisivel",
-        label: "Me sinto sozinha ou invisível, mesmo quando a gente está junto.",
+        label: "Me sinto só e invisível, mesmo quando a gente está junto.",
         head: "Solidão a dois.",
-        short: "Estar junto não tem bastado. Falta se sentir vista de verdade por quem está do seu lado.",
-        mirror: "se sente sozinha ou invisível, mesmo quando vocês estão juntos",
-        opening: "Em que momentos essa sensação de estar sozinha aparece mais forte, mesmo com a pessoa do lado?",
+        short: "Estar junto não tem bastado. Falta sentir que quem está do seu lado te enxerga de verdade.",
+        mirror: "se sente só e invisível, mesmo quando vocês estão juntos",
+        opening: "Em que momentos essa sensação de solidão aparece mais forte, mesmo com a pessoa do lado?",
       },
     ],
   },
   {
     id: "limites",
     label: "Conseguir dizer não sem engolir o que sinto.",
-    bridge: "Nem sempre é fácil falar o que você precisa, principalmente quando está acostumada a ceder.",
+    bridge: "Nem sempre é fácil falar o que você precisa, principalmente quando ceder virou costume.",
     patternName: "Ficar sempre por último",
     title: "Você cuida de todo mundo com tanto cuidado que acaba ficando por último.",
     insight:
@@ -82,10 +82,10 @@ export const THEMES: Theme[] = [
     patterns: [
       {
         id: "sim",
-        label: "Digo \"sim\" quando queria dizer \"não\", e depois fico com raiva de mim mesma.",
+        label: "Digo \"sim\" quando queria dizer \"não\", e depois fico com raiva de ter aceitado.",
         head: "O \"sim\" que custa caro.",
-        short: "Cada \"sim\" que você não queria dar evita um desconforto e cobra depois, em raiva de si mesma.",
-        mirror: "diz \"sim\" quando queria dizer \"não\" e depois fica com raiva de si mesma",
+        short: "Cada \"sim\" que você não queria dar evita um desconforto e cobra depois, em raiva por ter aceitado.",
+        mirror: "diz \"sim\" quando queria dizer \"não\" e depois fica com raiva de ter aceitado",
         opening: "Pensa no último \"sim\" que você se arrependeu de ter dado. O que você imaginou que aconteceria se dissesse \"não\"?",
       },
       {
@@ -99,7 +99,7 @@ export const THEMES: Theme[] = [
       {
         id: "espera",
         label: "Fico esperando que os outros percebam meu cansaço, e como ninguém nota, me fecho.",
-        head: "Esperar ser percebida.",
+        head: "Esperar que alguém perceba.",
         short: "Você torce para alguém notar seu cansaço e, quando ninguém nota, se fecha ainda mais.",
         mirror: "espera que os outros percebam seu cansaço e, quando ninguém nota, se fecha",
         opening: "Se alguém perguntasse hoje, de verdade, como você está — o que você responderia?",
@@ -133,10 +133,10 @@ export const THEMES: Theme[] = [
       },
       {
         id: "passado",
-        label: "Fico presa em decisões antigas, pensando no que eu deveria ter feito diferente.",
-        head: "Presa no que já foi.",
+        label: "Fico remoendo decisões antigas, pensando no que eu deveria ter feito diferente.",
+        head: "Remoendo o que já foi.",
         short: "Você revive decisões antigas como se ainda desse para mudá-las, e isso rouba energia do agora.",
-        mirror: "fica presa em decisões antigas, pensando no que deveria ter feito diferente",
+        mirror: "fica remoendo decisões antigas, pensando no que deveria ter feito diferente",
         opening: "Qual decisão mais volta à sua cabeça? E o que você sabia naquela época que hoje parece esquecer?",
       },
       {
@@ -159,9 +159,9 @@ export const THEMES: Theme[] = [
   },
   {
     id: "sobrecarga",
-    label: "Aliviar o cansaço de carregar tudo sozinha.",
+    label: "Aliviar o cansaço de carregar tudo sem apoio.",
     bridge: "Com tanta coisa para resolver, encontrar um momento para você acaba ficando para depois.",
-    patternName: "Carregar tudo sozinha",
+    patternName: "Carregar tudo sem apoio",
     title: "Você virou a pessoa que segura tudo — e ninguém segura você.",
     insight:
       "Dar conta de tudo pode parecer força por fora. Por dentro, costuma ser uma rotina sem pausa, em que as suas próprias necessidades ficam sempre para amanhã.",
@@ -212,21 +212,21 @@ export interface SimpleOption {
 export const BARRIERS: SimpleOption[] = [
   {
     id: "guarda",
-    label: "Guardo tudo para mim, com medo de ser julgada.",
+    label: "Guardo tudo para mim, com medo de julgamento.",
     head: "Sobrecarga em silêncio.",
     text: "Sem um espaço seguro para falar sem julgamento, tudo fica girando dentro da sua cabeça.",
   },
   {
     id: "incomoda",
     label: "Tento desabafar, mas sinto que incomodo ou ouço \"deixa pra lá\".",
-    head: "Sem ser ouvida.",
+    head: "Sem espaço para falar.",
     text: "Ouvir \"deixa pra lá\" faz você desistir de falar, mas não de sentir.",
   },
   {
     id: "sozinha",
-    label: "Tento resolver sozinha, mas volto sempre aos mesmos pensamentos.",
+    label: "Tento resolver tudo por conta própria, mas volto sempre aos mesmos pensamentos.",
     head: "Pensando em círculos.",
-    text: "Sozinha, a cabeça volta sempre ao mesmo ponto. É difícil ver a saída de dentro do labirinto.",
+    text: "Sem ajuda, a cabeça volta sempre ao mesmo ponto. É difícil ver a saída de dentro do labirinto.",
   },
   {
     id: "acesso",
@@ -239,7 +239,7 @@ export const BARRIERS: SimpleOption[] = [
 export const STARTS: SimpleOption[] = [
   {
     id: "desabafo",
-    label: "Conseguir falar tudo o que venho guardando, sem medo de ser julgada ou parecer dramática.",
+    label: "Conseguir falar tudo o que venho guardando, sem medo de julgamento ou de parecer exagero.",
     head: "Falar sem filtro e sair com a cabeça no lugar.",
     text: "Por áudio ou texto, a AURA escuta sem julgar, organiza o que você está sentindo e te mostra o que está por trás disso.",
   },
