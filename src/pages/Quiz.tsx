@@ -400,19 +400,20 @@ export default function Quiz() {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Sua leitura com a AURA</p>
                 <span className="v5-chip mt-3"><Sparkles className="h-3.5 w-3.5 text-primary" /> Padrão identificado: <strong className="font-semibold text-foreground">{reading.patternName}</strong></span>
                 <h1 className="mt-4 text-[26px] md:text-3xl font-semibold leading-tight text-foreground">{reading.title}</h1>
-                <ul className="mt-6 space-y-3">
+                <article className="quiz-dossier mt-6 rounded-3xl px-6 py-6">
+                  <p className="quiz-dossier-kicker text-[11px] font-semibold uppercase tracking-[0.2em]">Leitura pessoal · confidencial</p>
                   {[
                     { k: "O que está acontecendo", v: reading.living },
-                    { k: "Onde você trava", v: reading.barrier },
-                    { k: "O que pode ajudar agora", v: reading.start },
+                    { k: "O nó invisível", v: reading.barrier },
+                    { k: "A saída", v: reading.start },
                   ].map((x, i) => (
-                    <li key={x.k} className={`quiz-read-card quiz-read-${i + 1} rounded-2xl px-5 py-5`}>
-                      <p className="quiz-read-label flex items-center gap-2 text-[13px] font-medium italic"><span aria-hidden="true" className="quiz-read-dot" />{x.k}</p>
-                      <p className="mt-1.5 text-base font-semibold leading-snug text-foreground">{x.v.head}</p>
-                      <p className="mt-1 text-[15px] leading-relaxed text-foreground/80">{x.v.text}</p>
-                    </li>
+                    <div key={x.k} className={`quiz-dossier-act ${i ? "mt-5 pt-5" : "mt-4"}`}>
+                      <p className="quiz-dossier-label text-[13px] font-medium italic"><span className="quiz-dossier-num">{["I", "II", "III"][i]}</span> {x.k}</p>
+                      <p className="quiz-dossier-head mt-1.5 text-[19px] font-semibold leading-snug">{x.v.head}</p>
+                      <p className="quiz-dossier-text mt-1.5 text-[15px] leading-relaxed">{x.v.text}</p>
+                    </div>
                   ))}
-                </ul>
+                </article>
               </section>
 
               <div className="relative">

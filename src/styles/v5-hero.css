@@ -118,3 +118,13 @@
 .quiz-read-2 .quiz-read-dot{background:hsl(var(--accent))}
 .quiz-read-3 .quiz-read-label{color:hsl(var(--primary))}
 .quiz-read-3 .quiz-read-dot{background:hsl(var(--primary));box-shadow:0 0 10px hsl(var(--primary))}
+
+/* Leitura do Quiz como dossiê pérola: documento único, alto contraste, 3 atos. */
+.quiz-dossier{background:linear-gradient(165deg,hsl(40 30% 98%),hsl(150 18% 94%));color:hsl(222 45% 16%);border:1px solid hsl(0 0% 100%/.8);box-shadow:0 40px 80px -30px hsl(222 45% 4%/.85),0 0 0 1px hsl(128 20% 60%/.35)}
+.quiz-dossier-kicker{color:hsl(153 13% 36%)}
+.quiz-dossier-act+.quiz-dossier-act{border-top:1px solid hsl(222 30% 20%/.12)}
+.quiz-dossier-label{color:hsl(220 12% 40%)}
+.quiz-dossier-num{display:inline-block;min-width:1.6em;font-style:normal;font-weight:700;color:hsl(153 13% 36%)}
+.quiz-dossier-head{color:hsl(222 45% 14%)}
+.quiz-dossier-text{color:hsl(222 25% 28%)}
+.quiz-dossier-act:last-child .quiz-dossier-head{color:hsl(153 20% 28%)}
