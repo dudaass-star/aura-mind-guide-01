@@ -1421,7 +1421,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
           aria-hidden
         />}
 
-        {!embedded && <header className="relative py-5 border-b border-white/10">
+        {!embedded && <header className="relative py-1 md:py-5 border-b border-white/10">
           <div className="container mx-auto px-6 flex items-center justify-between">
             <Link
               to={backHref}
@@ -1434,14 +1434,14 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               <img
                 src={logoOlaAura}
                 alt="Olá AURA"
-                className="h-14 w-auto brightness-0 invert"
+                className="h-11 md:h-14 w-auto brightness-0 invert"
               />
             </Link>
             <div className="w-16" />
           </div>
         </header>}
 
-        <div className={embedded ? "relative pb-28" : "relative container mx-auto px-4 py-8 md:py-12 pb-28 lg:pb-12"}>
+        <div className={embedded ? "relative pb-28" : "relative container mx-auto px-4 pt-3 md:py-12 pb-28 lg:pb-12"}>
           <div
             className={
               embeddedClientSecret || asaasCardOpen ? "max-w-xl mx-auto" : "max-w-5xl mx-auto"
@@ -1492,7 +1492,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
 
             {/* Progresso — barra fina em vez de stepper discreto: comunica de longe
                 que o fluxo tem só 2 passos e que já está na metade. */}
-            <div className="mb-6 max-w-sm mx-auto">
+            <div className="mb-2 md:mb-6 max-w-sm mx-auto">
               <div className="flex items-baseline justify-between text-[11px] mb-1.5">
                 <span className="font-medium text-[hsl(var(--ck-text))]">
                   {embeddedClientSecret || asaasCardOpen ? "Passo 2 de 2 · Pagamento" : "Passo 1 de 2 · Seus dados"}
@@ -1641,7 +1641,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             <div className={embedded ? "grid gap-8" : "grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8 lg:gap-10 items-start"}>
               <div className="min-w-0 max-w-xl w-full mx-auto lg:mx-0">
             {/* Cabeçalho enxuto */}
-            {!embedded && <div className="text-center lg:text-left mb-4">
+            {!embedded && <div className="text-center lg:text-left mb-2">
               <h1 className="font-display text-xl md:text-3xl font-semibold mb-1 tracking-tight">
                 Comece em 2 minutos
               </h1>
@@ -1655,7 +1655,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             <form
               id="checkout-form"
               onSubmit={handleSubmit}
-              className="space-y-5"
+              className="space-y-3"
             >
               {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
               {/* Seleção simplificada: primeiro o ritmo, depois Anual x Mensal (sem trimestral/semestral). */}
@@ -1715,7 +1715,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                 })}
               </div>
 
-              <ul className="space-y-1.5 pt-1 text-sm text-white/85">
+              <ul className="space-y-1 text-sm text-white/85">
                 {[`${currentPlan.sessions} encontros guiados por mês com a AURA`, "Conversa por áudio e texto, a qualquer hora", "Todas as orações e meditações guiadas"].map((b) => (
                   <li key={b} className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0 text-[hsl(140_30%_72%)]" /> {b}</li>
                 ))}
