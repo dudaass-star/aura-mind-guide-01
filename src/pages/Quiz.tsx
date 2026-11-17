@@ -289,58 +289,68 @@ export default function Quiz() {
 
           {step === "plans" && (
             <div className="animate-fade-in space-y-6 pt-2">
-              <button onClick={() => (reading ? toOffer() : setStep("theme"))} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Voltar</button>
+              <button onClick={() => (reading ? toOffer() : setStep("theme"))} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> {reading ? "Voltar para o meu resultado" : "Voltar"}</button>
               <div>
-                <span className="v5-chip"><Sparkles className="h-3.5 w-3.5 text-primary" /> Ativação do seu espaço</span>
-                <h1 className="mt-4 text-2xl font-semibold leading-tight v5-gradient-text">Escolha como quer começar com a AURA</h1>
+                <h1 className="text-2xl font-semibold leading-tight v5-gradient-text">Escolha o ritmo do seu acompanhamento</h1>
+                <p className="mt-1 text-sm text-muted-foreground">Todos incluem conversa a qualquer hora, orações e meditações.</p>
               </div>
-              {moreRhythms && (<div>
-                <p className="mb-2 text-sm font-semibold">Qual ritmo de encontros você prefere?</p>
-                <div className="grid grid-cols-3 gap-2" role="radiogroup">
-                  {(["quinzenal", "semanal", "intensivo"] as Rhythm[]).map((r) => (
-                    <button key={r} role="radio" aria-checked={rhythm === r} onClick={() => setRhythm(r)}
-                      className={`rounded-2xl border px-3 py-3 text-left transition ${rhythm === r ? "border-primary bg-primary/15" : "border-border bg-card/60"}`}>
-                      <span className="block text-sm font-semibold">{r === "quinzenal" ? "A cada 15 dias" : r === "semanal" ? "Toda semana" : "2x por semana"}</span>
-                      <span className="block text-xs text-foreground/70">{r === "quinzenal" ? "2 encontros/mês" : r === "semanal" ? "4 encontros/mês" : "8 encontros/mês"}</span>
+              <div className="space-y-2" role="radiogroup" aria-label="Ritmo de encontros">
+                {([
+                  { r: "quinzenal" as Rhythm, freq: "A cada 15 dias · 2 encontros/mês", tag: "Para começar" },
+                  { r: "semanal" as Rhythm, freq: "Toda semana · 4 encontros/mês", tag: "★ Mais escolhido" },
+                  { r: "intensivo" as Rhythm, freq: "2x por semana · 8 encontros/mês", tag: "Momentos de virada" },
+                ]).map(({ r, freq, tag }) => {
+                  const on = rhythm === r; const pc = PAYWALL[r];
+                  return (
+                    <button key={r} role="radio" aria-checked={on} onClick={() => setRhythm(r)}
+                      className={`flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition ${on ? "border-primary bg-secondary/40 shadow-lg" : "border-border bg-card/60"}`}>
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${on ? "border-primary bg-primary" : "border-foreground/30"}`}>{on && <Check className="h-3 w-3 text-primary-foreground" />}</span>
+                      <span className="flex-1">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-base font-semibold">{pc.name}</span>
+                          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold ${r === "semanal" ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80"}`}>{tag}</span></span>
+                        <span className="block text-xs text-foreground/70">{freq}</span>
+                      </span>
+                      <span className="shrink-0 whitespace-nowrap text-right text-xs text-foreground/70">a partir de<br /><strong className="text-sm text-foreground">R$ {pc.yearlyMonth}</strong>/mês</span>
                     </button>
-                  ))}
-                </div>
-              </div>)}
+                  );
+                })}
+              </div>
               {(() => {
                 const c = PAYWALL[rhythm];
                 const opts = [
-                  { id: "yearly" as const, title: "Anual", tag: `${c.off}% OFF`, price: `R$ ${c.yearlyMonth}/mês`, note: `R$ ${c.yearlyTotal} cobrados uma vez por ano` },
-                  { id: "monthly" as const, title: "Mensal", tag: "7 dias por R$ " + c.trial, price: `R$ ${c.trial} hoje`, note: `Depois, R$ ${c.monthly}/mês · cancele quando quiser` },
+                  { id: "yearly" as const, tag: `★ -${c.off}%`, name: "Anual", price: `R$ ${c.yearlyMonth}`, unit: "/mês", note: `R$ ${c.yearlyTotal}/ano` },
+                  { id: "monthly" as const, tag: "7 dias", name: "Mensal", price: `R$ ${c.trial}`, unit: "7 dias", note: `Depois R$ ${c.monthly}/mês` },
                 ];
                 return (
-                  <div className="space-y-3" role="radiogroup" aria-label={`Plano ${c.name}`}>
-                    {opts.map((o) => (
-                      <button key={o.id} role="radio" aria-checked={billing === o.id} onClick={() => setBilling(o.id)}
-                        className={`relative w-full rounded-3xl border p-5 text-left transition ${billing === o.id ? "border-primary bg-card shadow-[0_20px_50px_-24px_hsl(var(--primary)/0.6)]" : "border-border bg-card/60"}`}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-base font-semibold">{c.name} {o.title}</span>
-                          <span className="rounded-full bg-primary/20 px-2.5 py-1 text-xs font-semibold text-primary">{o.tag}</span>
-                        </div>
-                        <p className="mt-2 text-2xl font-semibold">{o.price}</p>
-                        <p className="mt-1 text-sm text-foreground/75">{o.note}</p>
-                        <ul className="mt-3 space-y-1.5 text-xs text-foreground/80">
-                          {[c.sessions, "Conversa por áudio e texto a qualquer hora", "Todas as orações e meditações guiadas"].map((b) => (
-                            <li key={b} className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 shrink-0 text-primary" /> {b}</li>
-                          ))}
-                        </ul>
-                      </button>
-                    ))}
-                    <Button variant="sage" size="xl" className="v5-shimmer mt-2 w-full rounded-2xl shadow-lg" onClick={() => { trackLandingCta("final", `Paywall ${c.plan} ${billing} (quiz)`, V); goCheckout(c.plan, billing); }}>{billing === "monthly" ? "Começar meus 7 dias" : "Garantir o plano anual"}</Button>
-                    <p className="flex items-center justify-center gap-1.5 text-xs text-foreground/80"><ShieldCheck className="h-4 w-4 text-primary" /> Pagamento seguro · cancele em 1 clique</p>
-                    {!moreRhythms && (
-                      <button onClick={() => setMoreRhythms(true)} className="block w-full pt-2 text-center text-sm text-foreground/70 underline underline-offset-4">Precisa de encontros toda semana? Veja os planos semanais</button>
-                    )}
+                  <div>
+                    <div className="grid grid-cols-2 gap-3 pt-3" role="radiogroup" aria-label={`Ciclo do plano ${c.name}`}>
+                      {opts.map((o) => {
+                        const on = billing === o.id;
+                        return (
+                          <button key={o.id} role="radio" aria-checked={on} onClick={() => setBilling(o.id)}
+                            className={`relative rounded-2xl border-2 px-3 pb-4 pt-6 text-center transition ${on ? "border-primary bg-secondary/40 shadow-lg" : "border-border bg-card/60"}`}>
+                            <span className={`absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${on ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80"}`}>{o.tag}</span>
+                            {on && <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />}
+                            <span className="block text-sm font-semibold">{o.name}</span>
+                            <span className="mt-1 block text-2xl font-bold tracking-tight">{o.price}</span>
+                            <span className="block text-xs text-foreground/75">{o.unit}</span>
+                            <span className="mt-2 block text-[11px] leading-snug text-foreground/65">{o.note}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <ul className="mt-5 space-y-2 text-sm">
+                      {[c.sessions, "Conversa por áudio e texto, a qualquer hora", "Todas as orações e meditações guiadas"].map((t) => (
+                        <li key={t} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="font-medium">{t}</span></li>
+                      ))}
+                    </ul>
+                    <Button variant="sage" size="xl" className="v5-shimmer mt-5 w-full rounded-2xl shadow-lg" onClick={() => { trackLandingCta("final", `Paywall ${c.plan} ${billing} (quiz)`, V); goCheckout(c.plan, billing); }}>{billing === "monthly" ? `Começar por R$ ${c.trial}` : `Garantir o ${c.name} anual`}</Button>
+                    <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80"><ShieldCheck className="h-4 w-4 text-foreground/60" /> Pagamento seguro · cancele em 1 clique</p>
                   </div>
                 );
               })()}
             </div>
           )}
-
 
           {step === "result" && reading && (
             <div className="animate-fade-in space-y-10">
