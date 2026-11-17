@@ -126,7 +126,9 @@ export default function Quiz() {
     if (step !== "result") return setShowSticky(false);
     const onScroll = () => {
       const el = firstCta.current;
-      setShowSticky(!!el && el.getBoundingClientRect().bottom < 0);
+      const of = document.getElementById("oferta");
+      const offerVisible = !!of && of.getBoundingClientRect().top < window.innerHeight;
+      setShowSticky(!!el && el.getBoundingClientRect().bottom < 0 && !offerVisible);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -405,20 +407,20 @@ export default function Quiz() {
                 ))}
               </section>
 
-              <section id="oferta" className="relative scroll-mt-6 rounded-3xl border border-primary/40 bg-card p-6 shadow-[0_30px_60px_-28px_hsl(var(--primary)/0.5)]">
+              <section id="oferta" className="relative scroll-mt-6 rounded-3xl border border-border bg-card p-6 shadow-xl">
                 <span className="v5-chip mb-4"><Sparkles className="h-3.5 w-3.5 text-primary" /> Experiência inicial recomendada</span>
                 <p className="text-lg font-semibold">Você não precisa continuar resolvendo tudo sozinha na sua cabeça.</p>
                 <ul className="mt-5 space-y-3 text-[15px]">
-                  <li className="flex gap-3"><CalendarHeart className="h-5 w-5 text-primary shrink-0" /><span><strong className="font-semibold">2 encontros guiados por mês</strong><span className="block text-sm text-foreground/70">45 minutos com foco para clarear o rumo e decidir o que fazer.</span></span></li>
-                  <li className="flex gap-3"><MessageCircle className="h-5 w-5 text-primary shrink-0" /><span><strong className="font-semibold">Conversa por áudio ou texto, a qualquer hora</strong><span className="block text-sm text-foreground/70">Desabafe e organize os pensamentos no momento em que precisar.</span></span></li>
-                  <li className="flex gap-3"><Moon className="h-5 w-5 text-primary shrink-0" /><span><strong className="font-semibold">Orações e meditações guiadas</strong><span className="block text-sm text-foreground/70">Para desacelerar a cabeça e descansar melhor à noite.</span></span></li>
+                  <li className="flex gap-3"><CalendarHeart className="h-5 w-5 text-foreground/60 shrink-0" /><span><strong className="font-semibold">2 encontros guiados por mês</strong><span className="block text-sm text-foreground/70">45 minutos com foco para clarear o rumo e decidir o que fazer.</span></span></li>
+                  <li className="flex gap-3"><MessageCircle className="h-5 w-5 text-foreground/60 shrink-0" /><span><strong className="font-semibold">Conversa por áudio ou texto, a qualquer hora</strong><span className="block text-sm text-foreground/70">Desabafe e organize os pensamentos no momento em que precisar.</span></span></li>
+                  <li className="flex gap-3"><Moon className="h-5 w-5 text-foreground/60 shrink-0" /><span><strong className="font-semibold">Orações e meditações guiadas</strong><span className="block text-sm text-foreground/70">Para desacelerar a cabeça e descansar melhor à noite.</span></span></li>
                 </ul>
                 <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
                   <div className="rounded-2xl border border-border px-3 py-3">
                     <p className="text-muted-foreground">Uma sessão de terapia</p>
                     <p className="mt-1 font-semibold">R$ 150 a 250</p>
                   </div>
-                  <div className="rounded-2xl border border-primary px-3 py-3">
+                  <div className="rounded-2xl border border-foreground/25 bg-secondary/40 px-3 py-3">
                     <p className="text-muted-foreground">AURA, o mês todo</p>
                     <p className="mt-1 font-semibold">cerca de R$ 1 por dia</p>
                   </div>
@@ -429,7 +431,7 @@ export default function Quiz() {
                     { id: "yearly" as const, title: "Anual · R$ 9,90/mês", tag: "67% OFF", note: "R$ 118,80 cobrados uma vez por ano" },
                   ]).map((o) => (
                     <button key={o.id} type="button" role="radio" aria-checked={billing === o.id} onClick={() => setBilling(o.id)}
-                      className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition ${billing === o.id ? "border-primary bg-primary/10 shadow-[0_0_30px_-10px_hsl(var(--primary)/0.7)]" : "border-border bg-card/60"}`}>
+                      className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition ${billing === o.id ? "border-primary/70 bg-secondary/50" : "border-border bg-card/60"}`}>
                       <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${billing === o.id ? "border-primary" : "border-muted-foreground"}`}>
                         {billing === o.id && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
                       </span>
@@ -437,7 +439,7 @@ export default function Quiz() {
                         <span className="block text-base font-semibold">{o.title}</span>
                         <span className="block text-xs text-foreground/75">{o.note}</span>
                       </span>
-                      <span className="rounded-full bg-primary/20 px-2.5 py-1 text-[11px] font-semibold text-primary">{o.tag}</span>
+                      <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-foreground/80">{o.tag}</span>
                     </button>
                   ))}
                 </div>
@@ -445,7 +447,7 @@ export default function Quiz() {
                   {billing === "monthly" ? "Começar meus 7 dias" : "Garantir o plano anual"}
                 </Button>
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80">
-                  <ShieldCheck className="h-4 w-4 text-primary" /> Pagamento seguro · cancele em 1 clique
+                  <ShieldCheck className="h-4 w-4 text-foreground/60" /> Pagamento seguro · cancele em 1 clique
                 </p>
                 <p className="mt-2 text-center text-xs text-muted-foreground">
                   A Olá AURA não substitui acompanhamento médico ou psicológico.
