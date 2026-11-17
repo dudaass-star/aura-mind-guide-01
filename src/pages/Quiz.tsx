@@ -410,42 +410,31 @@ export default function Quiz() {
               <section id="oferta" className="relative scroll-mt-6 rounded-3xl border border-border bg-card p-6 shadow-xl">
                 <span className="v5-chip mb-4"><Sparkles className="h-3.5 w-3.5 text-primary" /> Experiência inicial recomendada</span>
                 <p className="text-lg font-semibold">Você não precisa continuar resolvendo tudo sozinha na sua cabeça.</p>
-                <ul className="mt-5 space-y-3 text-[15px]">
-                  <li className="flex gap-3"><CalendarHeart className="h-5 w-5 text-foreground/60 shrink-0" /><span><strong className="font-semibold">2 encontros guiados por mês</strong><span className="block text-sm text-foreground/70">45 minutos com foco para clarear o rumo e decidir o que fazer.</span></span></li>
-                  <li className="flex gap-3"><MessageCircle className="h-5 w-5 text-foreground/60 shrink-0" /><span><strong className="font-semibold">Conversa por áudio ou texto, a qualquer hora</strong><span className="block text-sm text-foreground/70">Desabafe e organize os pensamentos no momento em que precisar.</span></span></li>
-                  <li className="flex gap-3"><Moon className="h-5 w-5 text-foreground/60 shrink-0" /><span><strong className="font-semibold">Orações e meditações guiadas</strong><span className="block text-sm text-foreground/70">Para desacelerar a cabeça e descansar melhor à noite.</span></span></li>
-                </ul>
-                <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-2xl border border-border px-3 py-3">
-                    <p className="text-muted-foreground">Uma sessão de terapia</p>
-                    <p className="mt-1 font-semibold">R$ 150 a 250</p>
-                  </div>
-                  <div className="rounded-2xl border border-foreground/25 bg-secondary/40 px-3 py-3">
-                    <p className="text-muted-foreground">AURA, o mês todo</p>
-                    <p className="mt-1 font-semibold">cerca de R$ 1 por dia</p>
-                  </div>
-                </div>
-                <div className="mt-6 space-y-3 border-t border-border pt-5" role="radiogroup" aria-label="Plano Essencial">
+                <div className="mt-5 space-y-4" role="radiogroup" aria-label="Plano Essencial">
                   {([
-                    { id: "monthly" as const, title: "7 dias por R$ 6,90", tag: "Para experimentar", note: "Depois, R$ 29,90/mês · cancele quando quiser" },
-                    { id: "yearly" as const, title: "Anual · R$ 9,90/mês", tag: "67% OFF", note: "R$ 118,80 cobrados uma vez por ano" },
-                  ]).map((o) => (
-                    <button key={o.id} type="button" role="radio" aria-checked={billing === o.id} onClick={() => setBilling(o.id)}
-                      className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition ${billing === o.id ? "border-primary/70 bg-secondary/50" : "border-border bg-card/60"}`}>
-                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${billing === o.id ? "border-primary" : "border-muted-foreground"}`}>
-                        {billing === o.id && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
-                      </span>
-                      <span className="flex-1">
-                        <span className="block text-base font-semibold">{o.title}</span>
-                        <span className="block text-xs text-foreground/75">{o.note}</span>
-                      </span>
-                      <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-foreground/80">{o.tag}</span>
-                    </button>
-                  ))}
+                    { id: "yearly" as const, tag: "★ Recomendado · 67% OFF", price: "R$ 9,90", unit: "/mês", note: "R$ 118,80 por ano · menos de R$ 0,33 por dia", cta: "Garantir o plano anual" },
+                    { id: "monthly" as const, tag: "Para experimentar", price: "R$ 6,90", unit: "nos 7 primeiros dias", note: "Depois, R$ 29,90/mês · cancele quando quiser", cta: "Começar por R$ 6,90" },
+                  ]).map((o) => {
+                    const on = billing === o.id;
+                    return (
+                      <div key={o.id} role="radio" aria-checked={on} tabIndex={0} onClick={() => setBilling(o.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setBilling(o.id); }}
+                        className={`relative cursor-pointer rounded-3xl border-2 p-5 transition ${on ? "border-primary bg-secondary/40 shadow-lg" : "border-border bg-card/60 opacity-90"}`}>
+                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${on ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80"}`}>{o.tag}</span>
+                        <p className="mt-3 flex items-baseline gap-1.5"><span className="text-4xl font-bold tracking-tight">{o.price}</span><span className="text-sm text-foreground/75">{o.unit}</span></p>
+                        <p className="mt-1 text-xs text-foreground/70">{o.note}</p>
+                        <ul className="mt-4 space-y-2 text-sm">
+                          {["2 encontros guiados por mês (45 min)", "Conversa por áudio e texto, a qualquer hora", "Todas as orações e meditações guiadas"].map((t) => (
+                            <li key={t} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="font-medium">{t}</span></li>
+                          ))}
+                        </ul>
+                        <Button variant={on ? "sage" : "outline"} size="lg" className={`mt-5 w-full rounded-2xl ${on ? "v5-shimmer shadow-lg" : ""}`}
+                          onClick={(e) => { e.stopPropagation(); setBilling(o.id); trackLandingCta("final", `Paywall essencial ${o.id} (quiz)`, V); goCheckout("essencial", o.id); }}>
+                          {o.cta}
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
-                <Button variant="sage" size="xl" className="v5-shimmer mt-6 w-full rounded-2xl shadow-lg" onClick={() => { trackLandingCta("final", `Paywall essencial ${billing} (quiz)`, V); goCheckout("essencial", billing); }}>
-                  {billing === "monthly" ? "Começar meus 7 dias" : "Garantir o plano anual"}
-                </Button>
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80">
                   <ShieldCheck className="h-4 w-4 text-foreground/60" /> Pagamento seguro · cancele em 1 clique
                 </p>
