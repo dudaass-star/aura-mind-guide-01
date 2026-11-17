@@ -450,7 +450,7 @@ export default function Quiz() {
               <p className="-mt-6 text-center text-xs text-foreground/80">Na sua primeira conversa no App, você pode começar exatamente por esse ponto.</p>
 
               <div ref={firstCta}>
-                <Link to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); trackLandingCta("hero", "Continuar a conversa (quiz)", V); }} className="block">
+                <Link to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); setBilling("monthly"); trackLandingCta("hero", "Continuar a conversa (quiz)", V); }} className="block">
                   <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Converse agora a partir de R$ 6,90</Button>
                 </Link>
                 <p className="mt-2 text-center text-xs text-muted-foreground">Cancele quando quiser</p>
@@ -504,6 +504,7 @@ export default function Quiz() {
                   A Olá AURA não substitui acompanhamento médico ou psicológico.
                 </p>
               </section>
+              <p className="-mb-6 text-center text-sm font-medium text-foreground/90">Mais de 5.000 pessoas já deram esse passo ↓</p>
               <section aria-label="Quem já começou" className="-mx-5">
                 <div className="flex items-end justify-between px-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Quem já começou</p>
@@ -531,7 +532,7 @@ export default function Quiz() {
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur animate-fade-in">
             <div className="container mx-auto flex max-w-xl items-center gap-3 px-5 py-3">
               <p className="flex-1 text-sm leading-tight"><span className="font-semibold">7 dias por R$ 6,90</span><br /><span className="text-xs text-muted-foreground">cancele quando quiser</span></p>
-              <Link to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); trackLandingCta("final", "Barra fixa (quiz)", V); }}>
+              <Link to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); setBilling("monthly"); trackLandingCta("final", "Barra fixa (quiz)", V); }}>
                 <Button variant="sage" className="rounded-xl">Começar</Button>
               </Link>
             </div>
