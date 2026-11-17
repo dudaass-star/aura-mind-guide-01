@@ -1641,8 +1641,8 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             <div className={embedded ? "grid gap-8" : "grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8 lg:gap-10 items-start"}>
               <div className="min-w-0 max-w-xl w-full mx-auto lg:mx-0">
             {/* Cabeçalho enxuto */}
-            {!embedded && <div className="text-center lg:text-left mb-6">
-              <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
+            {!embedded && <div className="text-center lg:text-left mb-4">
+              <h1 className="font-display text-xl md:text-3xl font-semibold mb-1 tracking-tight">
                 Comece em 2 minutos
               </h1>
               <p className="text-white/65 text-sm">
@@ -1660,43 +1660,34 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
               {/* Seleção simplificada: primeiro o ritmo, depois Anual x Mensal (sem trimestral/semestral). */}
               {!embedded && <>
-              <RadioGroup
-                value={selectedPlan}
-                onValueChange={(value) => setSelectedPlan(value as PlanId)}
-                className="space-y-2"
-              >
-                {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
-                  const active = selectedPlan === id;
-                  const meta = PLAN_RHYTHM[id];
-                  return (
-                    <label
-                      key={id}
-                      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 cursor-pointer transition-all ${
-                        active
-                          ? "border-[hsl(140_22%_55%)] bg-[hsl(222_32%_14%)] shadow-[0_0_0_1px_hsl(140_22%_55%/0.5),0_12px_30px_-18px_hsl(140_22%_45%/0.9)]"
-                          : "border-white/12 bg-[hsl(222_30%_12%)] hover:border-white/25"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <RadioGroupItem value={id} id={id} className="border-white/40 text-[hsl(140_22%_55%)] shrink-0" />
-                        <div className="min-w-0">
-                          <p className="flex flex-wrap items-center gap-1.5 font-medium text-white">
-                            {plan.name}
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${id === "direcao" ? "bg-[hsl(140_22%_45%)] text-white" : "border border-white/25 text-white/85"}`}>{meta.tag}</span>
-                          </p>
-                          <p className="text-xs text-white/70">{meta.rhythm} · {plan.sessions} encontros/mês</p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 leading-tight">
-                        <p className="text-[11px] text-white/65">a partir de</p>
-                        <p className="ck-num font-display font-semibold text-white whitespace-nowrap">R$ {plan.yearlyMonthlyEquivalent}<span className="text-xs text-white/70">/mês</span></p>
-                      </div>
-                    </label>
-                  );
-                })}
-              </RadioGroup>
+              <div>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_30%_72%)]">1. Escolha seu ritmo</p>
+                <div role="radiogroup" aria-label="Ritmo de encontros" className="grid grid-cols-3 gap-1 rounded-2xl border border-white/12 bg-[hsl(222_30%_10%)] p-1">
+                  {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
+                    const active = selectedPlan === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setSelectedPlan(id)}
+                        className={`relative rounded-xl px-1 py-2 text-center leading-tight transition-all ${
+                          active ? "bg-[hsl(140_22%_45%)] text-white shadow-[0_6px_18px_-10px_hsl(140_22%_45%)]" : "text-white/75 hover:text-white"
+                        }`}
+                      >
+                        <span className="block text-[13px] font-semibold">{id === "direcao" ? "★ " : ""}{plan.name}</span>
+                        <span className={`block text-[10px] ${active ? "text-white/90" : "text-white/55"}`}>{plan.sessions} encontros/mês</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-center text-[11px] text-white/65">{PLAN_RHYTHM[selectedPlan].rhythm} · {PLAN_RHYTHM[selectedPlan].tag.replace("★ ", "")}</p>
+              </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
+              <p className="-mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_30%_72%)]">2. Escolha como entrar</p>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 {(["yearly", "monthly"] as BillingPeriod[]).map((b) => {
                   const active = billingPeriod === b;
                   const yearly = b === "yearly";
@@ -1706,17 +1697,17 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       type="button"
                       onClick={() => setBillingPeriod(b)}
                       aria-pressed={active}
-                      className={`relative rounded-2xl border px-3 pb-3 pt-4 text-center transition-all ${
+                      className={`relative rounded-2xl border px-3 pb-2.5 pt-3.5 text-center transition-all ${
                         active
-                          ? "border-[hsl(140_22%_55%)] bg-[hsl(222_32%_14%)] shadow-[0_0_0_1px_hsl(140_22%_55%/0.5)]"
-                          : "border-white/12 bg-[hsl(222_30%_12%)] hover:border-white/25"
+                          ? "border-[hsl(140_30%_72%)] bg-[hsl(140_18%_22%)] shadow-[0_0_0_1px_hsl(140_30%_72%/0.6),0_12px_30px_-18px_hsl(140_22%_45%)]"
+                          : "border-white/15 bg-[hsl(222_30%_13%)] hover:border-white/30"
                       }`}
                     >
                       <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(140_22%_45%)] text-white" : "border border-white/25 bg-[hsl(222_30%_14%)] text-white/85"}`}>
                         {yearly ? `★ -${currentPlan.yearlyDiscount}%` : "7 dias"}
                       </span>
                       <p className="text-sm font-medium text-white">{yearly ? "Anual" : "Mensal"}</p>
-                      <p className="ck-num mt-1 font-display text-2xl font-semibold text-white">R$ {yearly ? currentPlan.yearlyMonthlyEquivalent : currentPlan.trialPrice}</p>
+                      <p className="ck-num font-display text-xl font-semibold text-white">R$ {yearly ? currentPlan.yearlyMonthlyEquivalent : currentPlan.trialPrice}</p>
                       <p className="text-[11px] text-white/70">{yearly ? "/mês" : "nos 7 dias"}</p>
                       <p className="ck-num mt-1 text-[11px] text-white/65">{yearly ? `R$ ${currentPlan.yearlyPrice}/ano` : `Depois R$ ${currentPlan.monthlyPrice}/mês`}</p>
                     </button>
