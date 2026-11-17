@@ -1768,7 +1768,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                     <p id="phone-error" className="text-[11px] text-red-300 mt-1">{errors.phone}</p>
                   ) : (
                     <p id="phone-hint" className="text-[11px] text-white/60 mt-1">
-                      É por aqui que a AURA fala com você. Não enviamos spam.
+                      Para enviarmos seu link de acesso imediato ao app. Sem spam.
                     </p>
                   )}
                 </div>
