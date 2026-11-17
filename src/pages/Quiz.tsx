@@ -406,8 +406,8 @@ export default function Quiz() {
                     { k: "Onde você trava", v: reading.barrier },
                     { k: "O que pode ajudar agora", v: reading.start },
                   ].map((x, i) => (
-                    <li key={x.k} className={i === 2 ? "rounded-2xl border border-primary/50 bg-primary/10 px-4 py-4 shadow-[0_0_40px_-12px_hsl(var(--primary)/0.6)]" : "rounded-2xl border border-border bg-card px-4 py-4"}>
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{x.k}</p>
+                    <li key={x.k} className={`quiz-read-card quiz-read-${i + 1} rounded-2xl px-5 py-5`}>
+                      <p className="quiz-read-label flex items-center gap-2 text-[13px] font-medium italic"><span aria-hidden="true" className="quiz-read-dot" />{x.k}</p>
                       <p className="mt-1.5 text-base font-semibold leading-snug text-foreground">{x.v.head}</p>
                       <p className="mt-1 text-[15px] leading-relaxed text-foreground/80">{x.v.text}</p>
                     </li>
