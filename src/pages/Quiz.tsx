@@ -408,30 +408,15 @@ export default function Quiz() {
 
               <div ref={firstCta}>
                 <Link to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); trackLandingCta("hero", "Continuar a conversa (quiz)", V); }} className="block">
-                  <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Continuar essa conversa</Button>
+                  <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Converse agora a partir de R$ 6,90</Button>
                 </Link>
-                <p className="mt-2 text-center text-xs text-muted-foreground">7 dias por R$ 6,90 · cancele quando quiser</p>
+                <p className="mt-2 text-center text-xs text-muted-foreground">Cancele quando quiser</p>
               </div>
 
               <div className="flex items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-center text-sm font-medium text-foreground">
                 <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
-                <span>A plataforma nº 1 do Brasil para entender o que sente e mudar sua vida.</span>
+                <span>O app nº 1 do Brasil para entender o que sente e mudar sua vida.</span>
               </div>
-              <section aria-label="Quem já começou" className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Quem já começou</p>
-                {TESTIMONIALS.map((t) => (
-                  <figure key={t.n} className="rounded-2xl border border-border bg-card/80 px-4 py-4 backdrop-blur">
-                    <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="h-3.5 w-3.5 fill-primary text-primary" />)}</div>
-                    <p className="mt-2 text-base font-semibold leading-snug text-foreground">{t.h}</p>
-                    <blockquote className="mt-1.5 text-[15px] leading-relaxed text-foreground/80">“{t.q}”</blockquote>
-                    <figcaption className="mt-3 flex items-center gap-2.5 text-xs text-muted-foreground">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-sm font-semibold text-primary">{t.i}</span>
-                      <span><span className="block font-semibold text-foreground">{t.n}</span>Cliente Olá Aura</span>
-                    </figcaption>
-                  </figure>
-                ))}
-              </section>
-
               <section id="oferta" className="relative scroll-mt-6 rounded-3xl border border-border bg-card p-6 shadow-xl">
                 <span className="v5-chip mb-4"><Sparkles className="h-3.5 w-3.5 text-primary" /> Experiência inicial recomendada</span>
                 <p className="text-xl font-semibold">Seu acompanhamento começa agora.</p>
@@ -476,6 +461,21 @@ export default function Quiz() {
                   A Olá AURA não substitui acompanhamento médico ou psicológico.
                 </p>
               </section>
+              <section aria-label="Quem já começou" className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Quem já começou</p>
+                {TESTIMONIALS.map((t) => (
+                  <figure key={t.n} className="rounded-2xl border border-border bg-card/80 px-4 py-4 backdrop-blur">
+                    <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="h-3.5 w-3.5 fill-primary text-primary" />)}</div>
+                    <p className="mt-2 text-base font-semibold leading-snug text-foreground">{t.h}</p>
+                    <blockquote className="mt-1.5 text-[15px] leading-relaxed text-foreground/80">“{t.q}”</blockquote>
+                    <figcaption className="mt-3 flex items-center gap-2.5 text-xs text-muted-foreground">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-sm font-semibold text-primary">{t.i}</span>
+                      <span><span className="block font-semibold text-foreground">{t.n}</span>Cliente Olá Aura</span>
+                    </figcaption>
+                  </figure>
+                ))}
+              </section>
+
             </div>
           )}
         </main>
