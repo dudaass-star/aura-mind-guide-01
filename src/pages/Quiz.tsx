@@ -410,7 +410,7 @@ export default function Quiz() {
             <div className="animate-fade-in space-y-10">
               <section>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Sua leitura com a AURA</p>
-                <span className="v5-chip mt-3"><Sparkles className="h-3.5 w-3.5 text-primary" /> Padrão identificado: <strong className="font-semibold text-foreground">{reading.patternName}</strong></span>
+                <span className="v5-chip mt-3"><Sparkles className="h-3.5 w-3.5 text-primary" /> Foco da sua leitura: <strong className="font-semibold text-foreground">{reading.patternName}</strong></span>
                 <h1 className="mt-4 text-[26px] md:text-3xl font-semibold leading-tight text-foreground">{reading.title}</h1>
                 <article className="quiz-dossier mt-6 rounded-3xl px-6 py-6">
                   <p className="quiz-dossier-kicker text-[11px] font-semibold uppercase tracking-[0.2em]">Leitura pessoal · confidencial</p>
