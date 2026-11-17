@@ -518,20 +518,20 @@ export default function Quiz() {
                 </p>
               </section>
               <p className="-mb-6 text-center text-sm font-medium text-foreground/90">Mais de 5.000 pessoas já deram esse passo ↓</p>
-              <section aria-label="Quem já começou" className="-mx-5">
+              <section aria-label="Quem já começou" className="v5-band quiz-voices -mx-5 py-6">
                 <div className="flex items-end justify-between px-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Quem já começou</p>
-                  <p className="text-xs text-muted-foreground">Deslize →</p>
+                  <p className="quiz-voices-kicker text-xs font-semibold uppercase tracking-[0.18em]">Quem já começou</p>
+                  <p className="quiz-voices-hint text-xs">Deslize →</p>
                 </div>
-                <div ref={railRef} className="mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div ref={railRef} className="mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-3 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {LOOPED_TESTIMONIALS.map((t) => (
-                    <figure key={t.k} className="flex w-[85%] max-w-[340px] shrink-0 snap-center flex-col rounded-2xl border border-border bg-card/80 px-4 py-4 backdrop-blur">
-                      <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="h-3.5 w-3.5 fill-primary text-primary" />)}</div>
-                      <p className="mt-2 text-base font-semibold leading-snug text-foreground">{t.h}</p>
-                      <blockquote className="mt-1.5 flex-1 text-[15px] leading-relaxed text-foreground/80">“{t.q}”</blockquote>
-                      <figcaption className="mt-4 flex items-center gap-3 text-xs text-muted-foreground">
-                        <img src={t.a} alt={t.n} loading="lazy" className="h-10 w-10 rounded-full object-cover ring-2 ring-primary/30" />
-                        <span><span className="block text-sm font-semibold text-foreground">{t.n}</span>{t.m}</span>
+                    <figure key={t.k} className="quiz-voice-card flex w-[85%] max-w-[340px] shrink-0 snap-center flex-col rounded-2xl px-4 py-4">
+                      <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className="quiz-voice-star h-3.5 w-3.5" />)}</div>
+                      <p className="quiz-voice-head mt-2 text-base font-semibold leading-snug">{t.h}</p>
+                      <blockquote className="quiz-voice-quote mt-1.5 flex-1 text-[15px] leading-relaxed">“{t.q}”</blockquote>
+                      <figcaption className="quiz-voice-meta mt-4 flex items-center gap-3 text-xs">
+                        <img src={t.a} alt={t.n} loading="lazy" className="quiz-voice-avatar h-10 w-10 rounded-full object-cover" />
+                        <span><span className="quiz-voice-name block text-sm font-semibold">{t.n}</span>{t.m}</span>
                       </figcaption>
                     </figure>
                   ))}

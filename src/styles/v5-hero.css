@@ -59,8 +59,9 @@
     radial-gradient(50rem 40rem at 20% 85%,hsl(var(--primary)/.06),transparent 60%),
     hsl(var(--background));
 }
-/* Sem efeito zebra: seções escuras e de preço ficam transparentes sobre o mesmo fundo. */
-.theme-v5-night main > section,.theme-v5-night main > div > section,.theme-v5-night .v2-dark-section{background:transparent!important}
+/* Sem efeito zebra: seções escuras e de preço ficam transparentes sobre o mesmo fundo.
+   Exceção: faixas de cor deliberadas (.v5-band) mantêm o próprio fundo. */
+.theme-v5-night main > section:not(.v5-band),.theme-v5-night main > div > section:not(.v5-band),.theme-v5-night .v2-dark-section{background:transparent!important}
 /* Cartões em vidro com microborda luminosa. */
 .theme-v5-night .bg-card{background-color:hsl(var(--foreground)/.05)!important;backdrop-filter:blur(14px);border-color:hsl(var(--foreground)/.1)}
 .theme-v5-night .bg-card\/70,.theme-v5-night .bg-card\/60,.theme-v5-night .bg-card\/40{background-color:hsl(var(--foreground)/.05)!important;backdrop-filter:blur(14px)}
@@ -133,3 +134,26 @@
 .quiz-opt{background:linear-gradient(150deg,hsl(222 38% 16%),hsl(205 32% 13%));border-color:hsl(var(--primary)/.22);box-shadow:inset 0 1px 0 hsl(0 0% 100%/.04)}
 .quiz-opt:hover{border-color:hsl(var(--primary)/.5);background:linear-gradient(150deg,hsl(215 34% 18%),hsl(170 22% 15%))}
 .quiz-opt-picked,.quiz-opt-picked:hover{border-color:hsl(var(--primary)/.75);background:linear-gradient(150deg,hsl(190 28% 18%),hsl(150 24% 17%))}
+
+/* Depoimentos do Quiz: faixa sálvia com cartões pérola de alto contraste. */
+.theme-v5-night .quiz-voices{
+  background:
+    radial-gradient(30rem 18rem at 10% 0%, hsl(128 19% 60%/.26), transparent 62%),
+    radial-gradient(26rem 16rem at 95% 100%, hsl(150 20% 44%/.30), transparent 66%),
+    linear-gradient(160deg, hsl(153 13% 31%), hsl(150 16% 25%));
+  border-top:1px solid hsl(128 20% 60%/.30);
+  border-bottom:1px solid hsl(128 20% 60%/.30);
+}
+.quiz-voices-kicker{color:hsl(128 28% 82%)}
+.quiz-voices-hint{color:hsl(140 20% 82%)}
+.theme-v5-night .quiz-voice-card{
+  background:linear-gradient(165deg, hsl(40 30% 98%), hsl(150 18% 94%));
+  border:1px solid hsl(0 0% 100%/.85);
+  box-shadow:0 26px 50px -26px hsl(150 30% 5%/.75), 0 0 0 1px hsl(128 20% 60%/.30);
+}
+.quiz-voice-star{color:hsl(153 26% 32%);fill:hsl(153 26% 32%)}
+.quiz-voice-head{color:hsl(222 45% 14%)}
+.quiz-voice-quote{color:hsl(222 22% 32%)}
+.quiz-voice-name{color:hsl(222 40% 16%)}
+.quiz-voice-meta{color:hsl(220 12% 44%)}
+.quiz-voice-avatar{box-shadow:0 0 0 2px hsl(153 22% 42%/.55)}
