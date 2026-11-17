@@ -468,10 +468,13 @@ export default function Quiz() {
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80">
                   <ShieldCheck className="h-4 w-4 text-foreground/60" /> Pagamento seguro · cancele em 1 clique
                 </p>
-                <p className="mt-2 text-center text-xs text-muted-foreground">
+                <div className="mt-5 text-center">
+                  <p className="text-sm font-medium text-foreground/90">Gostaria de mais encontros de 45 minutos?</p>
+                  <button type="button" onClick={() => { setRhythm("semanal"); setMoreRhythms(true); setStep("plans"); }} className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline">Confira todos os planos disponíveis →</button>
+                </div>
+                <p className="mt-4 text-center text-xs text-muted-foreground">
                   A Olá AURA não substitui acompanhamento médico ou psicológico.
                 </p>
-                <button type="button" onClick={() => { setRhythm("semanal"); setMoreRhythms(true); setStep("plans"); }} className="mt-4 block w-full text-center text-sm text-foreground/70 underline underline-offset-4">Precisa de encontros toda semana? Veja os planos semanais</button>
               </section>
             </div>
           )}
