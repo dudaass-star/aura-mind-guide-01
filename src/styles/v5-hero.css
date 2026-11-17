@@ -157,3 +157,9 @@
 .quiz-voice-name{color:hsl(222 40% 16%)}
 .quiz-voice-meta{color:hsl(220 12% 44%)}
 .quiz-voice-avatar{box-shadow:0 0 0 2px hsl(153 22% 42%/.55)}
+/* Cartões de plano do Quiz: superfície sólida azul-noite, sem textura vazando atrás do texto. */
+.theme-v5-night .quiz-plan{background:hsl(222 34% 14%);border-color:hsl(222 22% 26%);backdrop-filter:none;-webkit-backdrop-filter:none}
+.theme-v5-night .quiz-plan-on{border-color:hsl(135 24% 52%);background:linear-gradient(165deg,hsl(160 22% 17%),hsl(222 34% 15%));box-shadow:0 0 0 1px hsl(135 24% 52%/.35),0 18px 40px -22px hsl(135 30% 40%/.55)}
+.theme-v5-night .quiz-plan-sub{color:hsl(128 24% 76%)}
+.theme-v5-night .quiz-plan-muted{color:hsl(220 16% 80%)}
+.theme-v5-night .quiz-plan-pill{background:hsl(222 28% 22%);color:hsl(40 30% 94%);border:1px solid hsl(128 18% 55%/.45)}

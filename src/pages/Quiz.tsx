@@ -357,14 +357,14 @@ export default function Quiz() {
                   const on = rhythm === r; const pc = PAYWALL[r];
                   return (
                     <button key={r} role="radio" aria-checked={on} onClick={() => setRhythm(r)}
-                      className={`flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition ${on ? "border-primary bg-secondary/40 shadow-lg" : "border-border bg-card/60"}`}>
+                      className={`flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition quiz-plan ${on ? "quiz-plan-on" : ""}`}>
                       <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${on ? "border-primary bg-primary" : "border-foreground/30"}`}>{on && <Check className="h-3 w-3 text-primary-foreground" />}</span>
                       <span className="flex-1">
                         <span className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-base font-semibold">{pc.name}</span>
-                          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold ${r === "semanal" ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80"}`}>{tag}</span></span>
-                        <span className="block text-xs text-foreground/70">{freq}</span>
+                          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold ${r === "semanal" ? "bg-primary text-primary-foreground" : "quiz-plan-pill"}`}>{tag}</span></span>
+                        <span className="quiz-plan-sub block text-xs">{freq}</span>
                       </span>
-                      <span className="shrink-0 whitespace-nowrap text-right text-xs text-foreground/70">a partir de<br /><strong className="text-sm text-foreground">R$ {pc.yearlyMonth}</strong>/mês</span>
+                      <span className="shrink-0 whitespace-nowrap text-right text-xs quiz-plan-muted">a partir de<br /><strong className="text-sm text-foreground">R$ {pc.yearlyMonth}</strong>/mês</span>
                     </button>
                   );
                 })}
@@ -382,13 +382,13 @@ export default function Quiz() {
                         const on = billing === o.id;
                         return (
                           <button key={o.id} role="radio" aria-checked={on} onClick={() => setBilling(o.id)}
-                            className={`relative rounded-2xl border-2 px-3 pb-4 pt-6 text-center transition ${on ? "border-primary bg-secondary/40 shadow-lg" : "border-border bg-card/60"}`}>
-                            <span className={`absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${on ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80"}`}>{o.tag}</span>
+                            className={`relative rounded-2xl border-2 px-3 pb-4 pt-6 text-center transition quiz-plan ${on ? "quiz-plan-on" : ""}`}>
+                            <span className={`absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${on ? "bg-primary text-primary-foreground" : "quiz-plan-pill"}`}>{o.tag}</span>
                             {on && <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />}
                             <span className="block text-sm font-semibold">{o.name}</span>
                             <span className="mt-1 block text-2xl font-bold tracking-tight">{o.price}</span>
                             <span className="block text-xs text-foreground/75">{o.unit}</span>
-                            <span className="mt-2 block text-[11px] leading-snug text-foreground/65">{o.note}</span>
+                            <span className="mt-2 block text-[11px] leading-snug quiz-plan-muted">{o.note}</span>
                           </button>
                         );
                       })}
@@ -485,13 +485,13 @@ export default function Quiz() {
                     const on = billing === o.id;
                     return (
                       <div key={o.id} role="radio" aria-checked={on} tabIndex={0} onClick={() => setBilling(o.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setBilling(o.id); }}
-                        className={`relative cursor-pointer rounded-2xl border-2 px-3 pb-4 pt-6 text-center transition ${on ? "border-primary bg-secondary/40 shadow-lg" : "border-border bg-card/60"}`}>
-                        <span className={`absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${on ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground/80"}`}>{o.tag}</span>
+                        className={`relative cursor-pointer rounded-2xl border-2 px-3 pb-4 pt-6 text-center transition quiz-plan ${on ? "quiz-plan-on" : ""}`}>
+                        <span className={`absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${on ? "bg-primary text-primary-foreground" : "quiz-plan-pill"}`}>{o.tag}</span>
                         {on && <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />}
                         <p className="text-sm font-semibold">{o.name}</p>
                         <p className="mt-1 text-2xl font-bold tracking-tight">{o.price}</p>
                         <p className="text-xs text-foreground/75">{o.unit}</p>
-                        <p className="mt-2 text-[11px] leading-snug text-foreground/65">{o.note}</p>
+                        <p className="mt-2 text-[11px] leading-snug quiz-plan-muted">{o.note}</p>
                       </div>
                     );
                   })}
