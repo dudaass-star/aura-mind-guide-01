@@ -93,7 +93,12 @@ export default function Quiz() {
     const plan = q.get("plan"); const b = q.get("billing");
     return plan && (b === "monthly" || b === "yearly") ? { plan, billing: b as "monthly" | "yearly" } : null;
   })();
-  const [step, setStep] = useState<Step>(initialChosen ? "checkout" : "theme");
+  // Respostas salvas na sessão: voltar/refresh nunca reinicia o quiz para a 1ª pergunta
+  const saved = (() => {
+    try { return JSON.parse(sessionStorage.getItem("aura_quiz_answers") || "null") as { theme: ThemeId; pattern: string; barrier: string; start: string } | null; } catch { return null; }
+  })();
+  const done = !!(saved?.theme && saved.pattern && saved.barrier && saved.start);
+  const [step, setStep] = useState<Step>(initialChosen ? "checkout" : done ? "result" : "theme");
   const [chosen, setChosen] = useState<{ plan: string; billing: "monthly" | "yearly" } | null>(initialChosen);
   // A escolha vai para o endereço do próprio /quiz: o pagamento lê plano e ciclo dali.
   const goCheckout = (plan: string, b: "monthly" | "yearly") => {
@@ -102,10 +107,20 @@ export default function Quiz() {
     setStep("checkout");
     window.scrollTo({ top: 0 });
   };
-  const [theme, setTheme] = useState<ThemeId | null>(null);
-  const [pattern, setPattern] = useState<string | null>(null);
-  const [barrier, setBarrier] = useState<string | null>(null);
-  const [start, setStart] = useState<string | null>(null);
+  const [theme, setTheme] = useState<ThemeId | null>(done ? saved!.theme : null);
+  const [pattern, setPattern] = useState<string | null>(done ? saved!.pattern : null);
+  const [barrier, setBarrier] = useState<string | null>(done ? saved!.barrier : null);
+  const [start, setStart] = useState<string | null>(done ? saved!.start : null);
+
+  useEffect(() => {
+    if (theme && pattern && barrier && start) {
+      try { sessionStorage.setItem("aura_quiz_answers", JSON.stringify({ theme, pattern, barrier, start })); } catch { /* noop */ }
+    }
+  }, [theme, pattern, barrier, start]);
+  const toOffer = () => {
+    setStep("result");
+    setTimeout(() => document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }), 350);
+  };
 
   useEffect(() => {
     trackMetaViewContent({ content_name: "Quiz", content_category: "quiz" });
@@ -249,7 +264,7 @@ export default function Quiz() {
 
           {step === "checkout" && chosen && (
             <div className="animate-fade-in space-y-6 pt-2">
-              <button onClick={() => { navigate("/quiz", { replace: true }); setStep("plans"); }} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Trocar plano</button>
+              <button onClick={() => { navigate("/quiz", { replace: true }); if (reading) toOffer(); else setStep("theme"); }} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Trocar plano</button>
               <div>
                 <span className="v5-chip"><ShieldCheck className="h-3.5 w-3.5 text-primary" /> Último passo</span>
                 <h1 className="mt-4 text-2xl font-semibold leading-tight v5-gradient-text">Ative seu espaço com a AURA</h1>
@@ -274,7 +289,7 @@ export default function Quiz() {
 
           {step === "plans" && (
             <div className="animate-fade-in space-y-6 pt-2">
-              <button onClick={() => setStep(reading ? "result" : "theme")} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Voltar</button>
+              <button onClick={() => (reading ? toOffer() : setStep("theme"))} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Voltar</button>
               <div>
                 <span className="v5-chip"><Sparkles className="h-3.5 w-3.5 text-primary" /> Ativação do seu espaço</span>
                 <h1 className="mt-4 text-2xl font-semibold leading-tight v5-gradient-text">Escolha como quer começar com a AURA</h1>
