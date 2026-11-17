@@ -448,7 +448,7 @@ export default function Quiz() {
                   <ShieldCheck className="h-4 w-4 text-primary" /> Pagamento seguro · cancele em 1 clique
                 </p>
                 <p className="mt-2 text-center text-xs text-muted-foreground">
-                  A AURA é uma inteligência artificial e não substitui psicoterapia.
+                  A Olá AURA não substitui acompanhamento médico ou psicológico.
                 </p>
                 <button type="button" onClick={() => { setRhythm("semanal"); setMoreRhythms(true); setStep("plans"); }} className="mt-4 block w-full text-center text-sm text-foreground/70 underline underline-offset-4">Precisa de encontros toda semana? Veja os planos semanais</button>
               </section>
