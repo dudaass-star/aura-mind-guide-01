@@ -90,7 +90,7 @@ const Option = ({ label, onClick }: { label: string; onClick: () => void }) => {
     type="button"
     disabled={picked}
     onClick={() => { setPicked(true); setTimeout(onClick, 320); }}
-    className={`group flex w-full items-center gap-4 text-left quiz-opt rounded-[20px] border px-5 py-3.5 text-[15px] leading-snug transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.985] ${picked ? "quiz-opt-picked text-foreground shadow-[0_8px_30px_-12px_hsl(var(--primary)/0.6)]" : "text-foreground/90 hover:text-foreground"}`}
+    className={`group flex w-full items-center gap-4 text-left quiz-opt rounded-[20px] border px-5 py-3 text-[15px] leading-snug transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.985] ${picked ? "quiz-opt-picked text-foreground shadow-[0_8px_30px_-12px_hsl(var(--primary)/0.6)]" : "text-foreground/90 hover:text-foreground"}`}
   >
     <span className="flex-1">{label}</span>
     <span aria-hidden="true" className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${picked ? "border-primary bg-primary" : "border-primary/45 group-hover:border-primary"}`}>
@@ -226,7 +226,7 @@ export default function Quiz() {
 
   const Progress = () =>
     idx >= 0 ? (
-      <div className="mb-5 flex items-center gap-4">
+      <div className="mb-4 flex items-center gap-4">
         {idx > 0 ? (
           <button type="button" onClick={back} aria-label="Voltar" className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-5 w-5" />
@@ -243,8 +243,8 @@ export default function Quiz() {
     <div className="animate-fade-in">
       <Progress />
       {bridge && <p className="mb-3 text-sm italic text-muted-foreground">{bridge}</p>}
-      <h1 className="text-2xl md:text-3xl font-semibold leading-tight mb-5">{title}</h1>
-      <div className="space-y-2.5">{children}</div>
+      <h1 className="text-[21px] md:text-3xl font-semibold leading-tight mb-4">{title}</h1>
+      <div className="space-y-2">{children}</div>
     </div>
   );
 
@@ -266,23 +266,25 @@ export default function Quiz() {
           <div className="v5-orb v5-orb-c" />
           <div className="v5-grain" />
         </div>
-        <header className="relative container mx-auto max-w-xl px-5 pt-6 pb-2">
-          <button type="button" onClick={restart} aria-label="Recomeçar o teste"><img src={logoHorizontal} alt="Olá Aura" className="h-7 w-auto brightness-0 invert" /></button>
+        <header className="relative container mx-auto max-w-xl px-5 pt-4 pb-1">
+          <button type="button" onClick={restart} aria-label="Recomeçar o teste"><img src={logoHorizontal} alt="Olá Aura" className="h-6 w-auto brightness-0 invert" /></button>
         </header>
-        <main className="relative container mx-auto max-w-xl px-5 py-4 pb-28">
+        <main className="relative container mx-auto max-w-xl px-5 py-2 pb-28">
           {step === "theme" && (
             <>
-              <span className="v5-chip v5-chip-active mb-3 text-[13px]">
-                <Award className="h-4 w-4 text-primary" />
-                <span>App <strong className="font-semibold">nº 1 do Brasil</strong></span>
-              </span>
-              <p className="mb-2 text-sm font-medium text-primary">Leitura pessoal em 1 minuto</p>
+              <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="v5-chip v5-chip-active text-[12px]">
+                  <Award className="h-3.5 w-3.5 text-primary" />
+                  <span>App <strong className="font-semibold">nº 1 do Brasil</strong></span>
+                </span>
+                <span className="text-xs font-medium text-primary">Leitura pessoal em 1 minuto</span>
+              </div>
               <Question title="Se você pudesse mudar uma coisa na sua vida hoje, o que faria mais diferença?">
                 {THEMES.map((t) => (
                   <Option key={t.id} label={t.label} onClick={() => { setTheme(t.id); setPattern(null); setStep("pattern"); }} />
                 ))}
               </Question>
-              <p className="mt-4 text-center text-xs text-muted-foreground">
+              <p className="mt-3 text-center text-[11px] text-muted-foreground">
                 Leva menos de 1 minuto · Suas respostas ficam só neste aparelho.
               </p>
             </>
