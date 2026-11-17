@@ -1,4 +1,4 @@
-// Barra fixa de CTA no mobile: aparece quando o CTA principal sai da viewport.
+// Barra fixa de CTA no mobile: aparece só depois que o CTA principal ficou acima da tela (usuário rolou além dele).
 // Evita perder quem rolou até os depoimentos e não quer voltar pra cima.
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export function StickyMobileCta({ anchorId, todayLabel, ctaLabel, onClick }: Sti
     const el = document.getElementById(anchorId);
     if (!el || typeof IntersectionObserver === "undefined") return;
     const obs = new IntersectionObserver(
-      ([entry]) => setVisible(!entry.isIntersecting),
+      ([entry]) => setVisible(!entry.isIntersecting && entry.boundingClientRect.top < 0),
       { threshold: 0.2 },
     );
     obs.observe(el);
