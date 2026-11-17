@@ -409,7 +409,8 @@ export default function Quiz() {
 
               <section id="oferta" className="relative scroll-mt-6 rounded-3xl border border-border bg-card p-6 shadow-xl">
                 <span className="v5-chip mb-4"><Sparkles className="h-3.5 w-3.5 text-primary" /> Experiência inicial recomendada</span>
-                <p className="text-lg font-semibold">Você não precisa continuar resolvendo tudo sozinha na sua cabeça.</p>
+                <p className="text-xl font-semibold">Seu acompanhamento começa agora.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Escolha como prefere dar os primeiros passos com a AURA.</p>
                 <div className="mt-5 grid grid-cols-2 gap-3" role="radiogroup" aria-label="Plano Essencial">
                   {([
                     { id: "yearly" as const, tag: "★ -67%", name: "Anual", price: "R$ 9,90", unit: "/mês", note: "R$ 118,80/ano · R$ 0,33/dia" },
