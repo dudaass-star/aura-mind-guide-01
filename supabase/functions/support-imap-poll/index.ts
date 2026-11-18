@@ -4,6 +4,7 @@ import { ImapFlow } from "npm:imapflow@1.0.171";
 import PostalMime from "npm:postal-mime@2.4.3";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3.25.76";
+import { resolveSupportProfile } from "../_shared/support-identity.ts";
 
 const optionsSchema = z.object({
   reprocess_seen: z.boolean().optional().default(false),
@@ -145,11 +146,10 @@ serve(async (req) => {
           }
 
           // Lookup profile by email
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("user_id, name")
-            .eq("email", fromEmail)
-            .maybeSingle();
+          // E-mail exato, Gmail sem pontos/+tag ou telefone citado no corpo.
+          const identity = await resolveSupportProfile(supabase, fromEmail, [parsed.text, subject]);
+          const profile = identity.profile;
+          if (identity.matched_by && identity.matched_by !== "email_exact") log("Cliente identificado", { matched_by: identity.matched_by });
 
           if (!ticketId) {
             const { data: newTicket, error: insertErr } = await supabase

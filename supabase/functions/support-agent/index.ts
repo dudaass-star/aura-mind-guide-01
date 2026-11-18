@@ -4,6 +4,7 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { customerRequestedRefund, normalizePendingActionWording, REFUND_TERMS_RE, SERVICE_POLICY } from "./service-policy.ts";
 import { APP_SUPPORT_POLICY, normalizeAppSupportAction } from "./app-policy.ts";
 import { RENEWAL_POLICY } from "./renewal-policy.ts";
+import { resolveSupportProfile } from "../_shared/support-identity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -219,6 +220,27 @@ serve(async (req) => {
       log("Customer history lookup failed", { error: String(e) });
     }
 
+    // Recupera o vínculo quando o e-mail difere do cadastro (Gmail com pontos) ou o cliente citou o telefone.
+    let lookupEmail: string = ticket.customer_email;
+    if (!ticket.profile_user_id) {
+      const identity = await resolveSupportProfile(
+        supabase, ticket.customer_email,
+        [ticket.subject, ...(messages || []).filter((m) => m.direction === "inbound").map((m) => m.body_text)],
+      );
+      if (identity.profile) {
+        ticket.profile_user_id = identity.profile.user_id;
+        await supabase.from("support_tickets").update({ profile_user_id: identity.profile.user_id }).eq("id", ticket_id);
+      }
+      context.identity_resolution = {
+        matched_by: identity.matched_by,
+        ambiguous: identity.ambiguous,
+        registered_email: identity.profile?.email || null,
+        note: identity.profile
+          ? "Cadastro localizado por dado do próprio cliente. Não diga que a conta não existe; informe com naturalidade o e-mail cadastrado para ele entrar no App."
+          : "Sem cadastro localizado por e-mail nem telefone citado.",
+      };
+    }
+
     if (ticket.profile_user_id) {
       const { data: profile } = await supabase
         .from("profiles")
@@ -226,6 +248,7 @@ serve(async (req) => {
         .eq("user_id", ticket.profile_user_id)
         .single();
       context.profile = profile;
+      if (profile?.email && profile.email.toLowerCase() !== (ticket.customer_email || "").toLowerCase()) lookupEmail = profile.email;
 
       // Apenas metadados de atividade: não expõe conteúdo terapêutico ao suporte.
       const { data: activity, error: activityError } = await supabase
@@ -244,10 +267,10 @@ serve(async (req) => {
 
     // Stripe context if email available
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (stripeKey && ticket.customer_email) {
+    if (stripeKey && lookupEmail) {
       try {
         const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
-        const customers = await stripe.customers.list({ email: ticket.customer_email, limit: 1 });
+        const customers = await stripe.customers.list({ email: lookupEmail, limit: 1 });
         if (customers.data.length > 0) {
           const customer = customers.data[0];
           const [subs, invoices] = await Promise.all([
