@@ -236,7 +236,9 @@ serve(async (req) => {
         ambiguous: identity.ambiguous,
         registered_email: identity.profile?.email || null,
         note: identity.profile
-          ? "Cadastro localizado por dado do próprio cliente. Não diga que a conta não existe; informe com naturalidade o e-mail cadastrado para ele entrar no App."
+          ? (identity.matched_by === "name_signature"
+            ? "Cadastro provável localizado só pelo nome assinado. Confirme com o cliente o e-mail cadastrado antes de qualquer ação; não diga que a conta não existe."
+            : "Cadastro localizado por dado do próprio cliente. Não diga que a conta não existe; informe com naturalidade o e-mail cadastrado para ele entrar no App.")
           : "Sem cadastro localizado por e-mail nem telefone citado.",
       };
     }
@@ -523,7 +525,8 @@ REVISÃO FINAL OBRIGATÓRIA:
 - Falha alegada não investigada: encaminhar análise humana do reembolso, não encerrar a questão apenas por estar fora da garantia.
 - Nunca dizer que o aplicativo não existe ou que não é necessário aplicativo; apresente a página de entrada do App.
 - Troca de plano: apenas orientar o menu de três pontos → Trocar de plano no App; não prometer execução pelo email ou cobrança imediata sem provedor comprovado.
-- Não inventar datas, prazos ou alternativas.`;
+- Não inventar datas, prazos ou alternativas.
+${ticket.profile_user_id ? "" : `- CADASTRO NÃO LOCALIZADO: não confirme status alegado (cancelado, ativo, vence amanhã), não mande assinar/contratar nem trocar plano, não prometa manter histórico. Acolha, diga que não encontrou assinatura ligada a ESTE e-mail e peça o e-mail ou telefone usado na compra. Ação "none".`}`;
 
     const aiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!aiKey) throw new Error("LOVABLE_API_KEY not configured");
@@ -694,6 +697,12 @@ REVISÃO FINAL OBRIGATÓRIA:
       }
     } catch (e) {
       log("Action param hardening failed (non-fatal)", { error: String(e) });
+    }
+
+    // Sem cadastro localizado, nenhuma ação de conta pode seguir: evita contratação duplicada em conta vazia.
+    if (!ticket.profile_user_id && ["troca_plano", "cancelamento", "cobranca_falhou", "reembolso", "pausa"].includes(args.category)) {
+      args.suggested_actions = [{ type: "none", reason: "Cadastro não localizado — aguardando confirmação do e-mail ou telefone da compra" }];
+      args.suggested_action = args.suggested_actions[0];
     }
 
     // Mark previous drafts as not current

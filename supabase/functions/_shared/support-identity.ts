@@ -40,9 +40,23 @@ export function extractBrazilPhones(texts: Array<string | null | undefined>): st
   return [...found];
 }
 
+/** Extrai nomes de assinatura ("Atenciosamente, Nome") ignorando trechos encaminhados. */
+export function extractSignatureNames(texts: Array<string | null | undefined>): string[] {
+  const found = new Set<string>();
+  const re = /(?:^|\n)\s*(?:atenciosamente|att\.?|abra[çc]os?|obrigad[oa]|grat[ao]|cordialmente|um abra[çc]o)[,.!]?\s*\n+\s*([A-Za-zÀ-ÿ]+(?:[ ]+[A-Za-zÀ-ÿ]+){1,4})\s*(?:\n|$)/gi;
+  for (const t of texts) {
+    if (!t) continue;
+    for (const m of t.matchAll(re)) {
+      const name = m[1].trim().replace(/\s+/g, " ");
+      if (name.split(" ").length >= 2) found.add(name);
+    }
+  }
+  return [...found];
+}
+
 export type SupportIdentityMatch = {
   profile: { user_id: string; email: string | null; name: string | null } | null;
-  matched_by: "email_exact" | "email_normalized" | "phone" | null;
+  matched_by: "email_exact" | "email_normalized" | "phone" | "name_signature" | null;
   ambiguous: boolean;
 };
 
@@ -80,5 +94,15 @@ export async function resolveSupportProfile(
     if (unique.size === 1) return { profile: [...unique.values()][0] as any, matched_by: "phone", ambiguous: false };
     if (unique.size > 1) return { profile: null, matched_by: null, ambiguous: true };
   }
+
+  // Último recurso: nome completo assinado, aceito só quando há exatamente um cadastro.
+  const names = extractSignatureNames(texts);
+  const byName = new Map<string, any>();
+  for (const n of names) {
+    const { data } = await supabase.from("profiles").select(sel).ilike("name", n).neq("status", "demo").limit(3);
+    for (const p of data || []) byName.set(p.user_id, p);
+  }
+  if (byName.size === 1) return { profile: [...byName.values()][0], matched_by: "name_signature", ambiguous: false };
+  if (byName.size > 1) return { profile: null, matched_by: null, ambiguous: true };
   return { profile: null, matched_by: null, ambiguous: false };
 }
