@@ -109,7 +109,7 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup, prewarm, accessToken, landingVariant, ctaSource, source } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, nativeCard, fallback, warmup, prewarm, accessToken, landingVariant, ctaSource, source } = await req.json();
 
     // === WARMUP ===
     // O front chama isso no primeiro foco de campo pra matar o cold start da função
@@ -399,7 +399,15 @@ serve(async (req) => {
         },
       },
     };
-    if (embedded) {
+    // Cartão nativo compacto (Payment Element com Checkout Sessions): só os campos
+    // do cartão aparecem na nossa página e o botão de pagar é o nosso, cabendo na
+    // primeira dobra do celular. Exige a versão da API que conhece ui_mode=elements.
+    const useNativeCard = !!embedded && !!nativeCard && source !== "degustacao";
+    if (useNativeCard) {
+      sessionConfig.ui_mode = "elements";
+      sessionConfig.return_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`;
+      delete sessionConfig.custom_text;
+    } else if (embedded) {
       sessionConfig.ui_mode = "embedded";
       // Degustação: o pagamento acontece dentro do App, sem sair da tela.
       if (source === "degustacao") sessionConfig.redirect_on_completion = "never";
@@ -622,7 +630,10 @@ serve(async (req) => {
     }
 
     logStep("Creating checkout session", { plan, billing: billingPeriod, priceId: effectiveTrial ? getTrialPrices()[plan] : priceId, mode: sessionConfig.mode, trial: effectiveTrial, citMitReinforced: effectiveTrial, returningCustomerMonthly });
-    const session = await stripe.checkout.sessions.create(sessionConfig);
+    if (useNativeCard) delete sessionConfig.custom_text;
+    const session = useNativeCard
+      ? await stripe.checkout.sessions.create(sessionConfig, { apiVersion: "2026-03-25.dahlia" } as any)
+      : await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
     // Log checkout session for funnel tracking.
@@ -699,6 +710,7 @@ serve(async (req) => {
           sessionId: session.id,
           accessToken: isCheckoutAccessToken(accessToken) ? accessToken : null,
           returning_customer: returningCustomerMonthly,
+          uiMode: useNativeCard ? "elements" : "embedded",
           serverMs: Date.now() - reqStart,
         }
       : { url: session.url, returning_customer: returningCustomerMonthly, serverMs: Date.now() - reqStart };

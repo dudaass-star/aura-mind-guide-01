@@ -32,6 +32,9 @@ export type FunnelStep =
   | "embedded_fallback_error"
   | "card_action_required"
   | "card_abandoned"
+  /** Toque no botão Pagar do formulário de cartão compacto. */
+  | "card_submit_clicked"
+  | "card_confirm_error"
   | "pix_modal_open"
   | "pix_qr_requested"
   | "pix_qr_generated"

@@ -28,9 +28,10 @@ import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
 import "@/styles/checkout-theme.css";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
-import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { logFunnel } from "@/lib/checkout-funnel";
 import { AsaasCardForm } from "@/components/checkout/AsaasCardForm";
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
+import { StripeNativeCardForm } from "@/components/checkout/StripeNativeCardForm";
 import { CycleTabs, type CycleTabItem } from "@/components/checkout/CycleTabs";
 import { OrderSummary } from "@/components/checkout/OrderSummary";
 import { TrustRow } from "@/components/checkout/TrustRow";
@@ -273,6 +274,9 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
   // devolvida pela edge function. Quando setados, renderizamos <EmbeddedCheckout /> inline,
   // sem salto pro domínio checkout.stripe.com.
   const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
+  // true = sessão criada no formato de cartão compacto (Payment Element).
+  // Sessões antigas (embedded) continuam no formulário completo da Stripe.
+  const [nativeCard, setNativeCard] = useState(false);
   const [stripePromise, setStripePromise] = useState<Promise<StripeJs | null> | null>(null);
   // Gateway de cartão vindo do system_config. Default stripe até carregar.
   const [cardGateway, setCardGateway] = useState<"stripe" | "asaas">("stripe");
@@ -497,6 +501,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
     clientSecret: string;
     sessionId: string | null;
     returning: boolean;
+    native: boolean;
   } | null>(null);
   const prewarmInFlightRef = useRef<string | null>(null);
 
@@ -554,6 +559,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             trial: billingPeriod === "monthly",
             paymentMethod: "card",
             embedded: true,
+            nativeCard: true,
             prewarm: true,
             name: name.trim(),
             email: email.trim(),
@@ -569,6 +575,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             clientSecret: (data as any).clientSecret,
             sessionId: (data as any).sessionId || null,
             returning: !!(data as any).returning_customer,
+            native: (data as any).uiMode === "elements",
           };
           if ((data as any).publishableKey) {
             setStripePromise((prev) => prev ?? loadStripe((data as any).publishableKey));
@@ -669,6 +676,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
       // aparece imediatamente, sem round-trip nenhum após o clique.
       const pre = prewarmRef.current?.key === prewarmKey ? prewarmRef.current : null;
       let clientSecret: string | null = pre?.clientSecret ?? null;
+      let native = pre?.native ?? false;
       let publishableKey: string | null = null;
       let outSessionId: string | null = pre?.sessionId ?? null;
       let isReturning = pre?.returning ?? false;
@@ -685,6 +693,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             trial: isMonthlyTrial,
             paymentMethod: "card",
             embedded: true,
+            nativeCard: true,
             name: name.trim(),
             email: email.trim(),
             phone: phone,
@@ -726,6 +735,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
           throw new Error((data as any)?.error || error.message || "Erro ao processar pagamento");
         }
         clientSecret = (data as any)?.clientSecret ?? null;
+        native = (data as any)?.uiMode === "elements";
         publishableKey = (data as any)?.publishableKey ?? null;
         outSessionId = (data as any)?.sessionId ?? null;
         isReturning = !!(data as any)?.returning_customer;
@@ -754,6 +764,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
         );
         setHasRedirected(true);
         if (publishableKey) setStripePromise((prev) => prev ?? loadStripe(publishableKey as string));
+        setNativeCard(native);
         setEmbeddedClientSecret(clientSecret);
         logFunnel("embedded_requested", {
           plan: selectedPlan,
@@ -1520,74 +1531,60 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               /* PaymentView — tela dedicada de pagamento.
                  Form some completamente; usuário vê só o widget Stripe + contexto mínimo.
                  Isso elimina a ambiguidade dos dois CTAs e do form duplicado embaixo. */
-              <div className="space-y-5">
-                <button
-                  type="button"
-                  onClick={handleResetCheckout}
-                  className="inline-flex items-center gap-1.5 text-sm text-white/65 hover:text-white transition-colors"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  Editar dados
-                </button>
-
-                <div className="text-center">
-                  <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
-                    Confirme e pague
-                  </h1>
-                  <p className="text-white/70 text-sm">
-                    Plano <span className="text-white font-medium">{currentPlan.name}</span> •{" "}
-                    <span className="text-[hsl(140_30%_72%)] font-semibold">R$ {currentPlan.trialPrice}</span>{" "}
-                    agora • depois R$ {currentPrice}/{periodLabel}
-                  </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={handleResetCheckout}
+                    className="inline-flex items-center gap-1.5 text-sm text-white/65 hover:text-white transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    Editar dados
+                  </button>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-white/60">
+                    <Lock className="w-3 h-3 text-[hsl(140_30%_72%)]" />
+                    Pagamento seguro
+                  </span>
                 </div>
 
-                <div className="text-center">
-                  <p className="font-display text-base md:text-lg font-semibold text-[hsl(140_30%_72%)]">
-                    Preencha seu cartão abaixo para finalizar ↓
-                  </p>
-                  <p className="text-[11px] text-white/55 mt-1">
-                    Pagamento seguro processado pela Stripe
-                  </p>
+                <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">Plano {currentPlan.name}</p>
+                    <p className="text-[11px] text-white/60">Cancele em 1 clique · Garantia 7 dias</p>
+                  </div>
+                  <p className="text-lg font-semibold text-[hsl(140_30%_72%)]">R$ {todayAmount}</p>
                 </div>
 
-                {/* Trust signals colados ao widget — ficam no campo de visão exato
-                    do momento em que o usuário vai digitar o cartão. */}
-                <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] text-white/75 bg-white/5 border border-white/10 rounded-full px-4 py-2">
-                  <div className="flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Pagamento seguro Stripe
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Garantia 7 dias
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Cancele em 1 clique
-                  </div>
-                </div>
-
-                <div className="relative rounded-2xl bg-white p-2 md:p-4 shadow-2xl min-h-[480px]">
-                  {/* Skeleton enquanto o iframe da Stripe carrega (~2-3s).
-                      O EmbeddedCheckout pinta por cima quando estiver pronto. */}
+                <div className="relative min-h-[200px]" ref={embeddedHostRef}>
                   {!embeddedMounted && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center pointer-events-none">
-                      <div className="w-8 h-8 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
-                      <p className="text-sm font-medium text-gray-700">
-                        {embeddedFallbackLoading
-                          ? "Abrindo o pagamento seguro…"
-                          : "Preparando o pagamento seguro…"}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {currentPlan.name} · R$ {todayAmount} hoje · leva 1 ou 2 segundos
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center pointer-events-none">
+                      <div className="w-7 h-7 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
+                      <p className="text-xs text-white/60">
+                        {embeddedFallbackLoading ? "Abrindo o pagamento seguro…" : "Preparando o pagamento seguro…"}
                       </p>
                     </div>
                   )}
-                  <div className="relative z-10" ref={embeddedHostRef}>
-                    <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
-                      <EmbeddedCheckout />
-                    </EmbeddedCheckoutProvider>
-                  </div>
+                  {nativeCard ? (
+                  <StripeNativeCardForm
+                      stripe={stripePromise}
+                      clientSecret={embeddedClientSecret}
+                      amountLabel={`R$ ${todayAmount}`}
+                      renewalLabel={
+                        billingPeriod === "monthly"
+                          ? `Depois, R$ ${currentPrice}/${periodLabel}. Cancele quando quiser.`
+                          : `Renova por R$ ${currentPrice}/${periodLabel}. Cancele quando quiser.`
+                      }
+                      plan={selectedPlan}
+                      billing={billingPeriod}
+                      onReady={() => setEmbeddedMounted(true)}
+                    />
+                  ) : (
+                    <div className="relative z-10 rounded-2xl bg-white p-2">
+                      <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
+                        <EmbeddedCheckout />
+                      </EmbeddedCheckoutProvider>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : asaasCardOpen ? (
