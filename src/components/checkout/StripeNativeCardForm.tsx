@@ -59,7 +59,7 @@ function Inner({ amountLabel, renewalLabel, plan, billing, onReady }: Omit<Props
   return (
     <div className="space-y-3">
       <PaymentElement
-        options={{ layout: "tabs", fields: { billingDetails: { address: "never" } } } as any}
+        options={{ layout: "tabs", fields: { billingDetails: { address: "never" } }, terms: { card: "never" } } as any}
         onReady={onReady}
       />
       {error && <p className="text-xs text-red-300">{error}</p>}
