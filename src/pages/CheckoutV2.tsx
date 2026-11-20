@@ -1435,20 +1435,25 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
 
         {!embedded && <header className="relative py-1 md:py-5 border-b border-white/10">
           <div className="container mx-auto px-6 flex items-center justify-between">
-            <Link
+            {/* Na etapa de pagamento não há saída para a landing: evita perder quem só quer rever o plano. */}
+            {embeddedClientSecret || asaasCardOpen ? <div className="w-16" /> : <Link
               to={backHref}
               className="inline-flex items-center gap-2 text-white/70 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="text-sm">Voltar</span>
-            </Link>
-            <Link to={backHref} className="flex items-center">
+            </Link>}
+            {embeddedClientSecret || asaasCardOpen ? <div className="flex items-center"><img
+                src={logoOlaAura}
+                alt="Olá AURA"
+                className="h-11 md:h-14 w-auto brightness-0 invert"
+              /></div> : <Link to={backHref} className="flex items-center">
               <img
                 src={logoOlaAura}
                 alt="Olá AURA"
                 className="h-11 md:h-14 w-auto brightness-0 invert"
               />
-            </Link>
+            </Link>}
             <div className="w-16" />
           </div>
         </header>}
@@ -1539,7 +1544,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                     className="inline-flex items-center gap-1.5 text-sm text-white/65 hover:text-white transition-colors"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
-                    Editar dados
+                    Trocar plano ou dados
                   </button>
                   <span className="inline-flex items-center gap-1 text-[11px] text-white/60">
                     <Lock className="w-3 h-3 text-[hsl(140_30%_72%)]" />
