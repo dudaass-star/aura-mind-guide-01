@@ -75,3 +75,14 @@
   box-shadow: 0 0 0 3px hsl(var(--ck-cta) / 0.25);
   outline: none;
 }
+
+/* Santuário aveludado: luz ambiente sálvia e lavanda sobre o navy, sem parede chapada. */
+.checkout-dark.ck-sanctuary{
+  min-height:100vh;
+  background:
+    radial-gradient(38rem 28rem at 0% 0%,hsl(140 30% 60%/.16),transparent 65%),
+    radial-gradient(34rem 26rem at 100% 35%,hsl(265 55% 72%/.11),transparent 65%),
+    radial-gradient(40rem 30rem at 30% 100%,hsl(140 30% 55%/.09),transparent 65%),
+    hsl(222 32% 11%);
+  background-attachment:fixed;
+}

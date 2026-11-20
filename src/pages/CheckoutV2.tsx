@@ -1422,7 +1422,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
         <meta property="og:type" content="website" />
       </Helmet>}
 
-      <div className={embedded ? "v2-theme checkout-dark text-white" : "v2-theme checkout-dark min-h-screen bg-[hsl(var(--ck-bg))] text-white"}>
+      <div className={embedded ? "v2-theme checkout-dark text-white" : "v2-theme checkout-dark min-h-screen ck-sanctuary text-white"}>
         {/* Glow decorativo no topo */}
         {!embedded && <div
           className="pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-60"
@@ -1655,7 +1655,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               {!embedded && <>
               <div>
                 <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_30%_72%)]">1. Escolha seu ritmo</p>
-                <div role="radiogroup" aria-label="Ritmo de encontros" className="grid grid-cols-3 gap-1.5 rounded-2xl border border-white/12 bg-[hsl(222_30%_10%)] p-1.5">
+                <div role="radiogroup" aria-label="Ritmo de encontros" className="grid grid-cols-3 gap-1.5 rounded-2xl border border-white/12 bg-white/[0.05] backdrop-blur-md p-1.5">
                   {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
                     const active = selectedPlan === id;
                     return (
@@ -1692,15 +1692,15 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       aria-pressed={active}
                       className={`relative rounded-2xl border px-3 pb-3.5 pt-5 text-center transition-all ${
                         active
-                          ? "border-[hsl(140_30%_72%)] bg-[hsl(140_18%_22%)] shadow-[0_0_0_1px_hsl(140_30%_72%/0.6),0_12px_30px_-18px_hsl(140_22%_45%)]"
-                          : "border-white/15 bg-[hsl(222_30%_13%)] hover:border-white/30"
+                          ? "border-[hsl(140_30%_72%)] bg-[hsl(140_28%_52%/0.22)] backdrop-blur-md shadow-[0_0_0_1px_hsl(140_30%_72%/0.6),0_14px_36px_-14px_hsl(140_30%_60%/0.7)]"
+                          : "border-white/15 bg-white/[0.05] backdrop-blur-md hover:border-white/30"
                       }`}
                     >
-                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(140_22%_45%)] text-white" : "border border-white/25 bg-[hsl(222_30%_14%)] text-white/85"}`}>
+                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(140_22%_45%)] text-white" : "border border-[hsl(40_40%_96%/0.3)] bg-[hsl(40_40%_96%/0.14)] backdrop-blur text-[hsl(40_40%_96%)]"}`}>
                         {yearly ? `★ -${currentPlan.yearlyDiscount}%` : "7 dias"}
                       </span>
                       <p className="text-sm font-medium text-white">{yearly ? "Anual" : "Mensal"}</p>
-                      <p className="ck-num mt-0.5 font-display text-2xl font-semibold text-white">R$ {yearly ? currentPlan.yearlyMonthlyEquivalent : currentPlan.trialPrice}</p>
+                      <p className="ck-num mt-0.5 font-display text-2xl font-semibold text-[hsl(40_40%_96%)]">R$ {yearly ? currentPlan.yearlyMonthlyEquivalent : currentPlan.trialPrice}</p>
                       <p className="text-[11px] text-white/70">{yearly ? "/mês" : "nos 7 dias"}</p>
                       <p className="ck-num mt-1 text-[11px] text-white/65">{yearly ? `R$ ${currentPlan.yearlyPrice}/ano` : `Depois R$ ${currentPlan.monthlyPrice}/mês`}</p>
                     </button>
