@@ -294,3 +294,17 @@
 .ck-calm ul.ck-box li svg{color:#fff!important}
 .ck-calm div.ck-box{background:hsl(38 45% 96%)!important;border-color:hsl(36 30% 88%)!important}
 .ck-calm .ck-field,.ck-calm input{background:#fff!important}
+
+/* Vivo como a Headspace: plano escolhido em bloco lilás sólido com texto branco;
+ * demais planos brancos; benefícios e formulário soltos no branco; CTA sálvia sólido. */
+.ck-calm .ck-plan-card{background:#fff!important;border:1.5px solid hsl(230 14% 88%)!important;box-shadow:none!important}
+.ck-calm .ck-plan-card:hover{border-color:hsl(265 40% 70%)!important}
+.ck-calm .ck-plan-card-active,.ck-calm .ck-plan-card-active:hover{background:hsl(265 42% 56%)!important;border:2px solid hsl(265 42% 56%)!important;color:#fff!important;box-shadow:0 18px 34px -18px hsl(265 45% 40%/.7)!important;transform:translateY(-2px)}
+.ck-calm .ck-plan-card-active *,.ck-calm .ck-plan-card-active .ck-sub{color:#fff!important}
+.ck-calm .ck-plan-card-active .ck-radio-on{background:#fff!important;border-color:#fff!important;color:hsl(265 42% 56%)!important}
+.ck-calm .ck-plan-card-active .ck-radio-on *{color:hsl(265 42% 56%)!important}
+.ck-calm .ck-plan-card-active .ck-badge{background:hsl(138 24% 42%)!important;color:#fff!important}
+.ck-calm ul.ck-box,.ck-calm div.ck-box{background:transparent!important;border:0!important;box-shadow:none!important;padding-left:0;padding-right:0}
+.ck-calm .ck-seg-active{background:hsl(265 42% 56%)!important;color:#fff!important}
+.ck-calm .ck-cta-main{background:hsl(138 26% 40%)!important}
+.ck-calm .ck-cta-main:hover{background:hsl(138 28% 34%)!important}
