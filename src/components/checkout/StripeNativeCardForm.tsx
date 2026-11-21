@@ -25,12 +25,12 @@ interface Props {
 }
 
 const appearance = {
-  theme: "stripe" as const,
+  theme: "night" as const,
   variables: {
-    colorPrimary: "#4f7a5a",
-    colorBackground: "#ffffff",
-    colorText: "#1a2536",
-    colorDanger: "#c0392b",
+    colorPrimary: "#a48fcc",
+    colorBackground: "#25332c",
+    colorText: "#f5f1ea",
+    colorDanger: "#f08a7e",
     borderRadius: "12px",
     spacingUnit: "3px",
     fontSizeBase: "15px",
@@ -67,7 +67,7 @@ function Inner({ amountLabel, renewalLabel, plan, billing, onReady }: Omit<Props
         type="button"
         onClick={pay}
         disabled={busy || state.type !== "success"}
-        className="w-full h-12 rounded-xl bg-[hsl(140_22%_45%)] hover:bg-[hsl(140_22%_40%)] text-[hsl(0_0%_100%)] font-semibold text-base flex items-center justify-center gap-2 disabled:opacity-60 transition-colors"
+        className="w-full h-12 rounded-xl rounded-full bg-[hsl(var(--ck-cta))] hover:bg-[hsl(var(--ck-cta-hover))] text-[hsl(0_0%_100%)] font-semibold text-base flex items-center justify-center gap-2 disabled:opacity-60 transition-colors"
       >
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
         {busy ? "Confirmando…" : `Pagar ${amountLabel}`}

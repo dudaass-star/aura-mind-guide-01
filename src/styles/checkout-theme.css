@@ -129,3 +129,41 @@
 .ck-light .ck-blob-c{width:28px;height:28px;right:34px;top:18px;background:hsl(0 0% 100%/.7)}
 .ck-light .ck-cta{border-radius:9999px!important;font-weight:800;letter-spacing:-.01em}
 .ck-light .ck-field,.ck-light input{border-radius:16px!important;border-width:2px!important}
+
+
+/* Checkout "Floresta Aveludada" (referência V5: dobra do App e cartão de plano):
+ * fundo sálvia profundo, cartões escuros nobres, texto pérola e lilás só na decisão. */
+.checkout-dark.ck-light.ck-forest{
+  --ck-bg: 153 13% 24%;
+  --ck-surface: 153 12% 19%;
+  --ck-card: 155 14% 18%;
+  --ck-text: 40 25% 96%;
+  --ck-text-soft: 140 10% 84%;
+  --ck-text-muted: 140 8% 70%;
+  --ck-line: 153 10% 36%;
+  --ck-cta: 265 38% 64%;
+  --ck-cta-hover: 265 36% 58%;
+  --ck-cta-light: 265 55% 82%;
+  --ck-cta-soft: 265 26% 30% / .55;
+  --ck-pill: 128 22% 70%;
+  --ck-pill-text: 153 20% 14%;
+  --ck-accent: 128 24% 70%;
+  --ck-accent-soft: 128 22% 66%;
+  --primary: 265 38% 64%;
+  --primary-foreground: 0 0% 100%;
+  background:radial-gradient(40rem 26rem at 15% 0%,hsl(128 20% 64%/.10),transparent 65%),hsl(var(--ck-bg));
+}
+.ck-forest .text-white{color:hsl(var(--ck-text))}
+.ck-forest [class*="bg-white/"]{background-color:hsl(var(--ck-card))}
+.ck-forest header{background:hsl(var(--ck-bg));border-color:hsl(var(--ck-line)/.6)}
+.ck-forest header img{filter:brightness(0) invert(1)}
+.ck-forest .ck-field,.ck-forest input{
+  background-color:hsl(var(--ck-card))!important;
+  border-color:hsl(var(--ck-line))!important;
+  color:hsl(var(--ck-text))!important;
+  border-width:1px!important;border-radius:14px!important;
+}
+.ck-forest input::placeholder{color:hsl(var(--ck-text-muted)/.8)}
+.ck-forest .text-red-300{color:hsl(6 80% 76%)}
+.ck-forest .ck-cta{border-radius:9999px!important;font-weight:700}
+.ck-forest .ck-hero{background:transparent}

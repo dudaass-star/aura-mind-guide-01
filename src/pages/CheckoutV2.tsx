@@ -1422,7 +1422,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
         <meta property="og:type" content="website" />
       </Helmet>}
 
-      <div className={embedded ? "v2-theme checkout-dark ck-light" : "v2-theme checkout-dark min-h-screen ck-light"}>
+      <div className={embedded ? "v2-theme checkout-dark ck-light ck-forest" : "v2-theme checkout-dark min-h-screen ck-light ck-forest"}>
         
 
         {!embedded && <header className="relative py-1 md:py-5 border-b border-white/10">
@@ -1549,7 +1549,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                     <p className="text-sm font-semibold">Plano {currentPlan.name}</p>
                     <p className="text-[11px] text-white/60">Cancele em 1 clique · Garantia 7 dias</p>
                   </div>
-                  <p className="text-lg font-semibold text-[hsl(140_24%_36%)]">R$ {todayAmount}</p>
+                  <p className="text-lg font-semibold text-[hsl(var(--ck-accent))]">R$ {todayAmount}</p>
                 </div>
 
                 <div className="relative min-h-[200px]" ref={embeddedHostRef}>
@@ -1645,12 +1645,10 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
               {/* Seleção simplificada: primeiro o ritmo, depois Anual x Mensal (sem trimestral/semestral). */}
               {!embedded && <>
-              <div className="ck-hero relative -mx-1 mb-2 overflow-hidden rounded-[28px] px-5 pb-6 pt-7 text-center">
-                <span aria-hidden className="ck-blob ck-blob-a" />
-                <span aria-hidden className="ck-blob ck-blob-b" />
-                <span aria-hidden className="ck-blob ck-blob-c" />
-                <h1 className="relative font-sans text-[28px] md:text-[34px] font-extrabold leading-[1.1] tracking-tight text-[hsl(var(--ck-hero-text))]">Dê o primeiro passo por você.</h1>
-                <p className="relative mt-2 inline-block rounded-full bg-[hsl(0_0%_100%)] px-3 py-1 text-[12px] font-semibold text-[hsl(265_40%_38%)]">Cancele quando quiser · Garantia de 7 dias</p>
+              <div className="ck-hero mb-3 pt-2 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--ck-accent))]">Seu primeiro passo</p>
+                <h1 className="mt-2 font-sans text-[28px] md:text-[34px] font-bold leading-[1.12] tracking-tight text-[hsl(var(--ck-text))]">Dê o primeiro passo <span className="text-[hsl(var(--ck-accent))]">por você.</span></h1>
+                <p className="mt-2 text-[13px] text-[hsl(var(--ck-text-muted))]">Cancele quando quiser · Garantia de 7 dias</p>
               </div>
               <div>
                 <p className="mb-2.5 text-[15px] font-bold text-[hsl(var(--ck-text))]">1. Escolha seu ritmo</p>
@@ -1665,11 +1663,11 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                         aria-checked={active}
                         onClick={() => setSelectedPlan(id)}
                         className={`relative rounded-full px-1 py-2.5 text-center leading-tight transition-all ${
-                          active ? "bg-[hsl(var(--ck-cta))] text-[hsl(0_0%_100%)] shadow-md" : "text-white/75 hover:text-white"
+                          active ? "bg-[hsl(var(--ck-pill))] text-[hsl(var(--ck-pill-text))] shadow-md" : "text-white/75 hover:text-white"
                         }`}
                       >
                         <span className="block text-[14px] font-semibold">{id === "direcao" ? <span className="text-[hsl(var(--champagne))]">★ </span> : null}{plan.name}</span>
-                        <span className={`block text-[11px] tracking-tight ${active ? "text-[hsl(0_0%_100%/0.9)]" : "text-white/55"}`}>{plan.sessions} encontros/mês</span>
+                        <span className={`block text-[11px] tracking-tight ${active ? "text-[hsl(var(--ck-pill-text)/0.8)]" : "text-white/55"}`}>{plan.sessions} encontros/mês</span>
                       </button>
                     );
                   })}
@@ -1691,11 +1689,11 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       aria-pressed={active}
                       className={`relative rounded-3xl border-2 px-3 pb-4 pt-6 text-center transition-all active:scale-[0.98] ${
                         active
-                          ? "border-[hsl(var(--ck-cta))] bg-[hsl(140_45%_93%)] shadow-[0_10px_24px_-14px_hsl(140_30%_30%/0.5)]"
-                          : "border-[hsl(265_45%_88%)] bg-[hsl(0_0%_100%)] hover:border-[hsl(265_45%_78%)]"
+                          ? "border-[hsl(var(--ck-cta))] bg-[hsl(var(--ck-cta-soft))] shadow-[0_14px_30px_-18px_hsl(222_40%_4%/0.8)]"
+                          : "border-[hsl(var(--ck-line))] bg-[hsl(var(--ck-card))] hover:border-[hsl(var(--ck-cta)/0.6)]"
                       }`}
                     >
-                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(140_22%_42%)] text-[hsl(0_0%_100%)]" : "border border-[hsl(265_40%_80%)] bg-[hsl(265_60%_95%)] text-[hsl(265_35%_40%)]"}`}>
+                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(var(--ck-pill))] text-[hsl(var(--ck-pill-text))]" : "bg-[hsl(var(--ck-cta))] text-[hsl(0_0%_100%)]"}`}>
                         {yearly ? `★ -${currentPlan.yearlyDiscount}%` : "7 dias"}
                       </span>
                       <p className="text-sm font-medium text-white">{yearly ? "Anual" : "Mensal"}</p>
@@ -1713,8 +1711,8 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                   ["Áudio e texto", " a qualquer hora"],
                   ["Todas as orações", " e meditações guiadas"],
                 ] as const).map(([forte, resto], i) => (
-                  <li key={forte} className="flex items-center gap-3 rounded-2xl bg-[hsl(0_0%_100%)] px-3 py-2.5">
-                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${["bg-[hsl(140_40%_86%)]","bg-[hsl(265_60%_90%)]","bg-[hsl(40_90%_86%)]"][i]}`}><Check className="h-3.5 w-3.5 text-[hsl(var(--ck-text))]" strokeWidth={3} /></span>
+                  <li key={forte} className="flex items-center gap-3 px-1 py-1">
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${i === 1 ? "bg-[hsl(var(--ck-cta)/0.22)]" : "bg-[hsl(var(--ck-accent)/0.18)]"}`}><Check className={`h-3.5 w-3.5 ${i === 1 ? "text-[hsl(var(--ck-cta-light))]" : "text-[hsl(var(--ck-accent))]"}`} strokeWidth={3} /></span>
                     <span><strong className="font-semibold text-[hsl(var(--ck-text))]">{forte}</strong>{resto}</span>
                   </li>
                 ))}
@@ -2039,7 +2037,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             }, 200);
           }
         }}>
-          <DialogContent className="bg-[hsl(220_35%_12%)] border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogContent className="bg-[hsl(153_14%_20%)] border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
             {pixStage === "form" ? (
               <>
                 <DialogHeader>
@@ -2050,7 +2048,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                     Plano <span className="text-white font-medium">{currentPlan.name}</span> · {periodShortMap[billingPeriod]} —{" "}
                     {pixMode === "subscription" && billingPeriod === "monthly" ? (
                       <>
-                        <span className="text-[hsl(140_24%_36%)] font-semibold">
+                        <span className="text-[hsl(var(--ck-accent))] font-semibold">
                           1ª semana R$ {currentPlan.trialPrice}
                         </span>{" "}
                         <span className="block text-xs mt-1 text-white/60">
@@ -2060,7 +2058,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       </>
                     ) : (
                       <>
-                        <span className="text-[hsl(140_24%_36%)] font-semibold">R$ {currentPrice}</span> à vista
+                        <span className="text-[hsl(var(--ck-accent))] font-semibold">R$ {currentPrice}</span> à vista
                       </>
                     )}
                   </DialogDescription>
@@ -2122,7 +2120,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       : "Escaneie ou copie o código"}
                   </DialogTitle>
                   <DialogDescription className="text-white/65">
-                    <span className="text-[hsl(140_24%_36%)] font-semibold">
+                    <span className="text-[hsl(var(--ck-accent))] font-semibold">
                       {pixData.authorizationOnly
                         ? "7 dias grátis"
                         : `R$ ${pixData.amount.toFixed(2).replace(".", ",")}`}
