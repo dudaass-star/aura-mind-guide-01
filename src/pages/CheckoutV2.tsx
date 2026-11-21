@@ -1422,16 +1422,8 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
         <meta property="og:type" content="website" />
       </Helmet>}
 
-      <div className={embedded ? "v2-theme checkout-dark text-white" : "v2-theme checkout-dark min-h-screen ck-sanctuary text-white"}>
-        {/* Glow decorativo no topo */}
-        {!embedded && <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-60"
-          style={{
-            background:
-              "radial-gradient(60% 60% at 50% 0%, hsl(265 60% 72% / 0.30) 0%, transparent 70%)",
-          }}
-          aria-hidden
-        />}
+      <div className={embedded ? "v2-theme checkout-dark ck-light" : "v2-theme checkout-dark min-h-screen ck-light"}>
+        
 
         {!embedded && <header className="relative py-1 md:py-5 border-b border-white/10">
           <div className="container mx-auto px-6 flex items-center justify-between">
@@ -1446,12 +1438,12 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             {embeddedClientSecret || asaasCardOpen ? <div className="flex items-center"><img
                 src={logoOlaAura}
                 alt="Olá AURA"
-                className="h-11 md:h-14 w-auto brightness-0 invert"
+                className="h-11 md:h-14 w-auto"
               /></div> : <Link to={backHref} className="flex items-center">
               <img
                 src={logoOlaAura}
                 alt="Olá AURA"
-                className="h-11 md:h-14 w-auto brightness-0 invert"
+                className="h-11 md:h-14 w-auto"
               />
             </Link>}
             <div className="w-16" />
@@ -1547,7 +1539,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                     Trocar plano ou dados
                   </button>
                   <span className="inline-flex items-center gap-1 text-[11px] text-white/60">
-                    <Lock className="w-3 h-3 text-[hsl(140_30%_72%)]" />
+                    <Lock className="w-3 h-3 text-[hsl(140_24%_36%)]" />
                     Pagamento seguro
                   </span>
                 </div>
@@ -1557,7 +1549,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                     <p className="text-sm font-semibold">Plano {currentPlan.name}</p>
                     <p className="text-[11px] text-white/60">Cancele em 1 clique · Garantia 7 dias</p>
                   </div>
-                  <p className="text-lg font-semibold text-[hsl(140_30%_72%)]">R$ {todayAmount}</p>
+                  <p className="text-lg font-semibold text-[hsl(140_24%_36%)]">R$ {todayAmount}</p>
                 </div>
 
                 <div className="relative min-h-[200px]" ref={embeddedHostRef}>
@@ -1654,12 +1646,12 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               {/* Seleção simplificada: primeiro o ritmo, depois Anual x Mensal (sem trimestral/semestral). */}
               {!embedded && <>
               <div className="pb-2 text-center">
-                <h1 className="font-display text-[26px] md:text-3xl font-semibold leading-tight text-[hsl(40_40%_96%)]">Dê o primeiro passo por você.</h1>
+                <h1 className="font-display text-[26px] md:text-3xl font-semibold leading-tight text-[hsl(var(--ck-text))]">Dê o primeiro passo por você.</h1>
                 <p className="mt-1.5 text-[13px] text-white/65">Cancele quando quiser · Garantia de 7 dias</p>
               </div>
               <div>
-                <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_30%_72%)]">1. Escolha seu ritmo</p>
-                <div role="radiogroup" aria-label="Ritmo de encontros" className="grid grid-cols-3 gap-1.5 rounded-2xl border border-white/10 bg-[hsl(228_22%_20%)] p-1.5">
+                <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_24%_36%)]">1. Escolha seu ritmo</p>
+                <div role="radiogroup" aria-label="Ritmo de encontros" className="grid grid-cols-3 gap-1.5 rounded-2xl border border-white/10 bg-[hsl(var(--ck-surface))] p-1.5">
                   {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
                     const active = selectedPlan === id;
                     return (
@@ -1670,11 +1662,11 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                         aria-checked={active}
                         onClick={() => setSelectedPlan(id)}
                         className={`relative rounded-xl px-1 py-2.5 text-center leading-tight transition-all ${
-                          active ? "bg-[hsl(140_22%_45%)] text-white" : "text-white/75 hover:text-white"
+                          active ? "bg-[hsl(140_22%_42%)] text-[hsl(0_0%_100%)] shadow-sm" : "text-white/75 hover:text-white"
                         }`}
                       >
                         <span className="block text-[14px] font-semibold">{id === "direcao" ? <span className="text-[hsl(var(--champagne))]">★ </span> : null}{plan.name}</span>
-                        <span className={`block text-[11px] tracking-tight ${active ? "text-white/90" : "text-white/55"}`}>{plan.sessions} encontros/mês</span>
+                        <span className={`block text-[11px] tracking-tight ${active ? "text-[hsl(0_0%_100%/0.9)]" : "text-white/55"}`}>{plan.sessions} encontros/mês</span>
                       </button>
                     );
                   })}
@@ -1682,7 +1674,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                 <p className="mt-2 text-center text-[12px] text-white/65">{PLAN_RHYTHM[selectedPlan].rhythm} · <span className={selectedPlan === "direcao" ? "text-[hsl(var(--champagne))]" : undefined}>{PLAN_RHYTHM[selectedPlan].tag.replace("★ ", "")}</span></p>
               </div>
 
-              <p className="pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_30%_72%)]">2. Escolha como entrar</p>
+              <p className="pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_24%_36%)]">2. Escolha como entrar</p>
 
               <div className="grid grid-cols-2 gap-3 pt-2">
                 {(["yearly", "monthly"] as BillingPeriod[]).map((b) => {
@@ -1696,15 +1688,15 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       aria-pressed={active}
                       className={`relative rounded-2xl border px-3 pb-3.5 pt-5 text-center transition-all ${
                         active
-                          ? "border-[hsl(140_30%_72%)] bg-[hsl(140_20%_30%)]"
-                          : "border-white/10 bg-[hsl(228_22%_20%)] hover:border-white/25"
+                          ? "border-[hsl(140_22%_42%)] bg-[hsl(140_30%_95%)] shadow-[0_8px_24px_-12px_hsl(140_22%_42%/0.35)]"
+                          : "border-white/10 bg-[hsl(0_0%_100%)] hover:border-white/25"
                       }`}
                     >
-                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(140_22%_45%)] text-white" : "border border-[hsl(40_40%_96%/0.3)] bg-[hsl(40_40%_96%/0.14)] text-[hsl(40_40%_96%)]"}`}>
+                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(140_22%_42%)] text-[hsl(0_0%_100%)]" : "border border-[hsl(265_40%_80%)] bg-[hsl(265_60%_95%)] text-[hsl(265_35%_40%)]"}`}>
                         {yearly ? `★ -${currentPlan.yearlyDiscount}%` : "7 dias"}
                       </span>
                       <p className="text-sm font-medium text-white">{yearly ? "Anual" : "Mensal"}</p>
-                      <p className="ck-num mt-0.5 font-display text-2xl font-semibold text-[hsl(40_40%_96%)]">R$ {yearly ? currentPlan.yearlyMonthlyEquivalent : currentPlan.trialPrice}</p>
+                      <p className="ck-num mt-0.5 font-display text-2xl font-semibold text-[hsl(var(--ck-text))]">R$ {yearly ? currentPlan.yearlyMonthlyEquivalent : currentPlan.trialPrice}</p>
                       <p className="text-[11px] text-white/70">{yearly ? "/mês" : "nos 7 dias"}</p>
                       <p className="ck-num mt-1 text-[11px] text-white/65">{yearly ? `R$ ${currentPlan.yearlyPrice}/ano` : `Depois R$ ${currentPlan.monthlyPrice}/mês`}</p>
                     </button>
@@ -1719,8 +1711,8 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                   ["Todas as orações", " e meditações guiadas"],
                 ] as const).map(([forte, resto]) => (
                   <li key={forte} className="flex items-center gap-2.5">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[hsl(140_30%_72%/0.16)]"><Check className="h-3 w-3 text-[hsl(140_30%_72%)]" strokeWidth={3} /></span>
-                    <span><strong className="font-semibold text-[hsl(40_40%_96%)]">{forte}</strong>{resto}</span>
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[hsl(140_30%_90%)]"><Check className="h-3 w-3 text-[hsl(140_24%_36%)]" strokeWidth={3} /></span>
+                    <span><strong className="font-semibold text-[hsl(var(--ck-text))]">{forte}</strong>{resto}</span>
                   </li>
                 ))}
               </ul>
@@ -1980,27 +1972,27 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-center">
-                <Gift className="w-10 h-10 text-[hsl(140_30%_72%)]" />
+                <Gift className="w-10 h-10 text-[hsl(140_24%_36%)]" />
               </div>
               <h2 className="font-display text-xl font-semibold text-white">Espera!</h2>
               <p className="text-white/70 text-sm leading-relaxed">
                 Sua oferta de trial ainda está ativa:{" "}
-                <span className="font-semibold text-[hsl(140_30%_72%)]">
+                <span className="font-semibold text-[hsl(140_24%_36%)]">
                   7 dias por apenas R$ {currentPlan.trialPrice}
                 </span>{" "}
                 (plano {currentPlan.name})
               </p>
               <ul className="space-y-2 text-sm text-white/70 text-left mx-auto max-w-xs">
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-[hsl(140_30%_72%)] flex-shrink-0" />
+                  <Check className="w-4 h-4 text-[hsl(140_24%_36%)] flex-shrink-0" />
                   Garantia de satisfação
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-[hsl(140_30%_72%)] flex-shrink-0" />
+                  <Check className="w-4 h-4 text-[hsl(140_24%_36%)] flex-shrink-0" />
                   Cancele quando quiser
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-[hsl(140_30%_72%)] flex-shrink-0" />
+                  <Check className="w-4 h-4 text-[hsl(140_24%_36%)] flex-shrink-0" />
                   +5.000 pessoas já começaram
                 </li>
               </ul>
@@ -2055,7 +2047,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                     Plano <span className="text-white font-medium">{currentPlan.name}</span> · {periodShortMap[billingPeriod]} —{" "}
                     {pixMode === "subscription" && billingPeriod === "monthly" ? (
                       <>
-                        <span className="text-[hsl(140_30%_72%)] font-semibold">
+                        <span className="text-[hsl(140_24%_36%)] font-semibold">
                           1ª semana R$ {currentPlan.trialPrice}
                         </span>{" "}
                         <span className="block text-xs mt-1 text-white/60">
@@ -2065,7 +2057,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       </>
                     ) : (
                       <>
-                        <span className="text-[hsl(140_30%_72%)] font-semibold">R$ {currentPrice}</span> à vista
+                        <span className="text-[hsl(140_24%_36%)] font-semibold">R$ {currentPrice}</span> à vista
                       </>
                     )}
                   </DialogDescription>
@@ -2127,7 +2119,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       : "Escaneie ou copie o código"}
                   </DialogTitle>
                   <DialogDescription className="text-white/65">
-                    <span className="text-[hsl(140_30%_72%)] font-semibold">
+                    <span className="text-[hsl(140_24%_36%)] font-semibold">
                       {pixData.authorizationOnly
                         ? "7 dias grátis"
                         : `R$ ${pixData.amount.toFixed(2).replace(".", ",")}`}

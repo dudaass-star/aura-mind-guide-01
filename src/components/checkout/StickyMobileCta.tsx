@@ -28,7 +28,7 @@ export function StickyMobileCta({ anchorId, todayLabel, ctaLabel, onClick }: Sti
   if (!visible) return null;
 
   return (
-    <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-white/10 bg-[hsl(220_35%_10%)]/95 backdrop-blur px-4 py-3 flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-200">
+    <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-white/10 bg-[hsl(var(--ck-bg))]/95 backdrop-blur px-4 py-3 flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-200">
       <div className="min-w-0">
         <p className="text-[10px] text-white/55 leading-none">cobrado hoje</p>
         <p className="text-sm font-semibold text-white leading-tight">{todayLabel}</p>

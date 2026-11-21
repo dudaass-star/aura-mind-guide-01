@@ -85,3 +85,36 @@
   background-color:hsl(228 22% 21%)!important;
   border-color:hsl(0 0% 100%/.12)!important;
 }
+
+/* Checkout claro e acolhedor (referência Calm/Headspace/Orações): fundo pérola,
+ * texto marinho, sálvia na ação e lilás discreto. Remapeia utilitários brancos
+ * herdados do tema escuro para tons marinho dentro do escopo. */
+.checkout-dark.ck-light{
+  --ck-bg: 36 33% 97%;
+  --ck-surface: 36 22% 93%;
+  --ck-text: 218 35% 16%;
+  --ck-text-soft: 218 18% 32%;
+  --ck-text-muted: 218 10% 46%;
+  --ck-line: 218 14% 84%;
+  --ck-cta: 140 24% 40%;
+  --ck-cta-hover: 140 26% 35%;
+  --ck-accent: 140 24% 40%;
+  --ck-accent-soft: 140 24% 36%;
+  min-height:100vh;
+  background:hsl(var(--ck-bg));
+  color:hsl(var(--ck-text));
+}
+.ck-light .text-white{color:hsl(var(--ck-text))}
+.ck-light [class*="text-white/"]{color:hsl(var(--ck-text-soft))}
+.ck-light [class*="text-white/4"],.ck-light [class*="text-white/5"],.ck-light [class*="text-white/6"]{color:hsl(var(--ck-text-muted))}
+.ck-light [class*="border-white/"]{border-color:hsl(var(--ck-line))}
+.ck-light [class*="bg-white/"]{background-color:hsl(0 0% 100%)}
+.ck-light header{background:hsl(var(--ck-bg))}
+.ck-light .ck-field,.ck-light input{
+  background-color:hsl(0 0% 100%)!important;
+  border-color:hsl(var(--ck-line))!important;
+  color:hsl(var(--ck-text))!important;
+}
+.ck-light .ck-field:focus-visible{border-color:hsl(var(--ck-cta))!important;box-shadow:0 0 0 3px hsl(var(--ck-cta)/.18)}
+.ck-light .ck-cta,.ck-light .ck-cta-text{color:hsl(0 0% 100%)!important;text-shadow:none}
+.ck-light .text-red-300{color:hsl(0 60% 42%)}
