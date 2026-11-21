@@ -28,7 +28,7 @@ const appearance = {
   theme: "night" as const,
   variables: {
     colorPrimary: "#a48fcc",
-    colorBackground: "#181d2c",
+    colorBackground: "#1c2336",
     colorText: "#f5f1ea",
     colorDanger: "#f08a7e",
     borderRadius: "12px",
