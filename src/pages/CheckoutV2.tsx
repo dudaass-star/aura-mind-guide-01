@@ -1645,13 +1645,16 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
               {/* Seleção simplificada: primeiro o ritmo, depois Anual x Mensal (sem trimestral/semestral). */}
               {!embedded && <>
-              <div className="pb-2 text-center">
-                <h1 className="font-display text-[26px] md:text-3xl font-semibold leading-tight text-[hsl(var(--ck-text))]">Dê o primeiro passo por você.</h1>
-                <p className="mt-1.5 text-[13px] text-white/65">Cancele quando quiser · Garantia de 7 dias</p>
+              <div className="ck-hero relative -mx-1 mb-2 overflow-hidden rounded-[28px] px-5 pb-6 pt-7 text-center">
+                <span aria-hidden className="ck-blob ck-blob-a" />
+                <span aria-hidden className="ck-blob ck-blob-b" />
+                <span aria-hidden className="ck-blob ck-blob-c" />
+                <h1 className="relative font-sans text-[28px] md:text-[34px] font-extrabold leading-[1.1] tracking-tight text-[hsl(var(--ck-hero-text))]">Dê o primeiro passo por você.</h1>
+                <p className="relative mt-2 inline-block rounded-full bg-[hsl(0_0%_100%)] px-3 py-1 text-[12px] font-semibold text-[hsl(265_40%_38%)]">Cancele quando quiser · Garantia de 7 dias</p>
               </div>
               <div>
-                <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_24%_36%)]">1. Escolha seu ritmo</p>
-                <div role="radiogroup" aria-label="Ritmo de encontros" className="grid grid-cols-3 gap-1.5 rounded-2xl border border-white/10 bg-[hsl(var(--ck-surface))] p-1.5">
+                <p className="mb-2.5 text-[15px] font-bold text-[hsl(var(--ck-text))]">1. Escolha seu ritmo</p>
+                <div role="radiogroup" aria-label="Ritmo de encontros" className="grid grid-cols-3 gap-1.5 rounded-full bg-[hsl(var(--ck-surface))] p-1.5">
                   {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
                     const active = selectedPlan === id;
                     return (
@@ -1661,8 +1664,8 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                         role="radio"
                         aria-checked={active}
                         onClick={() => setSelectedPlan(id)}
-                        className={`relative rounded-xl px-1 py-2.5 text-center leading-tight transition-all ${
-                          active ? "bg-[hsl(140_22%_42%)] text-[hsl(0_0%_100%)] shadow-sm" : "text-white/75 hover:text-white"
+                        className={`relative rounded-full px-1 py-2.5 text-center leading-tight transition-all ${
+                          active ? "bg-[hsl(var(--ck-cta))] text-[hsl(0_0%_100%)] shadow-md" : "text-white/75 hover:text-white"
                         }`}
                       >
                         <span className="block text-[14px] font-semibold">{id === "direcao" ? <span className="text-[hsl(var(--champagne))]">★ </span> : null}{plan.name}</span>
@@ -1674,7 +1677,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                 <p className="mt-2 text-center text-[12px] text-white/65">{PLAN_RHYTHM[selectedPlan].rhythm} · <span className={selectedPlan === "direcao" ? "text-[hsl(var(--champagne))]" : undefined}>{PLAN_RHYTHM[selectedPlan].tag.replace("★ ", "")}</span></p>
               </div>
 
-              <p className="pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_24%_36%)]">2. Escolha como entrar</p>
+              <p className="pt-3 text-[15px] font-bold text-[hsl(var(--ck-text))]">2. Escolha como entrar</p>
 
               <div className="grid grid-cols-2 gap-3 pt-2">
                 {(["yearly", "monthly"] as BillingPeriod[]).map((b) => {
@@ -1686,17 +1689,17 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       type="button"
                       onClick={() => setBillingPeriod(b)}
                       aria-pressed={active}
-                      className={`relative rounded-2xl border px-3 pb-3.5 pt-5 text-center transition-all ${
+                      className={`relative rounded-3xl border-2 px-3 pb-4 pt-6 text-center transition-all active:scale-[0.98] ${
                         active
-                          ? "border-[hsl(140_22%_42%)] bg-[hsl(140_30%_95%)] shadow-[0_8px_24px_-12px_hsl(140_22%_42%/0.35)]"
-                          : "border-white/10 bg-[hsl(0_0%_100%)] hover:border-white/25"
+                          ? "border-[hsl(var(--ck-cta))] bg-[hsl(140_45%_93%)] shadow-[0_10px_24px_-14px_hsl(140_30%_30%/0.5)]"
+                          : "border-[hsl(265_45%_88%)] bg-[hsl(0_0%_100%)] hover:border-[hsl(265_45%_78%)]"
                       }`}
                     >
                       <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(140_22%_42%)] text-[hsl(0_0%_100%)]" : "border border-[hsl(265_40%_80%)] bg-[hsl(265_60%_95%)] text-[hsl(265_35%_40%)]"}`}>
                         {yearly ? `★ -${currentPlan.yearlyDiscount}%` : "7 dias"}
                       </span>
                       <p className="text-sm font-medium text-white">{yearly ? "Anual" : "Mensal"}</p>
-                      <p className="ck-num mt-0.5 font-display text-2xl font-semibold text-[hsl(var(--ck-text))]">R$ {yearly ? currentPlan.yearlyMonthlyEquivalent : currentPlan.trialPrice}</p>
+                      <p className="ck-num mt-0.5 font-sans text-[28px] font-extrabold tracking-tight text-[hsl(var(--ck-text))]">R$ {yearly ? currentPlan.yearlyMonthlyEquivalent : currentPlan.trialPrice}</p>
                       <p className="text-[11px] text-white/70">{yearly ? "/mês" : "nos 7 dias"}</p>
                       <p className="ck-num mt-1 text-[11px] text-white/65">{yearly ? `R$ ${currentPlan.yearlyPrice}/ano` : `Depois R$ ${currentPlan.monthlyPrice}/mês`}</p>
                     </button>
@@ -1709,9 +1712,9 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                   [`${currentPlan.sessions} encontros guiados`, " por mês com a AURA"],
                   ["Áudio e texto", " a qualquer hora"],
                   ["Todas as orações", " e meditações guiadas"],
-                ] as const).map(([forte, resto]) => (
-                  <li key={forte} className="flex items-center gap-2.5">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[hsl(140_30%_90%)]"><Check className="h-3 w-3 text-[hsl(140_24%_36%)]" strokeWidth={3} /></span>
+                ] as const).map(([forte, resto], i) => (
+                  <li key={forte} className="flex items-center gap-3 rounded-2xl bg-[hsl(0_0%_100%)] px-3 py-2.5">
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${["bg-[hsl(140_40%_86%)]","bg-[hsl(265_60%_90%)]","bg-[hsl(40_90%_86%)]"][i]}`}><Check className="h-3.5 w-3.5 text-[hsl(var(--ck-text))]" strokeWidth={3} /></span>
                     <span><strong className="font-semibold text-[hsl(var(--ck-text))]">{forte}</strong>{resto}</span>
                   </li>
                 ))}
