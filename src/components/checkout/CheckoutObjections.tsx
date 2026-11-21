@@ -34,7 +34,7 @@ const ITEMS: { q: string; a: string[] }[] = [
 export function CheckoutObjections({ className = "" }: { className?: string }) {
   return (
     <div className={className}>
-      <p className="text-center text-[11px] uppercase tracking-wide text-[hsl(var(--ck-text-muted))] lg:text-left">
+      <p className="text-center text-[18px] font-extrabold text-[hsl(var(--ck-text-muted))] lg:text-left">
         Antes de começar
       </p>
       <p className="mb-3 mt-1 text-center text-[13px] leading-relaxed text-[hsl(var(--ck-text-soft))] lg:text-left">
@@ -44,14 +44,14 @@ export function CheckoutObjections({ className = "" }: { className?: string }) {
         type="single"
         collapsible
         defaultValue={ITEMS[0].q}
-        className="rounded-2xl border border-[hsl(var(--ck-line))] bg-[hsl(var(--ck-text)/0.04)] px-4"
+        className="ck-box rounded-[24px] px-5"
       >
         {ITEMS.map((it) => (
           <AccordionItem key={it.q} value={it.q} className="border-[hsl(var(--ck-line))] last:border-b-0">
-            <AccordionTrigger className="py-3 text-left text-sm text-[hsl(var(--ck-text-soft))] hover:no-underline">
+            <AccordionTrigger className="py-4 text-left text-[15px] font-bold text-[hsl(var(--ck-text))] hover:no-underline">
               {it.q}
             </AccordionTrigger>
-            <AccordionContent className="space-y-2.5 pb-4 text-[13px] leading-relaxed text-[hsl(var(--ck-text-muted))]">
+            <AccordionContent className="space-y-2.5 pb-4 text-[14px] leading-relaxed text-[hsl(var(--ck-text-soft))]">
               {it.a.map((p, i) => (
                 <p key={i}>{p}</p>
               ))}

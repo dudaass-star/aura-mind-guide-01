@@ -242,3 +242,26 @@
 .ck-calm .quiz-voice-name{color:hsl(var(--ck-text))!important}
 .ck-calm .quiz-voice-star{color:hsl(var(--ck-cta));fill:hsl(var(--ck-cta))}
 .ck-calm h1{letter-spacing:-.02em}
+
+/* Passada completa "vibe Headspace": areia quente, blocos macios, lilás na decisão. */
+.checkout-dark.ck-light.ck-calm{--ck-bg:42 45% 95%;--ck-card:40 40% 99%;--ck-line:38 24% 86%;
+  background:linear-gradient(180deg,hsl(265 45% 94%) 0,hsl(42 45% 95%) 340px)!important}
+.ck-calm header{background:hsl(42 45% 95%/.9)!important;box-shadow:none!important;border-color:transparent!important}
+.ck-calm h1{font-weight:800;color:hsl(var(--ck-text))}
+.ck-calm .ck-box{background:hsl(var(--ck-card));box-shadow:0 12px 30px -22px hsl(30 20% 30%/.35)}
+.ck-calm .ck-seg{background:hsl(0 0% 100%);box-shadow:0 8px 22px -16px hsl(30 20% 30%/.4)}
+.ck-calm .ck-seg-btn{color:hsl(var(--ck-text-soft))}
+.ck-calm .ck-seg-active{background:hsl(var(--ck-cta));color:#fff}
+.ck-calm .ck-seg-tag{background:hsl(var(--ck-pill));color:hsl(var(--ck-pill-text))}
+.ck-calm .ck-plan-card{background:hsl(var(--ck-card))!important;border-color:transparent!important;box-shadow:0 10px 26px -20px hsl(30 20% 30%/.4)}
+.ck-calm .ck-plan-card-active,.ck-calm .ck-plan-card-active:hover{background:hsl(var(--ck-cta-soft))!important;border-color:hsl(var(--ck-cta))!important;color:hsl(var(--ck-text))!important;box-shadow:0 16px 32px -20px hsl(var(--ck-cta)/.6)}
+.ck-calm .ck-plan-card-active span{color:inherit!important}
+.ck-calm .ck-sub{color:hsl(var(--ck-text-muted))}
+.ck-calm .ck-radio{border-color:hsl(var(--ck-line));background:#fff}
+.ck-calm .ck-radio-on{border-color:hsl(var(--ck-cta));background:hsl(var(--ck-cta));color:#fff!important}
+.ck-calm .ck-badge,.ck-calm .ck-plan-card-active .ck-badge{background:hsl(var(--ck-pill))!important;color:hsl(var(--ck-pill-text))!important}
+.ck-calm .ck-cta-main{background:hsl(var(--ck-cta))!important;min-height:58px;font-size:17px}
+.ck-calm .ck-cta-main:hover{background:hsl(var(--ck-cta-hover))!important}
+.ck-calm .text-white{color:hsl(var(--ck-text))}
+.ck-calm [class*="text-white/"]{color:hsl(var(--ck-text-muted))}
+.ck-calm .ck-field,.ck-calm input{min-height:54px;border-radius:16px!important;background:hsl(42 40% 97%)!important}

@@ -1650,74 +1650,47 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                 <h1 className="mt-3 font-sans text-[32px] md:text-[42px] font-bold leading-[1.1] tracking-tight text-[hsl(var(--ck-text))]">Dê o primeiro passo <span className="text-[hsl(var(--ck-cta-light))]">por você.</span></h1>
                 <p className="mt-3 text-[15px] text-[hsl(var(--ck-text-muted))]">Cancele quando quiser · Garantia de 7 dias</p>
               </div>
-              <div>
-                <div className="mb-3 flex items-end justify-between gap-3">
-                  <p className="text-[17px] font-bold text-[hsl(var(--ck-text))]">1. Escolha seu plano</p>
-                  
-                </div>
-                <div role="radiogroup" aria-label="Escolha do plano" className="grid gap-4 pt-2">
-                  {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
-                    const active = selectedPlan === id;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => setSelectedPlan(id)}
-                        className={`ck-plan-card relative flex items-center justify-between gap-3 rounded-[20px] border-2 px-5 py-4 text-left transition-all active:scale-[0.99] ${active ? "ck-plan-card-active" : ""}`}
-                      >
-                        {id === "direcao" && (
-                          <span className="absolute -top-2.5 left-5 whitespace-nowrap rounded-full bg-[hsl(var(--ck-cta))] px-2.5 py-0.5 text-[10px] font-bold text-[hsl(var(--ck-cta-fg))]">
-                            Mais escolhido
-                          </span>
-                        )}
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-[17px] font-bold">{plan.name}</span>
-                          <span className="mt-0.5 block text-[13px] text-[hsl(var(--ck-text-muted))]">{PLAN_RHYTHM[id].rhythm}</span>
-                        </span>
-                        <span className="flex shrink-0 items-baseline gap-1">
-                          <span className="ck-num text-[28px] font-extrabold leading-none">{plan.sessions}</span>
-                          <span className="text-[12px] font-medium text-[hsl(var(--ck-text-soft))]">encontros/mês</span>
-                        </span>
-                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${active ? "border-white bg-white" : "border-[hsl(var(--ck-line))] bg-white"}`}>{active && <Check className="h-3.5 w-3.5 text-[hsl(var(--ck-cta))]" strokeWidth={3} />}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <p className="pt-10 text-[17px] font-bold text-[hsl(var(--ck-text))]">2. Escolha o ciclo</p>
-
-              <div className="grid grid-cols-2 gap-3 pt-2">
+              {/* Ciclo como alternador em pílula: a hierarquia guia, sem numeração de formulário. */}
+              <div role="radiogroup" aria-label="Ciclo de cobrança" className="ck-seg mx-auto grid w-full max-w-sm grid-cols-2 rounded-full p-1.5">
                 {(["yearly", "monthly"] as BillingPeriod[]).map((b) => {
                   const active = billingPeriod === b;
-                  const yearly = b === "yearly";
                   return (
-                    <button
-                      key={b}
-                      type="button"
-                      onClick={() => setBillingPeriod(b)}
-                      aria-pressed={active}
-                      className={`relative rounded-3xl border-2 px-3 pb-4 pt-6 text-center transition-all active:scale-[0.98] ${
-                        active
-                          ? "border-[hsl(var(--ck-cta))] bg-[hsl(var(--ck-cta-soft))] shadow-[0_14px_30px_-18px_hsl(222_40%_4%/0.8)]"
-                          : "border-[hsl(var(--ck-line))] bg-[hsl(var(--ck-card))] hover:border-[hsl(var(--ck-cta)/0.6)]"
-                      }`}
-                    >
-                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(var(--ck-pill))] text-[hsl(var(--ck-pill-text))]" : "bg-[hsl(var(--ck-cta))] text-[hsl(0_0%_100%)]"}`}>
-                        {yearly ? `★ -${currentPlan.yearlyDiscount}%` : "7 dias"}
+                    <button key={b} type="button" role="radio" aria-checked={active} onClick={() => setBillingPeriod(b)}
+                      className={`ck-seg-btn rounded-full px-3 py-2.5 text-[15px] font-bold transition-all ${active ? "ck-seg-active" : ""}`}>
+                      {b === "yearly" ? <>Anual <span className="ck-seg-tag ml-1 rounded-full px-2 py-0.5 text-[11px]">-{currentPlan.yearlyDiscount}%</span></> : "Mensal"}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="ck-num mt-3 text-center text-[13px] text-[hsl(var(--ck-text-muted))]">
+                {billingPeriod === "yearly" ? `R$ ${currentPlan.yearlyPrice} por ano · o melhor valor` : `7 dias por R$ ${currentPlan.trialPrice} · depois R$ ${currentPlan.monthlyPrice}/mês`}
+              </p>
+
+              <div role="radiogroup" aria-label="Escolha do plano" className="grid gap-3 pt-6">
+                {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
+                  const active = selectedPlan === id;
+                  const yearly = billingPeriod === "yearly";
+                  return (
+                    <button key={id} type="button" role="radio" aria-checked={active} onClick={() => setSelectedPlan(id)}
+                      className={`ck-plan-card relative flex items-center gap-4 rounded-[24px] border-2 px-5 py-5 text-left transition-all active:scale-[0.99] ${active ? "ck-plan-card-active" : ""}`}>
+                      {id === "direcao" && (
+                        <span className="ck-badge absolute -top-3 right-5 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-bold">Mais escolhido</span>
+                      )}
+                      <span className={`ck-radio flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${active ? "ck-radio-on" : ""}`}>{active && <Check className="h-3.5 w-3.5" strokeWidth={3} />}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[18px] font-extrabold leading-tight">{plan.name}</span>
+                        <span className="ck-sub mt-1 block text-[13px]">{plan.sessions} encontros/mês · {PLAN_RHYTHM[id].rhythm}</span>
                       </span>
-                      <p className="text-sm font-medium text-white">{yearly ? "Anual" : "Mensal"}</p>
-                      <p className="ck-num mt-0.5 font-sans text-[28px] font-extrabold tracking-tight text-[hsl(var(--ck-text))]">R$ {yearly ? currentPlan.yearlyMonthlyEquivalent : currentPlan.trialPrice}</p>
-                      <p className="text-[11px] text-white/70">{yearly ? "/mês" : "nos 7 dias"}</p>
-                      <p className="ck-num mt-1 text-[11px] text-white/65">{yearly ? `R$ ${currentPlan.yearlyPrice}/ano` : `Depois R$ ${currentPlan.monthlyPrice}/mês`}</p>
+                      <span className="shrink-0 text-right">
+                        <span className="ck-num block text-[22px] font-extrabold leading-none">R$ {yearly ? plan.yearlyMonthlyEquivalent : plan.trialPrice}</span>
+                        <span className="ck-sub mt-1 block text-[11px]">{yearly ? "/mês" : "7 dias"}</span>
+                      </span>
                     </button>
                   );
                 })}
               </div>
 
-              <ul className="space-y-3 pt-8 text-[15px] text-white/85">
+              <ul className="ck-box mt-6 space-y-3 rounded-[24px] px-5 py-5 text-[15px]">
                 {([
                   [`${currentPlan.sessions} encontros guiados`, " por mês com a AURA"],
                   ["Áudio e texto", " a qualquer hora"],
@@ -1734,9 +1707,13 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               {/* Confiança acima da dobra, colada na escolha do plano. */}
 
               {/* Formulário enxuto */}
-              <div className="space-y-3 pt-5">
+              <div className="ck-box mt-6 space-y-4 rounded-[24px] px-5 py-6">
                 <div>
-                  <Label htmlFor="phone" className="text-white/80 text-sm">WhatsApp</Label>
+                  <p className="text-[18px] font-extrabold text-[hsl(var(--ck-text))]">Para onde enviamos seu acesso</p>
+                  <p className="mt-1 text-[13px] text-[hsl(var(--ck-text-muted))]">Leva menos de um minuto.</p>
+                </div>
+                <div>
+                  <Label htmlFor="phone" className="text-[14px] font-semibold text-[hsl(var(--ck-text-soft))]">WhatsApp</Label>
                   <Input
                     id="phone"
                     type="tel"
@@ -1760,7 +1737,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="name" className="text-white/80 text-sm">Nome</Label>
+                  <Label htmlFor="name" className="text-[14px] font-semibold text-[hsl(var(--ck-text-soft))]">Nome</Label>
                   <Input
                     id="name"
                     type="text"
@@ -1782,7 +1759,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="email" className="text-white/80 text-sm">Email</Label>
+                  <Label htmlFor="email" className="text-[14px] font-semibold text-[hsl(var(--ck-text-soft))]">Email</Label>
                   <Input
                     id="email"
                     type="email"
@@ -1815,7 +1792,8 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               {/* Escolha explícita do meio de pagamento: um CTA só, um preço só.
                   Antes eram dois botões com valores diferentes no rótulo e o PIX
                   parecia custar 5x mais que o cartão. */}
-              <div className="space-y-3 pt-1">
+              <div className="space-y-4 pt-6">
+                <p className="text-[18px] font-extrabold text-[hsl(var(--ck-text))]">Como prefere pagar</p>
                 {!pixManuallyDisabled ? (
                   <PaymentMethodToggle
                   value={payMethod}
@@ -1876,7 +1854,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                   variant="sage"
                   size="cta"
                   onClick={payMethod === "pix" ? () => void handleOpenPix("subscription") : undefined}
-                  className={`w-full whitespace-normal leading-tight ck-cta-text ${!isFormValid ? "opacity-70" : ""}`}
+                  className={`ck-cta ck-cta-main w-full whitespace-normal leading-tight ${!isFormValid ? "opacity-70" : ""}`}
                    disabled={payMethod === "card" && isLoading}
                    aria-disabled={!isFormValid || (payMethod === "card" && isLoading)}
                 >
@@ -2077,7 +2055,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
 
                 <div className="space-y-4 pt-2">
                   <div>
-                    <Label htmlFor="cpf" className="text-white/80 text-sm">CPF</Label>
+                    <Label htmlFor="cpf" className="text-[14px] font-semibold text-[hsl(var(--ck-text-soft))]">CPF</Label>
                     <Input
                       id="cpf"
                       type="text"
@@ -2186,7 +2164,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                   ) : null}
 
                   <div>
-                    <Label className="text-white/80 text-sm">Código copia-e-cola</Label>
+                    <Label className="text-[14px] font-semibold text-[hsl(var(--ck-text-soft))]">Código copia-e-cola</Label>
                     <div className="mt-1.5 flex gap-2">
                       <Input
                         readOnly

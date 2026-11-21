@@ -26,7 +26,7 @@ export function PaymentMethodToggle({
   pixHint,
 }: PaymentMethodToggleProps) {
   return (
-    <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Forma de pagamento">
+    <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Forma de pagamento">
       {options.map(({ id, label, Icon }) => {
         const active = value === id;
         return (
@@ -36,14 +36,14 @@ export function PaymentMethodToggle({
             role="radio"
             aria-checked={active}
             onClick={() => onChange(id)}
-            className={`flex items-center gap-2.5 rounded-xl border px-3 py-3 text-left transition-all ${
+            className={`flex items-center gap-2.5 rounded-[20px] border-2 px-3.5 py-4 text-left transition-all ${
               active
                 ? "border-[hsl(var(--ck-cta))] bg-[hsl(var(--ck-cta)/0.14)]"
-                : "border-[hsl(var(--ck-line))] bg-[hsl(var(--ck-text)/0.04)] hover:border-[hsl(var(--ck-line))] hover:bg-[hsl(var(--ck-text)/0.07)]"
+                : "border-[hsl(var(--ck-line))] bg-[hsl(var(--ck-card))] hover:border-[hsl(var(--ck-cta)/0.35)]"
             }`}
           >
             <span
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
                 active
                   ? "bg-[hsl(var(--ck-cta))] text-[hsl(var(--ck-cta-fg))]"
                   : "bg-[hsl(var(--ck-text)/0.08)] text-[hsl(var(--ck-text-soft))]"
