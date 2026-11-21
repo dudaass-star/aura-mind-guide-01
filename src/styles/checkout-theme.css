@@ -308,3 +308,50 @@
 .ck-calm .ck-seg-active{background:hsl(265 42% 56%)!important;color:#fff!important}
 .ck-calm .ck-cta-main{background:hsl(138 26% 40%)!important}
 .ck-calm .ck-cta-main:hover{background:hsl(138 28% 34%)!important}
+
+/* Atmosfera da 1ª dobra da /v5: refúgio noturno com a paisagem ao fundo,
+ * luz ambiente sálvia/lavanda, chips em superfície translúcida e CTA sálvia. */
+.checkout-dark.ck-light.ck-calm.ck-v5,.ck-calm-dialog.ck-v5-dialog{
+  --ck-bg:220 35% 10%;--ck-card:220 30% 16%;--ck-surface:220 30% 14%;
+  --ck-text:36 25% 94%;--ck-text-soft:36 15% 82%;--ck-text-muted:220 15% 68%;
+  --ck-line:220 20% 26%;--ck-cta:130 22% 52%;--ck-cta-hover:130 24% 58%;
+  --ck-cta-soft:130 24% 52%;--ck-accent:130 30% 70%;--ck-pill:130 26% 74%;--ck-pill-text:150 25% 12%;
+  color:hsl(var(--ck-text));color-scheme:dark;
+}
+.checkout-dark.ck-light.ck-calm.ck-v5{
+  background:
+    linear-gradient(180deg,hsl(220 35% 10%/.55) 0,hsl(220 35% 10%/.35) 260px,hsl(220 35% 10%) 620px),
+    url("../assets/v5-hero-refugio.jpg") top center/100% auto no-repeat,
+    radial-gradient(40rem 30rem at 0% 0%,hsl(130 18% 48%/.35),transparent 60%),
+    radial-gradient(36rem 30rem at 100% 40%,hsl(265 60% 65%/.22),transparent 60%),
+    hsl(220 35% 10%)!important;
+}
+.ck-v5 header{background:hsl(220 35% 10%/.85)!important;border-color:hsl(36 25% 94%/.08)!important;box-shadow:none!important;backdrop-filter:blur(10px)}
+.ck-v5 header img{filter:brightness(0) invert(1)}
+.ck-v5 h1{color:hsl(var(--ck-text))!important}
+.ck-v5 h1 span,.ck-v5 .ck-hero h1 em{background:linear-gradient(100deg,hsl(130 18% 58%),hsl(150 45% 78%) 50%,hsl(265 70% 82%));-webkit-background-clip:text;background-clip:text;color:transparent!important}
+.ck-v5 .text-white{color:hsl(var(--ck-text))}
+.ck-v5 [class*="text-white/"],.ck-v5-dialog [class*="text-white/"]{color:hsl(var(--ck-text-muted))}
+.ck-v5 .ck-seg{background:hsl(36 25% 94%/.06);border:1px solid hsl(36 25% 94%/.14);box-shadow:none;backdrop-filter:blur(10px)}
+.ck-v5 .ck-seg-btn{color:hsl(var(--ck-text-soft))}
+.ck-v5 .ck-seg-active{background:hsl(var(--ck-cta));color:#fff}
+.ck-v5 .ck-plan-card{background:hsl(36 25% 94%/.06)!important;border:1px solid hsl(36 25% 94%/.14)!important;color:hsl(var(--ck-text))!important;box-shadow:none!important;backdrop-filter:blur(10px)}
+.ck-v5 .ck-plan-card:hover{background:hsl(36 25% 94%/.1)!important}
+.ck-v5 .ck-plan-card-active,.ck-v5 .ck-plan-card-active:hover{background:hsl(130 18% 48%/.22)!important;border-color:hsl(130 18% 58%/.85)!important;box-shadow:0 0 26px -6px hsl(130 18% 48%/.7)!important}
+.ck-v5 .ck-plan-card-active span{color:hsl(var(--ck-text))!important}
+.ck-v5 .ck-sub{color:hsl(var(--ck-text-muted))!important}
+.ck-v5 .ck-radio{background:transparent!important;border-color:hsl(36 25% 94%/.3)!important}
+.ck-v5 .ck-radio-on{background:hsl(var(--ck-cta))!important;border-color:hsl(var(--ck-cta))!important}
+.ck-v5 .ck-badge{background:hsl(265 60% 80%)!important;color:hsl(222 40% 12%)!important}
+.ck-v5 .ck-box,.ck-v5 [class*="bg-white/"],.ck-v5-dialog [class*="bg-white/"]{background:hsl(36 25% 94%/.05)!important;border:1px solid hsl(36 25% 94%/.1);box-shadow:none!important}
+.ck-v5 .ck-field,.ck-v5 input,.ck-v5-dialog input{background:hsl(220 30% 14%)!important;border:1px solid hsl(36 25% 94%/.16)!important;color:hsl(var(--ck-text))!important}
+.ck-v5 input::placeholder{color:hsl(var(--ck-text-muted))}
+.ck-v5 .ck-cta,.ck-v5 .ck-cta-main,.ck-v5-dialog .ck-cta{background:hsl(var(--ck-cta))!important;color:#fff!important;border-radius:1rem!important;box-shadow:0 14px 30px -12px hsl(130 18% 48%/.7)!important;position:relative;overflow:hidden}
+.ck-v5 .ck-cta-main::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,hsl(0 0% 100%/.35) 50%,transparent 70%);transform:translateX(-100%);animation:v5shine 3.2s ease-in-out infinite;pointer-events:none}
+@keyframes v5shine{60%,100%{transform:translateX(100%)}}
+.ck-v5 .quiz-voice-card{background:hsl(36 25% 94%/.06)!important;border:1px solid hsl(36 25% 94%/.12)!important}
+.ck-v5 .quiz-voice-head,.ck-v5 .quiz-voice-name{color:hsl(var(--ck-text))!important}
+.ck-v5 .quiz-voice-quote,.ck-v5 .quiz-voice-meta{color:hsl(var(--ck-text-muted))!important}
+.ck-v5 .text-red-300{color:hsl(6 80% 76%)}
+.ck-v5-dialog{background:hsl(220 32% 12%)!important;color:hsl(var(--ck-text))}
+@media (prefers-reduced-motion:reduce){.ck-v5 .ck-cta-main::after{animation:none}}
