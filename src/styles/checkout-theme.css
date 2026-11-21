@@ -76,25 +76,12 @@
   outline: none;
 }
 
-/* Santuário aveludado: luz ambiente sálvia e lavanda sobre o navy, sem parede chapada. */
+/* Fundo sereno e sólido (referência Calm/Headspace): sem brilho, sem vidro. */
 .checkout-dark.ck-sanctuary{
   min-height:100vh;
-  background:
-    radial-gradient(30rem 24rem at 50% 8%,hsl(265 60% 70%/.30),transparent 68%),
-    radial-gradient(34rem 26rem at 100% 45%,hsl(265 55% 72%/.22),transparent 65%),
-    radial-gradient(32rem 26rem at 0% 20%,hsl(140 30% 60%/.16),transparent 65%),
-    radial-gradient(40rem 30rem at 30% 100%,hsl(265 45% 60%/.16),transparent 65%),
-    hsl(232 30% 15%);
-  background-attachment:fixed;
-}
-
-/* Toque lavanda nos cartões de escolha do checkout */
-.checkout-dark.ck-sanctuary [role="radiogroup"],
-.checkout-dark.ck-sanctuary button[aria-pressed="false"]{
-  background-color:hsl(265 35% 30%/.22)!important;
-  border-color:hsl(265 70% 82%/.28)!important;
+  background:linear-gradient(180deg,hsl(232 26% 19%) 0%,hsl(230 26% 15%) 100%);
 }
 .checkout-dark.ck-sanctuary input{
-  background-color:hsl(265 35% 35%/.16)!important;
-  border-color:hsl(265 70% 82%/.25)!important;
+  background-color:hsl(228 22% 21%)!important;
+  border-color:hsl(0 0% 100%/.12)!important;
 }

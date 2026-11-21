@@ -1653,9 +1653,13 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
               {/* Seleção simplificada: primeiro o ritmo, depois Anual x Mensal (sem trimestral/semestral). */}
               {!embedded && <>
+              <div className="pb-2 text-center">
+                <h1 className="font-display text-[26px] md:text-3xl font-semibold leading-tight text-[hsl(40_40%_96%)]">Dê o primeiro passo por você.</h1>
+                <p className="mt-1.5 text-[13px] text-white/65">Cancele quando quiser · Garantia de 7 dias</p>
+              </div>
               <div>
                 <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(140_30%_72%)]">1. Escolha seu ritmo</p>
-                <div role="radiogroup" aria-label="Ritmo de encontros" className="grid grid-cols-3 gap-1.5 rounded-2xl border border-white/12 bg-white/[0.05] backdrop-blur-md p-1.5">
+                <div role="radiogroup" aria-label="Ritmo de encontros" className="grid grid-cols-3 gap-1.5 rounded-2xl border border-white/10 bg-[hsl(228_22%_20%)] p-1.5">
                   {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
                     const active = selectedPlan === id;
                     return (
@@ -1666,7 +1670,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                         aria-checked={active}
                         onClick={() => setSelectedPlan(id)}
                         className={`relative rounded-xl px-1 py-2.5 text-center leading-tight transition-all ${
-                          active ? "bg-[hsl(140_22%_45%)] text-white shadow-[0_6px_18px_-10px_hsl(140_22%_45%)]" : "text-white/75 hover:text-white"
+                          active ? "bg-[hsl(140_22%_45%)] text-white" : "text-white/75 hover:text-white"
                         }`}
                       >
                         <span className="block text-[14px] font-semibold">{id === "direcao" ? <span className="text-[hsl(var(--champagne))]">★ </span> : null}{plan.name}</span>
@@ -1692,11 +1696,11 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       aria-pressed={active}
                       className={`relative rounded-2xl border px-3 pb-3.5 pt-5 text-center transition-all ${
                         active
-                          ? "border-[hsl(140_30%_72%)] bg-[hsl(140_28%_52%/0.22)] backdrop-blur-md shadow-[0_0_0_1px_hsl(140_30%_72%/0.6),0_14px_36px_-14px_hsl(140_30%_60%/0.7)]"
-                          : "border-white/15 bg-white/[0.05] backdrop-blur-md hover:border-white/30"
+                          ? "border-[hsl(140_30%_72%)] bg-[hsl(140_20%_30%)]"
+                          : "border-white/10 bg-[hsl(228_22%_20%)] hover:border-white/25"
                       }`}
                     >
-                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(140_22%_45%)] text-white" : "border border-[hsl(40_40%_96%/0.3)] bg-[hsl(40_40%_96%/0.14)] backdrop-blur text-[hsl(40_40%_96%)]"}`}>
+                      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${yearly ? "bg-[hsl(140_22%_45%)] text-white" : "border border-[hsl(40_40%_96%/0.3)] bg-[hsl(40_40%_96%/0.14)] text-[hsl(40_40%_96%)]"}`}>
                         {yearly ? `★ -${currentPlan.yearlyDiscount}%` : "7 dias"}
                       </span>
                       <p className="text-sm font-medium text-white">{yearly ? "Anual" : "Mensal"}</p>
