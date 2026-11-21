@@ -231,3 +231,14 @@
 .ck-calm .ck-plan-card-active span{color:#fff!important}
 .ck-calm .ck-plan-card-active .absolute{background:#fff!important;color:hsl(var(--ck-cta))!important}
 .ck-calm .text-red-300{color:hsl(4 60% 45%)}
+
+/* Depoimentos integrados ao fundo claro (sem faixa escura), aspas em lilás. */
+.ck-calm .theme-v5-night .quiz-voices{background:transparent!important;box-shadow:none!important}
+.ck-calm .quiz-voices-kicker{color:hsl(var(--ck-accent))}
+.ck-calm .quiz-voices-hint{color:hsl(var(--ck-text-muted))}
+.ck-calm .quiz-voice-card{background:hsl(var(--ck-card))!important;border:0!important;box-shadow:none!important}
+.ck-calm .quiz-voice-head{color:hsl(var(--ck-text))!important}
+.ck-calm .quiz-voice-quote,.ck-calm .quiz-voice-meta{color:hsl(var(--ck-text-soft))!important}
+.ck-calm .quiz-voice-name{color:hsl(var(--ck-text))!important}
+.ck-calm .quiz-voice-star{color:hsl(var(--ck-cta));fill:hsl(var(--ck-cta))}
+.ck-calm h1{letter-spacing:-.02em}
