@@ -1422,7 +1422,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
         <meta property="og:type" content="website" />
       </Helmet>}
 
-      <div className={embedded ? "v2-theme checkout-dark ck-light ck-forest" : "v2-theme checkout-dark min-h-screen ck-light ck-forest"}>
+      <div className={embedded ? "v2-theme checkout-dark ck-light ck-navy" : "v2-theme checkout-dark min-h-screen ck-light ck-navy"}>
         
 
         {!embedded && <header className="relative py-1 md:py-5 border-b border-white/10">
@@ -1645,14 +1645,17 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
               {/* Seleção simplificada: primeiro o ritmo, depois Anual x Mensal (sem trimestral/semestral). */}
               {!embedded && <>
-              <div className="ck-hero mb-3 pt-2 text-center">
+              <div className="ck-hero mb-5 pt-2 text-center">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--ck-accent))]">Seu primeiro passo</p>
-                <h1 className="mt-2 font-sans text-[28px] md:text-[34px] font-bold leading-[1.12] tracking-tight text-[hsl(var(--ck-text))]">Dê o primeiro passo <span className="text-[hsl(var(--ck-accent))]">por você.</span></h1>
+                <h1 className="mt-2 font-sans text-[28px] md:text-[34px] font-bold leading-[1.12] tracking-tight text-[hsl(var(--ck-text))]">Dê o primeiro passo <span className="text-[hsl(var(--ck-cta-light))]">por você.</span></h1>
                 <p className="mt-2 text-[13px] text-[hsl(var(--ck-text-muted))]">Cancele quando quiser · Garantia de 7 dias</p>
               </div>
               <div>
-                <p className="mb-2.5 text-[15px] font-bold text-[hsl(var(--ck-text))]">1. Escolha seu ritmo</p>
-                <div role="radiogroup" aria-label="Ritmo de encontros" className="grid grid-cols-3 gap-1.5 rounded-full bg-[hsl(var(--ck-surface))] p-1.5">
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <p className="text-[17px] font-bold text-[hsl(var(--ck-text))]">1. Escolha seu plano</p>
+                  <span className="text-[11px] text-[hsl(var(--ck-text-muted))]">Encontros por mês</span>
+                </div>
+                <div role="radiogroup" aria-label="Escolha do plano" className="grid grid-cols-3 gap-2 pt-2 sm:gap-3">
                   {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
                     const active = selectedPlan === id;
                     return (
@@ -1662,20 +1665,27 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                         role="radio"
                         aria-checked={active}
                         onClick={() => setSelectedPlan(id)}
-                        className={`relative rounded-full px-1 py-2.5 text-center leading-tight transition-all ${
-                          active ? "bg-[hsl(var(--ck-pill))] text-[hsl(var(--ck-pill-text))] shadow-md" : "text-white/75 hover:text-white"
-                        }`}
+                        className={`ck-plan-card relative min-h-[132px] rounded-2xl border-2 px-2 pb-3 pt-4 text-center transition-all active:scale-[0.98] ${active ? "ck-plan-card-active" : ""}`}
                       >
-                        <span className="block text-[14px] font-semibold">{id === "direcao" ? <span className="text-[hsl(var(--champagne))]">★ </span> : null}{plan.name}</span>
-                        <span className={`block text-[11px] tracking-tight ${active ? "text-[hsl(var(--ck-pill-text)/0.8)]" : "text-white/55"}`}>{plan.sessions} encontros/mês</span>
+                        {id === "direcao" && (
+                          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[hsl(var(--ck-cta))] px-2.5 py-0.5 text-[10px] font-bold text-[hsl(var(--ck-cta-fg))]">
+                            Mais escolhido
+                          </span>
+                        )}
+                        <span className="block text-[14px] font-bold sm:text-[15px]">{plan.name}</span>
+                        <span className="mt-2 flex items-baseline justify-center gap-1">
+                          <span className="ck-num text-[28px] font-extrabold leading-none">{plan.sessions}</span>
+                          <span className="text-[11px] font-medium text-[hsl(var(--ck-text-soft))]">encontros</span>
+                        </span>
+                        <span className="mt-1.5 block text-[11px] leading-tight text-[hsl(var(--ck-text-muted))]">{PLAN_RHYTHM[id].rhythm}</span>
+                        <span className={`mx-auto mt-3 block h-1 w-8 rounded-full ${active ? "bg-[hsl(var(--ck-cta))]" : "bg-[hsl(var(--ck-line))]"}`} />
                       </button>
                     );
                   })}
                 </div>
-                <p className="mt-2 text-center text-[12px] text-white/65">{PLAN_RHYTHM[selectedPlan].rhythm} · <span className={selectedPlan === "direcao" ? "text-[hsl(var(--champagne))]" : undefined}>{PLAN_RHYTHM[selectedPlan].tag.replace("★ ", "")}</span></p>
               </div>
 
-              <p className="pt-3 text-[15px] font-bold text-[hsl(var(--ck-text))]">2. Escolha como entrar</p>
+              <p className="pt-4 text-[15px] font-bold text-[hsl(var(--ck-text))]">2. Escolha o ciclo</p>
 
               <div className="grid grid-cols-2 gap-3 pt-2">
                 {(["yearly", "monthly"] as BillingPeriod[]).map((b) => {
@@ -2037,7 +2047,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             }, 200);
           }
         }}>
-          <DialogContent className="bg-[hsl(153_14%_20%)] border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogContent className="ck-navy-dialog border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
             {pixStage === "form" ? (
               <>
                 <DialogHeader>
