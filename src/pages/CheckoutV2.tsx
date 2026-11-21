@@ -24,7 +24,7 @@ import {
 } from "@/lib/ga4";
 import { getExternalId, setAdvancedMatching, trackMetaViewContent } from "@/lib/meta-pixel";
 import { oaiqCheckoutStarted } from "@/lib/openai-pixel";
-import logoOlaAura from "@/assets/logo-ola-aura.png";
+import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 import "@/styles/v2-theme.css";
 import "@/styles/checkout-theme.css";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
@@ -1425,8 +1425,8 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
       <div className={embedded ? "v2-theme checkout-dark ck-light ck-calm" : "v2-theme checkout-dark min-h-screen ck-light ck-calm"}>
         
 
-        {!embedded && <header className="relative py-1 md:py-5 border-b border-white/10">
-          <div className="container mx-auto px-6 flex items-center justify-between">
+        {!embedded && <header className="relative py-4 md:py-5">
+          <div className="container mx-auto px-6 grid grid-cols-[1fr_auto_1fr] items-center">
             {/* Na etapa de pagamento não há saída para a landing: evita perder quem só quer rever o plano. */}
             {embeddedClientSecret || asaasCardOpen ? <div className="w-16" /> : <Link
               to={backHref}
@@ -1435,15 +1435,15 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               <ArrowLeft className="w-4 h-4" />
               <span className="text-sm">Voltar</span>
             </Link>}
-            {embeddedClientSecret || asaasCardOpen ? <div className="flex items-center"><img
+            {embeddedClientSecret || asaasCardOpen ? <div className="flex items-center justify-self-center"><img
                 src={logoOlaAura}
                 alt="Olá AURA"
-                className="h-11 md:h-14 w-auto"
-              /></div> : <Link to={backHref} className="flex items-center">
+                className="h-8 md:h-10 w-auto"
+              /></div> : <Link to={backHref} className="flex items-center justify-self-center">
               <img
                 src={logoOlaAura}
                 alt="Olá AURA"
-                className="h-11 md:h-14 w-auto"
+                className="h-8 md:h-10 w-auto"
               />
             </Link>}
             <div className="w-16" />
@@ -1646,8 +1646,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
               {/* Seleção simplificada: primeiro o ritmo, depois Anual x Mensal (sem trimestral/semestral). */}
               {!embedded && <>
               <div className="ck-hero mb-8 pt-6 text-center">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--ck-accent))]">Seu primeiro passo</p>
-                <h1 className="mt-3 font-sans text-[32px] md:text-[42px] font-bold leading-[1.1] tracking-tight text-[hsl(var(--ck-text))]">Dê o primeiro passo <span className="text-[hsl(var(--ck-cta-light))]">por você.</span></h1>
+                <h1 className="font-sans text-[32px] md:text-[42px] font-bold leading-[1.1] tracking-tight text-[hsl(var(--ck-text))]">Dê o primeiro passo <span className="text-[hsl(var(--ck-cta-light))]">por você.</span></h1>
                 <p className="mt-3 text-[15px] text-[hsl(var(--ck-text-muted))]">Cancele quando quiser · Garantia de 7 dias</p>
               </div>
               {/* Ciclo como alternador em pílula: a hierarquia guia, sem numeração de formulário. */}
@@ -1662,9 +1661,6 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                   );
                 })}
               </div>
-              <p className="ck-num mt-3 text-center text-[13px] text-[hsl(var(--ck-text-muted))]">
-                {billingPeriod === "yearly" ? `R$ ${currentPlan.yearlyPrice} por ano · o melhor valor` : `7 dias por R$ ${currentPlan.trialPrice} · depois R$ ${currentPlan.monthlyPrice}/mês`}
-              </p>
 
               <div role="radiogroup" aria-label="Escolha do plano" className="grid gap-3 pt-6">
                 {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
@@ -1683,7 +1679,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                       </span>
                       <span className="shrink-0 text-right">
                         <span className="ck-num block text-[22px] font-extrabold leading-none">R$ {yearly ? plan.yearlyMonthlyEquivalent : plan.trialPrice}</span>
-                        <span className="ck-sub mt-1 block text-[11px]">{yearly ? "/mês" : "7 dias"}</span>
+                        <span className="ck-sub mt-1 block text-[11px] leading-snug">{yearly ? <>/mês<br />R$ {plan.yearlyPrice} por ano</> : <>nos 7 dias<br />depois R$ {plan.monthlyPrice}/mês</>}</span>
                       </span>
                     </button>
                   );
@@ -1731,7 +1727,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                   {errors.phone ? (
                     <p id="phone-error" className="text-[11px] text-red-300 mt-1">{errors.phone}</p>
                   ) : (
-                    <p id="phone-hint" className="text-[11px] text-white/60 mt-1">
+                    <p id="phone-hint" className="text-[12px] text-[hsl(var(--ck-text-muted))] mt-1">
                       Para enviarmos seu link de acesso imediato ao app. Sem spam.
                     </p>
                   )}
@@ -1782,7 +1778,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                     <p id="email-error" className="text-[11px] text-red-300 mt-1">{errors.email}</p>
                   )}
                   {!errors.email && (
-                    <p className="text-[11px] text-white/60 mt-1">
+                    <p className="text-[12px] text-[hsl(var(--ck-text-muted))] mt-1">
                       Só para recibo e recuperação de acesso.
                     </p>
                   )}

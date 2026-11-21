@@ -246,7 +246,7 @@
 /* Passada completa "vibe Headspace": areia quente, blocos macios, lilás na decisão. */
 .checkout-dark.ck-light.ck-calm{--ck-bg:42 45% 95%;--ck-card:40 40% 99%;--ck-line:38 24% 86%;
   background:linear-gradient(180deg,hsl(265 45% 94%) 0,hsl(42 45% 95%) 340px)!important}
-.ck-calm header{background:hsl(42 45% 95%/.9)!important;box-shadow:none!important;border-color:transparent!important}
+.ck-calm header{background:hsl(0 0% 100%)!important;box-shadow:0 2px 12px -6px hsl(150 10% 20%/.18)!important;border-color:transparent!important}
 .ck-calm h1{font-weight:800;color:hsl(var(--ck-text))}
 .ck-calm .ck-box{background:hsl(var(--ck-card));box-shadow:0 12px 30px -22px hsl(30 20% 30%/.35)}
 .ck-calm .ck-seg{background:hsl(0 0% 100%);box-shadow:0 8px 22px -16px hsl(30 20% 30%/.4)}
