@@ -274,3 +274,11 @@
 .ck-calm .ck-cta-main:hover{background:hsl(var(--ck-sage-hover))!important}
 .ck-calm .ck-box li span[class*="bg-"]{background:hsl(var(--ck-pill))!important}
 .ck-calm .ck-box li svg{color:hsl(var(--ck-accent))!important}
+
+/* Fundo branco puro: cores da Aura mais vivas sobre tela limpa. */
+.checkout-dark.ck-light.ck-calm{--ck-bg:0 0% 100%;--ck-card:0 0% 100%;--ck-line:230 14% 90%;background:#fff!important}
+.ck-calm header{box-shadow:0 1px 0 hsl(230 14% 92%)!important}
+.ck-calm .ck-plan-card,.ck-calm .ck-box,.ck-calm .quiz-voice-card{border:1.5px solid hsl(var(--ck-line))!important;box-shadow:0 8px 22px -18px hsl(230 20% 30%/.35)!important}
+.ck-calm .ck-plan-card-active,.ck-calm .ck-plan-card-active:hover{border:2px solid hsl(var(--ck-cta))!important;background:hsl(265 60% 97%)!important}
+.ck-calm .ck-seg{background:hsl(230 20% 96%);box-shadow:none}
+.ck-calm .ck-field,.ck-calm input{background:#fff!important}
