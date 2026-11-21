@@ -282,3 +282,15 @@
 .ck-calm .ck-plan-card-active,.ck-calm .ck-plan-card-active:hover{border:2px solid hsl(var(--ck-cta))!important;background:hsl(265 60% 97%)!important}
 .ck-calm .ck-seg{background:hsl(230 20% 96%);box-shadow:none}
 .ck-calm .ck-field,.ck-calm input{background:#fff!important}
+
+/* Cores vivas sobre o fundo branco: cartões creme, plano escolhido em lilás,
+ * benefícios em sálvia e formulário em areia, com campos brancos. */
+.ck-calm .ck-plan-card{background:hsl(38 50% 97%)!important;border:1.5px solid hsl(36 30% 88%)!important}
+.ck-calm .ck-plan-card-active,.ck-calm .ck-plan-card-active:hover{background:hsl(265 55% 95%)!important;border:2px solid hsl(265 40% 61%)!important;box-shadow:0 14px 30px -18px hsl(265 40% 50%/.55)!important}
+.ck-calm .ck-radio-on{background:hsl(265 40% 61%)!important;border-color:hsl(265 40% 61%)!important}
+.ck-calm .ck-badge,.ck-calm .ck-plan-card-active .ck-badge{background:hsl(138 22% 44%)!important;color:#fff!important}
+.ck-calm ul.ck-box{background:hsl(140 28% 95%)!important;border-color:hsl(138 22% 86%)!important}
+.ck-calm ul.ck-box li span[class*="bg-"]{background:hsl(138 22% 44%)!important}
+.ck-calm ul.ck-box li svg{color:#fff!important}
+.ck-calm div.ck-box{background:hsl(38 45% 96%)!important;border-color:hsl(36 30% 88%)!important}
+.ck-calm .ck-field,.ck-calm input{background:#fff!important}
