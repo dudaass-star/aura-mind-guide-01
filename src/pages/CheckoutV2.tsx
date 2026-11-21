@@ -1428,7 +1428,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
           className="pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-60"
           style={{
             background:
-              "radial-gradient(60% 60% at 50% 0%, hsl(140 22% 35% / 0.35) 0%, transparent 70%)",
+              "radial-gradient(60% 60% at 50% 0%, hsl(265 60% 72% / 0.30) 0%, transparent 70%)",
           }}
           aria-hidden
         />}
