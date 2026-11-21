@@ -192,3 +192,42 @@
 .ck-navy .ck-field,.ck-navy input,.ck-navy-dialog .ck-field,.ck-navy-dialog input{border-color:hsl(222 26% 26%)!important}
 .ck-navy-dialog{background:hsl(153 13% 24%)}
 .ck-navy-dialog .ck-field,.ck-navy-dialog input{background-color:hsl(222 32% 16%)!important}
+
+/* Visual sereno (referência Headspace): fundo marfim quente, cartões creme macios,
+ * texto carvão suave, lilás só na decisão e sálvia nos detalhes. Muito respiro. */
+.checkout-dark.ck-light.ck-calm,.ck-calm-dialog{
+  --ck-bg: 40 33% 98%;
+  --ck-surface: 36 30% 95%;
+  --ck-card: 36 28% 95%;
+  --ck-text: 150 8% 14%;
+  --ck-text-soft: 150 5% 30%;
+  --ck-text-muted: 150 4% 44%;
+  --ck-line: 36 18% 87%;
+  --ck-cta: 265 34% 56%;
+  --ck-cta-hover: 265 34% 50%;
+  --ck-cta-fg: 0 0% 100%;
+  --ck-cta-light: 265 36% 52%;
+  --ck-cta-soft: 265 52% 95%;
+  --ck-accent: 140 22% 38%;
+  --ck-pill: 140 26% 86%;
+  --ck-pill-text: 145 25% 22%;
+  background:hsl(var(--ck-bg));
+  color:hsl(var(--ck-text));
+  font-family:"Nunito","Manrope",ui-sans-serif,system-ui,sans-serif;
+}
+.ck-calm .ck-hero{background:transparent}
+.ck-calm header{background:hsl(0 0% 100%);border-color:hsl(var(--ck-line))!important;box-shadow:0 2px 10px -6px hsl(150 10% 20%/.15)}
+.ck-calm [class*="bg-white/"],.ck-calm-dialog [class*="bg-white/"]{background-color:hsl(var(--ck-card))}
+.ck-calm-dialog .text-white{color:hsl(var(--ck-text))}
+.ck-calm-dialog [class*="text-white/"]{color:hsl(var(--ck-text-soft))}
+.ck-calm .ck-field,.ck-calm input,.ck-calm-dialog .ck-field,.ck-calm-dialog input{
+  background-color:hsl(0 0% 100%)!important;border:1.5px solid hsl(var(--ck-line))!important;
+  color:hsl(var(--ck-text))!important;border-radius:14px!important;min-height:50px;font-size:16px}
+.ck-calm .ck-field:focus-visible,.ck-calm input:focus-visible{border-color:hsl(var(--ck-cta))!important;box-shadow:0 0 0 3px hsl(var(--ck-cta)/.15)}
+.ck-calm .ck-cta,.ck-calm-dialog .ck-cta{border-radius:9999px!important;font-weight:700;box-shadow:0 10px 24px -14px hsl(var(--ck-cta)/.8);color:#fff!important;text-shadow:none}
+.ck-calm .ck-plan-card{background:hsl(var(--ck-card));border-color:transparent!important;color:hsl(var(--ck-text))}
+.ck-calm .ck-plan-card:hover{border-color:hsl(var(--ck-cta)/.35)!important}
+.ck-calm .ck-plan-card-active,.ck-calm .ck-plan-card-active:hover{background:hsl(var(--ck-cta));border-color:hsl(var(--ck-cta))!important;color:#fff;box-shadow:0 14px 28px -18px hsl(var(--ck-cta)/.9)}
+.ck-calm .ck-plan-card-active span{color:#fff!important}
+.ck-calm .ck-plan-card-active .absolute{background:#fff!important;color:hsl(var(--ck-cta))!important}
+.ck-calm .text-red-300{color:hsl(4 60% 45%)}

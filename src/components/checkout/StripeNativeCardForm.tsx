@@ -25,12 +25,12 @@ interface Props {
 }
 
 const appearance = {
-  theme: "night" as const,
+  theme: "stripe" as const,
   variables: {
-    colorPrimary: "#a48fcc",
-    colorBackground: "#1c2336",
-    colorText: "#f5f1ea",
-    colorDanger: "#f08a7e",
+    colorPrimary: "#7f66b3",
+    colorBackground: "#ffffff",
+    colorText: "#2b2f36",
+    colorDanger: "#c2473b",
     borderRadius: "12px",
     spacingUnit: "3px",
     fontSizeBase: "15px",

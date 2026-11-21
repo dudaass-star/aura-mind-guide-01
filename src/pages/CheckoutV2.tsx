@@ -1422,7 +1422,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
         <meta property="og:type" content="website" />
       </Helmet>}
 
-      <div className={embedded ? "v2-theme checkout-dark ck-light ck-navy" : "v2-theme checkout-dark min-h-screen ck-light ck-navy"}>
+      <div className={embedded ? "v2-theme checkout-dark ck-light ck-calm" : "v2-theme checkout-dark min-h-screen ck-light ck-calm"}>
         
 
         {!embedded && <header className="relative py-1 md:py-5 border-b border-white/10">
@@ -1640,15 +1640,15 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             <form
               id="checkout-form"
               onSubmit={handleSubmit}
-              className="space-y-3"
+              className="space-y-4"
             >
               {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
               {/* Seleção simplificada: primeiro o ritmo, depois Anual x Mensal (sem trimestral/semestral). */}
               {!embedded && <>
-              <div className="ck-hero mb-5 pt-2 text-center">
+              <div className="ck-hero mb-8 pt-6 text-center">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--ck-accent))]">Seu primeiro passo</p>
-                <h1 className="mt-2 font-sans text-[28px] md:text-[34px] font-bold leading-[1.12] tracking-tight text-[hsl(var(--ck-text))]">Dê o primeiro passo <span className="text-[hsl(var(--ck-cta-light))]">por você.</span></h1>
-                <p className="mt-2 text-[13px] text-[hsl(var(--ck-text-muted))]">Cancele quando quiser · Garantia de 7 dias</p>
+                <h1 className="mt-3 font-sans text-[32px] md:text-[42px] font-bold leading-[1.1] tracking-tight text-[hsl(var(--ck-text))]">Dê o primeiro passo <span className="text-[hsl(var(--ck-cta-light))]">por você.</span></h1>
+                <p className="mt-3 text-[15px] text-[hsl(var(--ck-text-muted))]">Cancele quando quiser · Garantia de 7 dias</p>
               </div>
               <div>
                 <div className="mb-3 flex items-end justify-between gap-3">
@@ -1685,7 +1685,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                 </div>
               </div>
 
-              <p className="pt-4 text-[15px] font-bold text-[hsl(var(--ck-text))]">2. Escolha o ciclo</p>
+              <p className="pt-7 text-[17px] font-bold text-[hsl(var(--ck-text))]">2. Escolha o ciclo</p>
 
               <div className="grid grid-cols-2 gap-3 pt-2">
                 {(["yearly", "monthly"] as BillingPeriod[]).map((b) => {
@@ -1715,7 +1715,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
                 })}
               </div>
 
-              <ul className="space-y-2 pt-3 text-sm text-white/85">
+              <ul className="space-y-3 pt-6 text-[15px] text-white/85">
                 {([
                   [`${currentPlan.sessions} encontros guiados`, " por mês com a AURA"],
                   ["Áudio e texto", " a qualquer hora"],
@@ -2047,7 +2047,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             }, 200);
           }
         }}>
-          <DialogContent className="ck-navy-dialog border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogContent className="ck-calm-dialog border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
             {pixStage === "form" ? (
               <>
                 <DialogHeader>
