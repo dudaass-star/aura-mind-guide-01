@@ -10,7 +10,7 @@
 - Pedidos explícitos de encerrar uma sessão aceitam artigos e pronomes entre o verbo e “sessão/encontro”; isso reconhece a fala natural sem transformar despedidas comuns em encerramento.
 - A avaliação de uma sessão concluída é solicitada na própria conversa do App e registrada pelo fluxo autenticado de experiência; isso não depende de telefone nem do pós-sessão no WhatsApp.
 - Sessões em andamento mudam suavemente o contexto visual da conversa e mostram progresso no cabeçalho; o aviso de fechamento nunca entra como mensagem da AURA.
-- Chat wallpaper uses a light-stroke SVG variant only on the session canvas, retaining the same tile dimensions; this preserves doodle contrast without altering the casual background or message surfaces.
+- Chat wallpaper shares identical organic, three-scale SVG geometry across casual and light-stroke session variants, with wrapped edge copies and equal tile dimensions; this prevents visible grid seams while preserving each background's contrast.
 - AURA evita confirmação ritual e perguntas seguidas; revelação nova mantém Presença e impede fechamento por tempo.
 - O fio entre encontros fica separado de compromissos e é retomado sem tarefa artificial.
 - PIX: sonda só diagnostica; o checkout bloqueia apenas com `pix_gateway=off` e reconcilia pela mesma identidade.
