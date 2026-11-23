@@ -23,3 +23,5 @@
 .pc-seletor button{font-size:11px;font-weight:700;padding:4px 10px;border-radius:9999px;color:hsl(var(--suave))}
 .pc-seletor button[data-on="true"]{background:hsl(var(--texto));color:hsl(var(--bg))}
 @media (prefers-reduced-motion:reduce){.pc-surge,.pc-respira{animation:none}}
+.pc-topo{background:hsl(var(--bg)/.88);backdrop-filter:blur(8px);border-bottom:1px solid hsl(var(--linha)/.5)}
+.pc-rosto.h-9{box-shadow:0 0 0 3px hsl(var(--quente)/.12)}

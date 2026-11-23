@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Mic, Play } from "lucide-react";
+import { Mic, Play } from "lucide-react";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import "./preview-conversa/preview-conversa.css";
 
@@ -38,11 +38,12 @@ export default function PreviewConversa() {
 
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-xl flex-col">
         {/* A Aura presente, como alguém na sala */}
-        <header className="flex flex-col items-center px-6 pb-2 pt-14 text-center">
-          <img src={avatarAura} alt="AURA" className="pc-rosto h-20 w-20 rounded-full object-cover" />
-          <p className="pc-serif mt-3 text-2xl pc-texto">Aura</p>
-          <p className="mt-1 text-sm pc-suave">aqui com você</p>
-          <ChevronDown className="mt-4 h-4 w-4 pc-suave opacity-60" />
+        <header className="pc-topo sticky top-0 z-20 flex items-center gap-3 px-5 py-2.5">
+          <img src={avatarAura} alt="AURA" className="pc-rosto h-9 w-9 rounded-full object-cover" />
+          <div className="leading-tight">
+            <p className="text-[15px] font-bold pc-texto">Aura</p>
+            <p className="text-xs pc-suave">aqui com você</p>
+          </div>
         </header>
 
         <main className="flex-1 space-y-6 px-6 pb-8 pt-6">
@@ -66,13 +67,13 @@ export default function PreviewConversa() {
             }
             if (m.marcante) {
               return (
-                <p key={i} className="pc-surge pc-serif pc-marcante text-[22px] italic leading-snug pc-texto" style={atraso}>
+                <p key={i} className="pc-surge pc-marcante text-[18px] font-semibold leading-relaxed pc-texto" style={atraso}>
                   {m.texto}
                 </p>
               );
             }
             return (
-              <p key={i} className="pc-surge pc-serif max-w-[94%] text-[18px] leading-[1.65] pc-texto" style={atraso}>
+              <p key={i} className="pc-surge max-w-[94%] text-[16.5px] leading-[1.7] pc-texto" style={atraso}>
                 {m.texto}
               </p>
             );
@@ -86,7 +87,7 @@ export default function PreviewConversa() {
         {/* Espaço para falar, não um formulário */}
         <footer className="pc-rodape sticky bottom-0 px-6 pb-7 pt-6">
           <div className="flex items-center gap-3">
-            <span className="pc-serif flex-1 border-b pc-linha pb-2 text-[17px] italic pc-suave">Fale no seu tempo…</span>
+            <span className="flex-1 border-b pc-linha pb-2 text-[16px] pc-suave">Fale no seu tempo…</span>
             <span className="pc-mic flex h-12 w-12 items-center justify-center rounded-full"><Mic className="h-5 w-5" /></span>
           </div>
         </footer>
