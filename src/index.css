@@ -351,6 +351,11 @@ hsl(152 17% 36%);
   background-repeat: repeat;
 }
 
+/* Traço claro na sessão: mantém os doodles visíveis sobre o fundo escuro. */
+.portal-chat-wallpaper.portal-session-canvas {
+  background-image: url("./assets/chat-wallpaper-session.svg");
+}
+
 .portal-session-composer {
   background-color: hsl(var(--portal-session-composer) / 0.97);
 }
