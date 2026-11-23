@@ -169,6 +169,11 @@
   font-family: "Outfit", sans-serif;
 }
 
+/* Mensagens da conversa em Nunito: letras arredondadas e calorosas. */
+.portal-chat-theme [data-message-bubble] {
+  font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
+}
+
 .portal-voice-progress {
   appearance: none;
   background: transparent;
