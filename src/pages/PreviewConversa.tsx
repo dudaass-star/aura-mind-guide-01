@@ -58,7 +58,7 @@ export default function PreviewConversa() {
             }
             if (m.audio) {
               return (
-                <div key={i} className="pc-surge flex items-center gap-3" style={atraso}>
+                <div key={i} className="pc-surge pc-audio flex items-center gap-3" style={atraso}>
                   <span className="pc-play flex h-10 w-10 items-center justify-center rounded-full"><Play className="h-4 w-4 translate-x-[1px] fill-current" /></span>
                   <Voz />
                   <span className="text-xs pc-suave">{m.audio}</span>
@@ -67,13 +67,13 @@ export default function PreviewConversa() {
             }
             if (m.marcante) {
               return (
-                <p key={i} className="pc-surge pc-marcante text-[18px] font-semibold leading-relaxed pc-texto" style={atraso}>
+                <p key={i} className="pc-surge pc-marcante rounded-[22px] text-[17.5px] font-semibold leading-relaxed pc-texto" style={atraso}>
                   {m.texto}
                 </p>
               );
             }
             return (
-              <p key={i} className="pc-surge max-w-[94%] text-[16.5px] leading-[1.7] pc-texto" style={atraso}>
+              <p key={i} className="pc-surge pc-aura max-w-[88%] rounded-[22px] rounded-tl-[8px] px-4 py-3 text-[16px] leading-[1.7] pc-texto" style={atraso}>
                 {m.texto}
               </p>
             );
@@ -87,7 +87,7 @@ export default function PreviewConversa() {
         {/* Espaço para falar, não um formulário */}
         <footer className="pc-rodape sticky bottom-0 px-6 pb-7 pt-6">
           <div className="flex items-center gap-3">
-            <span className="flex-1 border-b pc-linha pb-2 text-[16px] pc-suave">Fale no seu tempo…</span>
+            <span className="pc-campo flex-1 rounded-full px-5 py-3.5 text-[16px] pc-suave">Fale no seu tempo…</span>
             <span className="pc-mic flex h-12 w-12 items-center justify-center rounded-full"><Mic className="h-5 w-5" /></span>
           </div>
         </footer>

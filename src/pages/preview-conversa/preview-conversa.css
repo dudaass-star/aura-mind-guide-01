@@ -25,3 +25,20 @@
 @media (prefers-reduced-motion:reduce){.pc-surge,.pc-respira{animation:none}}
 .pc-topo{background:hsl(var(--bg)/.88);backdrop-filter:blur(8px);border-bottom:1px solid hsl(var(--linha)/.5)}
 .pc-rosto.h-9{box-shadow:0 0 0 3px hsl(var(--quente)/.12)}
+/* Vida e acolhimento: ambiente sálvia+lavanda, falas com corpo */
+.pc-root{--bg:222 34% 13%;--aura:150 14% 20%;--eu:262 38% 62%;--euTx:0 0% 100%}
+.pc-root[data-luz="manha"]{--bg:40 40% 97%;--aura:0 0% 100%;--eu:262 42% 60%;--euTx:0 0% 100%}
+.pc-luz{background:
+  radial-gradient(80% 45% at 0% 0%,hsl(var(--sage)/.28),transparent 70%),
+  radial-gradient(80% 50% at 100% 35%,hsl(var(--lav)/.22),transparent 70%),
+  radial-gradient(70% 40% at 20% 100%,hsl(var(--sage)/.20),transparent 70%)}
+.pc-aura{background:hsl(var(--aura));box-shadow:0 8px 24px -14px hsl(222 40% 5%/.5);border:1px solid hsl(var(--sage)/.18)}
+.pc-eu{background:hsl(var(--eu));color:hsl(var(--euTx));border-top-right-radius:8px;box-shadow:0 8px 22px -12px hsl(var(--eu)/.7)}
+.pc-audio{align-self:flex-start;display:inline-flex;padding:8px 16px 8px 8px;border-radius:9999px;background:hsl(var(--sage)/.22);border:1px solid hsl(var(--sage)/.3)}
+.pc-audio .pc-play{background:hsl(var(--sage));color:hsl(0 0% 100%)}
+.pc-voz span{background:hsl(var(--lav))}
+.pc-marcante{border-left:0;padding:18px 20px;background:linear-gradient(135deg,hsl(var(--lav)/.28),hsl(var(--sage)/.22));border:1px solid hsl(var(--lav)/.35)}
+.pc-campo{background:hsl(var(--aura));border:1px solid hsl(var(--sage)/.3);color:hsl(var(--suave))}
+.pc-mic{box-shadow:0 0 0 0 hsl(var(--sage)/.5);animation:pcMic 3.5s ease-in-out infinite;color:hsl(0 0% 100%)}
+@keyframes pcMic{0%,100%{box-shadow:0 0 0 0 hsl(var(--sage)/.45)}50%{box-shadow:0 0 0 10px hsl(var(--sage)/0)}}
+.pc-topo{background:hsl(var(--bg)/.8)}
