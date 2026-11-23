@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Pause, Play } from "lucide-react";
+import { Loader2, Mic, Pause, Play } from "lucide-react";
+import avatarAura from "@/assets/avatar-aura.jpg";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -127,7 +128,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
   const elapsed = playing || currentTime > 0 ? currentTime : duration;
 
   return (
-    <div className="flex min-h-12 w-[min(17rem,76vw)] max-w-full items-center gap-2.5" data-voice-message>
+    <div className="flex min-h-10 w-[min(15.5rem,70vw)] max-w-full items-center gap-2" data-voice-message>
       <audio ref={audioRef} preload="metadata" playsInline>
         <source src={src} type={mimeType} />
       </audio>
@@ -137,7 +138,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
         variant="ghost"
         onClick={() => void togglePlayback()}
         className={cn(
-          "h-11 w-11 shrink-0 rounded-full border-0 shadow-none transition-transform active:scale-95",
+          "h-9 w-9 shrink-0 rounded-full border-0 shadow-none transition-transform active:scale-95",
           mine ? "bg-primary-foreground/18 text-primary-foreground hover:bg-primary-foreground/25 hover:text-primary-foreground" : "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
         )}
         aria-label={playing ? "Pausar mensagem de voz" : "Reproduzir mensagem de voz"}
@@ -146,7 +147,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
       </Button>
 
       <div className="min-w-0 flex-1">
-        <div className="relative h-7">
+        <div className="relative h-5">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-between gap-[2px]" aria-hidden="true">
             {BARS.map((height, index) => {
               const reached = duration > 0 && (index + 0.5) / BARS.length <= currentTime / duration;
@@ -154,7 +155,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
                 <span
                   key={index}
                   className={cn(
-                    "w-[3px] rounded-full transition-colors duration-300",
+                    "w-[2.5px] rounded-full transition-colors duration-300",
                     mine
                       ? reached ? "bg-primary-foreground" : "bg-primary-foreground/40"
                       : reached ? "bg-primary" : "bg-primary/25",
@@ -180,24 +181,34 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
             aria-label="Posição da mensagem de voz"
           />
         </div>
-        <div className={cn("mt-0.5 text-[11px] font-semibold tabular-nums", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>
+        <div className={cn("text-[10.5px] font-semibold leading-tight tabular-nums", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>
           {failed ? "Áudio incompatível" : formatDuration(elapsed)}
         </div>
       </div>
 
-      <Button
+      {/* Foto da Aura em repouso; vira controle de velocidade durante a escuta */}
+      {mine || playing || loading ? (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center">{<Button
         type="button"
         variant="ghost"
         size="sm"
         onClick={changeSpeed}
         className={cn(
-          "h-7 min-w-9 shrink-0 self-center rounded-full px-2 text-[11px] font-bold shadow-none",
+          "h-7 min-w-9 shrink-0 self-center rounded-full px-2 text-[11px] font-bold shadow-none animate-in fade-in zoom-in-90 duration-200",
           mine ? "bg-primary-foreground/15 text-primary-foreground hover:bg-primary-foreground/25 hover:text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
         )}
         aria-label={`Velocidade ${SPEEDS[speedIndex]} vezes. Toque para alterar`}
       >
         {SPEEDS[speedIndex]}x
-      </Button>
+      </Button>}</div>
+      ) : (
+        <div className="relative h-9 w-9 shrink-0 animate-in fade-in zoom-in-90 duration-200">
+          <img src={avatarAura} alt="" className="h-9 w-9 rounded-full object-cover" />
+          <span className="absolute -bottom-0.5 -left-1 flex h-4 w-4 items-center justify-center rounded-full bg-card text-primary">
+            <Mic className="h-2.5 w-2.5" />
+          </span>
+        </div>
+      )}
     </div>
   );
 }
