@@ -12,6 +12,9 @@ interface VoiceMessagePlayerProps {
 
 const SPEEDS = [1, 1.5, 2] as const;
 
+// Ondas da voz: alturas fixas e orgânicas, preenchidas conforme o áudio avança.
+const BARS = [30, 52, 70, 45, 85, 62, 40, 75, 95, 58, 36, 68, 88, 50, 72, 42, 80, 60, 34, 66, 90, 54, 38, 64, 46, 28];
+
 function formatDuration(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
   const minutes = Math.floor(seconds / 60);
@@ -134,7 +137,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
         variant="ghost"
         onClick={() => void togglePlayback()}
         className={cn(
-          "h-10 w-10 shrink-0 rounded-full border-0 shadow-none",
+          "h-11 w-11 shrink-0 rounded-full border-0 shadow-none transition-transform active:scale-95",
           mine ? "bg-primary-foreground/18 text-primary-foreground hover:bg-primary-foreground/25 hover:text-primary-foreground" : "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
         )}
         aria-label={playing ? "Pausar mensagem de voz" : "Reproduzir mensagem de voz"}
@@ -143,23 +146,42 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
       </Button>
 
       <div className="min-w-0 flex-1">
-        <input
-          type="range"
-          min={0}
-          max={duration || 1}
-          step={0.05}
-          value={Math.min(currentTime, duration || 1)}
-          onChange={(event) => {
-            const nextTime = Number(event.target.value);
-            setCurrentTime(nextTime);
-            if (audioRef.current) audioRef.current.currentTime = nextTime;
-          }}
-          className={cn("portal-voice-progress block h-5 w-full cursor-pointer", mine && "portal-voice-progress-mine")}
-          aria-label="Posição da mensagem de voz"
-        />
-        <div className={cn("mt-0.5 flex items-center justify-between text-[10px] font-semibold tabular-nums", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>
-          <span>{failed ? "Áudio incompatível" : formatDuration(elapsed)}</span>
-          <span className="font-normal">voz</span>
+        <div className="relative h-7">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-between gap-[2px]" aria-hidden="true">
+            {BARS.map((height, index) => {
+              const reached = duration > 0 && (index + 0.5) / BARS.length <= currentTime / duration;
+              return (
+                <span
+                  key={index}
+                  className={cn(
+                    "w-[3px] rounded-full transition-colors duration-300",
+                    mine
+                      ? reached ? "bg-primary-foreground" : "bg-primary-foreground/40"
+                      : reached ? "bg-primary" : "bg-primary/25",
+                    playing && "portal-voice-bar-live",
+                  )}
+                  style={{ height: `${height}%`, animationDelay: `${(index % 7) * 110}ms` }}
+                />
+              );
+            })}
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={duration || 1}
+            step={0.05}
+            value={Math.min(currentTime, duration || 1)}
+            onChange={(event) => {
+              const nextTime = Number(event.target.value);
+              setCurrentTime(nextTime);
+              if (audioRef.current) audioRef.current.currentTime = nextTime;
+            }}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            aria-label="Posição da mensagem de voz"
+          />
+        </div>
+        <div className={cn("mt-0.5 text-[11px] font-semibold tabular-nums", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>
+          {failed ? "Áudio incompatível" : formatDuration(elapsed)}
         </div>
       </div>
 
@@ -169,8 +191,8 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
         size="sm"
         onClick={changeSpeed}
         className={cn(
-          "h-8 min-w-8 shrink-0 rounded-full px-1.5 text-[10px] font-bold shadow-none",
-          mine ? "text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground" : "text-primary hover:bg-primary/10 hover:text-primary",
+          "h-7 min-w-9 shrink-0 self-center rounded-full px-2 text-[11px] font-bold shadow-none",
+          mine ? "bg-primary-foreground/15 text-primary-foreground hover:bg-primary-foreground/25 hover:text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
         )}
         aria-label={`Velocidade ${SPEEDS[speedIndex]} vezes. Toque para alterar`}
       >

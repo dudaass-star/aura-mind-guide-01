@@ -1625,8 +1625,8 @@ export function ConversarTab({
            <Button type="button" className="mt-3 w-full rounded-full" onClick={onOpenBilling}>Renovar meu plano</Button>
          </div>
          ) : (
-         <form onSubmit={send} className={cn("portal-chat-composer shrink-0 border-t border-border/60 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 backdrop-blur-xl transition-colors duration-500", activeSession && "portal-session-composer")}>
-         <div className="flex items-end gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner focus-within:border-primary/50 focus-within:bg-card focus-within:ring-2 focus-within:ring-ring/20">
+         <form onSubmit={send} className={cn("portal-chat-composer shrink-0 border-t border-border/30 bg-card/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-2.5 backdrop-blur-xl transition-colors duration-500", activeSession && "portal-session-composer")}>
+         <div className="portal-composer-field flex items-end gap-1.5 rounded-[1.6rem] border border-border/50 bg-secondary/40 py-1 pl-2 pr-1 transition-colors duration-300 focus-within:border-primary/40 focus-within:bg-secondary/60">
           {recording ? (
             <>
               <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" onClick={() => stopRecording(true)} aria-label="Cancelar gravação"><X /></Button>
@@ -1652,8 +1652,8 @@ export function ConversarTab({
             }}
             rows={1}
             maxLength={8000}
-             placeholder="Mensagem..."
-            className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-base text-foreground outline-none placeholder:text-muted-foreground"
+             placeholder="Escreva para a Aura…"
+            className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-base leading-snug text-foreground outline-none placeholder:text-muted-foreground/70"
             aria-label="Mensagem para a AURA"
             onFocus={() => {
               setTimeout(() => scrollToBottom("auto"), 120);
@@ -1661,11 +1661,11 @@ export function ConversarTab({
             }}
           />
           {!draft.trim() && (
-            <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" disabled={sending} onClick={() => void startRecording()} aria-label="Gravar áudio"><Mic /></Button>
+            <Button type="button" size="icon" className="h-10 w-10 shrink-0 rounded-full bg-primary text-primary-foreground shadow-none transition-transform hover:bg-primary/90 active:scale-95" disabled={sending} onClick={() => void startRecording()} aria-label="Gravar áudio"><Mic /></Button>
           )}
-           <Button type="submit" size="icon" className="h-10 w-10 shrink-0 rounded-full shadow-sm" disabled={!draft.trim() || sending} aria-label="Enviar mensagem">
+           {draft.trim() && <Button type="submit" size="icon" className="h-10 w-10 shrink-0 rounded-full shadow-none transition-transform active:scale-95" disabled={sending} aria-label="Enviar mensagem">
             {sending ? <Loader2 className="animate-spin" /> : <Send />}
-          </Button>
+          </Button>}
           </>
           )}
         </div>

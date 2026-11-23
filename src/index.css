@@ -356,6 +356,11 @@ hsl(152 17% 36%);
   background-image: url("./assets/chat-wallpaper-session.svg");
 }
 
+/* Ondas da voz respiram suavemente enquanto o áudio toca. */
+@keyframes portal-voice-breathe { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(0.7); } }
+.portal-voice-bar-live { animation: portal-voice-breathe 1.4s ease-in-out infinite; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) { .portal-voice-bar-live { animation: none; } }
+
 .portal-session-composer {
   background-color: hsl(var(--portal-session-composer) / 0.97);
 }
