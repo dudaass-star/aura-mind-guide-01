@@ -1,0 +1,21 @@
+/* Prévia de estilos da conversa: tokens próprios por tema, isolados nesta página */
+.pc-root{--pc-bg:222 40% 11%;--pc-surface:222 30% 16%;--pc-text:40 30% 94%;--pc-muted:220 15% 68%;--pc-sage:140 20% 61%;--pc-lav:255 45% 78%;--pc-user:255 30% 26%;--pc-line:220 20% 24%;
+  font-family:'Nunito',system-ui,sans-serif;background:hsl(var(--pc-bg));color:hsl(var(--pc-text));min-height:100dvh;transition:background .6s,color .6s}
+.pc-root[data-theme="diario"]{--pc-bg:45 30% 97%;--pc-surface:0 0% 100%;--pc-text:222 35% 16%;--pc-muted:220 10% 45%;--pc-sage:150 13% 32%;--pc-lav:258 35% 60%;--pc-user:258 45% 94%;--pc-line:40 15% 88%}
+.pc-root[data-theme="ritual"]{--pc-bg:224 45% 8%;--pc-surface:224 32% 13%;--pc-line:224 22% 20%}
+.pc-root[data-theme="ritual"][data-casual="true"]{--pc-bg:45 30% 97%;--pc-surface:0 0% 100%;--pc-text:222 35% 16%;--pc-muted:220 10% 45%;--pc-sage:150 13% 32%;--pc-lav:258 35% 60%;--pc-user:258 45% 94%;--pc-line:40 15% 88%}
+.pc-serif{font-family:'Fraunces','Georgia',serif}
+.pc-bg{background:hsl(var(--pc-bg))}.pc-surface{background:hsl(var(--pc-surface))}
+.pc-text{color:hsl(var(--pc-text))}.pc-muted{color:hsl(var(--pc-muted))}
+.pc-sage{color:hsl(var(--pc-sage))}.pc-lav{color:hsl(var(--pc-lav))}
+.pc-border{border-color:hsl(var(--pc-line))}
+.pc-user{background:hsl(var(--pc-user));color:hsl(var(--pc-text))}
+.pc-ambient{background:radial-gradient(60% 40% at 15% 0%,hsl(var(--pc-sage)/.16),transparent 70%),radial-gradient(50% 35% at 100% 20%,hsl(var(--pc-lav)/.14),transparent 70%)}
+.pc-root[data-theme="diario"] .pc-ambient,.pc-root[data-casual="true"] .pc-ambient{background:none}
+.pc-wave span{background:hsl(var(--pc-sage));border-radius:9999px;width:3px;display:inline-block}
+.pc-highlight{border-left:3px solid hsl(var(--pc-lav));padding-left:14px}
+.pc-ring{background:conic-gradient(hsl(var(--pc-sage)) var(--pc-p),hsl(var(--pc-line)) 0);border-radius:9999px;padding:3px}
+.pc-chip-on{background:hsl(var(--pc-text));color:hsl(var(--pc-bg))}
+.pc-cta{background:hsl(var(--pc-sage));color:hsl(var(--pc-bg))}
+.pc-root[data-theme="diario"] .pc-cta,.pc-root[data-casual="true"] .pc-cta{color:hsl(0 0% 100%)}
+.pc-fade{animation:pcIn .5s ease both}@keyframes pcIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
