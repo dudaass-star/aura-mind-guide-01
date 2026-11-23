@@ -1,5 +1,7 @@
 # Decisões técnicas
 
+- Blog covers stay in private storage and render through existing signed links; only the generation service accesses the bucket directly, preventing unrestricted client downloads.
+
 - Contas de demonstração usam `profiles.status = 'demo'`, com direito de acesso apenas ao App e sem telefone/cobrança; isso permite separar personagens fictícios de clientes ativos em rotinas e indicadores.
 - Demo sharing uses protected individual seven-day invites; sessions start on click, without extending normal links.
 - Chat errors share descriptors; retry only transient failures to prevent terminal resends.

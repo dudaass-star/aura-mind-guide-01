@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "blog covers publicly readable" ON storage.objects;

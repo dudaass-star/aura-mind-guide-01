@@ -85,6 +85,13 @@
       "when": 1794611020069,
       "tag": "0011_sessions_realtime",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795462615317,
+      "tag": "0012_remove_public_blog_cover_reads",
+      "breakpoints": true
     }
   ]
 }
