@@ -344,10 +344,10 @@ hsl(152 17% 36%);
   background-color: hsl(var(--portal-session-canvas));
 }
 
-/* Papel de parede sutil da conversa (estilo apps de mensagem) */
+/* Mosaico compacto: desenhos completos e ornamentos preenchem os intervalos. */
 .portal-chat-wallpaper {
   background-image: url("./assets/chat-wallpaper.svg");
-  background-size: 120px 120px;
+  background-size: 180px 180px;
   background-repeat: repeat;
 }
 
