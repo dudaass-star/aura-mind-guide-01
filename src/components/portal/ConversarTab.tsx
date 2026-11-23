@@ -258,7 +258,7 @@ const MessageTimeline = memo(function MessageTimeline({
         return (
           <div key={message.id} data-chat-message data-message-id={message.id} className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
-              "min-w-0 max-w-[86%] text-[15px] leading-relaxed md:max-w-[76%]",
+              "min-w-0 max-w-[86%] text-[14px] leading-[1.5] md:max-w-[76%]",
               message.is_audio && message.audio_url ? "px-2.5 py-2" : "px-3 py-1.5",
               mine ? "rounded-2xl rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : "rounded-2xl rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm",
               message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
@@ -288,7 +288,7 @@ const MessageTimeline = memo(function MessageTimeline({
                 </div>
               ) : (!message.is_audio || !message.audio_url) && (mine
                 ? <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                : <MessageResponse className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{message.content}</MessageResponse>)}
+                : <MessageResponse className="whitespace-pre-wrap break-words text-[14px] leading-[1.5]">{message.content}</MessageResponse>)}
               {message.is_audio && message.audio_url && (
                 <VoiceMessagePlayer src={message.audio_url} mine={mine} durationMs={audioDurationMs(message)} mimeType={audioMimeType(message)} />
               )}
