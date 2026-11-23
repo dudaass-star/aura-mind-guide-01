@@ -347,7 +347,7 @@ hsl(152 17% 36%);
 /* Papel de parede sutil da conversa (estilo apps de mensagem) */
 .portal-chat-wallpaper {
   background-image: url("./assets/chat-wallpaper.svg");
-  background-size: 240px 240px;
+  background-size: 120px 120px;
   background-repeat: repeat;
 }
 
