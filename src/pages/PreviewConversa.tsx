@@ -1,18 +1,18 @@
 import { useState } from "react";
-import { Mic, Play, Bookmark, Lock } from "lucide-react";
+import { Mic, Play } from "lucide-react";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import "./preview-conversa/preview-conversa.css";
 
 // Prévia apenas visual: a conversa como um encontro acolhedor com alguém.
 type Luz = "noite" | "manha";
-type Msg = { de: "aura" | "eu"; texto?: string; audio?: string; transcricao?: string; marcante?: boolean };
+type Msg = { de: "aura" | "eu"; texto?: string; audio?: string; transcricao?: string };
 
 const SESSAO: Msg[] = [
   { de: "aura", texto: "Oi, Marina. Que bom te ver de novo 🌿" },
   { de: "aura", texto: "Fiquei pensando no que você disse da última vez, sobre estar sempre correndo atrás. Como foi a sua semana com isso?" },
   { de: "eu", texto: "Ficou parecido. Terminei o projeto do trabalho, mas no mesmo dia já estava pensando no próximo. Nem comemorei." },
   { de: "aura", texto: "Repara numa coisa: você entregou, e a primeira coisa que fez foi tirar o valor do que entregou." },
-  { de: "aura", texto: "Talvez o problema não seja o quanto você faz, e sim quem decide quando é suficiente.", marcante: true },
+  { de: "aura", texto: "Talvez o problema não seja o quanto você faz, e sim quem decide quando é suficiente." },
   { de: "aura", audio: "0:48", transcricao: "“Quero te dizer uma coisa com calma, Marina…”" },
   { de: "eu", texto: "Nossa. Acho que quem decide nunca sou eu." },
   { de: "aura", texto: "Então vamos olhar pra isso juntas, sem pressa. Se fosse você quem decidisse, o que teria mudado na terça-feira?" },
@@ -25,7 +25,6 @@ function Voz() {
 
 export default function PreviewConversa() {
   const [luz, setLuz] = useState<Luz>("noite");
-  const [guardado, setGuardado] = useState(false);
   let ultimo: string | null = null;
 
   return (
@@ -74,27 +73,12 @@ export default function PreviewConversa() {
                   <div key={i} className={`pc-surge flex items-end gap-2 ${esp}`} style={st}>
                     {rosto}
                     <div className="pc-cardvoz w-[84%] p-3.5">
-                      <p className="mb-2.5 text-[11.5px] font-bold uppercase tracking-[.08em] pc-sage">Mensagem de voz da Aura</p>
                       <div className="flex items-center gap-3">
                         <span className="pc-play flex h-11 w-11 shrink-0 items-center justify-center rounded-full"><Play className="h-4 w-4 translate-x-[1px] fill-current" /></span>
                         <Voz />
                         <span className="text-[12px] font-semibold pc-suave">{m.audio}</span>
                       </div>
                       <p className="mt-2.5 text-[13.5px] italic pc-suave">{m.transcricao}</p>
-                    </div>
-                  </div>
-                );
-              }
-              if (m.marcante) {
-                return (
-                  <div key={i} className={`pc-surge flex items-end gap-2 py-2 ${esp}`} style={st}>
-                    <span className="w-7 shrink-0" />
-                    <div className="pc-marcante w-[88%] px-5 pb-4 pt-5">
-                      <span className="pc-aspas" aria-hidden>“</span>
-                      <p className="text-[18px] font-bold leading-[1.55] pc-texto">{m.texto}</p>
-                      <button onClick={() => setGuardado(!guardado)} className="pc-guardar mt-3.5 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-bold" data-on={guardado}>
-                        <Bookmark className={`h-3.5 w-3.5 ${guardado ? "fill-current" : ""}`} />{guardado ? "Guardado no seu percurso" : "Guardar no meu percurso"}
-                      </button>
                     </div>
                   </div>
                 );
@@ -119,7 +103,6 @@ export default function PreviewConversa() {
             <span className="flex-1 text-[15.5px] pc-suave">Pode falar no seu tempo…</span>
             <span className="pc-mic flex h-12 w-12 items-center justify-center rounded-full"><Mic className="h-5 w-5" /></span>
           </div>
-          <p className="mt-2.5 flex items-center justify-center gap-1.5 text-[11px] pc-suave"><Lock className="h-3 w-3" />Espaço só seu, protegido e confidencial</p>
         </footer>
       </div>
     </div>

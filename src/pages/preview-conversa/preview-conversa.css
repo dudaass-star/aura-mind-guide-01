@@ -33,10 +33,6 @@
 .pc-voz span{width:3px;border-radius:9999px;display:inline-block;background:linear-gradient(to top,hsl(var(--sage)),hsl(var(--lav)));animation:pcOnda 2.6s ease-in-out infinite;transform-origin:center}
 @keyframes pcOnda{0%,100%{transform:scaleY(.75);opacity:.7}50%{transform:scaleY(1.05);opacity:1}}
 
-.pc-marcante{position:relative;border-radius:26px;background:linear-gradient(145deg,hsl(var(--lav)/.26),hsl(var(--sage)/.18));border:1px solid hsl(var(--lav)/.38);box-shadow:0 16px 36px -20px hsl(var(--lav)/.7)}
-.pc-aspas{position:absolute;top:-6px;left:14px;font-size:54px;line-height:1;font-weight:900;color:hsl(var(--lav)/.8)}
-.pc-guardar{background:hsl(var(--texto)/.08);color:hsl(var(--texto));border:1px solid hsl(var(--texto)/.14);transition:all .3s}
-.pc-guardar[data-on="true"]{background:hsl(var(--sageF));color:hsl(0 0% 100%);border-color:transparent}
 
 .pc-pontos{display:inline-flex;gap:4px}
 .pc-pontos i{width:6px;height:6px;border-radius:9999px;background:hsl(var(--sage));animation:pcPonto 1.8s ease-in-out infinite}
