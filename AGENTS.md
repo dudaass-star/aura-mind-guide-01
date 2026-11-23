@@ -1,5 +1,7 @@
 # Decisões técnicas
 
+- Conversation design experiments are removed once integrated into the App; this prevents obsolete public preview pages from shipping.
+
 - Blog covers stay in private storage and render through existing signed links; only the generation service accesses the bucket directly, preventing unrestricted client downloads.
 
 - Contas de demonstração usam `profiles.status = 'demo'`, com direito de acesso apenas ao App e sem telefone/cobrança; isso permite separar personagens fictícios de clientes ativos em rotinas e indicadores.

@@ -5,6 +5,9 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Publicação da conversa
+- [x] Excluir a página de teste da conversa: endereço agora abre 404; Checkout V2 ativo confirmado no site sem alterações nesta tarefa; compilação OK e nova verificação sem críticos. Versão limpa preparada para publicação.
+
 ## Clipes do App para anúncios
 - [x] Gravar conversa v3 em velocidade normal: quatro trocas reais na conta fictícia, 139,4 segundos, 1080×1920 sem áudio; sequência visual e decodificação conferidas.
 - [ ] Capturar a transição contínua ao iniciar sessão: início confirmado na conta fictícia e resposta real gravados, mas o estado visual só apareceu após recarregar na captura; clipe v2 é material parcial, não comprova a transição solicitada. Depende de investigar a atualização visual antes da gravação final.
