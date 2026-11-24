@@ -73,6 +73,7 @@
 - [x] Validar consulta financeira real, filtros, detalhes por dia e gráficos na conta de Eduardo; previsão PIX limitada aos registros existentes e mandatos ativos/aprovados, sem inventar histórico ausente.
 
 ## Tela inicial
+- [x] Testar fundo de casa com luz natural na foto do convite à conversa; duas variações guardadas, primeira aplicada apenas ao card. Foto carregada e abertura da conversa autenticada conferidas em 393×575, sem erros; entrega de imagens local encaminhada ao endereço público. Imagem original preservada nas demais telas; aguarda avaliação e publicação.
 - [x] Criar capas individuais para as seis meditações; imagens distintas carregadas na biblioteca e capa correspondente na reprodução conferidas na conta de Eduardo. Aguarda publicação do App.
 - [x] Meditações renovada com imagens próprias, biblioteca compacta e reprodução dedicada; áudio real, pausa, avanço, busca, filtros e telas pequena/grande conferidos na conta de Eduardo sem erros. Aguarda publicação do App.
 - [x] Preparar e conferir prévias privadas da página de Meditações e da reprodução; imagens carregadas, texto legível e sem transbordamento. Somente proposta visual, sem reprodução real ou alteração no App dos clientes.

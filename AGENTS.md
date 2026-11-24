@@ -1,5 +1,7 @@
 # Decisões técnicas
 
+- Home avatar background experiments use a separate asset pointer on the conversation card only; the original shared portrait remains unchanged until approval.
+
 - Voice-message reading state stays outside playback and its toggle shares the duration/receipt row; opening persisted text never loads, regenerates or plays audio, and collapsed messages stay compact.
 
 - Conversation design experiments are removed once integrated into the App; this prevents obsolete public preview pages from shipping.
