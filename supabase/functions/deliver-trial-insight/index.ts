@@ -1,3 +1,4 @@
+import { isConversationMessage } from '../_shared/history-filter.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendMessage } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
@@ -240,12 +241,13 @@ Deno.serve(async (req) => {
     }
 
     // Fetch last 20 messages for AI analysis
-    const { data: messages } = await supabase
+    const { data: rawMessages } = await supabase
       .from('messages')
-      .select('content, role, created_at')
+      .select('content, role, created_at, metadata')
       .eq('user_id', user_id)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(30);
+    const messages = (rawMessages || []).filter(isConversationMessage).slice(0, 20);
 
     if (!messages || messages.length < 6) {
       console.log(`⏭️ Skipping: insufficient messages (${messages?.length || 0})`);

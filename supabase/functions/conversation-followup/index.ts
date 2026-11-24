@@ -1,3 +1,4 @@
+import { isConversationMessage } from '../_shared/history-filter.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, antiBurstDelayForInstance } from "../_shared/instance-helper.ts";
@@ -145,12 +146,13 @@ async function generateContextualFollowup(
   userPlan: string,
   hoursAgo: number
 ): Promise<string> {
-  const { data: recentMessages } = await supabase
+  const { data: rawRecent } = await supabase
     .from('messages')
-    .select('content, role')
+    .select('content, role, metadata')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(5);
+    .limit(10);
+  const recentMessages = (rawRecent || []).filter(isConversationMessage).slice(0, 5);
 
   // Se temos contexto da conversa, usar IA para gerar mensagem contextual
   if (conversationContext && !conversationContext.toLowerCase().includes('conversa casual')) {
@@ -403,12 +405,13 @@ Deno.serve(async (req) => {
         }
         
         // Buscar últimas mensagens para análise
-        const { data: recentMessages } = await supabase
+        const { data: rawRecentMessages } = await supabase
           .from('messages')
-          .select('content, role, created_at')
+          .select('content, role, created_at, metadata')
           .eq('user_id', followup.user_id)
           .order('created_at', { ascending: false })
-          .limit(20);
+          .limit(30);
+        const recentMessages = (rawRecentMessages || []).filter(isConversationMessage).slice(0, 20);
         
         const lastUserMessage = recentMessages?.find((m: any) => m.role === 'user');
         const lastAssistantMessage = recentMessages?.find((m: any) => m.role === 'assistant');

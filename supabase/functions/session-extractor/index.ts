@@ -1,3 +1,4 @@
+import { isConversationMessage } from '../_shared/history-filter.ts';
 // ============================================================================
 // session-extractor — micro-agente dedicado de extração pós-sessão
 // ----------------------------------------------------------------------------
@@ -376,14 +377,15 @@ Deno.serve(async (req) => {
 
     // 2) Busca mensagens trocadas durante a sessão (started_at .. ended_at OU now)
     const upperBound = session.ended_at ?? new Date().toISOString();
-    const { data: sessionMessages } = await supabase
+    const { data: rawSessionMessages } = await supabase
       .from("messages")
-      .select("content, role, created_at")
+      .select("content, role, created_at, metadata")
       .eq("user_id", session.user_id)
       .gte("created_at", session.started_at)
       .lte("created_at", upperBound)
       .order("created_at", { ascending: true })
       .limit(120);
+    const sessionMessages = (rawSessionMessages || []).filter(isConversationMessage);
 
     if (!sessionMessages || sessionMessages.length < 3) {
       console.log(`ℹ️ session-extractor: sessão ${sessionId} com menos de 3 mensagens — extração mínima`);

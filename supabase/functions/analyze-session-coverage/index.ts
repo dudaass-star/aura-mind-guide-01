@@ -1,3 +1,4 @@
+import { isConversationMessage } from '../_shared/history-filter.ts';
 // ============================================================================
 // analyze-session-coverage — auditor de cobertura de sessão (sob demanda)
 // ----------------------------------------------------------------------------
@@ -400,14 +401,15 @@ Deno.serve(async (req) => {
     }
 
     const upperBound = session.ended_at ?? new Date().toISOString();
-    const { data: messages } = await supabase
+    const { data: rawMessages } = await supabase
       .from("messages")
-      .select("role, content, created_at")
+      .select("role, content, created_at, metadata")
       .eq("user_id", session.user_id)
       .gte("created_at", session.started_at)
       .lte("created_at", upperBound)
       .order("created_at", { ascending: true })
       .limit(300);
+    const messages = (rawMessages || []).filter(isConversationMessage);
 
     if (!messages || messages.length < 4) {
       return new Response(JSON.stringify({ error: "sessão com poucas mensagens para auditoria" }), {
