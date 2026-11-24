@@ -12,7 +12,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
 import { pollChatIndependently } from "@/lib/chat-poll";
 import avatarAura from "@/assets/avatar-aura.jpg";
-import avatarAuraLuzNatural from "@/assets/aura-luz-natural.webp.asset.json";
+import avatarAuraFundoPerola from "@/assets/aura-fundo-perola.webp.asset.json";
 import { InstallAppMenuItem, useInstallApp } from "@/components/portal/InstallAppMenuItem";
 import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDialog";
 import { reportPushConversion } from "@/lib/push-notifications";
@@ -1469,7 +1469,7 @@ export function ConversarTab({
           aria-label="Abrir conversa com a AURA"
         >
           <div className="relative shrink-0">
-            <img src={avatarAuraLuzNatural.url} alt="AURA" className="portal-pc-avatar h-14 w-14 rounded-full object-cover" />
+            <img src={avatarAuraFundoPerola.url} alt="AURA" className="portal-pc-avatar h-14 w-14 rounded-full object-cover" />
             <span className="portal-pc-dot absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2" aria-label="AURA disponível" />
           </div>
            <div className="min-w-0 flex-1 pt-0.5">
