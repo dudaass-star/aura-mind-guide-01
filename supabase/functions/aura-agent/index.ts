@@ -6243,7 +6243,7 @@ serve(async (req) => {
 
       // 1. Messages
       if (messagesResult.status === 'fulfilled' && messagesResult.value.data) {
-        const messages = messagesResult.value.data.filter((m: any) => m.metadata?.kind !== 'response_failure');
+        const messages = messagesResult.value.data.filter((m: any) => !['response_failure', 'app_migration_redirect', 'operational_support', 'support_acknowledgement'].includes(m.metadata?.kind));
         const count = messagesResult.value.count;
         const lastUserMsg = messages.find((m: any) => m.role === 'user');
         const lastAuraMsg = messages.find((m: any) => m.role === 'assistant');

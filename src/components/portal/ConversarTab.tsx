@@ -109,6 +109,15 @@ function isResponseFailure(message: ChatMessage) {
   return (message.metadata as Record<string, unknown>).kind === "response_failure";
 }
 
+// Avisos que existem só para o WhatsApp (convite ao App, suporte operacional)
+// ficam no histórico para auditoria, mas não são fala da Aura dentro do App.
+const WHATSAPP_ONLY_KINDS = new Set(["app_migration_redirect", "operational_support", "support_acknowledgement"]);
+export function isWhatsAppOnlyNotice(message: { role: string; metadata?: unknown; channel?: string | null }) {
+  if (message.role !== "assistant") return false;
+  if (!message.metadata || typeof message.metadata !== "object" || Array.isArray(message.metadata)) return false;
+  return WHATSAPP_ONLY_KINDS.has(String((message.metadata as Record<string, unknown>).kind ?? ""));
+}
+
 type PendingMessage = {
   clientId: string;
   text?: string;
@@ -375,7 +384,8 @@ export function ConversarTab({
     () => readPortalCache<ChatMessage[]>(messageCacheKey, 7 * 24 * 60 * 60 * 1000)?.value ?? [],
     [messageCacheKey],
   );
-  const [messages, setMessages] = useState<ChatMessage[]>(cachedMessages);
+  const [rawMessages, setMessages] = useState<ChatMessage[]>(cachedMessages);
+  const messages = useMemo(() => rawMessages.filter((message) => !isWhatsAppOnlyNotice(message)), [rawMessages]);
   const [draft, setDraft] = useState("");
   const autoSendRef = useRef<string | null>(null);
   const [responseNotice, setResponseNotice] = useState<string | null>(null);

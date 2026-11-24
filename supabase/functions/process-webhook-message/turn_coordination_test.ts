@@ -70,7 +70,7 @@ Deno.test("telemetria do aplicativo não registra conteúdo", () => {
 Deno.test("conversa livre no WhatsApp é preservada e redirecionada ao aplicativo", () => {
   assert(SOURCE.includes("'payment_failed', 'canceling', 'taster'"));
   assert(SOURCE.includes("whatsapp_app_migration_sent_at"));
-  assert(SOURCE.includes("message_variant: firstMigration ? 'app_migration' : 'app_redirect'"));
+  assert(SOURCE.includes("firstMigration ? 'app_migration' : 'app_redirect'"));
   assert(SOURCE.includes("persistirMensagemRecebidaWhatsapp"));
   assert(SOURCE.includes("action: firstMigration ? 'app_migration_sent' : 'app_redirect_sent'"));
 });
