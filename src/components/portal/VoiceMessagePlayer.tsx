@@ -69,7 +69,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
     if (!audio) return;
 
     setPlaying(false);
-    setLoading(false);
+    setLoading(autoPlayRef.current);
     setFailed(false);
     setCurrentTime(0);
     setDuration(knownDuration);
@@ -161,6 +161,23 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
     }
   };
 
+  // Vigia: se o carregamento não avança, força a recuperação em vez de girar para sempre.
+  useEffect(() => {
+    if (!loading || playing) return;
+    const timer = window.setTimeout(() => {
+      const audio = audioRef.current;
+      if (!audio || !audio.paused) return;
+      void recover().then((ok) => {
+        if (!ok) {
+          setLoading(false);
+          setFailed(true);
+        }
+      });
+    }, 6000);
+    return () => window.clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, playing, activeSrc]);
+
   const changeSpeed = () => {
     const nextIndex = (speedIndex + 1) % SPEEDS.length;
     setSpeedIndex(nextIndex);
@@ -171,9 +188,8 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
 
   return (
     <div className="flex min-h-10 w-[min(15.5rem,70vw)] max-w-full items-center gap-2" data-voice-message>
-      <audio ref={audioRef} preload="metadata" playsInline>
-        <source src={activeSrc} type={mimeType} />
-      </audio>
+      {/* src direto no <audio>: com <source>, erros 400/403/404 não chegam ao elemento e o play trava */}
+      <audio ref={audioRef} src={activeSrc} preload="metadata" playsInline />
       <Button
         type="button"
         size="icon"
