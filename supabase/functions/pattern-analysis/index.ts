@@ -1,3 +1,4 @@
+import { isConversationMessage } from '../_shared/history-filter.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
@@ -325,16 +326,16 @@ serve(async (req) => {
                 .eq('status', 'active'),
               supabase
                 .from('messages')
-                .select('role, content, created_at')
+                .select('role, content, created_at, metadata')
                 .eq('user_id', user.user_id)
                 .order('created_at', { ascending: false })
-                .limit(20),
+                .limit(30),
             ]);
 
             const insights = insightsResult.data || [];
             const checkins = checkinsResult.data || [];
             const themes = themesResult.data || [];
-            const messages = messagesResult.data || [];
+            const messages = (messagesResult.data || []).filter(isConversationMessage).slice(0, 20);
 
             // Check if we have enough data
             if (insights.length === 0 && checkins.length === 0 && messages.length < 5) {

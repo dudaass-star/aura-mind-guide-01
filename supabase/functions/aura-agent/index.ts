@@ -1,3 +1,4 @@
+import { isConversationMessage } from '../_shared/history-filter.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
@@ -2738,7 +2739,7 @@ async function regenerateEvolutionSummary(
       await Promise.allSettled([
         supabase
           .from('messages')
-          .select('role, content, created_at')
+          .select('role, content, created_at, metadata')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(80),
@@ -2769,7 +2770,7 @@ async function regenerateEvolutionSummary(
 
     const messages: any[] =
       msgsRes.status === 'fulfilled' && msgsRes.value.data
-        ? [...msgsRes.value.data].reverse()
+        ? [...msgsRes.value.data].filter(isConversationMessage).reverse()
         : [];
     const insights: any[] =
       insightsRes.status === 'fulfilled' ? insightsRes.value.data || [] : [];

@@ -1,3 +1,4 @@
+import { isConversationMessage } from '../_shared/history-filter.ts';
 // ============================================================================
 // curate-monthly-milestones
 // ----------------------------------------------------------------------------
@@ -27,15 +28,16 @@ async function curateUserMilestones(
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
   // Buscar últimas mensagens do mês
-  const { data: messages } = await supabase
+  const { data: rawMessages } = await supabase
     .from('messages')
-    .select('role, content, created_at')
+    .select('role, content, created_at, metadata')
     .eq('user_id', userId)
     .gte('created_at', thirtyDaysAgo)
     .order('created_at', { ascending: true })
     .limit(500);
 
-  if (!messages || messages.length < 8) return 0; // pouca conversa, skip
+  const messages = (rawMessages || []).filter(isConversationMessage);
+  if (messages.length < 8) return 0; // pouca conversa, skip
 
   // Marcos já existentes do período (evitar duplicidade)
   const { data: existingMarcos } = await supabase
