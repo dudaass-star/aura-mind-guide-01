@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2, Mic, Pause, Play } from "lucide-react";
-import avatarAura from "@/assets/avatar-aura.jpg";
+import avatarAura from "@/assets/aura-fundo-lavanda.png.asset.json";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -273,7 +273,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover,
       </Button>}</div>
       ) : (
         <div className="relative h-9 w-9 shrink-0 animate-in fade-in zoom-in-90 duration-200">
-          <img src={avatarAura} alt="" className="h-9 w-9 rounded-full object-cover" />
+          <img src={avatarAura.url} alt="" className="h-9 w-9 rounded-full object-cover" />
           <span className="absolute -bottom-0.5 -left-1 flex h-4 w-4 items-center justify-center rounded-full bg-card text-primary">
             <Mic className="h-2.5 w-2.5" />
           </span>

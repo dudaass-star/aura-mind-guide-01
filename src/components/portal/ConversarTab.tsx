@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { cn } from "@/lib/utils";
 import { pollChatIndependently } from "@/lib/chat-poll";
-import avatarAura from "@/assets/avatar-aura.jpg";
 import avatarAuraFundoLavanda from "@/assets/aura-fundo-lavanda.png.asset.json";
 import { InstallAppMenuItem, useInstallApp } from "@/components/portal/InstallAppMenuItem";
 import { PushNotificationsDialog } from "@/components/portal/PushNotificationsDialog";
@@ -1507,7 +1506,7 @@ export function ConversarTab({
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="relative shrink-0">
-          <img src={avatarAura} alt="AURA" className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/20" />
+          <img src={avatarAuraFundoLavanda.url} alt="AURA" className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/20" />
           <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-primary" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
@@ -1575,7 +1574,7 @@ export function ConversarTab({
 
         {messages.length === 0 && (
           <div className="mx-auto flex h-full max-w-sm flex-col items-center justify-center text-center">
-            <img src={avatarAura} alt="AURA" className="mb-4 h-16 w-16 rounded-full object-cover ring-4 ring-card" />
+            <img src={avatarAuraFundoLavanda.url} alt="AURA" className="mb-4 h-16 w-16 rounded-full object-cover ring-4 ring-card" />
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Sua conversa com a AURA</p>
             <p className="mt-2 font-display text-2xl text-foreground">Pode falar do seu jeito.</p>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">A AURA está disponível por texto ou áudio.</p>

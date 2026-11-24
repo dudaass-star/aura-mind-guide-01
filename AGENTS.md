@@ -1,6 +1,6 @@
 # Decisões técnicas
 
-- Home avatar background experiments use a separate asset pointer on the conversation card only; the original shared portrait remains unchanged until approval.
+- The conversation card, chat header, empty chat and voice-message portraits share the approved asset pointer; preserve the original portrait for unrelated screens to keep visual changes scoped.
 
 - Voice-message reading state stays outside playback and its toggle shares the duration/receipt row; opening persisted text never loads, regenerates or plays audio, and collapsed messages stay compact.
 
