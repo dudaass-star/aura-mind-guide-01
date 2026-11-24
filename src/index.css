@@ -234,28 +234,28 @@
   background-color: hsl(var(--primary-foreground));
 }
 
-/* Card principal da AURA no padrão da /v5: sálvia profundo + brilho lavanda */
+/* Convite à conversa com as cores crepúsculo do ícone, sem halo ou vidro. */
 .portal-primary-conversation {
-  --pc-sage: 153 13% 27%;
-  --pc-sage-deep: 153 16% 20%;
-  --pc-lavender: 270 40% 78%;
+  --pc-violet: 260 49% 42%;
+  --pc-orchid: 278 42% 44%;
+  --pc-rose: 327 38% 51%;
   --pc-ink: 0 0% 100%;
+  --pc-muted: 285 65% 95%;
+  --pc-border: 290 45% 82%;
+  --pc-presence: 140 45% 70%;
+  --pc-shadow: 220 35% 5%;
+  --pc-background: linear-gradient(115deg, hsl(var(--pc-violet)) 0%, hsl(var(--pc-orchid)) 48%, hsl(var(--pc-rose)) 100%);
   position: relative;
   overflow: hidden;
   color: hsl(var(--pc-ink));
-  background:
-hsl(152 17% 36%);
-  border-color: hsl(140 45% 80% / 0.45) !important;
-  box-shadow:
-    inset 0 1px 0 hsl(0 0% 100% / 0.22),
-    0 0 0 1px hsl(140 45% 75% / 0.12),
-    0 0 28px -4px hsl(140 45% 65% / 0.35),
-    0 18px 36px -22px hsl(220 35% 5% / 0.9);
+  background: var(--pc-background);
+  border-color: hsl(var(--pc-border) / 0.35) !important;
+  box-shadow: 0 10px 24px -16px hsl(var(--pc-shadow) / 0.6);
 }
 .portal-primary-conversation:hover,
 .portal-primary-conversation:active,
 .portal-primary-conversation:focus-visible {
-  background: hsl(152 18% 31%) !important;
+  background: var(--pc-background) !important;
   color: hsl(var(--pc-ink)) !important;
 }
 /* Doodles da conversa como textura interna do card da AURA */
@@ -268,13 +268,14 @@ hsl(152 17% 36%);
   background-size: 90px 90px;
   background-repeat: repeat;
   filter: brightness(0) invert(1);
-  opacity: 1;
+  /* O SVG já tem 22% de opacidade; 45% aqui resulta em cerca de 10%. */
+  opacity: 0.45;
   z-index: 0;
 }
 .portal-primary-conversation > * { position: relative; z-index: 1; }
 .portal-pc-title { color: hsl(var(--pc-ink)); }
-.portal-pc-muted { color: hsl(140 35% 92%) !important; text-shadow: 0 1px 2px hsl(153 25% 12% / 0.5); }
-.portal-pc-avatar { box-shadow: 0 0 0 3px hsl(var(--pc-ink) / 0.18), 0 0 24px hsl(var(--pc-lavender) / 0.55); }
+.portal-pc-muted { color: hsl(var(--pc-muted)) !important; }
+.portal-pc-avatar { box-shadow: 0 0 0 2px hsl(var(--pc-ink) / 0.65); }
 /* Cartão do momento: vidro escuro com faixa sálvia, sem estampa, para não duplicar o cartão da AURA */
 .portal-moment-card {
   position: relative; overflow: hidden;
@@ -291,7 +292,7 @@ hsl(152 17% 36%);
 .portal-moment-eyebrow { color: hsl(140 30% 72%); }
 .portal-moment-title { color: hsl(0 0% 100% / 0.95); }
 .portal-moment-action { color: hsl(270 45% 85%); }
-.portal-pc-dot { background: hsl(140 45% 70%); border-color: hsl(var(--pc-sage)); }
+.portal-pc-dot { background: hsl(var(--pc-presence)); border-color: hsl(var(--pc-violet)); }
 
 /* Fundo da entrada do App com a luz suave da /v5 */
 /* Entrada do App: fundo azul navy com respiro de sálvia e lavanda */
