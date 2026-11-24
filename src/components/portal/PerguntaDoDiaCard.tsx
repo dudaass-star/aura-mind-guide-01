@@ -60,7 +60,7 @@ export function PerguntaDoDiaCard({ lastUserMessageAt, onRespond }: Props) {
       <p className="text-[10px] uppercase tracking-[0.2em] text-[#87A878] font-bold font-['Nunito']">
         Pergunta do dia
       </p>
-      <p className="text-[#1B2A4E] font-display text-xl leading-snug" style={{ fontWeight: 500 }}>
+      <p className="text-[#1B2A4E] text-lg leading-snug" style={{ fontWeight: 400 }}>
         {pergunta}
       </p>
       <Button type="button" onClick={() => onRespond(pergunta)} className="w-fit rounded-full px-4 text-xs font-bold font-['Nunito'] uppercase tracking-wider">

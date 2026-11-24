@@ -229,7 +229,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
                   <Link to={`/episodio/${episode.id}?u=${userId}`}>
                     <span className="portal-area-content flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold">{episode.episode_number}</span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-foreground">{episode.stage_title || episode.title}</span>
+                      <span className="block text-sm font-semibold text-foreground">{episode.stage_title || episode.title}</span>
                       <span className="mt-0.5 block text-xs font-normal text-muted-foreground">{stateLabel}{state?.status === "in_progress" ? ` · ${state.progress_percent}%` : index === 0 && state?.status !== "completed" ? " · mais recente" : ""}</span>
                     </span>
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -272,7 +272,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
                       <Button variant="ghost" className="h-auto min-h-16 w-full justify-start gap-3 rounded-xl px-4 py-3 text-left">
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Check className="h-4 w-4" /></span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-foreground">{item.journey?.title}</span>
+                          <span className="block text-sm font-semibold text-foreground">{item.journey?.title}</span>
                           <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
                             {item.completed_at ? `Concluída em ${new Date(item.completed_at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : "Jornada concluída"} · Rever episódios
                           </span>

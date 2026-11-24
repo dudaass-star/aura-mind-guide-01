@@ -1208,21 +1208,21 @@
 /* Seu Percurso — relicário pessoal */
 .percurso-hero { position: relative; overflow: hidden; border-radius: 1.5rem; padding: 1.75rem 1.5rem; color: hsl(0 0% 100%);
   background: radial-gradient(120% 90% at 0% 0%, hsl(145 18% 45% / .55), transparent 60%), radial-gradient(90% 80% at 100% 100%, hsl(260 35% 70% / .25), transparent 60%), hsl(222 40% 14%); }
-.percurso-kicker { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: hsl(130 22% 75%); }
+.percurso-kicker { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: hsl(130 22% 75%); }
 .percurso-title { margin-top: .6rem; font-family: "Outfit", sans-serif; font-size: 1.7rem; line-height: 1.2; font-weight: 500; }
 .percurso-lead { margin-top: .75rem; font-size: .9rem; line-height: 1.6; color: hsl(0 0% 100% / .78); }
 .percurso-meta { margin-top: 1.1rem; display: inline-block; border-radius: 999px; padding: .35rem .8rem; font-size: 12px; background: hsl(0 0% 100% / .1); color: hsl(0 0% 100% / .9); }
 .percurso-relic { position: relative; border-radius: 1.25rem; padding: 1.4rem 1.25rem 1.1rem 1.25rem; background: linear-gradient(160deg, hsl(140 20% 96%), hsl(0 0% 100%)); border: 1px solid hsl(145 18% 45% / .22); box-shadow: 0 10px 28px -18px hsl(222 40% 14% / .35); transition: background .4s; }
 .percurso-relic-focus { background: linear-gradient(160deg, hsl(140 25% 90%), hsl(0 0% 100%)); border-color: hsl(145 18% 45% / .6); }
 .percurso-relic-mark { width: 1.4rem; height: 1.4rem; color: hsl(145 18% 45% / .55); }
-.percurso-relic-text { margin-top: .5rem; font-family: "Outfit", sans-serif; font-size: 1.12rem; line-height: 1.55; color: hsl(222 40% 14%); }
+.percurso-relic-text { margin-top: .5rem; font-family: "Figtree", sans-serif; font-size: 1.12rem; line-height: 1.55; color: hsl(222 40% 14%); }
 .percurso-relic-date { margin-top: .8rem; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: hsl(145 18% 38%); }
 .percurso-letter { border-radius: 1.25rem; padding: 1.5rem 1.35rem; background: hsl(40 30% 98%); border: 1px solid hsl(222 20% 85%); box-shadow: 0 14px 32px -22px hsl(222 40% 14% / .4); }
-.percurso-letter-text { white-space: pre-line; font-family: "Outfit", sans-serif; font-size: 1rem; line-height: 1.75; color: hsl(222 35% 18%); }
+.percurso-letter-text { white-space: pre-line; font-family: "Figtree", sans-serif; font-size: 1rem; line-height: 1.75; color: hsl(222 35% 18%); }
 .percurso-letter-clamp { display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
-.percurso-letter-sign { font-family: "Outfit", sans-serif; font-style: italic; color: hsl(145 18% 38%); }
+.percurso-letter-sign { font-family: "Figtree", sans-serif; font-style: italic; color: hsl(145 18% 38%); }
 .percurso-shift { display: grid; gap: .9rem; }
-.percurso-shift-label { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: hsl(222 10% 55%); }
+.percurso-shift-label { font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: hsl(222 10% 55%); }
 .percurso-shift-label-now { color: hsl(145 18% 38%); }
 .percurso-shift-before { margin-top: .25rem; font-size: .85rem; line-height: 1.55; color: hsl(222 10% 50%); }
 .percurso-shift-now { margin-top: .25rem; padding-left: .75rem; border-left: 2px solid hsl(145 18% 45%); font-size: .95rem; line-height: 1.6; color: hsl(222 40% 14%); }
@@ -1231,16 +1231,16 @@
 .percurso-section-title { font-family: var(--font-display); font-size: 1.3rem; font-weight: 500; line-height: 1.25; color: hsl(var(--foreground)); }
 .percurso-card { border-radius: 1.25rem; padding: 1.25rem; background: hsl(var(--card)); border: 1px solid hsl(var(--primary) / .14); box-shadow: 0 12px 30px -22px hsl(var(--foreground) / .35); }
 .percurso-card .font-display { font-size: 1.05rem; font-weight: 500; }
-.percurso-invite { border-radius: 1.25rem; padding: 1.25rem; border: 1px dashed hsl(var(--primary) / .35); background: hsl(var(--primary) / .05); font-family: var(--font-display); font-style: italic; font-size: .98rem; line-height: 1.6; color: hsl(var(--muted-foreground)); }
-.percurso-quote { position: relative; padding: .9rem 1rem; border-radius: .9rem; background: hsl(var(--primary) / .07); font-family: var(--font-display); font-style: italic; font-size: .98rem; line-height: 1.55; color: hsl(var(--foreground)); }
+.percurso-invite { border-radius: 1.25rem; padding: 1.25rem; border: 1px dashed hsl(var(--primary) / .35); background: hsl(var(--primary) / .05); font-family: "Figtree", sans-serif; font-style: italic; font-size: .98rem; line-height: 1.6; color: hsl(var(--muted-foreground)); }
+.percurso-quote { position: relative; padding: .9rem 1rem; border-radius: .9rem; background: hsl(var(--primary) / .07); font-family: "Figtree", sans-serif; font-style: italic; font-size: .98rem; line-height: 1.55; color: hsl(var(--foreground)); }
 .percurso-quote span { display: block; margin-top: .4rem; font-family: inherit; font-style: normal; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: hsl(var(--primary)); }
 .percurso-thread { border-radius: 1.25rem; padding: 1.4rem 1.25rem; background: linear-gradient(150deg, hsl(var(--primary) / .1), hsl(var(--card))); border: 1px solid hsl(var(--primary) / .2); }
-.percurso-thread-text { font-family: var(--font-display); font-size: 1.05rem; line-height: 1.65; color: hsl(var(--foreground)); }
+.percurso-thread-text { font-family: "Figtree", sans-serif; font-size: 1.05rem; line-height: 1.65; color: hsl(var(--foreground)); }
 .percurso-timeline { position: relative; display: grid; gap: 1.25rem; padding-left: 1.4rem; }
 .percurso-timeline::before { content: ""; position: absolute; left: .35rem; top: .35rem; bottom: .35rem; width: 2px; background: linear-gradient(hsl(var(--primary) / .5), hsl(var(--primary) / .08)); }
 .percurso-timeline li { position: relative; }
 .percurso-timeline li::before { content: ""; position: absolute; left: -1.33rem; top: .3rem; width: .7rem; height: .7rem; border-radius: 999px; background: hsl(var(--card)); border: 2px solid hsl(var(--primary)); }
-.percurso-timeline-text { margin-top: .2rem; font-family: var(--font-display); font-size: 1.02rem; line-height: 1.5; color: hsl(var(--foreground)); }
+.percurso-timeline-text { margin-top: .2rem; font-family: "Figtree", sans-serif; font-size: 1.02rem; line-height: 1.5; color: hsl(var(--foreground)); }
 .percurso-chapter { border-radius: 1.25rem; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); box-shadow: 0 10px 26px -22px hsl(var(--foreground) / .35); }
 .percurso-chapter-featured { border-color: hsl(var(--primary) / .35); }
 .percurso-chapter h3 { font-family: var(--font-display); font-weight: 500; }
@@ -1308,13 +1308,13 @@
 .portal-progress-page .percurso-book-theme { font-size: .62rem; line-height: 1.25; opacity: .8; font-style: italic; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .portal-progress-page .percurso-evolution { position: relative; padding: 1.4rem 1.25rem; border-radius: 1.25rem; background: linear-gradient(165deg, hsl(220 40% 14% / .85), hsl(var(--primary) / .18)); border: 1px solid hsl(var(--primary) / .3); color: hsl(30 30% 97%); display: flex; flex-direction: column; gap: .9rem; }
 .portal-progress-page .percurso-evolution-then { opacity: .72; }
-.portal-progress-page .percurso-evolution-before { font-family: var(--font-display); font-style: italic; font-size: 1rem; line-height: 1.45; }
+.portal-progress-page .percurso-evolution-before { font-family: "Figtree", sans-serif; font-style: italic; font-size: 1rem; line-height: 1.45; }
 .portal-progress-page .percurso-evolution-line { height: 2.2rem; width: 2px; margin-left: .5rem; background: linear-gradient(hsl(30 30% 97% / .2), hsl(var(--primary))); border-radius: 2px; }
-.portal-progress-page .percurso-evolution-now { font-family: var(--font-display); font-size: 1.2rem; line-height: 1.4; }
+.portal-progress-page .percurso-evolution-now { font-family: "Figtree", sans-serif; font-size: 1.2rem; line-height: 1.4; }
 .portal-progress-page .percurso-evolution-note { font-size: .78rem; opacity: .65; border-top: 1px solid hsl(30 30% 97% / .12); padding-top: .8rem; }
 .portal-progress-page .percurso-sealed, .portal-progress-page .percurso-next { display: flex; flex-direction: column; gap: .5rem; text-align: left; padding: 1.2rem 1.25rem; border-radius: 1.25rem; border: 1px dashed hsl(var(--primary) / .45); background: hsl(var(--primary) / .08); color: hsl(30 30% 97%); }
 .portal-progress-page .percurso-sealed { border-style: solid; box-shadow: 0 14px 30px -18px hsl(var(--primary) / .7); }
-.portal-progress-page .percurso-sealed-title { font-family: var(--font-display); font-size: 1.15rem; line-height: 1.35; }
+.portal-progress-page .percurso-sealed-title { font-family: "Figtree", sans-serif; font-size: 1.15rem; line-height: 1.35; }
 
 /* Percurso — leitura editorial do capítulo */
 .percurso-chapter-lede { font-family: var(--font-display); font-style: italic; font-size: 1.05rem; line-height: 1.55; color: hsl(var(--foreground) / .85); }
@@ -1392,7 +1392,7 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
   background: linear-gradient(155deg, hsl(150 22% 30% / .55), hsl(222 38% 16% / .85)); border: 1px solid hsl(140 30% 70% / .22); }
 .percurso-turn-icon { flex: none; width: 2rem; height: 2rem; border-radius: 999px; display: grid; place-items: center; background: hsl(140 30% 70% / .18); color: hsl(140 35% 80%); }
 .percurso-turn-date { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: hsl(140 30% 75%); }
-.percurso-turn-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.6em; font-size: .95rem; font-weight: 600; line-height: 1.35; color: hsl(0 0% 100%); }
+.percurso-turn-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.6em; font-size: .95rem; font-weight: 500; line-height: 1.35; color: hsl(0 0% 100%); }
 .percurso-sheet { background: hsl(222 38% 13%) !important; border-color: hsl(0 0% 100% / .1) !important; color: hsl(0 0% 100%); max-height: 92dvh; }
 .percurso-sheet-scroll { overflow-y: auto; padding: 0 1.25rem calc(1.5rem + env(safe-area-inset-bottom)); }
 .percurso-sheet .percurso-chapter-reading { --foreground: 0 0% 100%; --muted-foreground: 220 15% 75%; --primary: 140 30% 72%;
@@ -1418,8 +1418,8 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .percurso-read-title { font-family: var(--font-display); font-size: 1.2rem; font-weight: 500; line-height: 1.35; color: hsl(140 35% 80%); }
 .portal-progress-page .percurso-quote, .percurso-sheet .percurso-quote { background: hsl(140 30% 72% / .1); border-left: 2px solid hsl(140 30% 72% / .6); border-radius: .25rem .9rem .9rem .25rem; }
 .percurso-fio { position: relative; border-radius: 1.25rem; padding: 1.2rem 1.15rem; background: radial-gradient(120% 100% at 0% 0%, hsl(145 30% 50% / .32), transparent 65%), hsl(222 38% 16% / .9); border: 1px solid hsl(140 35% 72% / .45); box-shadow: 0 14px 34px -18px hsl(145 40% 45% / .6); }
-.percurso-fio-eyebrow { display: flex; align-items: center; gap: .4rem; font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: hsl(140 40% 78%); }
-.percurso-fio-question { font-family: var(--font-display); font-size: 1.2rem; line-height: 1.45; color: hsl(30 30% 98%); }
+.percurso-fio-eyebrow { display: flex; align-items: center; gap: .4rem; font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: hsl(140 40% 78%); }
+.percurso-fio-question { font-family: "Figtree", sans-serif; font-size: 1.2rem; line-height: 1.45; color: hsl(30 30% 98%); }
 .percurso-fio-cta { display: inline-flex; width: 100%; justify-content: center; align-items: center; gap: .5rem; border-radius: 999px; padding: .8rem 1rem; font-size: .92rem; font-weight: 600; background: hsl(140 32% 70%); color: hsl(222 40% 12%) !important; transition: transform .15s; }
 .percurso-fio-cta:active { transform: scale(.98); }
 
