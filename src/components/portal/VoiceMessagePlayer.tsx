@@ -28,6 +28,8 @@ function formatDuration(seconds: number) {
 export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover }: VoiceMessagePlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeSrc, setActiveSrc] = useState(src);
+  // Força recarregar quando o link recuperado é igual ao atual.
+  const [reloadNonce, setReloadNonce] = useState(0);
   const recoveryTriedRef = useRef(false);
   const autoPlayRef = useRef(false);
   const recoveringRef = useRef(false);
@@ -44,7 +46,6 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
     if (!onRecover || !userIntentRef.current || recoveryTriedRef.current || recoveringRef.current) return false;
     recoveryTriedRef.current = true;
     recoveringRef.current = true;
-    userIntentRef.current = true;
     setLoading(true);
     setFailed(false);
     try {
@@ -52,6 +53,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
       if (!fresh) return false;
       autoPlayRef.current = true;
       setActiveSrc(fresh);
+      setReloadNonce((value) => value + 1);
       return true;
     } catch {
       return false;
@@ -143,7 +145,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
       audio.removeEventListener("error", fail);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [knownDuration, activeSrc]);
+  }, [knownDuration, activeSrc, reloadNonce]);
 
   const togglePlayback = async () => {
     const audio = audioRef.current;
@@ -156,6 +158,9 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
       return;
     }
 
+    // Toque explícito: libera recuperação/regeração só para este áudio.
+    userIntentRef.current = true;
+    recoveryTriedRef.current = false;
     setLoading(true);
     setFailed(false);
     try {
