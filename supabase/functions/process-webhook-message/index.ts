@@ -264,7 +264,7 @@ async function transcribeAudio(audioUrl: string, onTiming?: (timing: { audio_tot
   }
 }
 
-async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: string | null; audioContent: string | null }> {
+async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: string | null; audioContent: string | null; storagePath: string | null }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 25_000);
   try {
@@ -278,13 +278,13 @@ async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: s
     });
     if (!response.ok) {
       console.error('❌ TTS error:', await response.text());
-      return { audioUrl: null, audioContent: null };
+      return { audioUrl: null, audioContent: null, storagePath: null };
     }
     const data = await response.json();
-    return { audioUrl: data.audioUrl ?? null, audioContent: data.audioContent ?? null };
+    return { audioUrl: data.audioUrl ?? null, audioContent: data.audioContent ?? null, storagePath: data.storagePath ?? null };
   } catch (error) {
     console.error('❌ TTS exception:', error);
-    return { audioUrl: null, audioContent: null };
+    return { audioUrl: null, audioContent: null, storagePath: null };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -1874,7 +1874,7 @@ Deno.serve(async (req) => {
       // Audio messages
       if (msg.isAudio) {
         console.log(`🎙️ Generating audio for: ${responseText.substring(0, 50)}...`);
-        const { audioUrl, audioContent } = await generateTTS(responseText, profile.user_id);
+        const { audioUrl, audioContent, storagePath: ttsStoragePath } = await generateTTS(responseText, profile.user_id);
         if (!audioUrl && !audioContent) {
           // Antes isso caía pra texto com apenas um console.log — falha invisível.
           console.error('❌ TTS retornou vazio; registrando falha e caindo pra texto');
@@ -1890,7 +1890,7 @@ Deno.serve(async (req) => {
               audio_url: audioUrl,
               channel: 'in_app',
               delivery_status: 'delivered',
-              metadata: { reply_to_message_id: inboundMessageDbId || null, assistant_persisted_at: new Date().toISOString() },
+              metadata: { reply_to_message_id: inboundMessageDbId || null, assistant_persisted_at: new Date().toISOString(), tts_storage_path: ttsStoragePath },
             });
             if (audioPersistError) throw audioPersistError;
             sentAnyResponse = true;
