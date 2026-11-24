@@ -18,6 +18,7 @@ import { reportPushConversion } from "@/lib/push-notifications";
 import { isPushReady, requestDegustacaoStart } from "@/lib/degustacao";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 import { VoiceMessagePlayer } from "@/components/portal/VoiceMessagePlayer";
+import { VoiceMessageText } from "@/components/portal/VoiceMessageText";
 import type { Json } from "@/integrations/supabase/types";
 import { readPortalCache, writePortalCache } from "@/lib/portal-cache";
 import { MessageResponse } from "@/components/ai-elements/message";
@@ -311,6 +312,7 @@ const MessageTimeline = memo(function MessageTimeline({
                 ? <p className="whitespace-pre-wrap break-words">{message.content}</p>
                 : <MessageResponse className="whitespace-pre-wrap break-words text-[14px] leading-[1.5]">{message.content}</MessageResponse>)}
               {message.is_audio && message.audio_url && (
+                <>
                 <VoiceMessagePlayer
                   src={message.audio_url}
                   mine={mine}
@@ -318,6 +320,8 @@ const MessageTimeline = memo(function MessageTimeline({
                   mimeType={audioMimeType(message)}
                   onRecover={!mine && message.role === "assistant" ? () => recoverAuraAudio(message.id) : undefined}
                 />
+                <VoiceMessageText content={message.content} mine={mine} />
+                </>
               )}
               <div className={cn("mt-0.5 flex items-center justify-end gap-1 text-[10px] leading-none", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
                 <span>{formatTime(message.created_at)}</span>

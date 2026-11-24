@@ -5,6 +5,9 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Leitura das mensagens de voz
+- [x] Adicionar “Ler mensagem” e “Ocultar texto” dentro do balão com o texto existente; abertura/recolhimento verificados na conversa autenticada em celular e desktop, sem carregar, recuperar ou reproduzir áudio, sem erros de tela. Aguarda publicação.
+
 ## Publicação da conversa
 - [x] Excluir a página de teste da conversa: endereço agora abre 404; Checkout V2 ativo confirmado no site sem alterações nesta tarefa; compilação OK e nova verificação sem críticos. Versão limpa preparada para publicação.
 

@@ -1,5 +1,7 @@
 # Decisões técnicas
 
+- Voice-message reading toggles render persisted message content independently of the player; opening text never loads, regenerates or plays audio.
+
 - Conversation design experiments are removed once integrated into the App; this prevents obsolete public preview pages from shipping.
 
 - Blog covers stay in private storage and render through existing signed links; only the generation service accesses the bucket directly, preventing unrestricted client downloads.
