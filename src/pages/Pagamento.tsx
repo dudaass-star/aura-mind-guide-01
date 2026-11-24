@@ -57,7 +57,7 @@ const Pagamento = () => {
         {!error ? (
           <div className="text-center max-w-sm animate-fade-in">
             <Loader2 className="w-8 h-8 text-accent animate-spin mx-auto mb-4" />
-            <h1 className="text-lg font-semibold text-foreground mb-1 font-['Fraunces']">
+            <h1 className="text-lg font-semibold text-foreground mb-1 font-display">
               Abrindo seu pagamento seguro
             </h1>
             <p className="text-sm text-muted-foreground font-['Nunito']">
@@ -69,7 +69,7 @@ const Pagamento = () => {
             <div className="bg-muted rounded-full p-4 w-16 h-16 mx-auto flex items-center justify-center mb-4">
               <AlertCircle size={28} className="text-muted-foreground" />
             </div>
-            <h1 className="text-xl font-semibold text-foreground mb-2 font-['Fraunces']">
+            <h1 className="text-xl font-semibold text-foreground mb-2 font-display">
               Não foi possível abrir
             </h1>
             <p className="text-muted-foreground font-['Nunito'] mb-4">{error}</p>

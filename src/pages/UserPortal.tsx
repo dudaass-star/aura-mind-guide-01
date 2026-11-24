@@ -883,7 +883,7 @@ function PortalError({ message }: { message: string }) {
           <div className="bg-muted rounded-full p-4 w-16 h-16 mx-auto flex items-center justify-center mb-4">
             <Lock size={28} className="text-muted-foreground" />
           </div>
-          <h1 className="text-xl font-semibold text-foreground mb-2 font-['Fraunces']">
+          <h1 className="text-xl font-semibold text-foreground mb-2 font-display">
             Acesso não autorizado
           </h1>
           <p className="text-muted-foreground font-['Nunito']">{message}</p>

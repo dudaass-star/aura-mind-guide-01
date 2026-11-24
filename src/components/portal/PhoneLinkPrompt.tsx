@@ -47,7 +47,7 @@ export function PhoneLinkPrompt() {
           <div className="bg-accent/10 rounded-full p-4 w-16 h-16 mx-auto flex items-center justify-center mb-5">
             <Phone size={26} className="text-accent" />
           </div>
-          <h1 className="text-xl font-semibold text-foreground mb-2 text-center font-['Fraunces']">
+          <h1 className="text-xl font-semibold text-foreground mb-2 text-center font-display">
             Confirma seu WhatsApp
           </h1>
           <p className="text-sm text-muted-foreground text-center mb-6 font-['Nunito']">

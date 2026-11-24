@@ -19,7 +19,7 @@ export function MetricCard({ icon: Icon, label, value }: { icon: React.ElementTy
   return (
     <div className="bg-muted/50 rounded-xl p-3 text-center hover:bg-muted/70 hover:shadow-sm transition-all hover:scale-[1.02]">
       <Icon size={18} className="text-accent mx-auto mb-1" />
-      <p className="text-xl font-semibold text-foreground font-['Fraunces']">{value}</p>
+      <p className="text-xl font-semibold text-foreground font-display">{value}</p>
       <p className="text-xs text-muted-foreground font-['Nunito']">{label}</p>
     </div>
   );
@@ -75,7 +75,7 @@ export function PortalHeader({ firstName }: { firstName: string }) {
     <div className="border-b border-border/20">
       <div className="max-w-2xl mx-auto px-5 py-5 animate-fade-in">
         <div className="flex items-center gap-2">
-          <p className="text-xl font-medium text-foreground font-['Fraunces']">
+          <p className="text-xl font-medium text-foreground font-display">
             {greeting}, {firstName}
           </p>
           <Sparkles size={18} className="text-accent animate-pulse-soft" />

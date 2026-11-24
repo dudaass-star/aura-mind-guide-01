@@ -15,8 +15,8 @@ export default {
   	extend: {
   		fontFamily: {
 			display: [
-				'Fraunces',
-				'serif'
+				'Outfit',
+				'sans-serif'
 			],
   			body: [
   				'Nunito',
