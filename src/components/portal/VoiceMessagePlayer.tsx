@@ -31,6 +31,8 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
   const recoveryTriedRef = useRef(false);
   const autoPlayRef = useRef(false);
   const recoveringRef = useRef(false);
+  // Só recupera/regera depois que a pessoa tocou no play deste áudio.
+  const userIntentRef = useRef(false);
 
   useEffect(() => {
     setActiveSrc(src);
@@ -39,9 +41,10 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
 
   // Tenta uma única recuperação: link renovado ou voz regerada pelo texto original.
   const recover = async () => {
-    if (!onRecover || recoveryTriedRef.current || recoveringRef.current) return false;
+    if (!onRecover || !userIntentRef.current || recoveryTriedRef.current || recoveringRef.current) return false;
     recoveryTriedRef.current = true;
     recoveringRef.current = true;
+    userIntentRef.current = true;
     setLoading(true);
     setFailed(false);
     try {
@@ -73,7 +76,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
     setFailed(false);
     setCurrentTime(0);
     setDuration(knownDuration);
-    audio.load();
+    if (autoPlayRef.current) audio.load();
 
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => {
@@ -94,6 +97,10 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
       }
     };
     const started = () => {
+      // Um áudio por vez: pausa os demais da conversa.
+      document.querySelectorAll<HTMLAudioElement>("audio[data-voice-audio]").forEach((other) => {
+        if (other !== audio && !other.paused) other.pause();
+      });
       setPlaying(true);
       setLoading(false);
       setFailed(false);
@@ -105,6 +112,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
     const wait = () => setLoading(true);
     const fail = () => {
       setPlaying(false);
+      if (!userIntentRef.current) return;
       void recover().then((ok) => {
         if (!ok) {
           setLoading(false);
@@ -163,7 +171,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
 
   // Vigia: se o carregamento não avança, força a recuperação em vez de girar para sempre.
   useEffect(() => {
-    if (!loading || playing) return;
+    if (!loading || playing || !userIntentRef.current) return;
     const timer = window.setTimeout(() => {
       const audio = audioRef.current;
       if (!audio || !audio.paused) return;
@@ -189,7 +197,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
   return (
     <div className="flex min-h-10 w-[min(15.5rem,70vw)] max-w-full items-center gap-2" data-voice-message>
       {/* src direto no <audio>: com <source>, erros 400/403/404 não chegam ao elemento e o play trava */}
-      <audio ref={audioRef} src={activeSrc} preload="metadata" playsInline />
+      <audio ref={audioRef} src={activeSrc} preload="none" playsInline data-voice-audio />
       <Button
         type="button"
         size="icon"
