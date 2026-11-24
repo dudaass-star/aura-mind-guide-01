@@ -234,15 +234,16 @@
   background-color: hsl(var(--primary-foreground));
 }
 
-/* Convite à conversa com as cores crepúsculo do ícone, sem halo ou vidro. */
+/* Convite à conversa em pérola clara, com contraste marinho e presença sálvia. */
 .portal-primary-conversation {
-  --pc-amethyst: 260 32% 16%;
-  --pc-ink: 0 0% 100%;
-  --pc-muted: 275 32% 86%;
-  --pc-border: 321 23% 45%;
-  --pc-presence: 140 45% 70%;
+  --pc-pearl: 150 18% 97%;
+  --pc-ink: 220 30% 20%;
+  --pc-muted: 153 13% 37%;
+  --pc-border: 153 19% 78%;
+  --pc-avatar-ring: 321 23% 75%;
+  --pc-presence: 145 38% 44%;
   --pc-shadow: 220 35% 5%;
-  --pc-background: hsl(var(--pc-amethyst));
+  --pc-background: hsl(var(--pc-pearl));
   position: relative;
   overflow: hidden;
   color: hsl(var(--pc-ink));
@@ -265,15 +266,15 @@
   background-image: url("./assets/aura-card-doodles.svg");
   background-size: 90px 90px;
   background-repeat: repeat;
-  filter: brightness(0) invert(1);
+  filter: none;
   /* Textura discreta para deixar a presença e a foto em primeiro plano. */
-  opacity: 0.3;
+  opacity: 0.2;
   z-index: 0;
 }
 .portal-primary-conversation > * { position: relative; z-index: 1; }
 .portal-pc-title { color: hsl(var(--pc-ink)); }
 .portal-pc-muted { color: hsl(var(--pc-muted)) !important; }
-.portal-pc-avatar { box-shadow: 0 0 0 2px hsl(var(--pc-ink) / 0.65); }
+.portal-pc-avatar { box-shadow: 0 0 0 2px hsl(var(--pc-avatar-ring) / 0.65); }
 /* Cartão do momento: vidro escuro com faixa sálvia, sem estampa, para não duplicar o cartão da AURA */
 .portal-moment-card {
   position: relative; overflow: hidden;
@@ -290,7 +291,7 @@
 .portal-moment-eyebrow { color: hsl(140 30% 72%); }
 .portal-moment-title { color: hsl(0 0% 100% / 0.95); }
 .portal-moment-action { color: hsl(270 45% 85%); }
-.portal-pc-dot { background: hsl(var(--pc-presence)); border-color: hsl(var(--pc-amethyst)); }
+.portal-pc-dot { background: hsl(var(--pc-presence)); border-color: hsl(var(--pc-pearl)); }
 
 /* Fundo da entrada do App com a luz suave da /v5 */
 /* Entrada do App: fundo azul navy com respiro de sálvia e lavanda */
