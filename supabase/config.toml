@@ -205,3 +205,6 @@ verify_jwt = false
     verify_jwt = false
   [functions.welcome-safety-net]
     verify_jwt = false
+
+[functions.aura-audio-url]
+verify_jwt = false

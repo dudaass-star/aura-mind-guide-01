@@ -9,6 +9,8 @@ interface VoiceMessagePlayerProps {
   mine: boolean;
   durationMs?: number | null;
   mimeType?: string;
+  /** Busca um link novo (ou regera a voz) quando o arquivo atual não toca mais. */
+  onRecover?: () => Promise<string | null>;
 }
 
 const SPEEDS = [1, 1.5, 2] as const;
@@ -23,8 +25,37 @@ function formatDuration(seconds: number) {
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMessagePlayerProps) {
+export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover }: VoiceMessagePlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [activeSrc, setActiveSrc] = useState(src);
+  const recoveryTriedRef = useRef(false);
+  const autoPlayRef = useRef(false);
+  const recoveringRef = useRef(false);
+
+  useEffect(() => {
+    setActiveSrc(src);
+    recoveryTriedRef.current = false;
+  }, [src]);
+
+  // Tenta uma única recuperação: link renovado ou voz regerada pelo texto original.
+  const recover = async () => {
+    if (!onRecover || recoveryTriedRef.current || recoveringRef.current) return false;
+    recoveryTriedRef.current = true;
+    recoveringRef.current = true;
+    setLoading(true);
+    setFailed(false);
+    try {
+      const fresh = await onRecover();
+      if (!fresh) return false;
+      autoPlayRef.current = true;
+      setActiveSrc(fresh);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      recoveringRef.current = false;
+    }
+  };
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const knownDuration = durationMs && durationMs > 0 ? durationMs / 1000 : 0;
@@ -57,6 +88,10 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
     const ready = () => {
       setLoading(false);
       setFailed(false);
+      if (autoPlayRef.current) {
+        autoPlayRef.current = false;
+        void audio.play().catch(() => setFailed(true));
+      }
     };
     const started = () => {
       setPlaying(true);
@@ -70,8 +105,12 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
     const wait = () => setLoading(true);
     const fail = () => {
       setPlaying(false);
-      setLoading(false);
-      setFailed(true);
+      void recover().then((ok) => {
+        if (!ok) {
+          setLoading(false);
+          setFailed(true);
+        }
+      });
     };
 
     audio.addEventListener("timeupdate", updateTime);
@@ -95,7 +134,8 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
       audio.removeEventListener("waiting", wait);
       audio.removeEventListener("error", fail);
     };
-  }, [knownDuration, src]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [knownDuration, activeSrc]);
 
   const togglePlayback = async () => {
     const audio = audioRef.current;
@@ -114,8 +154,10 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
       if (audio.ended || (duration > 0 && audio.currentTime >= duration)) audio.currentTime = 0;
       await audio.play();
     } catch {
-      setFailed(true);
-      setLoading(false);
+      if (!(await recover())) {
+        setFailed(true);
+        setLoading(false);
+      }
     }
   };
 
@@ -130,7 +172,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType }: VoiceMes
   return (
     <div className="flex min-h-10 w-[min(15.5rem,70vw)] max-w-full items-center gap-2" data-voice-message>
       <audio ref={audioRef} preload="metadata" playsInline>
-        <source src={src} type={mimeType} />
+        <source src={activeSrc} type={mimeType} />
       </audio>
       <Button
         type="button"

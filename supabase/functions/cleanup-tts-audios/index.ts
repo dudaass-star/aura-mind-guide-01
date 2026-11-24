@@ -7,10 +7,14 @@ const corsHeaders = {
 };
 
 const BUCKET = 'aura-tts-audios';
-const TTL_DAYS = 7;
+// Áudios de quem tem acesso ao App ficam guardados para serem ouvidos de novo.
+// Só descartamos sobras compartilhadas (7 dias) e áudios de quem já não tem acesso (60 dias).
+// Se um áudio descartado for pedido depois, o App regera a voz pelo texto original.
+const SHARED_TTL_DAYS = 7;
+const INACTIVE_TTL_DAYS = 60;
 const MAX_DELETE_PER_RUN = 1000;
 
-async function listAllOldFiles(supabase: ReturnType<typeof createClient>, cutoff: Date): Promise<string[]> {
+async function listAllOldFiles(supabase: ReturnType<typeof createClient>): Promise<string[]> {
   const collected: string[] = [];
 
   // Lista as pastas (top-level): cada user_id ou "shared"
@@ -26,6 +30,14 @@ async function listAllOldFiles(supabase: ReturnType<typeof createClient>, cutoff
   for (const folder of folders || []) {
     if (collected.length >= MAX_DELETE_PER_RUN) break;
     const folderName = folder.name;
+    let cutoff: Date;
+    if (folderName === 'shared') {
+      cutoff = new Date(Date.now() - SHARED_TTL_DAYS * 86400000);
+    } else {
+      const { data: entitled } = await supabase.rpc('has_portal_entitlement', { _user_id: folderName });
+      if (entitled === true) continue;
+      cutoff = new Date(Date.now() - INACTIVE_TTL_DAYS * 86400000);
+    }
     let offset = 0;
     while (collected.length < MAX_DELETE_PER_RUN) {
       const { data: files, error } = await supabase.storage
@@ -66,14 +78,11 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const cutoff = new Date(Date.now() - TTL_DAYS * 24 * 60 * 60 * 1000);
-    console.log(`🧹 [cleanup-tts-audios] Looking for files older than ${cutoff.toISOString()}`);
-
-    const toDelete = await listAllOldFiles(supabase, cutoff);
+    const toDelete = await listAllOldFiles(supabase);
     console.log(`🧹 [cleanup-tts-audios] Found ${toDelete.length} files to delete`);
 
     if (toDelete.length === 0) {
-      return new Response(JSON.stringify({ deleted: 0, cutoff: cutoff.toISOString() }), {
+      return new Response(JSON.stringify({ deleted: 0 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -93,7 +102,6 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       deleted: deleted?.length ?? 0,
-      cutoff: cutoff.toISOString(),
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

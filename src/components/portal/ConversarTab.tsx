@@ -219,10 +219,30 @@ function dayKeyBrt() {
   }).format(new Date());
 }
 
+// Pede ao servidor links renovados das falas em áudio da Aura (arquivos em área privada).
+// regenerate=true regera a voz pelo texto original quando o arquivo já foi descartado.
+async function requestAuraAudioUrls(messageIds: string[], regenerate = false) {
+  if (!messageIds.length) return {} as Record<string, string | null>;
+  const { data, error } = await supabasePortal.functions.invoke("aura-audio-url", { body: { messageIds, regenerate } });
+  if (error || !data?.urls) return {} as Record<string, string | null>;
+  return data.urls as Record<string, string | null>;
+}
+
+async function recoverAuraAudio(messageId: string) {
+  const urls = await requestAuraAudioUrls([messageId], true);
+  return urls[messageId] ?? null;
+}
+
 async function hydrateAudioUrls(messages: ChatMessage[]) {
   const paths = [...new Set(messages.map(audioStoragePath).filter((path): path is string => Boolean(path)))];
-  if (!paths.length) return messages;
-  const { data: signedAudios } = await supabasePortal.storage.from("chat-audios").createSignedUrls(paths, 3600);
+  const auraIds = messages
+    .filter((message) => message.role === "assistant" && message.is_audio && message.audio_url && !message.audio_url.startsWith("blob:") && /^[0-9a-f-]{36}$/i.test(message.id))
+    .map((message) => message.id)
+    .slice(-60);
+  const [signedAudios, auraUrls] = await Promise.all([
+    paths.length ? supabasePortal.storage.from("chat-audios").createSignedUrls(paths, 3600).then(({ data }) => data) : Promise.resolve(null),
+    requestAuraAudioUrls(auraIds).catch(() => ({} as Record<string, string | null>)),
+  ]);
   const signedByPath = new Map<string, string>();
   signedAudios?.forEach((signed, index) => {
     const path = paths[index];
@@ -230,7 +250,7 @@ async function hydrateAudioUrls(messages: ChatMessage[]) {
   });
   return messages.map((message) => {
     const path = audioStoragePath(message);
-    const signedUrl = path ? signedByPath.get(path) : null;
+    const signedUrl = (path ? signedByPath.get(path) : null) ?? auraUrls[message.id] ?? null;
     return signedUrl ? { ...message, audio_url: signedUrl } : message;
   });
 }
@@ -291,7 +311,13 @@ const MessageTimeline = memo(function MessageTimeline({
                 ? <p className="whitespace-pre-wrap break-words">{message.content}</p>
                 : <MessageResponse className="whitespace-pre-wrap break-words text-[14px] leading-[1.5]">{message.content}</MessageResponse>)}
               {message.is_audio && message.audio_url && (
-                <VoiceMessagePlayer src={message.audio_url} mine={mine} durationMs={audioDurationMs(message)} mimeType={audioMimeType(message)} />
+                <VoiceMessagePlayer
+                  src={message.audio_url}
+                  mine={mine}
+                  durationMs={audioDurationMs(message)}
+                  mimeType={audioMimeType(message)}
+                  onRecover={!mine && message.role === "assistant" ? () => recoverAuraAudio(message.id) : undefined}
+                />
               )}
               <div className={cn("mt-0.5 flex items-center justify-end gap-1 text-[10px] leading-none", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
                 <span>{formatTime(message.created_at)}</span>
