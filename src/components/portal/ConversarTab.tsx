@@ -27,6 +27,7 @@ import { HomeMomentBar } from "@/components/portal/HomeMomentBar";
 import { setResumeIntent } from "@/lib/chat-resume-intent";
 import { takeawayFromClosure } from "@/lib/today-hero";
 import { PostSessionScheduleDialog } from "@/components/portal/PostSessionScheduleDialog";
+import { isWhatsAppOnlyNotice } from "@/lib/whatsapp-only-notice";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
 type ChatMessage = {
@@ -107,15 +108,6 @@ function getJourneyEpisodeCard(metadata: unknown): JourneyEpisodeCardMetadata | 
 function isResponseFailure(message: ChatMessage) {
   if (!message.metadata || typeof message.metadata !== "object" || Array.isArray(message.metadata)) return false;
   return (message.metadata as Record<string, unknown>).kind === "response_failure";
-}
-
-// Avisos que existem só para o WhatsApp (convite ao App, suporte operacional)
-// ficam no histórico para auditoria, mas não são fala da Aura dentro do App.
-const WHATSAPP_ONLY_KINDS = new Set(["app_migration_redirect", "operational_support", "support_acknowledgement"]);
-export function isWhatsAppOnlyNotice(message: { role: string; metadata?: unknown; channel?: string | null }) {
-  if (message.role !== "assistant") return false;
-  if (!message.metadata || typeof message.metadata !== "object" || Array.isArray(message.metadata)) return false;
-  return WHATSAPP_ONLY_KINDS.has(String((message.metadata as Record<string, unknown>).kind ?? ""));
 }
 
 type PendingMessage = {

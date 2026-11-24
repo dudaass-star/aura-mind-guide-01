@@ -706,6 +706,8 @@ Deno.serve(async (req) => {
             user_id: profile.user_id,
             role: 'assistant',
             content: blockMessage,
+            channel: 'whatsapp',
+            metadata: { kind: 'whatsapp_access_notice' },
           });
           // Marca rate-limit
           await supabase

@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { isWhatsAppOnlyNotice } from "@/components/portal/ConversarTab";
+// @ts-ignore -- executado com bun test, fora do typecheck do app
+import { describe, it, expect } from "bun:test";
+import { isWhatsAppOnlyNotice } from "./whatsapp-only-notice";
 
 describe("avisos só do WhatsApp", () => {
   it("esconde o convite de migração ao App", () => {
