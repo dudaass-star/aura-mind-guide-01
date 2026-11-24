@@ -1,6 +1,6 @@
 # Decisões técnicas
 
-- Voice-message reading toggles render persisted message content independently of the player; opening text never loads, regenerates or plays audio.
+- Voice-message reading state stays outside playback and its toggle shares the duration/receipt row; opening persisted text never loads, regenerates or plays audio, and collapsed messages stay compact.
 
 - Conversation design experiments are removed once integrated into the App; this prevents obsolete public preview pages from shipping.
 

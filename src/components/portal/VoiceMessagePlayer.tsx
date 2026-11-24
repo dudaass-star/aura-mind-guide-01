@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2, Mic, Pause, Play } from "lucide-react";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ interface VoiceMessagePlayerProps {
   mine: boolean;
   durationMs?: number | null;
   mimeType?: string;
+  readingToggle?: ReactNode;
+  receipt?: ReactNode;
   /** Busca um link novo (ou regera a voz) quando o arquivo atual não toca mais. */
   onRecover?: () => Promise<string | null>;
 }
@@ -25,7 +27,7 @@ function formatDuration(seconds: number) {
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
-export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover }: VoiceMessagePlayerProps) {
+export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover, readingToggle, receipt }: VoiceMessagePlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeSrc, setActiveSrc] = useState(src);
   // Força recarregar quando o link recuperado é igual ao atual.
@@ -200,7 +202,7 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
   const elapsed = playing || currentTime > 0 ? currentTime : duration;
 
   return (
-    <div className="flex min-h-10 w-[min(15.5rem,70vw)] max-w-full items-center gap-2" data-voice-message>
+    <div className="grid w-[min(15.5rem,70vw)] max-w-full grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-2" data-voice-message>
       {/* src direto no <audio>: com <source>, erros 400/403/404 não chegam ao elemento e o play trava */}
       <audio ref={audioRef} src={activeSrc} preload="none" playsInline data-voice-audio />
       <Button
@@ -252,9 +254,6 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
             aria-label="Posição da mensagem de voz"
           />
         </div>
-        <div className={cn("text-[10.5px] font-semibold leading-tight tabular-nums", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>
-          {failed ? "Áudio incompatível" : formatDuration(elapsed)}
-        </div>
       </div>
 
       {/* Foto da Aura em repouso; vira controle de velocidade durante a escuta */}
@@ -280,6 +279,13 @@ export function VoiceMessagePlayer({ src, mine, durationMs, mimeType, onRecover 
           </span>
         </div>
       )}
+      <div className="col-span-3 flex min-h-5 items-center gap-1 pl-11">
+        <span className={cn("shrink-0 text-[10.5px] font-semibold leading-tight tabular-nums", mine ? "text-primary-foreground/80" : "text-muted-foreground")}>
+          {failed ? "Áudio incompatível" : formatDuration(elapsed)}
+        </span>
+        {readingToggle}
+        {receipt && <div className="ml-auto shrink-0">{receipt}</div>}
+      </div>
     </div>
   );
 }

@@ -277,11 +277,19 @@ const MessageTimeline = memo(function MessageTimeline({
         const mine = message.role === "user";
         const reportCard = getReportCard(message.metadata);
         const episodeCard = getJourneyEpisodeCard(message.metadata);
+        const receipt = (
+          <div className={cn("flex items-center justify-end gap-1 text-[10px] leading-none", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
+            <span>{formatTime(message.created_at)}</span>
+            {mine && message.delivery_status === "sending" && <Check className="h-3 w-3" />}
+            {mine && message.delivery_status === "delivered" && <CheckCheck className="h-3 w-3" />}
+            {mine && message.delivery_status === "failed" && <AlertCircle className="h-3 w-3" />}
+          </div>
+        );
         return (
           <div key={message.id} data-chat-message data-message-id={message.id} className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
             <div className={cn(
               "min-w-0 max-w-[86%] text-[14px] leading-[1.5] md:max-w-[76%]",
-              message.is_audio && message.audio_url ? "px-2.5 py-2" : "px-3 py-1.5",
+              message.is_audio && message.audio_url ? "px-2.5 py-1.5" : "px-3 py-1.5",
               mine ? "rounded-2xl rounded-tr-sm border border-primary/80 bg-primary text-primary-foreground shadow-md" : "rounded-2xl rounded-tl-sm border border-border/70 bg-card text-foreground shadow-sm",
               message.delivery_status === "failed" && "border-destructive/60 bg-destructive/10 text-foreground",
             )} data-message-bubble>
@@ -312,23 +320,21 @@ const MessageTimeline = memo(function MessageTimeline({
                 ? <p className="whitespace-pre-wrap break-words">{message.content}</p>
                 : <MessageResponse className="whitespace-pre-wrap break-words text-[14px] leading-[1.5]">{message.content}</MessageResponse>)}
               {message.is_audio && message.audio_url && (
-                <>
-                <VoiceMessagePlayer
-                  src={message.audio_url}
-                  mine={mine}
-                  durationMs={audioDurationMs(message)}
-                  mimeType={audioMimeType(message)}
-                  onRecover={!mine && message.role === "assistant" ? () => recoverAuraAudio(message.id) : undefined}
-                />
-                <VoiceMessageText content={message.content} mine={mine} />
-                </>
+                <VoiceMessageText content={message.content} mine={mine}>
+                  {(readingToggle) => (
+                    <VoiceMessagePlayer
+                      src={message.audio_url ?? ""}
+                      mine={mine}
+                      durationMs={audioDurationMs(message)}
+                      mimeType={audioMimeType(message)}
+                      onRecover={!mine && message.role === "assistant" ? () => recoverAuraAudio(message.id) : undefined}
+                      readingToggle={readingToggle}
+                      receipt={receipt}
+                    />
+                  )}
+                </VoiceMessageText>
               )}
-              <div className={cn("mt-0.5 flex items-center justify-end gap-1 text-[10px] leading-none", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                <span>{formatTime(message.created_at)}</span>
-                {mine && message.delivery_status === "sending" && <Check className="h-3 w-3" />}
-                {mine && message.delivery_status === "delivered" && <CheckCheck className="h-3 w-3" />}
-                {mine && message.delivery_status === "failed" && <AlertCircle className="h-3 w-3" />}
-              </div>
+              {(!message.is_audio || !message.audio_url) && <div className="mt-0.5">{receipt}</div>}
             </div>
             {mine && message.delivery_status === "failed" && (
               <div className="mt-1 flex items-center gap-1" aria-label="Mensagem não enviada">
