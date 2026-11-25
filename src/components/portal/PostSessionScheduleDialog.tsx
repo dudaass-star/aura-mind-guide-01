@@ -66,7 +66,7 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
   const today = brtDate(new Date(Date.now() + 30 * 60_000));
   const times = useMemo(() => {
     const out: string[] = [];
-    for (let h = 6; h <= 23; h++) for (const m of [0, 30]) {
+    for (let h = 0; h <= 23; h++) for (const m of [0, 30]) {
       const v = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
       if (date && new Date(`${date}T${v}:00-03:00`).getTime() > Date.now() + 15 * 60_000) out.push(v);
     }

@@ -62,7 +62,11 @@ export function TimeWheelPicker({ times, value, onChange }: { times: string[]; v
 
   // Garante sempre um horário válido selecionado.
   useEffect(() => {
-    if (times.length && !times.includes(value)) onChange(times[0]);
+    if (times.length && !times.includes(value)) {
+      // Abre no horário atual do usuário (BRT); madrugada continua acessível rolando para cima.
+      const now = new Date().toLocaleTimeString("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false });
+      onChange(times.find((t) => t >= now) || times[0]);
+    }
   }, [times, value, onChange]);
 
   if (!times.length) return null;

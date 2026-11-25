@@ -29,7 +29,7 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
 
   const times = useMemo(() => {
     const out: string[] = [];
-    for (let h = 6; h <= 23; h++) for (const m of [0, 30]) {
+    for (let h = 0; h <= 23; h++) for (const m of [0, 30]) {
       const v = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
       if (new Date(`${date}T${v}:00-03:00`).getTime() > Date.now() + 15 * 60_000) out.push(v);
     }

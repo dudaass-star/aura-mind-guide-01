@@ -201,7 +201,7 @@ export function SessoesTab({
   const maxDate = new Date(new Date(`${today}T12:00:00-03:00`).getTime() + 60 * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   const availableTimes = useMemo(() => {
     const result: string[] = [];
-    for (let hour = 6; hour <= 23; hour += 1) {
+    for (let hour = 0; hour <= 23; hour += 1) {
       for (const minute of [0, 30]) {
         const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
         const candidate = new Date(brtIso(date, value)).getTime();
