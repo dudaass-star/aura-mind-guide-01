@@ -13,6 +13,7 @@ import { PhoneLinkPrompt } from "@/components/portal/PhoneLinkPrompt";
 import { ConversarTab } from "@/components/portal/ConversarTab";
 import { clearResumeIntent, setResumeIntent } from "@/lib/chat-resume-intent";
 import { toast } from "@/hooks/use-toast";
+import { PLAN_LABELS, CYCLE_LABELS } from "@/lib/plan-pricing";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 import { DegustacaoPlansDialog } from "@/components/portal/DegustacaoPlansDialog";
 import { DegustacaoScheduleNextDialog } from "@/components/portal/DegustacaoScheduleNextDialog";
@@ -673,6 +674,22 @@ const UserPortal = () => {
               degustacaoInterrupted={Boolean(degustacaoState?.interrupted)}
               profileStatus={profile?.status}
               fullName={profile?.name || ""}
+              subscriptionSummary={{
+                planName: (() => {
+                  const tier = String((profile as any)?.plan_tier || "").toLowerCase();
+                  if (tier === "lite") return "Plano Lite";
+                  if (tier === "base") return "Plano Base";
+                  if (profile?.plan === "oracoes") return "Orações e Meditações";
+                  const name = (PLAN_LABELS as Record<string, string>)[String(profile?.plan)];
+                  return name ? `Plano ${name.replace(/^Plano\s+/i, "")}` : "Seu plano";
+                })(),
+                detail: (() => {
+                  const cycle = profile?.billing_cycle === "semestral" ? "semiannual" : profile?.billing_cycle;
+                  const label = (CYCLE_LABELS as Record<string, string>)[String(cycle)];
+                  return isCanceled ? "Assinatura encerrada" : label ? `Cobrança ${label.toLowerCase()}` : undefined;
+                })(),
+                paymentLabel: isInterPix || isWooviPix || isAsaasPix ? "PIX Automático" : "Cartão de crédito",
+              }}
               entryContext={searchParams.get("migracao") === "whatsapp" ? "migration" : searchParams.get("onboarding") === "new" ? "new" : "regular"}
             />
           </div>

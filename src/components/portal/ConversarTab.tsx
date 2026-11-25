@@ -30,6 +30,7 @@ import { setResumeIntent } from "@/lib/chat-resume-intent";
 import { takeawayFromClosure } from "@/lib/today-hero";
 import { PostSessionScheduleDialog } from "@/components/portal/PostSessionScheduleDialog";
 import { isWhatsAppOnlyNotice } from "@/lib/whatsapp-only-notice";
+import { ManageSubscriptionDialog, type SubscriptionSummary } from "@/components/portal/ManageSubscriptionDialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
 type ChatMessage = {
@@ -384,7 +385,9 @@ export function ConversarTab({
   profileStatus,
   fullName = "",
   degustacaoCard,
+  subscriptionSummary,
 }: {
+  subscriptionSummary?: SubscriptionSummary;
   userId: string;
   firstName: string;
   degustacaoCard?: React.ReactNode;
@@ -408,6 +411,7 @@ export function ConversarTab({
   degustacaoInterrupted?: boolean;
 }) {
   const navigate = useNavigate();
+  const [manageOpen, setManageOpen] = useState(false);
   const messageCacheKey = `aura-chat-messages:${userId}`;
   const cachedMessages = useMemo(
     () => readPortalCache<ChatMessage[]>(messageCacheKey, 7 * 24 * 60 * 60 * 1000)?.value ?? [],
@@ -1405,14 +1409,18 @@ export function ConversarTab({
                 <MoreVertical className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} collisionPadding={16} className="z-[70] w-64 max-w-[calc(100vw-2rem)] rounded-lg border-border bg-background p-1.5 shadow-card">
-              {!isDemo && <DropdownMenuItem onSelect={onOpenBilling} disabled={accountLoading} className="gap-3 px-3 py-3 font-body">
-                {accountLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                <span>{accountLoading ? "Abrindo…" : billingLabel}</span>
+            <DropdownMenuContent align="end" sideOffset={10} collisionPadding={16} className="portal-dialog z-[70] w-72 max-w-[calc(100vw-2rem)] rounded-3xl border-0 p-2 shadow-card">
+              <div className="px-3 pb-2 pt-2">
+                <p className="font-display text-base font-semibold text-foreground">{firstName}</p>
+                {!isDemo && subscriptionSummary && <p className="text-xs text-muted-foreground">{subscriptionSummary.planName}</p>}
+              </div>
+              {!isDemo && <DropdownMenuItem onSelect={() => setManageOpen(true)} className="gap-3 rounded-xl px-3 py-3 font-body text-[15px] focus:bg-foreground/5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary"><CreditCard className="h-4 w-4" /></span>
+                <span>Gerenciar assinatura</span>
               </DropdownMenuItem>}
-              {!isDemo && <DropdownMenuItem onSelect={onChangePlan} className="gap-3 px-3 py-3 font-body">
-                <RefreshCw className="h-4 w-4" />
-                <span>Trocar de plano</span>
+              {!isDemo && <DropdownMenuItem onSelect={() => setShowPushDialog(true)} className="gap-3 rounded-xl px-3 py-3 font-body text-[15px] focus:bg-foreground/5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary"><Bell className="h-4 w-4" /></span>
+                <span>Notificações e lembretes</span>
               </DropdownMenuItem>}
               <InstallAppMenuItem
                 available={installApp.available}
@@ -1420,21 +1428,24 @@ export function ConversarTab({
                 onInstall={installApp.install}
                 onShowIosGuide={() => setShowIosInstallGuide(true)}
               />
-              {!isDemo && <DropdownMenuItem onSelect={() => setShowPushDialog(true)} className="gap-3 px-3 py-3 font-body">
-                <Bell className="h-4 w-4" />
-                <span>Notificações</span>
-              </DropdownMenuItem>}
-              {!isDemo && canManageSubscription(profileStatus) && <DropdownMenuItem onSelect={() => navigate("/cancelar?from=app")} className="gap-3 px-3 py-3 font-body">
-                <CreditCard className="h-4 w-4" />
-                <span>Gerenciar assinatura</span>
-              </DropdownMenuItem>}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={onSignOut} className="gap-3 px-3 py-3 font-body text-destructive focus:text-destructive">
-                <LogOut className="h-4 w-4" />
-                <span>Sair</span>
+              <DropdownMenuSeparator className="my-1.5 bg-border/50" />
+              <DropdownMenuItem onSelect={onSignOut} className="gap-3 rounded-xl px-3 py-2.5 font-body text-sm text-muted-foreground focus:bg-foreground/5">
+                <LogOut className="ml-2 h-4 w-4" />
+                <span>Sair da conta</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {!isDemo && <ManageSubscriptionDialog
+            open={manageOpen}
+            onOpenChange={setManageOpen}
+            summary={subscriptionSummary ?? { planName: "Seu plano", paymentLabel: "—" }}
+            billingLabel={billingLabel}
+            billingLoading={accountLoading}
+            canCancel={canManageSubscription(profileStatus)}
+            onOpenBilling={onOpenBilling}
+            onChangePlan={onChangePlan}
+            onCancel={() => { setManageOpen(false); navigate("/cancelar?from=app"); }}
+          />}
           </div>
         </div>
       </header>
