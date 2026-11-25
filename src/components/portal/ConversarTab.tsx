@@ -1450,7 +1450,7 @@ export function ConversarTab({
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
-          {!isDemo && <SupportDialog open={supportOpen} onOpenChange={setSupportOpen} />}
+          {!isDemo && <SupportDialog open={supportOpen} onOpenChange={setSupportOpen} onManageSubscription={() => setManageOpen(true)} onOpenSessions={() => { setChatOpen(false); onNavigate?.("sessoes"); }} />}
           {!isDemo && <ManageSubscriptionDialog
             open={manageOpen}
             onOpenChange={setManageOpen}
