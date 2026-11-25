@@ -623,14 +623,12 @@ const CancelSubscription = () => {
                   </p>
                   {currentOffer ? renderOfferCard(currentOffer) : null}
                   <div className="pt-2 border-t border-border/50 space-y-2">
-                    {hasNextOffer && <Button variant="outline" className="w-full" onClick={() => setOfferIndex(index => index + 1)}>Não quero esta oferta · ver outra opção</Button>}
                     <Button
                       variant="ghost"
-                      onClick={() => setStatus("confirm_cancel")}
+                      onClick={() => hasNextOffer ? setOfferIndex(index => index + 1) : setStatus("confirm_cancel")}
                       className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
                     >
-                      <XCircle className="w-4 h-4 mr-2" />
-                      Cancelar mesmo assim
+                      Continuar cancelamento
                     </Button>
                     <Button variant="outline" onClick={() => offerIndex > 0 ? setOfferIndex(index => index - 1) : setStatus("selecting_reason")} className="w-full">
                       Voltar
