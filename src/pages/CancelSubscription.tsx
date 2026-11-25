@@ -453,7 +453,7 @@ const CancelSubscription = () => {
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-4 min-h-11 text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
-            {fromApp ? "Voltar para o App" : "Voltar ao início"}
+            {fromApp ? "Voltar" : "Voltar ao início"}
           </Link>
 
           <section className="space-y-6">
@@ -660,7 +660,7 @@ const CancelSubscription = () => {
                     <p className="text-center text-muted-foreground">{message}</p>
                   </div>
                   <Button onClick={resetForm} variant="outline" className="w-full">
-                    {fromApp ? "Voltar para o App" : "Voltar ao início"}
+                    {fromApp ? "Voltar" : "Voltar ao início"}
                   </Button>
                 </div>
               )}
