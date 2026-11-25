@@ -15,6 +15,7 @@ import {
   MessageCircle,
   Compass,
   HeartHandshake,
+  Check,
 } from "lucide-react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -384,50 +385,52 @@ const CancelSubscription = () => {
 
     if (tier === "lite") {
       return (
-        <div key="lite" className={`rounded-lg border border-border/60 bg-card p-5 space-y-4${highlight}`}>
-          <div className="flex items-start gap-3">
-            <Compass className="w-5 h-5 shrink-0 text-primary mt-0.5" />
-            <div className="space-y-2">
-              <p className="font-medium text-foreground">Plano Lite — um ritmo mais leve para o seu mês</p>
-              <p className="text-sm text-foreground/80">R$ 19,90/mês</p>
-              <ul className="text-sm text-muted-foreground space-y-1.5">
-                <li><span className="text-foreground/90 font-medium">Conversas por texto sem limite:</span> escreva para a Aura sempre que precisar, no seu tempo.</li>
-                <li><span className="text-foreground/90 font-medium">1 encontro guiado por mês:</span> uma pausa profunda para olhar para a sua vida e escolher os próximos passos.</li>
-                <li><span className="text-foreground/90 font-medium">15 min de áudios da Aura:</span> a voz dela nos momentos que pedem mais presença.</li>
-              </ul>
-              <p className="text-xs text-muted-foreground">
-                A Aura continua com você e com tudo o que vocês já construíram. A troca começa um ciclo novo hoje, com cobrança de R$ 19,90; se você já pagou o mês atual, ele segue valendo.
-              </p>
-            </div>
+        <div key="lite" className={`rounded-2xl border border-primary/25 bg-card p-5 space-y-4${highlight}`}>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">
+            <Compass className="w-3.5 h-3.5" />
+            Para manter seu acompanhamento
+          </span>
+          <div>
+            <p className="text-3xl font-bold leading-none text-foreground">
+              R$ 19,90<span className="text-base font-semibold text-muted-foreground">/mês</span>
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">Plano Lite</p>
           </div>
+          <ul className="space-y-2 text-sm leading-snug text-foreground/90">
+            <li className="flex items-start gap-2"><Check className="mt-0.5 w-4 h-4 shrink-0 text-primary" />1 encontro guiado por mês com a Aura</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 w-4 h-4 shrink-0 text-primary" />Conversas por texto ilimitadas, no seu tempo</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 w-4 h-4 shrink-0 text-primary" />Áudios da Aura nos momentos que pedem mais presença</li>
+          </ul>
           <Button className="w-full" onClick={() => runAction("downgrade_to_lite")}>
-            Continuar com o Lite
+            Ficar com o Lite
           </Button>
+          <p className="text-center text-xs text-muted-foreground">Mude ou cancele quando quiser.</p>
         </div>
       );
     }
 
     if (tier === "base") {
       return (
-        <div key="base" className={`rounded-lg border border-border/60 bg-card p-5 space-y-4${highlight}`}>
-          <div className="flex items-start gap-3">
-            <HeartHandshake className="w-5 h-5 shrink-0 text-primary mt-0.5" />
-            <div className="space-y-2">
-              <p className="font-medium text-foreground">Plano Base — a Aura por perto, do seu jeito</p>
-              <p className="text-sm text-foreground/80">R$ 9,90/mês · menos de R$ 0,33 por dia</p>
-              <ul className="text-sm text-muted-foreground space-y-1.5">
-                <li><span className="text-foreground/90 font-medium">30 conversas por texto no mês:</span> para desabafar, pensar em voz alta ou pedir clareza quando algo pesar.</li>
-                <li><span className="text-foreground/90 font-medium">Ela continua te conhecendo:</span> suas conversas e o seu percurso seguem com a Aura, sem recomeçar do zero.</li>
-                <li><span className="text-foreground/90 font-medium">Volta quando quiser:</span> se a rotina abrir espaço, você retoma encontros e áudios mudando de plano.</li>
-              </ul>
-              <p className="text-xs text-muted-foreground">
-                Encontros guiados e áudios ficam fora deste plano. A troca começa um ciclo novo hoje, com cobrança de R$ 9,90; se você já pagou o mês atual, ele segue valendo.
-              </p>
-            </div>
+        <div key="base" className={`rounded-2xl border border-primary/25 bg-card p-5 space-y-4${highlight}`}>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">
+            <HeartHandshake className="w-3.5 h-3.5" />
+            Menos de R$ 0,33 por dia
+          </span>
+          <div>
+            <p className="text-3xl font-bold leading-none text-foreground">
+              R$ 9,90<span className="text-base font-semibold text-muted-foreground">/mês</span>
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">Plano Base</p>
           </div>
+          <ul className="space-y-2 text-sm leading-snug text-foreground/90">
+            <li className="flex items-start gap-2"><Check className="mt-0.5 w-4 h-4 shrink-0 text-primary" />30 conversas no mês para desabafar e ter clareza</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 w-4 h-4 shrink-0 text-primary" />Sua história e percurso continuam salvos</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 w-4 h-4 shrink-0 text-primary" />A Aura segue te conhecendo, sem recomeçar do zero</li>
+          </ul>
           <Button className="w-full" onClick={() => runAction("downgrade_to_base")}>
             Ficar com a Aura no Base
           </Button>
+          <p className="text-center text-xs text-muted-foreground">Sem encontros nem áudios · Cancele quando quiser.</p>
         </div>
       );
     }
