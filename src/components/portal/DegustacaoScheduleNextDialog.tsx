@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { CalendarDays, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DayStrip } from "@/components/portal/DayStrip";
 import { Label } from "@/components/ui/label";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import type { Json } from "@/integrations/supabase/types";
@@ -59,7 +59,7 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { track("degustacao_next_skipped"); onDone(false); } }}>
-      <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-lg">
+      <DialogContent className="portal-dialog w-[calc(100%-2rem)] max-w-sm p-6">
         <DialogHeader className="text-left">
           <CalendarDays className="mb-2 h-6 w-6 text-primary" />
           <DialogTitle className="font-display text-xl">Quando vai ser o seu próximo encontro?</DialogTitle>
@@ -67,14 +67,14 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="next-date">Dia</Label>
-            <Input id="next-date" type="date" value={date} min={today} max={addDays(today, 30)} onChange={(e) => { setDate(e.target.value); setTime(""); }} />
+            <Label>Dia</Label>
+            <DayStrip min={today} max={addDays(today, 30)} value={date} onChange={(v) => { setDate(v); setTime(""); }} />
           </div>
           <div className="grid gap-1.5">
             <Label>Horário</Label>
             <TimeWheelPicker times={times} value={time} onChange={setTime} />
           </div>
-          <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">A AURA guarda esse horário por 24 horas. Para confirmar o encontro, é preciso ativar um plano logo em seguida.</p>
+          <p className="rounded-2xl bg-foreground/5 px-4 py-3 text-xs text-muted-foreground">A AURA guarda esse horário por 24 horas. Para confirmar o encontro, é preciso ativar um plano logo em seguida.</p>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button onClick={() => void confirm()} disabled={saving || !time}>
             {saving && <Loader2 className="animate-spin" />}Pré-reservar e ativar meu plano

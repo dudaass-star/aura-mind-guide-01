@@ -168,9 +168,9 @@ export function ChangePlanDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="portal-dialog w-[calc(100%-2rem)] max-w-lg p-6">
         <DialogHeader>
-          <DialogTitle className="font-['Nunito']">{minimumSessionLimit ? "Ter mais sessões" : "Trocar de plano"}</DialogTitle>
+          <DialogTitle className="font-display text-xl font-semibold">{minimumSessionLimit ? "Ter mais sessões" : "Trocar de plano"}</DialogTitle>
           <DialogDescription className="font-['Nunito']">
             {minimumSessionLimit ? `Veja os planos com mais de ${minimumSessionLimit} ${minimumSessionLimit === 1 ? "sessão" : "sessões"} por mês. ${copyDescription}` : copyDescription}
           </DialogDescription>
