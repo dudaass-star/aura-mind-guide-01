@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TimeSlotPills } from "@/components/portal/TimeSlotPills";
+import { TimeWheelPicker } from "@/components/portal/TimeWheelPicker";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import type { Json } from "@/integrations/supabase/types";
 import { planSessionLimit, suggestNextSession } from "@/lib/next-session";
@@ -134,7 +134,7 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
                 </div>
                 <div className="grid gap-1.5">
                   <Label>Horário</Label>
-                  <TimeSlotPills times={times} value={time} onChange={setTime} />
+                  <TimeWheelPicker times={times} value={time} onChange={setTime} />
                 </div>
                 {error && <p className="text-sm text-destructive">{error}</p>}
                 <Button onClick={() => void schedule(new Date(`${date}T${time}:00-03:00`), "custom")} disabled={saving || !time || !date}>
