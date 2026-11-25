@@ -194,10 +194,11 @@ export function SessoesTab({
   const isOracoesPlan = String(profile?.plan || "").toLowerCase() === "oracoes" && !isDegustacao;
   const canSchedule = isDegustacao ? !nextPaidSession : isOracoesPlan ? !courtesySession : planLimit > 0 && monthUsed < planLimit;
   const degustacaoStatus = !courtesySession ? "1 sessão gratuita disponível" : courtesySession.status === "completed" ? (nextPaidSession ? "1º encontro de cortesia concluído • Próximo encontro agendado" : "1º encontro de cortesia concluído • Marque seu próximo encontro") : (nextPaidSession ? "1º encontro de cortesia marcado • Próximo encontro agendado" : "1º encontro de cortesia marcado");
-  const bounds = monthBounds(selectedMonth);
+
 
   const minDate = selectedMonth === currentMonth ? today : `${selectedMonth}-01`;
-  const maxDate = new Date(new Date(bounds.end).getTime() - 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  // Calendário livre até 60 dias à frente; a cota mensal segue validada no servidor.
+  const maxDate = new Date(new Date(`${today}T12:00:00-03:00`).getTime() + 60 * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   const availableTimes = useMemo(() => {
     const result: string[] = [];
     for (let hour = 6; hour <= 23; hour += 1) {

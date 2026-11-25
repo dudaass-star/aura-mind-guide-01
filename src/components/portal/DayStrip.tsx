@@ -1,56 +1,66 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Fileira de dias para tocar, no lugar do calendário do navegador. Datas em "AAAA-MM-DD" (BRT).
+// Mini calendário em grade mensal (D S T Q Q S S), no lugar do calendário do navegador. Datas em "AAAA-MM-DD" (BRT).
 const TZ = "America/Sao_Paulo";
 const brtToday = () => new Date().toLocaleDateString("en-CA", { timeZone: TZ });
+const WEEK = ["D", "S", "T", "Q", "Q", "S", "S"];
 
-function addDays(iso: string, days: number) {
-  const d = new Date(`${iso}T12:00:00-03:00`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toLocaleDateString("en-CA", { timeZone: TZ });
+function monthKey(iso: string) { return iso.slice(0, 7); }
+function shiftMonth(key: string, n: number) {
+  const [y, m] = key.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 export function DayStrip({ min, max, value, onChange }: { min: string; max: string; value: string; onChange: (v: string) => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const days = useMemo(() => {
-    const out: string[] = [];
-    for (let d = min; d <= max && out.length < 62; d = addDays(d, 1)) out.push(d);
-    return out;
-  }, [min, max]);
+  const [view, setView] = useState(() => monthKey(value || min));
   const today = brtToday();
-  const tomorrow = addDays(today, 1);
-
-  useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.scrollIntoView({ block: "nearest", inline: "center" });
-  }, [value]);
+  const cells = useMemo(() => {
+    const [y, m] = view.split("-").map(Number);
+    const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+    const total = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const out: (string | null)[] = Array(first).fill(null);
+    for (let d = 1; d <= total; d++) out.push(`${view}-${String(d).padStart(2, "0")}`);
+    return out;
+  }, [view]);
+  const label = new Date(`${view}-15T12:00:00-03:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: TZ });
+  const canPrev = view > monthKey(min);
+  const canNext = view < monthKey(max);
 
   return (
-    <div ref={ref} role="radiogroup" aria-label="Dia" className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {days.map((d) => {
-        const date = new Date(`${d}T12:00:00-03:00`);
-        const top = d === today ? "Hoje" : d === tomorrow ? "Amanhã" : date.toLocaleDateString("pt-BR", { weekday: "short", timeZone: TZ }).replace(".", "");
-        const month = date.toLocaleDateString("pt-BR", { month: "short", timeZone: TZ }).replace(".", "");
-        const selected = d === value;
-        return (
-          <button
-            key={d}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            aria-label={date.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: TZ })}
-            onClick={() => onChange(d)}
-            className={cn(
-              "flex w-[4.25rem] shrink-0 snap-center flex-col items-center rounded-2xl py-2.5 transition-colors",
-              selected ? "bg-primary text-primary-foreground shadow-md" : "bg-foreground/5 text-foreground hover:bg-foreground/10",
-            )}
-          >
-            <span className={cn("text-[11px] font-semibold capitalize", !selected && "text-muted-foreground")}>{top}</span>
-            <span className="font-display text-xl font-semibold leading-tight">{date.getUTCDate()}</span>
-            <span className={cn("text-[10px] capitalize", !selected && "text-muted-foreground")}>{month}</span>
-          </button>
-        );
-      })}
+    <div className="rounded-2xl bg-foreground/5 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <button type="button" onClick={() => setView(shiftMonth(view, -1))} disabled={!canPrev} aria-label="Mês anterior" className="flex h-8 w-8 items-center justify-center rounded-full text-foreground hover:bg-foreground/10 disabled:opacity-25"><ChevronLeft className="h-4 w-4" /></button>
+        <span className="font-display text-sm font-semibold capitalize">{label}</span>
+        <button type="button" onClick={() => setView(shiftMonth(view, 1))} disabled={!canNext} aria-label="Próximo mês" className="flex h-8 w-8 items-center justify-center rounded-full text-foreground hover:bg-foreground/10 disabled:opacity-25"><ChevronRight className="h-4 w-4" /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-y-1 text-center">
+        {WEEK.map((w, i) => <span key={i} className="pb-1 text-[11px] font-semibold text-muted-foreground">{w}</span>)}
+        {cells.map((d, i) => {
+          if (!d) return <span key={`e${i}`} />;
+          const disabled = d < min || d > max;
+          const selected = d === value;
+          return (
+            <button
+              key={d}
+              type="button"
+              disabled={disabled}
+              aria-pressed={selected}
+              aria-label={new Date(`${d}T12:00:00-03:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: TZ })}
+              onClick={() => onChange(d)}
+              className={cn(
+                "mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm transition-colors",
+                selected ? "bg-primary font-semibold text-primary-foreground" : disabled ? "text-muted-foreground/40" : "text-foreground hover:bg-foreground/10",
+                !selected && d === today && !disabled && "font-semibold ring-1 ring-primary/60",
+              )}
+            >
+              {Number(d.slice(8))}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
