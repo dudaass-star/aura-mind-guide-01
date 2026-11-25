@@ -9,7 +9,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import type { Json } from "@/integrations/supabase/types";
 
 // Pós-encontro de cortesia: primeiro marca o 2º encontro, depois mostra os planos.
-const brtToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+const brtToday = () => new Date(Date.now() + 30 * 60_000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 const addDays = (iso: string, days: number) => {
   const d = new Date(`${iso}T12:00:00-03:00`);
   d.setUTCDate(d.getUTCDate() + days);

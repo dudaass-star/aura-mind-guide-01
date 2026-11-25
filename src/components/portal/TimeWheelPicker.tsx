@@ -65,7 +65,7 @@ export function TimeWheelPicker({ times, value, onChange }: { times: string[]; v
     if (times.length && !times.includes(value)) onChange(times[0]);
   }, [times, value, onChange]);
 
-  if (!times.length) return <p className="text-sm text-muted-foreground">Não há horários livres nesse dia. Escolha outro.</p>;
+  if (!times.length) return null;
 
   const pickHour = (nh: string) => {
     const m = value.slice(3);

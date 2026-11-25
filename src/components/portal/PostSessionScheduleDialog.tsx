@@ -63,7 +63,7 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
     return () => { cancelled = true; };
   }, [sessionId, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const today = brtDate(new Date());
+  const today = brtDate(new Date(Date.now() + 30 * 60_000));
   const times = useMemo(() => {
     const out: string[] = [];
     for (let h = 6; h <= 23; h++) for (const m of [0, 30]) {
