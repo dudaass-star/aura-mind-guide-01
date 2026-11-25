@@ -8,3 +8,4 @@
 - Saved session takeaways are `user_milestones` rows with `source='user_saved'` and `session_id`, written only by manage-portal-session from the session's own closure, unique per user+session; prevents duplicates and client-forged text.
 - The home primary card shows the moment chosen by `homeBarWithSaved(homeBarFromHero(selectTodayHero(...)))` (saved takeaway only within 48h when the selector leaves it empty), with the conversation card kept right below; with no moment it shows only the conversation card, so home and Hoje never disagree. "Rever" opens that exact Percurso item through a one-shot focus key.
 - Portal dialogs render outside the App area, so pending/new ones use the shared `.portal-dialog` surface and `DayStrip` for dates; keeps windows in the App's look without touching already-approved ones.
+- App help uses `portal-support-message` (JWT subject only) to create support tickets answered by e-mail; keeps operational support out of the AURA chat.
