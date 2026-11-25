@@ -36,7 +36,7 @@ export function DayStrip({ min, max, value, onChange }: { min: string; max: stri
         <span className="font-display text-sm font-semibold capitalize">{label}</span>
         <button type="button" onClick={() => setView(shiftMonth(view, 1))} disabled={!canNext} aria-label="Próximo mês" className="flex h-8 w-8 items-center justify-center rounded-full text-foreground hover:bg-foreground/10 disabled:opacity-25"><ChevronRight className="h-4 w-4" /></button>
       </div>
-      <div className="grid grid-cols-7 gap-y-1 text-center">
+      <div className="grid grid-cols-7 gap-y-0.5 text-center">
         {WEEK.map((w, i) => <span key={i} className="pb-1 text-[11px] font-semibold text-muted-foreground">{w}</span>)}
         {cells.map((d, i) => {
           if (!d) return <span key={`e${i}`} />;
@@ -51,7 +51,7 @@ export function DayStrip({ min, max, value, onChange }: { min: string; max: stri
               aria-label={new Date(`${d}T12:00:00-03:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: TZ })}
               onClick={() => onChange(d)}
               className={cn(
-                "mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm transition-colors",
+                "mx-auto flex h-8 w-8 items-center justify-center rounded-full text-sm transition-colors",
                 selected ? "bg-primary font-semibold text-primary-foreground" : disabled ? "text-muted-foreground/40" : "text-foreground hover:bg-foreground/10",
                 !selected && d === today && !disabled && "font-semibold ring-1 ring-primary/60",
               )}

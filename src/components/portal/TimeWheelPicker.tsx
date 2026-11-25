@@ -30,10 +30,10 @@ function Wheel({ items, value, onChange, ariaLabel }: { items: string[]; value: 
       role="listbox"
       aria-label={ariaLabel}
       onScroll={onScroll}
-      className="relative h-[200px] w-20 snap-y snap-mandatory overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="relative h-[140px] w-20 snap-y snap-mandatory overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{ maskImage: "linear-gradient(transparent, #000 30%, #000 70%, transparent)" }}
     >
-      <div style={{ height: ITEM * 2 }} />
+      <div style={{ height: 50 }} />
       {items.map((it) => (
         <button
           key={it}
@@ -50,7 +50,7 @@ function Wheel({ items, value, onChange, ariaLabel }: { items: string[]; value: 
           {it}
         </button>
       ))}
-      <div style={{ height: ITEM * 2 }} />
+      <div style={{ height: 50 }} />
     </div>
   );
 }

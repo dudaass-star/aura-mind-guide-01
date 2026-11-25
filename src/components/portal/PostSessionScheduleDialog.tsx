@@ -96,7 +96,7 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
-      <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-2xl">
+      <DialogContent className="portal-dialog w-[calc(100%-2rem)] max-w-sm p-6">
         {done ? (
           <div className="py-2 text-center">
             <CalendarCheck className="mx-auto h-10 w-10 text-primary" />

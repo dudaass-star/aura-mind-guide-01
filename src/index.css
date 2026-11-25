@@ -1555,6 +1555,10 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
   border: 1px solid hsl(0 0% 100% / 0.08) !important;
   border-radius: 1.5rem !important;
   box-shadow: 0 30px 70px -30px hsl(220 50% 4% / 0.9) !important;
+  /* Nunca maior que a tela: rola por dentro em celulares baixos. */
+  max-height: calc(100dvh - 2.5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .portal-dialog h2, .portal-dialog [class*="font-display"] { font-family: "Outfit", sans-serif; }
 .portal-dialog textarea, .portal-dialog input { color: hsl(var(--foreground)); }
