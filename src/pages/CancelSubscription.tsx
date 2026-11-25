@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+
 import {
   AlertTriangle,
   CheckCircle,
@@ -22,9 +16,11 @@ import {
   Archive,
   MessageCircle,
 } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
+import { retentionOffers, type RetentionTier } from "@/lib/retention-flow";
 
 interface SubscriptionInfo {
   id: string;
@@ -61,6 +57,7 @@ type Status =
   | "recap"
   | "selecting_reason"
   | "offer_ladder"
+  | "confirm_cancel"
   | "processing"
   | "success"
   | "already_active"
@@ -69,19 +66,15 @@ type Status =
   | "reactivation"
   | "error";
 
-type Tier = "pause" | "discount_30" | "lite" | "base";
-
-// Ordem de ofertas por motivo declarado
-const OFFERS_BY_REASON: Record<string, Tier[]> = {
-  expensive: ["discount_30", "lite", "base"],
-  not_using: ["pause", "lite"],
-  come_back_later: ["pause", "base"],
-  not_satisfied: ["pause"],
-  other: ["discount_30", "pause", "lite", "base"],
-};
+type Tier = RetentionTier;
 
 const CancelSubscription = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const fromApp = searchParams.get("from") === "app";
+  const requestClient = fromApp ? supabasePortal : supabase;
+  const [requiresLogin, setRequiresLogin] = useState(false);
+  const [offerIndex, setOfferIndex] = useState(0);
   // Ofertas de dunning chegam por WhatsApp como /cancelar?t=<token>&offer=<tier>.
   const offerParamRaw = searchParams.get("offer");
   const portalToken = searchParams.get("t");
@@ -93,7 +86,7 @@ const CancelSubscription = () => {
       : null;
   const highlightedTier: Tier | null = trackedTier || queryTier;
   const [phone, setPhone] = useState("");
-  const [status, setStatus] = useState<Status>("idle");
+  const [status, setStatus] = useState<Status>(fromApp ? "checking" : "idle");
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [message, setMessage] = useState("");
   const [reasons, setReasons] = useState<CancellationReason[]>([]);
@@ -105,6 +98,10 @@ const CancelSubscription = () => {
   const [needsNewCard, setNeedsNewCard] = useState<boolean>(false);
   const [reactivating, setReactivating] = useState<boolean>(false);
   const autoCheckedRef = useRef(false);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [status, offerIndex]);
 
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, "");
@@ -118,9 +115,9 @@ const CancelSubscription = () => {
     setPhone(formatPhone(e.target.value));
   };
 
-  const checkSubscription = async (opts?: { token?: string; retentionCode?: string; skipToOffers?: boolean }) => {
+  const checkSubscription = async (opts?: { token?: string; retentionCode?: string; skipToOffers?: boolean; authenticated?: boolean }) => {
     const digits = phone.replace(/\D/g, "");
-    if (!opts?.token && !opts?.retentionCode && digits.length < 10) {
+    if (!opts?.authenticated && !opts?.token && !opts?.retentionCode && digits.length < 10) {
       toast.error("Por favor, insira um número de telefone válido");
       return;
     }
@@ -129,8 +126,10 @@ const CancelSubscription = () => {
     setMessage("");
 
     try {
-      const { data, error } = await supabase.functions.invoke("cancel-subscription", {
-        body: opts?.retentionCode
+      const { data, error } = await requestClient.functions.invoke("cancel-subscription", {
+        body: opts?.authenticated
+          ? { authenticated: true, action: "check" }
+          : opts?.retentionCode
           ? { retention_code: opts.retentionCode, action: "check" }
           : opts?.token
           ? { token: opts.token, action: "check", offer: highlightedTier }
@@ -189,14 +188,23 @@ const CancelSubscription = () => {
   // Link de oferta do WhatsApp (/cancelar?t=<token>&offer=<tier>): identifica
   // o usuário pelo token e leva direto pra oferta prometida na mensagem.
   useEffect(() => {
-    if (autoCheckedRef.current || (!portalToken && !retentionCode)) return;
+    if (autoCheckedRef.current) return;
+    if (fromApp) {
+      autoCheckedRef.current = true;
+      void supabasePortal.auth.getSession().then(({ data }) => {
+        if (!data.session) { setRequiresLogin(true); return; }
+        void checkSubscription({ authenticated: true });
+      });
+      return;
+    }
+    if (!portalToken && !retentionCode) return;
     autoCheckedRef.current = true;
     void checkSubscription({
       ...(retentionCode ? { retentionCode } : { token: portalToken || undefined }),
       skipToOffers: !!retentionCode || !!highlightedTier,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [portalToken, retentionCode, highlightedTier]);
+  }, [fromApp, portalToken, retentionCode, highlightedTier]);
 
   const runAction = async (
     action:
@@ -212,9 +220,11 @@ const CancelSubscription = () => {
     setMessage("");
 
     try {
-      const { data, error } = await supabase.functions.invoke("cancel-subscription", {
+      const { data, error } = await requestClient.functions.invoke("cancel-subscription", {
         body: {
-          ...(retentionCode
+          ...(fromApp
+            ? { authenticated: true }
+            : retentionCode
             ? { retention_code: retentionCode }
             : digits.length >= 10 ? { phone: digits } : { token: portalToken }),
           action,
@@ -262,6 +272,8 @@ const CancelSubscription = () => {
   };
 
   const resetForm = () => {
+    if (fromApp) { navigate("/meu-espaco"); return; }
+    setOfferIndex(0);
     setReactivating(false);
     autoCheckedRef.current = true; // não reabre o fluxo por token depois de reset
     setStatus("idle");
@@ -282,9 +294,11 @@ const CancelSubscription = () => {
     setReactivating(true);
     try {
       const digits = phone.replace(/\D/g, "");
-      const { data, error } = await supabase.functions.invoke("cancel-subscription", {
+      const { data, error } = await requestClient.functions.invoke("cancel-subscription", {
         body: {
-          ...(retentionCode
+          ...(fromApp
+            ? { authenticated: true }
+            : retentionCode
             ? { retention_code: retentionCode }
             : digits.length >= 10 ? { phone: digits } : { token: portalToken }),
           action: "reactivate",
@@ -321,13 +335,9 @@ const CancelSubscription = () => {
     },
   };
 
-  const baseOfferList: Tier[] = selectedReason
-    ? OFFERS_BY_REASON[selectedReason] || OFFERS_BY_REASON.other
-    : [];
-  // A oferta que veio no link entra sempre em primeiro lugar.
-  const offerList: Tier[] = highlightedTier
-    ? [highlightedTier, ...baseOfferList.filter((t) => t !== highlightedTier)]
-    : baseOfferList;
+  const offerList = retentionOffers(selectedReason, subscription?.gateway, discountAvailable, highlightedTier);
+  const currentOffer = offerList[offerIndex];
+  const hasNextOffer = offerIndex + 1 < offerList.length;
 
   const renderOfferCard = (tier: Tier) => {
     if (tier === "discount_30" && !discountAvailable) return null;
@@ -337,7 +347,7 @@ const CancelSubscription = () => {
       return (
         <div key="pause" className={`rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3${highlight}`}>
           <div className="flex items-start gap-3">
-            <Pause className="w-5 h-5 text-primary mt-0.5" />
+            <Pause className="w-5 h-5 shrink-0 text-primary mt-0.5" />
             <div>
               <p className="font-medium text-foreground">Pausar por um tempo</p>
               <p className="text-sm text-muted-foreground">
@@ -345,18 +355,9 @@ const CancelSubscription = () => {
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {[30, 60, 90].map((d) => (
-              <Button
-                key={d}
-                variant="outline"
-                size="sm"
-                onClick={() => runAction("pause", { pause_days: d })}
-              >
-                {d} dias
-              </Button>
-            ))}
-          </div>
+          <Button variant="outline" className="w-full" onClick={() => runAction("pause", { pause_days: 30 })}>
+            Pausar por 30 dias
+          </Button>
         </div>
       );
     }
@@ -365,7 +366,7 @@ const CancelSubscription = () => {
       return (
         <div key="discount" className={`rounded-lg border border-primary/30 bg-primary/10 p-4 space-y-3${highlight}`}>
           <div className="flex items-start gap-3">
-            <Sparkles className="w-5 h-5 text-primary mt-0.5" />
+            <Sparkles className="w-5 h-5 shrink-0 text-primary mt-0.5" />
             <div>
               <p className="font-medium text-foreground">30% de desconto por 3 meses</p>
               <p className="text-sm text-muted-foreground">
@@ -384,11 +385,11 @@ const CancelSubscription = () => {
       return (
         <div key="lite" className={`rounded-lg border border-border bg-muted/30 p-4 space-y-3${highlight}`}>
           <div className="flex items-start gap-3">
-            <TrendingDown className="w-5 h-5 text-foreground/70 mt-0.5" />
+            <TrendingDown className="w-5 h-5 shrink-0 text-foreground/70 mt-0.5" />
             <div>
               <p className="font-medium text-foreground">Plano Lite — R$ 19,90/mês</p>
               <p className="text-sm text-muted-foreground">
-                Continua com a Aura de forma mais leve, mantendo seu histórico e seus insights.
+                1 encontro guiado por mês, 15 minutos de áudio da Aura por mês e conversas por texto sem limite mensal. Histórico e percurso preservados.
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 A troca começa um ciclo novo hoje: cobramos R$ 19,90 agora e, se você já pagou o mês
@@ -408,11 +409,11 @@ const CancelSubscription = () => {
       return (
         <div key="base" className={`rounded-lg border border-border bg-muted/30 p-4 space-y-3${highlight}`}>
           <div className="flex items-start gap-3">
-            <Archive className="w-5 h-5 text-foreground/70 mt-0.5" />
+            <Archive className="w-5 h-5 shrink-0 text-foreground/70 mt-0.5" />
             <div>
               <p className="font-medium text-foreground">Plano Base — R$ 9,90/mês</p>
               <p className="text-sm text-muted-foreground">
-                Um acompanhamento mínimo pra não perder seu histórico e conseguir voltar quando quiser.
+                30 mensagens por texto por mês com a Aura, sem encontros guiados e sem áudios da Aura. Uma opção de contato pontual, com seu histórico e percurso preservados.
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 A troca começa um ciclo novo hoje: cobramos R$ 9,90 agora e, se você já pagou o mês
@@ -430,6 +431,8 @@ const CancelSubscription = () => {
     return null;
   };
 
+  if (requiresLogin) return <Navigate to="/meu-espaco/entrar" replace />;
+
   return (
     <>
       <Helmet>
@@ -440,25 +443,26 @@ const CancelSubscription = () => {
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
           <Link
-            to="/"
+            to={fromApp ? "/meu-espaco" : "/"}
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6"
           >
             <ArrowLeft className="w-4 h-4" />
-            Voltar ao início
+            {fromApp ? "Voltar para o App" : "Voltar ao início"}
           </Link>
 
-          <Card className="border-border/50">
-            <CardHeader className="text-center">
+          <section className="space-y-6">
+            <header className="space-y-2 text-center">
               <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center mx-auto mb-4">
                 <span className="text-primary font-display font-bold text-2xl">A</span>
               </div>
-              <CardTitle className="text-2xl font-display">Antes de você decidir</CardTitle>
-              <CardDescription>
+              <h1 className="text-2xl font-display">Antes de você decidir</h1>
+              <p className="text-sm text-muted-foreground">
                 {status === "idle" && "Informe seu telefone para verificar sua assinatura"}
                 {status === "checking" && "Buscando sua história..."}
                 {status === "recap" && "Um pouco do seu percurso"}
                 {status === "selecting_reason" && "O que te fez pensar em sair?"}
                 {status === "offer_ladder" && "Escolha o que faz mais sentido pra você"}
+                {status === "confirm_cancel" && "Confirmar cancelamento"}
                 {status === "processing" && "Processando..."}
                 {status === "success" && "Prontinho"}
                 {status === "already_active" && "Assinatura ativa"}
@@ -466,10 +470,10 @@ const CancelSubscription = () => {
                 {status === "already_paused" && "Assinatura pausada"}
                 {status === "reactivation" && "Sua oferta continua de pé"}
                 {status === "error" && "Ops!"}
-              </CardDescription>
-            </CardHeader>
+              </p>
+            </header>
 
-            <CardContent className="space-y-6">
+            <div className="space-y-6">
               {/* 1. Phone input */}
               {status === "idle" && (
                 <div className="space-y-4">
@@ -515,7 +519,7 @@ const CancelSubscription = () => {
                         <p className="text-sm text-muted-foreground">
                           Vocês já fizeram{" "}
                           <span className="font-semibold text-foreground">
-                            {valueRecap.sessions_count} sessõe{valueRecap.sessions_count === 1 ? "" : "s"}
+                            {valueRecap.sessions_count} {valueRecap.sessions_count === 1 ? "encontro" : "encontros"}
                           </span>{" "}
                           juntos. Isso é história — e ela fica com você.
                         </p>
@@ -557,9 +561,10 @@ const CancelSubscription = () => {
                       Ficar como está
                     </Button>
                     <Button variant="secondary" onClick={() => setStatus("selecting_reason")} className="flex-1">
-                      Continuar
+                      Quero cancelar
                     </Button>
                   </div>
+                  <Button variant="ghost" className="w-full text-destructive" onClick={() => setStatus("confirm_cancel")}>Ir direto ao cancelamento</Button>
                 </div>
               )}
 
@@ -571,17 +576,19 @@ const CancelSubscription = () => {
                   </p>
                   <div className="space-y-2">
                     {reasons.map((reason) => (
-                      <button
+                      <Button
+                        variant="outline"
                         key={reason.id}
-                        onClick={() => setSelectedReason(reason.id)}
-                        className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                        onClick={() => { setSelectedReason(reason.id); setOfferIndex(0); }}
+                        aria-pressed={selectedReason === reason.id}
+                        className={`h-auto w-full justify-start whitespace-normal p-3 rounded-lg border text-left transition-colors ${
                           selectedReason === reason.id
                             ? "border-primary bg-primary/10 text-foreground"
                             : "border-border hover:border-primary/50 text-muted-foreground"
                         }`}
                       >
                         {reason.label}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                   {selectedReason === "other" && (
@@ -597,7 +604,7 @@ const CancelSubscription = () => {
                     </Button>
                     <Button
                       disabled={!selectedReason}
-                      onClick={() => setStatus("offer_ladder")}
+                      onClick={() => { setOfferIndex(0); setStatus(offerList.length ? "offer_ladder" : "confirm_cancel"); }}
                       className="flex-1"
                     >
                       Continuar
@@ -614,20 +621,29 @@ const CancelSubscription = () => {
                       ? "Sua condição especial está reservada aqui:"
                       : "Algumas opções antes de cancelar:"}
                   </p>
-                  {offerList.map(renderOfferCard)}
+                  {currentOffer ? renderOfferCard(currentOffer) : null}
                   <div className="pt-2 border-t border-border/50 space-y-2">
+                    {hasNextOffer && <Button variant="outline" className="w-full" onClick={() => setOfferIndex(index => index + 1)}>Não quero esta oferta · ver outra opção</Button>}
                     <Button
                       variant="ghost"
-                      onClick={() => runAction("cancel")}
+                      onClick={() => setStatus("confirm_cancel")}
                       className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
                     >
                       <XCircle className="w-4 h-4 mr-2" />
                       Cancelar mesmo assim
                     </Button>
-                    <Button variant="outline" onClick={() => setStatus("selecting_reason")} className="w-full">
+                    <Button variant="outline" onClick={() => offerIndex > 0 ? setOfferIndex(index => index - 1) : setStatus("selecting_reason")} className="w-full">
                       Voltar
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {status === "confirm_cancel" && (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">Ao confirmar, você interrompe as próximas renovações. O acesso ao período efetivamente pago será preservado, conforme sua assinatura.</p>
+                  <Button variant="destructive" className="w-full" onClick={() => void runAction("cancel")}>Confirmar cancelamento</Button>
+                  <Button variant="outline" className="w-full" onClick={resetForm}>Manter minha assinatura</Button>
                 </div>
               )}
 
@@ -641,7 +657,7 @@ const CancelSubscription = () => {
                     <p className="text-center text-muted-foreground">{message}</p>
                   </div>
                   <Button onClick={resetForm} variant="outline" className="w-full">
-                    Voltar ao início
+                    {fromApp ? "Voltar para o App" : "Voltar ao início"}
                   </Button>
                 </div>
               )}
@@ -783,13 +799,13 @@ const CancelSubscription = () => {
                       </Button>
                     </a>
                   )}
-                  <Button onClick={resetForm} className="w-full">
+                  <Button onClick={() => fromApp ? void checkSubscription({ authenticated: true }) : resetForm()} className="w-full">
                     Tentar novamente
                   </Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           <p className="text-center text-xs text-muted-foreground mt-6">
             Precisa de ajuda?{" "}

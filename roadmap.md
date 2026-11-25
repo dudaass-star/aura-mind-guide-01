@@ -306,4 +306,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Substituir o áudio de gratidão pela versão enviada (120,798 s), alinhar 22 frases e conferir reprodução, pausa, rolagem e modo só ouvir nas telas pequena/grande; gravação hospedada idêntica ao envio e sem erros. Aguarda publicação do App.
 
 ## Janelas do App no visual atualizado
+- [x] Integrar Gerenciar assinatura ao App autenticado e validar ofertas sequenciais separadas (desconto → Lite → Base; tempo → pausa → Base), com cancelamento direto disponível. Conferido na conta autenticada em celular e computador, sem efetivar cancelamentos, descontos ou cobranças; nove testes passaram. PIX exibe apenas ofertas executáveis; pausa/desconto temporário Woovi indisponíveis. Aguarda publicação do App.
 - [x] Agendar sessão, Preparar encontro, Ajustar leitura, Cancelar sessão, O que não ficou certo?, Apagar informação, Trocar de plano e próximo encontro da degustação no visual navy/sálvia; fileira de dias e horários 06h–23h. Janelas já aprovadas mantidas. Agendar conferido no celular; demais não abertas (sem dados na conta).

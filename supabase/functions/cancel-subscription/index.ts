@@ -1,3 +1,4 @@
+import { validCancelRequest } from "./request.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
@@ -107,10 +108,12 @@ serve(async (req) => {
     }
     logStep("Stripe key verified");
 
-    const { phone, token, retention_code, action, reason, reason_detail, pause_days, offer } = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!validCancelRequest(body)) return jsonResponse({ success: false, message: "Pedido inválido." }, 400);
+    const { phone, token, retention_code, action, reason, reason_detail, pause_days, offer, authenticated } = body;
     logStep("Request received", { phone: !!phone, token: !!token, action, reason });
 
-    if (!phone && !token && !retention_code) {
+    if (!authenticated && !phone && !token && !retention_code) {
       throw new Error("Phone number or token is required");
     }
 
@@ -123,6 +126,16 @@ serve(async (req) => {
       throw new Error("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
     }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    let authenticatedUserId: string | null = null;
+    if (authenticated) {
+      const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      if (!jwt) return jsonResponse({ success: false, message: "Entre no App para gerenciar sua assinatura." }, 401);
+      const { data, error } = await supabase.auth.getClaims(jwt);
+      if (error || data?.claims?.role !== "authenticated" || typeof data.claims.sub !== "string") {
+        return jsonResponse({ success: false, message: "Seu acesso expirou. Entre novamente no App." }, 401);
+      }
+      authenticatedUserId = data.claims.sub;
+    }
 
     const retentionOffer = retention_code
       ? await findRetentionOfferByCode(supabase, String(retention_code))
@@ -175,15 +188,22 @@ serve(async (req) => {
       billing_cycle?: string | null;
       status?: string | null;
       payment_failed_at?: string | null;
+      plan_expires_at?: string | null;
     } | null = null;
     {
       const variants = getPhoneVariations(phoneClean);
-      const { data } = await supabase
+      const query = supabase
         .from("profiles")
-        .select("id, user_id, name, email, card_gateway, asaas_customer_id, plan, billing_cycle, status, payment_failed_at")
-        .in("phone", variants)
-        .limit(1);
-      if (data && data.length > 0) profile = data[0] as any;
+        .select("id, user_id, name, email, phone, card_gateway, asaas_customer_id, plan, billing_cycle, status, payment_failed_at, plan_expires_at");
+      const { data, error } = authenticatedUserId
+        ? await query.eq("user_id", authenticatedUserId).limit(1)
+        : await query.in("phone", variants).limit(1);
+      if (error) throw error;
+      if (data && data.length > 0) {
+        profile = data[0] as any;
+        if (authenticatedUserId) phoneClean = String(data[0].phone || "").replace(/\D/g, "");
+      }
+      if (authenticatedUserId && !profile) return jsonResponse({ success: false, message: "Cadastro não encontrado." }, 404);
     }
 
     // Grava estado no perfil pelo user_id (ou por TODAS as variações de telefone).
@@ -350,6 +370,31 @@ serve(async (req) => {
       return jsonResponse({ success: true, status: "reactivation_checkout", url: session.url });
     }
 
+    // Helper: Value Recap — puxa histórico do usuário para exibir antes das ofertas
+    const buildValueRecap = async () => {
+      if (!profile?.user_id) return null;
+      const [{ count: sessionsCount }, { data: snapshots }] = await Promise.all([
+        supabase
+          .from("sessions")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", profile.user_id)
+          .eq("status", "completed"),
+        supabase
+          .from("thematic_snapshots")
+          .select("theme, before_summary, after_summary, confidence, created_at")
+          .eq("user_id", profile.user_id)
+          .order("created_at", { ascending: false })
+          .limit(3),
+      ]);
+      return {
+        name: profile.name,
+        sessions_count: sessionsCount ?? 0,
+        snapshots: (snapshots ?? []).filter(
+          (s: any) => s.confidence === "high" || s.confidence === "medium"
+        ),
+      };
+    };
+
     // ─── Roteamento Woovi (PIX Automático Bacen, jornada composta) ────────
     // Mesma regra do Inter: sem cancelar o mandato na Woovi, o débito segue
     // autorizado no banco do cliente mesmo depois do cancelamento no portal.
@@ -394,7 +439,8 @@ serve(async (req) => {
             },
             // No PIX Automático o "desconto" é um mandato novo já no valor
             // reduzido: o cliente escaneia um QR e pode até usar outra conta.
-            discount_available: true,
+            discount_available: !authenticated,
+            value_recap: await buildValueRecap(),
             offer: offeredTier,
             reasons: CANCELLATION_REASONS,
           });
@@ -697,7 +743,12 @@ serve(async (req) => {
     logStep("Searching with phone variations", { phoneVariations });
     
     let customer: Stripe.Customer | null = null;
+    if (authenticatedUserId && profile?.email) {
+      const byEmail = await stripe.customers.list({ email: profile.email, limit: 1 });
+      customer = byEmail.data[0] ?? null;
+    }
     for (const phoneVar of phoneVariations) {
+      if (customer) break;
       const customers = await stripe.customers.search({
         query: `metadata['phone']:'${phoneVar}'`,
         limit: 1,
@@ -741,7 +792,7 @@ serve(async (req) => {
 
     logStep("Customer found", { customerId: customer.id });
 
-    // Get active subscriptions first, then fallback to past_due
+    // Assinaturas no período pago de experiência também precisam permitir saída.
     const activeSubscriptions = await stripe.subscriptions.list({
       customer: customer.id,
       status: "active",
@@ -750,7 +801,15 @@ serve(async (req) => {
 
     let subscriptions = activeSubscriptions;
 
-    if (activeSubscriptions.data.length === 0) {
+    if (subscriptions.data.length === 0) {
+      subscriptions = await stripe.subscriptions.list({
+        customer: customer.id,
+        status: "trialing",
+        limit: 1,
+      });
+    }
+
+    if (subscriptions.data.length === 0) {
       logStep("No active subscription, checking past_due");
       const pastDueSubscriptions = await stripe.subscriptions.list({
         customer: customer.id,
@@ -913,31 +972,6 @@ serve(async (req) => {
         .gte("created_at", twelveMonthsAgo)
         .limit(1);
       return !!data && data.length > 0;
-    };
-
-    // Helper: Value Recap — puxa histórico do usuário para exibir antes das ofertas
-    const buildValueRecap = async () => {
-      if (!profile?.user_id) return null;
-      const [{ count: sessionsCount }, { data: snapshots }] = await Promise.all([
-        supabase
-          .from("sessions")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", profile.user_id)
-          .eq("status", "completed"),
-        supabase
-          .from("thematic_snapshots")
-          .select("theme, before_summary, after_summary, confidence, created_at")
-          .eq("user_id", profile.user_id)
-          .order("created_at", { ascending: false })
-          .limit(3),
-      ]);
-      return {
-        name: profile.name,
-        sessions_count: sessionsCount ?? 0,
-        snapshots: (snapshots ?? []).filter(
-          (s: any) => s.confidence === "high" || s.confidence === "medium"
-        ),
-      };
     };
 
     // If action is "check", just return subscription info

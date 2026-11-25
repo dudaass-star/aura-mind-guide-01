@@ -11,6 +11,7 @@
 // eles fazem o PSP registrar a autorização como variável no arranjo Pix.
 //
 // A ativação de acesso NUNCA acontece aqui — só no webhook, com dinheiro entrando.
+import { offerValueCents, retentionBillingCycle } from "../_shared/retention-prices.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import QRCode from "https://esm.sh/qrcode@1.5.4";
 import {
@@ -42,13 +43,6 @@ const TRIAL_PRICES: Record<string, number> = { essencial: 690, direcao: 990, tra
 
 // Ofertas de retenção (mode=offer). O mandato novo já nasce com o valor da
 // oferta: no PIX não existe cupom, o desconto É o valor da recorrência.
-const LITE_PRICE_CENTS = 1990;
-function offerValueCents(tier: string, fullCents: number): number {
-  if (tier === "discount_30") return Math.round(fullCents * 0.7);
-  if (tier === "lite") return LITE_PRICE_CENTS;
-  return fullCents;
-}
-
 const PLAN_NAMES: Record<string, string> = {
   essencial: "Essencial", direcao: "Direção", transformacao: "Transformação", oracoes: "Orações",
 };
@@ -290,6 +284,7 @@ Deno.serve(async (req) => {
     // cliente ganha um QR NOVO, então pode pagar de outra conta — a atual é
     // justamente a que ficou sem saldo.
     const offerTier = mode === "offer" ? String(body.offer || "discount_30") : null;
+    if (offerTier && !["discount_30", "lite", "base"].includes(offerTier)) return json({ error: "Oferta inválida" }, 400);
     const retentionOfferId = mode === "offer" && /^[0-9a-f-]{36}$/i.test(String(body.retentionOfferId || ""))
       ? String(body.retentionOfferId)
       : null;
@@ -389,7 +384,7 @@ Deno.serve(async (req) => {
       previousSubscriptionId = prev?.subscription_id || null;
 
       plan = plan || prev?.plan || prof?.plan || "";
-      billing = billing || prev?.billing_period || prof?.billing_cycle || "monthly";
+      billing = retentionBillingCycle(offerTier, billing || prev?.billing_period || prof?.billing_cycle || "monthly");
       name = name || prev?.customer_name || prof?.name || "Cliente";
       email = email || prev?.customer_email || prof?.email || "";
       phone = phone || prev?.customer_phone || prof?.phone || "";

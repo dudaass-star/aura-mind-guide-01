@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
+import { canManageSubscription } from "@/lib/retention-flow";
 import { cn } from "@/lib/utils";
 import { pollChatIndependently } from "@/lib/chat-poll";
 import avatarAuraFundoLavanda from "@/assets/aura-fundo-lavanda.png.asset.json";
@@ -1422,6 +1423,10 @@ export function ConversarTab({
               {!isDemo && <DropdownMenuItem onSelect={() => setShowPushDialog(true)} className="gap-3 px-3 py-3 font-body">
                 <Bell className="h-4 w-4" />
                 <span>Notificações</span>
+              </DropdownMenuItem>}
+              {!isDemo && canManageSubscription(profileStatus) && <DropdownMenuItem onSelect={() => navigate("/cancelar?from=app")} className="gap-3 px-3 py-3 font-body">
+                <CreditCard className="h-4 w-4" />
+                <span>Gerenciar assinatura</span>
               </DropdownMenuItem>}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={onSignOut} className="gap-3 px-3 py-3 font-body text-destructive focus:text-destructive">
