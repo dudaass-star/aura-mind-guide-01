@@ -1564,3 +1564,36 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .portal-dialog textarea, .portal-dialog input { color: hsl(var(--foreground)); }
 .portal-dialog textarea::placeholder { color: hsl(var(--muted-foreground) / 0.8); }
 .portal-dialog > * { min-width: 0; }
+
+/* Saída da assinatura: tema do App, sem vidro ou efeitos luminosos. */
+.subscription-exit {
+  font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+}
+.subscription-exit h1 {
+  font-family: inherit;
+}
+.subscription-exit button {
+  min-height: 44px;
+  border-radius: 999px;
+  height: auto;
+  white-space: normal;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  line-height: 1.4;
+}
+.subscription-exit button[aria-pressed] {
+  border-radius: 0.5rem;
+}
+.subscription-exit section > header {
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+}
+.subscription-exit input {
+  min-height: 48px;
+  background: hsl(var(--card));
+}
+.subscription-exit section > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

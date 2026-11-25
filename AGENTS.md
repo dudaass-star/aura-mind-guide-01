@@ -1,4 +1,5 @@
 # Decisões técnicas
+- Subscription exit styling is scoped to `.subscription-exit` and reuses portal tokens; this keeps public and authenticated cancellation consistent without changing billing or other App screens.
 - App subscription management uses the isolated portal client and a server-validated JWT subject; retention offers are rendered one at a time with an independent cancellation exit, so neither identity nor cancellation depends on client-supplied phone numbers or rejected offers.
 - PIX retention tiers share a cent-based price helper and force monthly cadence for reduced tiers; this prevents Base from falling back to full-plan prices or inheriting an annual mandate.
 

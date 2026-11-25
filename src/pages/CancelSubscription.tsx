@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { retentionOffers, type RetentionTier } from "@/lib/retention-flow";
+import logoOlaAura from "@/assets/logo-ola-aura-horizontal.png";
 
 interface SubscriptionInfo {
   id: string;
@@ -345,7 +346,7 @@ const CancelSubscription = () => {
 
     if (tier === "pause") {
       return (
-        <div key="pause" className={`rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3${highlight}`}>
+        <div key="pause" className={`rounded-lg border border-primary/20 bg-secondary/40 p-5 space-y-4${highlight}`}>
           <div className="flex items-start gap-3">
             <Pause className="w-5 h-5 shrink-0 text-primary mt-0.5" />
             <div>
@@ -364,7 +365,7 @@ const CancelSubscription = () => {
 
     if (tier === "discount_30") {
       return (
-        <div key="discount" className={`rounded-lg border border-primary/30 bg-primary/10 p-4 space-y-3${highlight}`}>
+        <div key="discount" className={`rounded-lg border border-primary/20 bg-secondary/40 p-5 space-y-4${highlight}`}>
           <div className="flex items-start gap-3">
             <Sparkles className="w-5 h-5 shrink-0 text-primary mt-0.5" />
             <div>
@@ -383,7 +384,7 @@ const CancelSubscription = () => {
 
     if (tier === "lite") {
       return (
-        <div key="lite" className={`rounded-lg border border-border bg-muted/30 p-4 space-y-3${highlight}`}>
+        <div key="lite" className={`rounded-lg border border-border/60 bg-card p-5 space-y-4${highlight}`}>
           <div className="flex items-start gap-3">
             <TrendingDown className="w-5 h-5 shrink-0 text-foreground/70 mt-0.5" />
             <div>
@@ -407,7 +408,7 @@ const CancelSubscription = () => {
 
     if (tier === "base") {
       return (
-        <div key="base" className={`rounded-lg border border-border bg-muted/30 p-4 space-y-3${highlight}`}>
+        <div key="base" className={`rounded-lg border border-border/60 bg-card p-5 space-y-4${highlight}`}>
           <div className="flex items-start gap-3">
             <Archive className="w-5 h-5 shrink-0 text-foreground/70 mt-0.5" />
             <div>
@@ -440,11 +441,11 @@ const CancelSubscription = () => {
         <meta name="description" content="Cancele sua assinatura AURA" />
       </Helmet>
 
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-lg">
+      <div className="portal-chat-theme subscription-exit min-h-screen bg-background text-foreground px-5 py-6 sm:py-10">
+        <div className="mx-auto w-full max-w-lg">
           <Link
             to={fromApp ? "/meu-espaco" : "/"}
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6"
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-4 min-h-11 text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
             {fromApp ? "Voltar para o App" : "Voltar ao início"}
@@ -452,17 +453,17 @@ const CancelSubscription = () => {
 
           <section className="space-y-6">
             <header className="space-y-2 text-center">
-              <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center mx-auto mb-4">
-                <span className="text-primary font-display font-bold text-2xl">A</span>
-              </div>
-              <h1 className="text-2xl font-display">Antes de você decidir</h1>
+              <img src={logoOlaAura} alt="Olá Aura" className="mx-auto mb-5 h-auto w-28" />
+              <h1 className="text-2xl font-semibold leading-tight">
+                {status === "confirm_cancel" ? "Confirmar cancelamento" : status === "success" ? "Tudo certo" : "Antes de você decidir"}
+              </h1>
               <p className="text-sm text-muted-foreground">
                 {status === "idle" && "Informe seu telefone para verificar sua assinatura"}
                 {status === "checking" && "Buscando sua história..."}
                 {status === "recap" && "Um pouco do seu percurso"}
                 {status === "selecting_reason" && "O que te fez pensar em sair?"}
                 {status === "offer_ladder" && "Escolha o que faz mais sentido pra você"}
-                {status === "confirm_cancel" && "Confirmar cancelamento"}
+                {status === "confirm_cancel" && "Sem novas renovações"}
                 {status === "processing" && "Processando..."}
                 {status === "success" && "Prontinho"}
                 {status === "already_active" && "Assinatura ativa"}
@@ -508,7 +509,7 @@ const CancelSubscription = () => {
               {status === "recap" && subscription && (
                 <div className="space-y-6">
                   {valueRecap && (valueRecap.sessions_count > 0 || valueRecap.snapshots.length > 0) ? (
-                    <div className="rounded-lg border border-primary/20 bg-gradient-to-br from-primary/5 to-transparent p-4 space-y-3">
+                    <div className="rounded-lg border border-primary/20 bg-secondary/40 p-4 space-y-3">
                       <div className="flex items-center gap-2">
                         <Heart className="w-4 h-4 text-primary" />
                         <p className="text-sm font-medium text-foreground">
@@ -533,7 +534,7 @@ const CancelSubscription = () => {
                     </div>
                   ) : null}
 
-                  <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
+                  <div className="bg-card rounded-lg border border-border/60 p-5 space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Plano</span>
                       <span className="font-medium">{subscription.plan}</span>
@@ -556,7 +557,7 @@ const CancelSubscription = () => {
                     </p>
                   )}
 
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row">
                     <Button variant="outline" onClick={resetForm} className="flex-1">
                       Ficar como está
                     </Button>
@@ -581,10 +582,10 @@ const CancelSubscription = () => {
                         key={reason.id}
                         onClick={() => { setSelectedReason(reason.id); setOfferIndex(0); }}
                         aria-pressed={selectedReason === reason.id}
-                        className={`h-auto w-full justify-start whitespace-normal p-3 rounded-lg border text-left transition-colors ${
+                        className={`h-auto min-h-12 w-full justify-start whitespace-normal px-4 py-3 rounded-lg border text-left transition-colors ${
                           selectedReason === reason.id
                             ? "border-primary bg-primary/10 text-foreground"
-                            : "border-border hover:border-primary/50 text-muted-foreground"
+                            : "border-border/60 bg-card hover:border-primary/50 text-foreground"
                         }`}
                       >
                         {reason.label}
@@ -598,7 +599,7 @@ const CancelSubscription = () => {
                       onChange={(e) => setReasonDetail(e.target.value)}
                     />
                   )}
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row">
                     <Button variant="outline" onClick={() => setStatus("recap")} className="flex-1">
                       Voltar
                     </Button>
@@ -651,8 +652,8 @@ const CancelSubscription = () => {
               {status === "success" && (
                 <div className="space-y-6">
                   <div className="flex flex-col items-center py-4">
-                    <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
-                      <CheckCircle className="w-8 h-8 text-green-500" />
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                      <CheckCircle className="w-8 h-8 text-primary" />
                     </div>
                     <p className="text-center text-muted-foreground">{message}</p>
                   </div>
@@ -675,7 +676,7 @@ const CancelSubscription = () => {
                     </div>
                   </div>
                   {subscription?.plan && (
-                    <div className="bg-muted/50 rounded-lg p-4 text-sm flex justify-between">
+                    <div className="bg-card rounded-lg border border-border/60 p-5 text-sm flex justify-between">
                       <span className="text-muted-foreground">Plano atual</span>
                       <span className="font-medium capitalize">{subscription.plan}</span>
                     </div>
@@ -717,8 +718,8 @@ const CancelSubscription = () => {
               {/* Already canceling */}
               {status === "already_canceling" && subscription && (
                 <div className="space-y-6">
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 flex gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="bg-secondary border border-border rounded-lg p-4 flex gap-3">
+                    <AlertTriangle className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                     <div className="text-sm">
                       <p className="text-muted-foreground">
                         {message || `Sua assinatura será encerrada em ${subscription.endDateFormatted}.`}
@@ -738,7 +739,7 @@ const CancelSubscription = () => {
                     Sua assinatura não está mais ativa — mas a oferta que te mandamos no
                     WhatsApp vale pra voltar agora, com todo o seu histórico intacto.
                   </p>
-                  <div className="rounded-lg border border-primary/30 bg-primary/10 p-4 space-y-3">
+                  <div className="rounded-lg border border-primary/20 bg-secondary/40 p-5 space-y-4">
                     <div className="flex items-start gap-3">
                       <Sparkles className="w-5 h-5 text-primary mt-0.5" />
                       <div>
