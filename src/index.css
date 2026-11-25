@@ -1567,9 +1567,29 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 
 /* Saída da assinatura: tema do App, sem vidro ou efeitos luminosos. */
 .subscription-exit {
+  --background: 222 36% 14%;
+  --foreground: 40 25% 96%;
+  --card: 222 30% 18%;
+  --card-foreground: 40 25% 96%;
+  --popover: 222 30% 18%;
+  --popover-foreground: 40 25% 96%;
+  --muted: 220 26% 21%;
+  --muted-foreground: 220 15% 75%;
+  --secondary: 220 26% 21%;
+  --secondary-foreground: 40 25% 96%;
+  --accent: 220 26% 24%;
+  --accent-foreground: 40 25% 96%;
+  --primary: 145 45% 62%;
+  --primary-foreground: 153 25% 12%;
+  --border: 220 20% 28%;
+  --input: 220 20% 30%;
+  --ring: 145 45% 62%;
+  --destructive: 0 70% 70%;
+  color: hsl(var(--foreground));
   font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0;
 }
+.subscription-exit header img { filter: brightness(0) invert(1); opacity: 0.92; }
 .subscription-exit h1 {
   font-family: inherit;
 }

@@ -460,7 +460,7 @@ const CancelSubscription = () => {
               <p className="text-sm text-muted-foreground">
                 {status === "idle" && "Informe seu telefone para verificar sua assinatura"}
                 {status === "checking" && "Buscando sua história..."}
-                {status === "recap" && "Um pouco do seu percurso"}
+                {status === "recap" && (valueRecap?.snapshots.length ? "Um pouco do seu percurso" : "Sua caminhada até aqui")}
                 {status === "selecting_reason" && "O que te fez pensar em sair?"}
                 {status === "offer_ladder" && "Escolha o que faz mais sentido pra você"}
                 {status === "confirm_cancel" && "Sem novas renovações"}
@@ -558,14 +558,13 @@ const CancelSubscription = () => {
                   )}
 
                   <div className="flex flex-col gap-3 sm:flex-row">
-                    <Button variant="outline" onClick={resetForm} className="flex-1">
-                      Ficar como está
+                    <Button onClick={resetForm} className="flex-1">
+                      Manter minha assinatura
                     </Button>
-                    <Button variant="secondary" onClick={() => setStatus("selecting_reason")} className="flex-1">
-                      Quero cancelar
+                    <Button variant="outline" onClick={() => setStatus("selecting_reason")} className="flex-1">
+                      Continuar cancelamento
                     </Button>
                   </div>
-                  <Button variant="ghost" className="w-full text-destructive" onClick={() => setStatus("confirm_cancel")}>Ir direto ao cancelamento</Button>
                 </div>
               )}
 
