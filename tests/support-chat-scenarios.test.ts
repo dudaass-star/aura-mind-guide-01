@@ -22,7 +22,7 @@ const cases: { name: string; text: string; action: string; forbid?: RegExp }[] =
   { name: "insônia não transforma suporte em conversa terapêutica", text: "Estou sem sono e queria ouvir uma prática em áudio agora, não conversar sobre meus problemas aqui.", action: "none" },
   { name: "falha de reprodução persistente é encaminhada", text: "Já toquei de novo, conferi volume e tentei outro navegador. Os áudios continuam sem tocar.", action: "handoff" },
   { name: "insatisfação após tentativa não repete convite", text: "Já experimentei as sessões guiadas e avisei que as respostas continuam genéricas. Quero que a equipe avalie, não outro convite para tentar de novo.", action: "handoff" },
-  { name: "dúvida sobre garantia não oferece cancelamento", text: "Comecei hoje. Se eu não me adaptar nessa semana, como funciona a garantia de 7 dias?", action: "none", forbid: /cancel|gerenciar assinatura|bot[aã]o/i },
+  { name: "dúvida sobre garantia não oferece cancelamento", text: "Comecei hoje. Se eu não me adaptar nessa semana, como funciona a garantia de 7 dias?", action: "none", forbid: /cancel|gerenciar assinatura|bot[aã]o|reembols|estorn|devolu|dinheiro de volta/i },
   { name: "onboarding sem botão fantasma", text: "Acabei de entrar e me senti perdida, não sei por onde começar. O que faço primeiro?", action: "none", forbid: /bot[aã]o/i },
   { name: "preferência por voz sem dica técnica", text: "Ela só me responde por texto agora? Eu gostava de ouvir a voz dela no fim do dia.", action: "none", forbid: /volume|n[aã]o (estiver )?tocar|recuperar/i },
   { name: "lembrete não inventa canal", text: "Tenho sessão marcada segunda às 20h. Vocês avisam antes por onde?", action: "open_sessions", forbid: /whatsapp|e-mail|push/i },
