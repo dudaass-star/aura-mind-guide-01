@@ -1,4 +1,4 @@
-import { TimeSlotPills } from "@/components/portal/TimeSlotPills";
+import { TimeWheelPicker } from "@/components/portal/TimeWheelPicker";
 import { useMemo, useState } from "react";
 import { CalendarDays, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -29,7 +29,7 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
 
   const times = useMemo(() => {
     const out: string[] = [];
-    for (let h = 6; h <= 23; h++) for (const m of [0, 15, 30, 45]) {
+    for (let h = 6; h <= 23; h++) for (const m of [0, 30]) {
       const v = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
       if (new Date(`${date}T${v}:00-03:00`).getTime() > Date.now() + 15 * 60_000) out.push(v);
     }
@@ -72,7 +72,7 @@ export function DegustacaoScheduleNextDialog({ open, userId, onDone }: {
           </div>
           <div className="grid gap-1.5">
             <Label>Horário</Label>
-            <TimeSlotPills times={times} value={time} onChange={setTime} />
+            <TimeWheelPicker times={times} value={time} onChange={setTime} />
           </div>
           <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">A AURA guarda esse horário por 24 horas. Para confirmar o encontro, é preciso ativar um plano logo em seguida.</p>
           {error && <p className="text-sm text-destructive">{error}</p>}
