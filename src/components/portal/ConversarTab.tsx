@@ -3,9 +3,10 @@ import { MovementGiftPrompt } from "@/components/movement/MovementGiftPrompt";
 import { canOfferGift, readGiftState } from "@/lib/movement-gift-cadence";
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, ChevronRight, CreditCard, Download, Headphones, HeartHandshake, Loader2, LogOut, Mic, Moon, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Bookmark, Trash2, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, BookOpen, CalendarDays, Check, CheckCheck, CircleHelp, Gift, ChevronRight, CreditCard, Download, Headphones, HeartHandshake, Loader2, LogOut, Mic, Moon, MoreVertical, RefreshCw, RotateCcw, Send, Share2, Sparkles, Square, SquarePlus, Star, Sun, Bookmark, Trash2, UserRound, X } from "lucide-react";
 import { trackMovement } from "@/lib/movement-analytics";
 import { Button } from "@/components/ui/button";
+import { SupportDialog } from "@/components/portal/SupportDialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
@@ -412,6 +413,7 @@ export function ConversarTab({
 }) {
   const navigate = useNavigate();
   const [manageOpen, setManageOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const messageCacheKey = `aura-chat-messages:${userId}`;
   const cachedMessages = useMemo(
     () => readPortalCache<ChatMessage[]>(messageCacheKey, 7 * 24 * 60 * 60 * 1000)?.value ?? [],
@@ -1422,6 +1424,14 @@ export function ConversarTab({
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary"><Bell className="h-4 w-4" /></span>
                 <span>Notificações e lembretes</span>
               </DropdownMenuItem>}
+              {!isDemo && <DropdownMenuItem onSelect={() => setSupportOpen(true)} className="gap-3 rounded-xl px-3 py-3 font-body text-[15px] focus:bg-foreground/5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary"><CircleHelp className="h-4 w-4" /></span>
+                <span>Ajuda e suporte</span>
+              </DropdownMenuItem>}
+              {!isDemo && <DropdownMenuItem onSelect={() => navigateFromConversation("movimento")} className="gap-3 rounded-xl px-3 py-3 font-body text-[15px] focus:bg-foreground/5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary"><Gift className="h-4 w-4" /></span>
+                <span>Presentear alguém</span>
+              </DropdownMenuItem>}
               <InstallAppMenuItem
                 available={installApp.available}
                 ios={installApp.ios}
@@ -1433,8 +1443,14 @@ export function ConversarTab({
                 <LogOut className="ml-2 h-4 w-4" />
                 <span>Sair da conta</span>
               </DropdownMenuItem>
+              <div className="flex items-center justify-center gap-3 px-3 pb-1 pt-2 text-[11px] text-muted-foreground">
+                <a href="/termos" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">Termos de uso</a>
+                <span aria-hidden>·</span>
+                <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">Privacidade</a>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
+          {!isDemo && <SupportDialog open={supportOpen} onOpenChange={setSupportOpen} />}
           {!isDemo && <ManageSubscriptionDialog
             open={manageOpen}
             onOpenChange={setManageOpen}

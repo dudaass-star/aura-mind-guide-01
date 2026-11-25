@@ -66,3 +66,4 @@
 - Plan-change cycle choices and annual savings use the shared pricing helpers while legacy billing cycles remain readable; this keeps the two-choice interface consistent without rewriting existing contracts.
 
 - The plan-change dialog loads Nunito from the installed font package; local font files avoid failed external font requests and inconsistent fallback typography.
+- App help messages go through `portal-support-message` (JWT subject only) into the existing support tickets and draft pipeline, replied by e-mail; this keeps operational support out of the AURA conversation.
