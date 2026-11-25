@@ -1615,18 +1615,8 @@ export function ConversarTab({
               {pendingRating && (
                 <div className="mx-auto w-full max-w-md px-5 pt-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Encontro concluído</p>
-                  <DrawerTitle className="mt-2 font-display text-2xl leading-tight">Como foi nosso encontro hoje?</DrawerTitle>
-                  <DrawerDescription className="mt-1 text-sm">Sua nota ajuda a AURA a preparar o próximo.</DrawerDescription>
-                  <div className="mt-4 flex justify-between gap-1" role="group" aria-label="Nota da sessão">
-                    {[1, 2, 3, 4, 5].map((rating) => (
-                      <Button key={rating} type="button" variant="ghost" className="h-14 flex-1 rounded-2xl hover:bg-primary/15" disabled={ratingSaving} onClick={() => void saveSessionRating(rating)} aria-label={`Dar nota ${rating}`}>
-                        <Star className="!h-8 !w-8 text-primary" />
-                      </Button>
-                    ))}
-                  </div>
-                  {ratingError && <p className="mt-2 text-xs text-destructive">{ratingError}</p>}
                   {pendingRating.closure_type && takeawayFromClosure(pendingRating.closure_text) && (
-                    <section className="mt-5 rounded-2xl border border-primary/25 bg-primary/10 p-4" aria-label="Para você levar">
+                    <section className="mt-3 rounded-2xl border border-primary/25 bg-primary/10 p-4" aria-label="Para você levar">
                       <p className="text-xs font-semibold uppercase tracking-wide text-primary">Para você levar</p>
                       <p className="mt-2 text-sm leading-relaxed">{takeawayFromClosure(pendingRating.closure_text)}</p>
                       {takeawaySaved === pendingRating.id ? (
@@ -1639,6 +1629,16 @@ export function ConversarTab({
                       {takeawayError && <p className="mt-2 text-xs text-destructive">{takeawayError}</p>}
                     </section>
                   )}
+                  <DrawerTitle className="mt-5 font-display text-2xl leading-tight">Como foi nosso encontro hoje?</DrawerTitle>
+                  <DrawerDescription className="mt-1 text-sm">Sua nota ajuda a AURA a preparar o próximo.</DrawerDescription>
+                  <div className="mt-4 flex justify-between gap-1" role="group" aria-label="Nota da sessão">
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <Button key={rating} type="button" variant="ghost" className="h-14 flex-1 rounded-2xl hover:bg-primary/15" disabled={ratingSaving} onClick={() => void saveSessionRating(rating)} aria-label={`Dar nota ${rating}`}>
+                        <Star className="!h-8 !w-8 text-primary" />
+                      </Button>
+                    ))}
+                  </div>
+                  {ratingError && <p className="mt-2 text-xs text-destructive">{ratingError}</p>}
                   <Button type="button" variant="ghost" className="mt-3 w-full text-muted-foreground" onClick={() => setLandingDismissed(pendingRating.id)}>Agora não</Button>
                 </div>
               )}

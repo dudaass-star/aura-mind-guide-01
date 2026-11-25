@@ -66,7 +66,7 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
   const today = brtDate(new Date());
   const times = useMemo(() => {
     const out: string[] = [];
-    for (let h = 6; h <= 23; h++) for (const m of [0, 15, 30, 45]) {
+    for (let h = 6; h <= 23; h++) for (const m of [0, 30]) {
       const v = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
       if (date && new Date(`${date}T${v}:00-03:00`).getTime() > Date.now() + 15 * 60_000) out.push(v);
     }
@@ -110,7 +110,7 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
             <DialogHeader className="text-left">
               <CalendarDays className="mb-2 h-6 w-6 text-primary" />
               <DialogTitle className="font-display text-xl">Seu próximo encontro</DialogTitle>
-              <DialogDescription>Para dar sequência ao seu processo, o seu próximo horário fica reservado para {rhythm}:</DialogDescription>
+              <DialogDescription>Para manter o ritmo do seu percurso, o mesmo horário fica reservado para {rhythm}:</DialogDescription>
             </DialogHeader>
             {!custom ? (
               <div className="grid gap-3">
@@ -122,6 +122,7 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
                 <Button size="lg" onClick={() => void schedule(suggestion, "one_tap")} disabled={saving}>
                   {saving && <Loader2 className="animate-spin" />}Garantir esse horário
                 </Button>
+                <p className="-mt-1 text-center text-xs text-muted-foreground">Você pode remarcar a qualquer momento em Sessões sem complicação.</p>
                 <Button variant="outline" onClick={() => { setCustom(true); setTime(""); setError(null); }}>Escolher outro dia ou horário</Button>
                 <Button variant="ghost" size="sm" onClick={close}>Escolher depois</Button>
               </div>
