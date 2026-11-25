@@ -1565,6 +1565,14 @@ div.percurso-letter-clamp { display: block; max-height: 11rem; -webkit-mask-imag
 .portal-dialog textarea::placeholder { color: hsl(var(--muted-foreground) / 0.8); }
 .portal-dialog > * { min-width: 0; }
 
+/* Troca de plano: Nunito em toda a janela, sem alterar outras janelas aprovadas. */
+.portal-dialog.plan-change-dialog,
+.portal-dialog.plan-change-dialog h2,
+.portal-dialog.plan-change-dialog button {
+  font-family: "Nunito", sans-serif;
+  letter-spacing: 0;
+}
+
 /* Saída da assinatura: tema do App, sem vidro ou efeitos luminosos. */
 .subscription-exit {
   --background: 222 36% 14%;

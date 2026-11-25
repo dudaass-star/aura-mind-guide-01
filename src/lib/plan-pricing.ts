@@ -6,6 +6,18 @@
 export type PlanId = "essencial" | "direcao" | "transformacao";
 export type BillingCycle = "monthly" | "quarterly" | "semiannual" | "yearly";
 
+export const PLAN_CHANGE_CYCLES = ["monthly", "yearly"] as const;
+export function planChangeInitialCycle(cycle?: BillingCycle | null): "monthly" | "yearly" {
+  return cycle === "yearly" ? "yearly" : "monthly";
+}
+
+export function annualPlanSavings(plan: PlanId) {
+  const prices = PLAN_MONTHLY_EQUIVALENT[plan];
+  const total = Math.round(prices.yearly * 1200) / 100;
+  const savings = Math.round((prices.monthly - prices.yearly) * 1200) / 100;
+  return { total, savings, percent: Math.round((1 - prices.yearly / prices.monthly) * 100) };
+}
+
 export const PLAN_LABELS: Record<PlanId, string> = {
   essencial: "Essencial",
   direcao: "Direção",

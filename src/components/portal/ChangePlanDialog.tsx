@@ -1,4 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import "@fontsource/nunito/400.css";
+import "@fontsource/nunito/600.css";
+import "@fontsource/nunito/700.css";
+import "@fontsource/nunito/800.css";
 import { Loader2, Check } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -14,16 +18,17 @@ import { toast } from "@/hooks/use-toast";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import {
   PLAN_LABELS,
-  PLAN_TAGLINES,
   PLAN_MONTHLY_EQUIVALENT,
   CYCLE_LABELS,
+  PLAN_CHANGE_CYCLES,
+  planChangeInitialCycle,
+  annualPlanSavings,
   fmtBRL,
   type PlanId,
   type BillingCycle,
 } from "@/lib/plan-pricing";
 
 const PLAN_IDS: PlanId[] = ["essencial", "direcao", "transformacao"];
-const CYCLES: BillingCycle[] = ["monthly", "quarterly", "semiannual", "yearly"];
 
 interface Props {
   open: boolean;
@@ -50,7 +55,7 @@ export function ChangePlanDialog({
   paymentGateway,
   minimumSessionLimit,
 }: Props) {
-  const [billing, setBilling] = useState<BillingCycle>(currentBilling ?? "monthly");
+  const [billing, setBilling] = useState<BillingCycle>(planChangeInitialCycle(currentBilling));
   const [selected, setSelected] = useState<PlanId | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -63,6 +68,13 @@ export function ChangePlanDialog({
     copyPaste?: string | null;
   } | null>(null);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (open) {
+      setBilling(planChangeInitialCycle(currentBilling));
+      setSelected(null);
+    }
+  }, [open, currentBilling]);
 
   const isInter = paymentGateway === "inter-pix";
   // PIX Automático da Woovi: mesma natureza do Inter (mandato Bacen com valor
@@ -168,17 +180,17 @@ export function ChangePlanDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="portal-dialog w-[calc(100%-2rem)] max-w-lg p-6">
+      <DialogContent className="portal-dialog plan-change-dialog w-[calc(100%-2rem)] max-w-lg p-5 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl font-semibold">{minimumSessionLimit ? "Ter mais sessões" : "Trocar de plano"}</DialogTitle>
-          <DialogDescription className="font-['Nunito']">
+          <DialogTitle className="font-body text-xl font-bold">{minimumSessionLimit ? "Ter mais sessões" : "Trocar de plano"}</DialogTitle>
+          <DialogDescription className="font-body">
             {minimumSessionLimit ? `Veja os planos com mais de ${minimumSessionLimit} ${minimumSessionLimit === 1 ? "sessão" : "sessões"} por mês. ${copyDescription}` : copyDescription}
           </DialogDescription>
         </DialogHeader>
 
         {success && (
           <>
-            <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm font-['Nunito'] space-y-2">
+            <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm font-body space-y-2">
               <div className="flex items-center gap-2">
                 <Check size={16} className="text-accent" />
                 <span className="font-semibold">
@@ -201,7 +213,7 @@ export function ChangePlanDialog({
                       className="mx-auto h-44 w-44 rounded-lg bg-background p-2"
                     />
                   )}
-                  <button
+                  <Button variant="outline"
                     type="button"
                     onClick={() => {
                       navigator.clipboard.writeText(success.copyPaste as string);
@@ -210,7 +222,7 @@ export function ChangePlanDialog({
                     className="w-full rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40"
                   >
                     Copiar código PIX
-                  </button>
+                  </Button>
                 </div>
               )}
               {success.nextChargeDate && success.nextChargeAmount != null && (
@@ -233,27 +245,26 @@ export function ChangePlanDialog({
 
         {!success && !confirming && (
           <>
-            {/* Toggle de ciclo (4 opções) */}
-            <div className="flex justify-center mb-2">
-              <div className="inline-flex flex-wrap justify-center rounded-full border border-border p-1 bg-muted/30">
-                {CYCLES.map((b) => (
-                  <button
+            <div role="radiogroup" aria-label="Ciclo de cobrança" className="grid grid-cols-2 gap-1 rounded-full bg-secondary p-1">
+                {PLAN_CHANGE_CYCLES.map((b) => (
+                  <Button variant="ghost"
                     key={b}
                     type="button"
-                    onClick={() => setBilling(b)}
-                    className={`px-3 py-1.5 text-xs rounded-full font-['Nunito'] transition-colors ${
+                    role="radio" aria-checked={billing === b}
+                    onClick={() => { setBilling(b); setSelected(null); }}
+                    className={`h-11 rounded-full px-2 text-sm font-bold ${
                       billing === b
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground"
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                        : "text-foreground"
                     }`}
                   >
                     {CYCLE_LABELS[b]}
-                  </button>
+                    {b === "yearly" && <span className="rounded-full bg-background px-2 py-0.5 text-[10px] font-bold text-primary">Até −67%</span>}
+                  </Button>
                 ))}
-              </div>
             </div>
 
-            <div className="space-y-2.5">
+            <div role="radiogroup" aria-label="Escolha do plano" className="space-y-2.5">
               {PLAN_IDS.filter((plan) => !minimumSessionLimit || PLAN_SESSION_LIMITS[plan] > minimumSessionLimit).map((p) => {
                 // Em tier de retenção (lite/base) o usuário está num preço reduzido:
                 // o Essencial mensal cheio precisa continuar selecionável.
@@ -262,53 +273,58 @@ export function ChangePlanDialog({
                 const isSelected = p === selected;
                 const price = priceFor(p, billing);
                 return (
-                  <button
+                  <Button variant="ghost"
                     key={p}
                     type="button"
+                    role="radio" aria-checked={isSelected}
                     onClick={() => !isCurrent && setSelected(p)}
                     disabled={isCurrent}
-                    className={`w-full text-left rounded-lg border p-3 transition-all ${
+                    className={`block h-auto w-full whitespace-normal text-left rounded-lg border-2 p-3 transition-colors disabled:opacity-100 ${
                       isSelected
-                        ? "border-accent ring-2 ring-accent/30 bg-accent/5"
+                        ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
                         : isCurrent
-                          ? "border-border/40 bg-muted/30 cursor-default"
-                          : "border-border hover:border-accent/60"
+                          ? "border-border bg-secondary cursor-default"
+                          : "border-border bg-card hover:border-primary hover:bg-secondary"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold font-['Nunito']">{PLAN_LABELS[p]}</span>
+                          <span className="font-bold font-body">{PLAN_LABELS[p]}</span>
                           {isCurrent && (
                             <span className="text-[10px] uppercase tracking-wider bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
                               Seu plano
                             </span>
                           )}
                           {isSelected && !isCurrent && (
-                            <Check size={14} className="text-accent" />
+                            <Check size={18} className="text-primary-foreground" />
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground font-['Nunito'] mt-0.5">
-                          {PLAN_TAGLINES[p]}
+                        <p className={`text-xs mt-1 ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`}>
+                          {PLAN_SESSION_LIMITS[p]} encontros/mês · {p === "essencial" ? "Quinzenal" : p === "direcao" ? "Semanal" : "2 vezes por semana"}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-sm font-semibold font-['Nunito']">
+                        <div className="text-lg font-extrabold">
                           {fmtBRL(price)}
                         </div>
-                        <div className="text-[10px] text-muted-foreground font-['Nunito']">
-                          /mês{billing !== "monthly" ? ` (${CYCLE_LABELS[billing].toLowerCase()})` : ""}
+                        <div className={`text-xs ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`}>
+                          /mês
                         </div>
                       </div>
                     </div>
-                  </button>
+                    {billing === "yearly" && <div className={`mt-2 flex flex-wrap items-center justify-between gap-1 border-t pt-2 text-xs ${isSelected ? "border-primary-foreground/20 text-primary-foreground" : "border-border text-muted-foreground"}`}>
+                      <span>{fmtBRL(annualPlanSavings(p).total)} por ano</span>
+                      <span className={`font-bold ${isSelected ? "text-primary-foreground" : "text-primary"}`}>Economize {fmtBRL(annualPlanSavings(p).savings)} · {annualPlanSavings(p).percent}%</span>
+                    </div>}
+                  </Button>
                 );
               })}
             </div>
 
-            <DialogFooter className="gap-2 sm:gap-2">
+            <DialogFooter className="sticky -bottom-5 z-10 bg-background py-3 gap-2 sm:gap-2 sm:-bottom-6">
               <Button variant="ghost" onClick={() => handleClose(false)}>
-                Cancelar
+                Fechar
               </Button>
               <Button
                 onClick={() => setConfirming(true)}
@@ -322,7 +338,7 @@ export function ChangePlanDialog({
 
         {!success && confirming && selected && (
           <>
-            <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm font-['Nunito'] space-y-2">
+            <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm font-body space-y-2">
               <div>
                 <span className="text-muted-foreground">De:</span>{" "}
                 <span className="font-medium">
@@ -335,6 +351,7 @@ export function ChangePlanDialog({
                 <span className="font-medium">
                   {PLAN_LABELS[selected]} ({CYCLE_LABELS[billing].toLowerCase()}) ·{" "}
                   {fmtBRL(priceFor(selected, billing))}/mês
+                  {billing === "yearly" && <span className="block text-muted-foreground">{fmtBRL(annualPlanSavings(selected).total)} por ano</span>}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground pt-1">

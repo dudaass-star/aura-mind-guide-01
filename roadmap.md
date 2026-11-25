@@ -311,3 +311,6 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 
 ## Visual da pausa e cancelamento
 - [x] Atualizar marca, Nunito e superfícies do fluxo existente sem alterar pagamentos; recap, motivos, desconto/Lite/Base, confirmação e retorno ao App conferidos com conta autenticada em 393×575 e desktop, sem erros ou cobranças; nove testes passaram. Aguarda publicação.
+
+## Troca de plano no App
+- [x] Padronizar Nunito, destacar seleção e limitar escolha a Mensal/Anual com economia e total anual; conferido na conta autenticada em celular e computador até a confirmação, sem efetivar cobrança. Doze testes passaram; aguarda publicação.

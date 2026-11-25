@@ -61,3 +61,7 @@
 - The `/quiz` acquisition page composes its reading from fixed, reviewed copy per answer (`src/lib/quiz/content.ts`) and keeps answers only on the device; Meta and funnel events carry step names only, never emotional answers.
 - In the night theme, `main > section` is forced transparent to kill the zebra effect; a section that must carry its own colored band needs the `.v5-band` class, otherwise the global rule silently erases its background.
 - Aura voice files stay in the private TTS bucket for users with App access (cleanup only drops shared leftovers and files of users without access); the App gets renewable links via `aura-audio-url` and regenerates from the message text when a file is gone, so history audio never dies yet storage doesn't grow for churned users.
+
+- Plan-change cycle choices and annual savings use the shared pricing helpers while legacy billing cycles remain readable; this keeps the two-choice interface consistent without rewriting existing contracts.
+
+- The plan-change dialog loads Nunito from the installed font package; local font files avoid failed external font requests and inconsistent fallback typography.
