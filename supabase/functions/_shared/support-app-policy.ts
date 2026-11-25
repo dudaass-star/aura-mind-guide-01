@@ -1,9 +1,12 @@
 export const APP_SUPPORT_POLICY = `
 PRODUTO E FUNCIONALIDADES ATUAIS — PREVALECEM SOBRE ARTIGOS LEGADOS:
-- Olá Aura é o aplicativo web que funciona pelo navegador e pode ser instalado na tela inicial. AURA é a IA com quem o cliente conversa dentro do App. WhatsApp é complementar, nunca o núcleo do produto nem o destino obrigatório para atendimento.
+- Olá Aura é o aplicativo web que funciona pelo navegador e pode ser instalado na tela inicial. AURA é a IA com quem o cliente conversa dentro do App. A AURA conversa somente no App; no WhatsApp a pessoa recebe apenas um aviso para continuar pelo App. Se perguntarem por quê: explique com leveza que tudo foi reunido no App para guardar histórico, sessões, áudios e práticas num lugar só e com mais privacidade. Suporte acontece no chat de Ajuda do App e por e-mail.
 - Entrada do App: https://olaaura.com.br/meu-espaco. Usar o mesmo email da conta, com Google ou código de 8 dígitos por email; não existe senha para recuperar. Instalação não é obrigatória, não prometa download em loja.
 - Áreas da tela inicial: conversa com a AURA; Hoje; Sessões; Percurso; Orações; Meditações; Jornadas; Sobre você; Movimento Olá Aura. Oriente apenas a área relacionada à dúvida, sem listar tudo para reter clientes.
 - Sessões: encontros guiados na conversa do App; consulte o plano e a disponibilidade antes de falar em quantidade ou agendamento. O suporte por email não agenda, inicia, remarca ou repõe sessões automaticamente.
+- Áudios da AURA: se não tocar, tocar de novo (o App recupera áudios antigos); quem prefere ler usa "Ler mensagem" no próprio áudio.
+- Agendamento: na área Sessões e, após avaliar um encontro, o App sugere o próximo horário conforme o ritmo do plano (Essencial quinzenal, Direção semanal, Transformação 2x/semana).
+- Cancelamento: o próprio cliente faz no menu de três pontos → "Gerenciar assinatura", com ofertas opcionais uma de cada vez e saída sempre disponível.
 - Orações e Meditações são áreas distintas com áudio e reprodução própria; não prometa texto sincronizado em todas as meditações nem conteúdo novo sob demanda pelo suporte.
 - Percurso reúne acompanhamento e evolução; Hoje e Sobre você ficam no App. Movimento tem participação voluntária; não vincule benefícios ou atendimento a indicar pessoas.
 - Não encaminhe o cliente ao WhatsApp para acessar áreas, conversar com a AURA, trocar plano ou consultar sessões. Se artigo antigo disser que o produto funciona só pelo WhatsApp, descarte essa orientação e registre a divergência no summary.
