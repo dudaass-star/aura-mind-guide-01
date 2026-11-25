@@ -3,7 +3,7 @@ import "@fontsource/nunito/400.css";
 import "@fontsource/nunito/600.css";
 import "@fontsource/nunito/700.css";
 import "@fontsource/nunito/800.css";
-import { Loader2, Check } from "lucide-react";
+import { Loader2, Check, CreditCard } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
+import { canMigratePixToCard } from "@/lib/card-migration";
 import {
   PLAN_LABELS,
   PLAN_MONTHLY_EQUIVALENT,
@@ -41,6 +42,8 @@ interface Props {
   /** Gateway ativo — roteia para a edge function correta e ajusta copy. */
   paymentGateway: "stripe-card" | "asaas-pix" | "asaas-card" | "inter-pix" | "woovi-pix";
   minimumSessionLimit?: number;
+  onSwitchToCard?: () => Promise<void>;
+  cardMigrationLoading?: boolean;
 }
 
 const PLAN_SESSION_LIMITS: Record<PlanId, number> = { essencial: 2, direcao: 4, transformacao: 8 };
@@ -54,11 +57,14 @@ export function ChangePlanDialog({
   currentTier,
   paymentGateway,
   minimumSessionLimit,
+  onSwitchToCard,
+  cardMigrationLoading = false,
 }: Props) {
   const [billing, setBilling] = useState<BillingCycle>(planChangeInitialCycle(currentBilling));
   const [selected, setSelected] = useState<PlanId | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [migratingToCard, setMigratingToCard] = useState(false);
   const [success, setSuccess] = useState<{
     planName: string;
     nextChargeDate?: string;
@@ -85,6 +91,7 @@ export function ChangePlanDialog({
   const isAsaas = paymentGateway === "asaas-pix" || paymentGateway === "asaas-card";
   const isPix = paymentGateway === "asaas-pix";
   const isAsaasCard = paymentGateway === "asaas-card";
+  const offersCardMigration = canMigratePixToCard(paymentGateway, currentTier) && Boolean(onSwitchToCard);
   // Mostra tela de sucesso com próxima cobrança em qualquer fluxo Asaas
   // (PIX e cartão recorrente Asaas reusam a mesma edge com retorno idêntico).
   const showsNextCharge = isAsaas || isPixAutomatico;
@@ -108,10 +115,11 @@ export function ChangePlanDialog({
     setConfirming(false);
     setLoading(false);
     setSuccess(null);
+    setMigratingToCard(false);
   };
 
   const handleClose = (next: boolean) => {
-    if (loading) return;
+    if (loading || cardMigrationLoading) return;
     if (!next) reset();
     onOpenChange(next);
   };
@@ -184,7 +192,7 @@ export function ChangePlanDialog({
         <DialogHeader>
           <DialogTitle className="font-body text-xl font-bold">{minimumSessionLimit ? "Ter mais sessões" : "Trocar de plano"}</DialogTitle>
           <DialogDescription className="font-body">
-            {minimumSessionLimit ? `Veja os planos com mais de ${minimumSessionLimit} ${minimumSessionLimit === 1 ? "sessão" : "sessões"} por mês. ${copyDescription}` : copyDescription}
+            {migratingToCard ? "Troque a forma de pagamento da sua assinatura atual." : minimumSessionLimit ? `Veja os planos com mais de ${minimumSessionLimit} ${minimumSessionLimit === 1 ? "sessão" : "sessões"} por mês. ${copyDescription}` : copyDescription}
           </DialogDescription>
         </DialogHeader>
 
@@ -243,7 +251,7 @@ export function ChangePlanDialog({
           </>
         )}
 
-        {!success && !confirming && (
+        {!success && !confirming && !migratingToCard && (
           <>
             <div role="radiogroup" aria-label="Ciclo de cobrança" className="grid grid-cols-2 gap-1 rounded-full bg-secondary p-1">
                 {PLAN_CHANGE_CYCLES.map((b) => (
@@ -336,7 +344,7 @@ export function ChangePlanDialog({
           </>
         )}
 
-        {!success && confirming && selected && (
+        {!success && confirming && selected && !migratingToCard && (
           <>
             <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm font-body space-y-2">
               <div>
@@ -370,6 +378,31 @@ export function ChangePlanDialog({
               <Button onClick={handleConfirm} disabled={loading}>
                 {loading && <Loader2 size={14} className="animate-spin mr-2" />}
                 Confirmar troca
+              </Button>
+            </DialogFooter>
+            {offersCardMigration && (
+              <div className="border-t border-border pt-3 text-center">
+                <p className="text-xs text-muted-foreground">Prefere pagar no cartão de crédito?</p>
+                <Button variant="link" className="mt-1 h-auto whitespace-normal text-sm text-primary" disabled={loading} onClick={() => setMigratingToCard(true)}>
+                  <CreditCard size={16} className="mr-2 shrink-0" />
+                  Trocar para cartão
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+        {migratingToCard && offersCardMigration && (
+          <>
+            <div className="space-y-3 rounded-lg border border-border bg-secondary p-4 text-sm">
+              <p className="font-bold">{currentPlan ? PLAN_LABELS[currentPlan] : "Seu plano atual"}{currentBilling ? ` · ${CYCLE_LABELS[currentBilling]}` : ""}</p>
+              <p className="text-muted-foreground">Esta etapa muda apenas o pagamento para cartão, mantendo seu plano e ciclo atuais. Depois, você pode voltar aqui para trocar de plano.</p>
+              <p className="text-muted-foreground">Na próxima tela, confira o valor e a data da primeira cobrança antes de confirmar. O PIX só é encerrado após a confirmação do cartão.</p>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button variant="ghost" disabled={cardMigrationLoading} onClick={() => setMigratingToCard(false)}>Voltar</Button>
+              <Button disabled={cardMigrationLoading} onClick={() => { void onSwitchToCard?.(); }}>
+                {cardMigrationLoading ? <Loader2 size={16} className="mr-2 animate-spin" /> : <CreditCard size={16} className="mr-2" />}
+                Continuar com cartão
               </Button>
             </DialogFooter>
           </>

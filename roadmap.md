@@ -313,4 +313,5 @@ Tudo concluído em 10/09/2026. Funções publicadas; painel de cobrança separad
 - [x] Atualizar marca, Nunito e superfícies do fluxo existente sem alterar pagamentos; recap, motivos, desconto/Lite/Base, confirmação e retorno ao App conferidos com conta autenticada em 393×575 e desktop, sem erros ou cobranças; nove testes passaram. Aguarda publicação.
 
 ## Troca de plano no App
+- [x] Adicionar alternativa PIX Woovi → cartão na confirmação, reaproveitando migração do plano/ciclo atuais; conta autenticada no cartão conferida e PIX simulado em celular/computador, com retorno e bloqueio de clique repetido. Dezesseis testes passaram; sem cobrança ou migração financeira real. PIX legado e tiers de retenção sem opção por incompatibilidade existente. Aguarda publicação.
 - [x] Padronizar Nunito, destacar seleção e limitar escolha a Mensal/Anual com economia e total anual; conferido na conta autenticada em celular e computador até a confirmação, sem efetivar cobrança. Doze testes passaram; aguarda publicação.

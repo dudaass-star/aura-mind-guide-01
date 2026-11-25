@@ -488,7 +488,7 @@ const UserPortal = () => {
     setPortalLoading(true);
     toast({
       title: "Abrindo o pagamento no cartão…",
-      description: "Nada é cobrado agora: seu período já pago continua valendo.",
+      description: "Confira o valor e a data da primeira cobrança antes de confirmar.",
     });
     try {
       const { data, error } = await supabasePortal.functions.invoke("switch-to-card", {
@@ -826,6 +826,8 @@ const UserPortal = () => {
                 : "stripe-card"
           }
           minimumSessionLimit={minimumSessionLimit}
+          onSwitchToCard={handleSwitchToCard}
+          cardMigrationLoading={portalLoading}
         />
       )}
     </>
