@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarCheck, CalendarDays, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DayStrip } from "@/components/portal/DayStrip";
 import { TimeWheelPicker } from "@/components/portal/TimeWheelPicker";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import type { Json } from "@/integrations/supabase/types";
@@ -129,8 +129,8 @@ export function PostSessionScheduleDialog({ userId, sessionId, onClose }: Props)
             ) : (
               <div className="grid gap-3">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="post-next-date">Dia</Label>
-                  <Input id="post-next-date" type="date" value={date} min={today} onChange={(e) => { setDate(e.target.value); setTime(""); }} />
+                  <Label>Dia</Label>
+                  <DayStrip min={today} max={brtDate(new Date(Date.now() + 60 * 86400000))} value={date} onChange={(v) => { setDate(v); setTime(""); }} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label>Horário</Label>

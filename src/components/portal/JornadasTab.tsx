@@ -350,7 +350,7 @@ export function JornadasTab({ userId, profile, onJourneyChanged }: JornadasTabPr
       )}
 
       <AlertDialog open={Boolean(pendingJourneyId)} onOpenChange={(open) => !open && setPendingJourneyId(null)}>
-        <AlertDialogContent className="max-w-sm rounded-2xl">
+        <AlertDialogContent className="portal-dialog w-[calc(100%-2rem)] max-w-sm p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">{currentJourney ? "Trocar sua jornada atual?" : "Refazer esta jornada?"}</AlertDialogTitle>
             <AlertDialogDescription>
