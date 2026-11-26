@@ -1,0 +1,81 @@
+/* Ajustes exclusivos do quiz; não alteram a /v5 nem o checkout independente. */
+.quiz-page {
+  --quiz-paper: 150 16% 97%;
+  --quiz-ink: 222 38% 16%;
+  --quiz-ink-soft: 222 20% 30%;
+  --quiz-ink-muted: 222 12% 42%;
+  --quiz-line: 153 12% 84%;
+  --quiz-sage: 153 13% 31%;
+  --quiz-sage-hover: 153 16% 26%;
+  --quiz-lilac: 265 42% 56%;
+  --quiz-lilac-soft: 265 35% 94%;
+  font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+}
+.quiz-page h1, .quiz-page h2, .quiz-page h3 { font-family: inherit; letter-spacing: 0; }
+.quiz-page .quiz-opt { border-radius: 12px; min-height: 58px; white-space: normal; height: auto; font-weight: 500; box-shadow: none; }
+.quiz-page .quiz-opt-picked { box-shadow: none; }
+.quiz-page .v5-chip { backdrop-filter: none; box-shadow: none; }
+.quiz-page .quiz-dossier { background: hsl(var(--quiz-paper)); border-color: hsl(var(--quiz-line)); border-radius: 12px; box-shadow: none; }
+.quiz-page .quiz-dossier-head { color: hsl(var(--quiz-ink)); }
+.quiz-page .quiz-dossier-text { color: hsl(var(--quiz-ink-soft)); }
+.quiz-page .quiz-dossier-label { color: hsl(var(--quiz-ink-muted)); }
+.quiz-page .quiz-conversation { border-radius: 12px; background: hsl(var(--card)); box-shadow: none; }
+.quiz-page .quiz-offer { border-radius: 0; border: 0; border-top: 1px solid hsl(var(--border)); background: transparent; box-shadow: none; padding: 28px 0 0; }
+.quiz-page .quiz-cta { min-height: 54px; padding-inline: 16px; font-size: 16px; font-weight: 700; white-space: normal; line-height: 1.3; box-shadow: none; }
+.quiz-page .quiz-cta:hover { box-shadow: none; transform: none; }
+.quiz-page .quiz-plan { white-space: normal; height: auto; border-radius: 12px; box-shadow: none; }
+.quiz-page #oferta .quiz-plan { display: flex; flex-direction: column; gap: 0; }
+.quiz-page .quiz-sticky { background: hsl(var(--background)); }
+
+/* O último passo acompanha o checkout claro aprovado: branco, lilás e sálvia. */
+.theme-v2.theme-v5-night.quiz-checkout,
+.checkout-dark.ck-light.ck-calm.ck-quiz,
+.ck-calm-dialog.ck-quiz-dialog {
+  --background: 0 0% 100%;
+  --foreground: 222 38% 16%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 38% 16%;
+  --primary: 153 13% 31%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 265 35% 94%;
+  --secondary-foreground: 222 38% 16%;
+  --muted: 150 16% 97%;
+  --muted-foreground: 222 12% 42%;
+  --border: 153 12% 84%;
+  --input: 153 12% 84%;
+  --ring: 153 13% 31%;
+  --ck-bg: 0 0% 100%;
+  --ck-card: 0 0% 100%;
+  --ck-surface: 0 0% 100%;
+  --ck-text: 222 38% 16%;
+  --ck-text-soft: 222 20% 30%;
+  --ck-text-muted: 222 12% 42%;
+  --ck-line: 153 12% 84%;
+  --ck-cta: 153 13% 31%;
+  --ck-cta-hover: 153 16% 26%;
+  --ck-cta-fg: 0 0% 100%;
+  --ck-accent: 153 13% 31%;
+  --ck-sage: 153 13% 31%;
+  --ck-sage-hover: 153 16% 26%;
+  background: hsl(var(--background)) !important;
+  color: hsl(var(--foreground));
+  color-scheme: light;
+  min-height: 0;
+  font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
+}
+.quiz-checkout .v5-chip { color: hsl(var(--foreground)); background: hsl(var(--secondary)); border-color: hsl(var(--border)); }
+.quiz-checkout .quiz-summary { background: hsl(var(--secondary)); border: 1px solid hsl(var(--border)); }
+.quiz-checkout .quiz-logo { filter: none; }
+.ck-calm.ck-quiz .ck-field, .ck-calm.ck-quiz input,
+.ck-quiz-dialog .ck-field, .ck-quiz-dialog input { background: hsl(var(--card)) !important; color: hsl(var(--foreground)) !important; }
+.ck-calm.ck-quiz .ck-cta, .ck-calm.ck-quiz .ck-cta-main, .ck-quiz-dialog .ck-cta {
+  background: hsl(var(--ck-cta)) !important; color: hsl(var(--ck-cta-fg)) !important; box-shadow: none !important; letter-spacing: 0;
+}
+.ck-calm.ck-quiz .ck-cta:hover { background: hsl(var(--ck-cta-hover)) !important; transform: none; }
+.ck-calm.ck-quiz .quiz-voices { background: hsl(var(--quiz-sage)) !important; }
+.ck-calm.ck-quiz .quiz-voice-card { background: hsl(var(--quiz-paper)) !important; }
+.ck-quiz [aria-label="Forma de pagamento"] > [role="radio"] { flex-direction: column; align-items: flex-start; gap: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .quiz-page *, .quiz-page *::after { animation: none !important; scroll-behavior: auto !important; }
+}

@@ -5,14 +5,19 @@ import avatarJuliana from "@/assets/avatar-juliana.jpg";
 import avatarPedro from "@/assets/avatar-pedro.jpg";
 import avatarFernanda from "@/assets/avatar-fernanda.jpg";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import "@/styles/v2-theme.css";
 import "@/styles/v5-hero.css";
+import "@fontsource/nunito/400.css";
+import "@fontsource/nunito/600.css";
+import "@fontsource/nunito/700.css";
+import "@/styles/quiz-theme.css";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck, Mic, Award } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { THEMES, BARRIERS, STARTS, composeReading, type ThemeId } from "@/lib/quiz/content";
+import { INITIAL_OFFER, PAYWALL, offerForCheckout, type Rhythm, type QuizBilling } from "@/lib/quiz/offer";
 import { trackLandingCta, checkoutHref, useLandingEngagement } from "@/lib/landing-analytics";
 import { trackMetaViewContent } from "@/lib/meta-pixel";
 import { logFunnel } from "@/lib/checkout-funnel";
@@ -41,12 +46,6 @@ const LOOPED_TESTIMONIALS = Array.from({ length: LOOP_COPIES }, (_, c) =>
 ).flat();
 // Paywall do quiz: ritmo escolhe o plano (quinzenal=Essencial, semanal=Direção); só Mensal e Anual.
 // Valores devem acompanhar a tabela do CheckoutV2.
-type Rhythm = "quinzenal" | "semanal" | "intensivo";
-const PAYWALL = {
-  quinzenal: { plan: "essencial", name: "Essencial", sessions: "2 encontros guiados por mês", trial: "6,90", monthly: "29,90", yearlyMonth: "9,90", yearlyTotal: "118,80", off: 67 },
-  semanal: { plan: "direcao", name: "Direção", sessions: "4 encontros guiados por mês", trial: "9,90", monthly: "49,90", yearlyMonth: "16,90", yearlyTotal: "202,80", off: 66 },
-  intensivo: { plan: "transformacao", name: "Transformação", sessions: "8 encontros guiados por mês", trial: "19,90", monthly: "79,90", yearlyMonth: "26,90", yearlyTotal: "322,80", off: 66 },
-} as const;
 const planQuery = (plan: string, billing: "monthly" | "yearly") => `?${checkoutHref("final", "quiz").split("?")[1] ?? "lp=quiz"}&plan=${plan}&billing=${billing}`;
 const LOADING_STEPS = ["Lendo suas respostas…", "Entendendo o que mais tem te afetado…", "Preparando por onde começar com a AURA…"];
 
@@ -64,7 +63,6 @@ const Loading = () => {
   return (
     <div className="flex flex-col items-center justify-center py-24 animate-fade-in">
       <div className="relative h-24 w-24">
-        <div className="v5-halo" />
         <img src={avatarAura} alt="" className="relative h-24 w-24 rounded-full object-cover ring-2 ring-primary/60" />
       </div>
       <p className="mt-8 text-4xl font-semibold tabular-nums v5-gradient-text">{pct}%</p>
@@ -86,17 +84,17 @@ const Loading = () => {
 const Option = ({ label, onClick }: { label: string; onClick: () => void }) => {
   const [picked, setPicked] = useState(false);
   return (
-  <button
+  <Button variant="ghost"
     type="button"
     disabled={picked}
     onClick={() => { setPicked(true); setTimeout(onClick, 320); }}
-    className={`group flex w-full items-center gap-4 text-left quiz-opt rounded-[20px] border px-5 py-3 text-[15px] leading-snug transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.985] ${picked ? "quiz-opt-picked text-foreground shadow-[0_8px_30px_-12px_hsl(var(--primary)/0.6)]" : "text-foreground/90 hover:text-foreground"}`}
+    className={`group flex w-full items-center gap-4 text-left quiz-opt border px-5 py-3 text-[15px] leading-snug transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.985] ${picked ? "quiz-opt-picked text-foreground" : "text-foreground/90 hover:text-foreground"}`}
   >
     <span className="flex-1">{label}</span>
     <span aria-hidden="true" className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${picked ? "border-primary bg-primary" : "border-primary/45 group-hover:border-primary"}`}>
       {picked && <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={3} />}
     </span>
-  </button>
+  </Button>
   );
 };
 
@@ -123,10 +121,10 @@ export default function Quiz() {
     setStep("checkout");
     window.scrollTo({ top: 0 });
   };
-  const [theme, setTheme] = useState<ThemeId | null>(done ? saved!.theme : null);
-  const [pattern, setPattern] = useState<string | null>(done ? saved!.pattern : null);
-  const [barrier, setBarrier] = useState<string | null>(done ? saved!.barrier : null);
-  const [start, setStart] = useState<string | null>(done ? saved!.start : null);
+  const [theme, setTheme] = useState<ThemeId | null>(done ? saved?.theme ?? null : null);
+  const [pattern, setPattern] = useState<string | null>(done ? saved?.pattern ?? null : null);
+  const [barrier, setBarrier] = useState<string | null>(done ? saved?.barrier ?? null : null);
+  const [start, setStart] = useState<string | null>(done ? saved?.start ?? null : null);
 
   useEffect(() => {
     if (theme && pattern && barrier && start) {
@@ -144,6 +142,12 @@ export default function Quiz() {
   const toOffer = () => {
     setStep("result");
     setTimeout(() => document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }), 350);
+  };
+  // Todos os convites de entrada abrem a mesma oferta, sem herdar o anual.
+  const showInitialOffer = (source: "hero" | "demo" | "final", label: string) => {
+    setBilling(INITIAL_OFFER.billing);
+    trackLandingCta(source, label, V);
+    document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -202,8 +206,7 @@ export default function Quiz() {
   }, [step]);
 
   const [rhythm, setRhythm] = useState<Rhythm>("quinzenal");
-  const [moreRhythms, setMoreRhythms] = useState(false);
-  const [billing, setBilling] = useState<"monthly" | "yearly">("yearly");
+  const [billing, setBilling] = useState<QuizBilling>(INITIAL_OFFER.billing);
   const currentTheme = THEMES.find((t) => t.id === theme);
   const reading = useMemo(
     () => (theme && pattern && barrier && start ? composeReading({ theme, pattern, barrier, start }) : null),
@@ -228,9 +231,9 @@ export default function Quiz() {
     idx >= 0 ? (
       <div className="mb-4 flex items-center gap-4">
         {idx > 0 ? (
-          <button type="button" onClick={back} aria-label="Voltar" className="text-muted-foreground hover:text-foreground">
+          <Button variant="ghost" size="icon-sm" type="button" onClick={back} aria-label="Voltar" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-5 w-5" />
-          </button>
+          </Button>
         ) : <span className="w-5" />}
         <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
           <div className="h-full bg-primary transition-all duration-500" style={{ width: `${((idx + 1) / 4) * 100}%` }} />
@@ -259,15 +262,9 @@ export default function Quiz() {
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
       </Helmet>
-      <div className="theme-v2 theme-v5-night relative min-h-screen overflow-hidden bg-background text-foreground antialiased">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[640px] overflow-hidden [mask-image:linear-gradient(to_bottom,black_55%,transparent)]">
-          <div className="v5-orb v5-orb-a" />
-          <div className="v5-orb v5-orb-b" />
-          <div className="v5-orb v5-orb-c" />
-          <div className="v5-grain" />
-        </div>
+      <div className={`theme-v2 theme-v5-night quiz-page ${step === "checkout" ? "quiz-checkout" : ""} relative min-h-screen overflow-hidden bg-background text-foreground antialiased`}>
         <header className="relative container mx-auto max-w-xl px-5 pt-4 pb-1">
-          <button type="button" onClick={restart} aria-label="Recomeçar o teste"><img src={logoHorizontal} alt="Olá Aura" className="h-6 w-auto brightness-0 invert" /></button>
+          <Button type="button" variant="ghost" onClick={restart} aria-label="Recomeçar o teste" className="h-auto p-0 hover:bg-transparent"><img src={logoHorizontal} alt="Olá Aura" className="quiz-logo h-6 w-auto brightness-0 invert" /></Button>
         </header>
         <main className="relative container mx-auto max-w-xl px-5 py-2 pb-28">
           {step === "theme" && (
@@ -307,7 +304,7 @@ export default function Quiz() {
           )}
 
           {step === "start" && (
-            <Question title="Se você pudesse começar a cuidar de você hoje, o que mais faria diferença?">
+            <Question title="O que você mais gostaria de sentir daqui para frente?">
               {STARTS.map((s) => (
                 <Option key={s.id} label={s.label} onClick={() => { setStart(s.id); setStep("loading"); }} />
               ))}
@@ -318,16 +315,17 @@ export default function Quiz() {
 
           {step === "checkout" && chosen && (
             <div className="animate-fade-in space-y-6 pt-2">
-              <button onClick={() => { navigate("/quiz", { replace: true }); if (reading) toOffer(); else setStep("theme"); }} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Trocar plano</button>
+              <Button variant="ghost" onClick={() => { navigate("/quiz", { replace: true }); if (reading) toOffer(); else setStep("theme"); }} className="h-auto justify-start gap-1 p-0 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> Trocar plano</Button>
               <div>
                 <span className="v5-chip"><ShieldCheck className="h-3.5 w-3.5 text-primary" /> Último passo</span>
-                <h1 className="mt-4 text-2xl font-semibold leading-tight v5-gradient-text">Ative seu espaço com a AURA</h1>
+                <h1 className="mt-4 text-2xl font-semibold leading-tight text-foreground">Dê o primeiro passo por você.</h1>
                 {(() => {
                   const c = chosen.plan === "direcao" ? PAYWALL.semanal : chosen.plan === "transformacao" ? PAYWALL.intensivo : PAYWALL.quinzenal;
+                  const offer = offerForCheckout(c.plan, chosen.billing);
                   const label = c
-                    ? chosen.billing === "yearly" ? `${c.name} Anual · R$ ${c.yearlyMonth}/mês (R$ ${c.yearlyTotal} por ano)` : `${c.name} Mensal · 7 dias por R$ ${c.trial}, depois R$ ${c.monthly}/mês`
+                    ? chosen.billing === "yearly" ? `${c.name} Anual · R$ ${c.yearlyMonth}/mês (R$ ${offer?.today} por ano)` : `${c.name} Mensal · ${offer?.initialDays} dias por R$ ${offer?.today}, depois R$ ${offer?.renewal}/mês`
                     : "Transformação Mensal";
-                  return <p className="mt-3 rounded-2xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm"><span className="text-foreground/70">Plano escolhido: </span><strong className="font-semibold">{label}</strong>
+                  return <p className="quiz-summary mt-3 rounded-xl px-4 py-3 text-sm"><span className="text-muted-foreground">Plano escolhido: </span><strong className="font-semibold">{label}</strong>
                     <span className="mt-3 block space-y-1.5 text-xs text-foreground/80">
                       {[c ? c.sessions : "8 encontros guiados por mês", "Conversa por áudio e texto a qualquer hora", "Orações e meditações guiadas para desacelerar e descansar"].map((b) => (
                         <span key={b} className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 shrink-0 text-primary" /> {b}</span>
@@ -343,7 +341,7 @@ export default function Quiz() {
 
           {step === "plans" && (
             <div className="animate-fade-in space-y-6 pt-2">
-              <button onClick={() => (reading ? toOffer() : setStep("theme"))} className="flex items-center gap-1 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> {reading ? "Voltar para o meu resultado" : "Voltar"}</button>
+              <Button variant="ghost" onClick={() => (reading ? toOffer() : setStep("theme"))} className="h-auto justify-start gap-1 p-0 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" /> {reading ? "Voltar para o meu resultado" : "Voltar"}</Button>
               <div>
                 <h1 className="text-2xl font-semibold leading-tight v5-gradient-text">Escolha o ritmo do seu acompanhamento</h1>
                 <p className="mt-1 text-sm text-muted-foreground">Todos incluem conversa a qualquer hora, orações e meditações.</p>
@@ -356,7 +354,7 @@ export default function Quiz() {
                 ]).map(({ r, freq, tag }) => {
                   const on = rhythm === r; const pc = PAYWALL[r];
                   return (
-                    <button key={r} role="radio" aria-checked={on} onClick={() => setRhythm(r)}
+                    <Button variant="ghost" key={r} role="radio" aria-checked={on} onClick={() => setRhythm(r)}
                       className={`flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition quiz-plan ${on ? "quiz-plan-on" : ""}`}>
                       <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${on ? "border-primary bg-primary" : "border-foreground/30"}`}>{on && <Check className="h-3 w-3 text-primary-foreground" />}</span>
                       <span className="flex-1">
@@ -365,7 +363,7 @@ export default function Quiz() {
                         <span className="quiz-plan-sub block text-xs">{freq}</span>
                       </span>
                       <span className="shrink-0 whitespace-nowrap text-right text-xs quiz-plan-muted">a partir de<br /><strong className="text-sm text-foreground">R$ {pc.yearlyMonth}</strong>/mês</span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -381,15 +379,15 @@ export default function Quiz() {
                       {opts.map((o) => {
                         const on = billing === o.id;
                         return (
-                          <button key={o.id} role="radio" aria-checked={on} onClick={() => setBilling(o.id)}
-                            className={`relative rounded-2xl border-2 px-3 pb-4 pt-6 text-center transition quiz-plan ${on ? "quiz-plan-on" : ""}`}>
+                          <Button variant="ghost" key={o.id} role="radio" aria-checked={on} onClick={() => setBilling(o.id)}
+                            className={`relative flex-col gap-0 rounded-2xl border-2 px-3 pb-4 pt-6 text-center transition quiz-plan ${on ? "quiz-plan-on" : ""}`}>
                             <span className={`absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${on ? "bg-primary text-primary-foreground" : "quiz-plan-pill"}`}>{o.tag}</span>
                             {on && <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />}
                             <span className="block text-sm font-semibold">{o.name}</span>
                             <span className="mt-1 block text-2xl font-bold tracking-tight">{o.price}</span>
                             <span className="block text-xs text-foreground/75">{o.unit}</span>
                             <span className="mt-2 block text-[11px] leading-snug quiz-plan-muted">{o.note}</span>
-                          </button>
+                          </Button>
                         );
                       })}
                     </div>
@@ -398,7 +396,7 @@ export default function Quiz() {
                         <li key={t} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="font-medium">{t}</span></li>
                       ))}
                     </ul>
-                    <Button variant="sage" size="xl" className="v5-shimmer mt-5 w-full rounded-2xl shadow-lg" onClick={() => { trackLandingCta("final", `Paywall ${c.plan} ${billing} (quiz)`, V); goCheckout(c.plan, billing); }}>{billing === "monthly" ? `Começar por R$ ${c.trial}` : `Garantir o ${c.name} anual`}</Button>
+                    <Button variant="sage" size="xl" className="quiz-cta mt-5 w-full rounded-xl" onClick={() => { trackLandingCta("final", `Paywall ${c.plan} ${billing} (quiz)`, V); goCheckout(c.plan, billing); }}>{billing === "monthly" ? `Começar meus 7 dias por R$ ${c.trial}` : `Assinar por R$ ${c.yearlyTotal}/ano`}</Button>
                     <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80"><ShieldCheck className="h-4 w-4 text-foreground/60" /> Pagamento seguro · cancele em 1 clique</p>
                   </div>
                 );
@@ -416,8 +414,8 @@ export default function Quiz() {
                   <p className="quiz-dossier-kicker text-[11px] font-semibold uppercase tracking-[0.2em]">Leitura pessoal · confidencial</p>
                   {[
                     { k: "O que está acontecendo", v: reading.living },
-                    { k: "O nó invisível", v: reading.barrier },
-                    { k: "A saída", v: reading.start },
+                    { k: "O que dificulta a mudança", v: reading.barrier },
+                    { k: "Por onde começar", v: reading.start },
                   ].map((x, i) => (
                     <div key={x.k} className={`quiz-dossier-act ${i ? "mt-5 pt-5" : "mt-4"}`}>
                       <p className="quiz-dossier-label text-[13px] font-medium italic"><span className="quiz-dossier-num">{["I", "II", "III"][i]}</span> {x.k}</p>
@@ -426,12 +424,10 @@ export default function Quiz() {
                     </div>
                   ))}
                 </article>
-                <p className="mt-4 text-center text-sm text-foreground/70">Quer responder pensando em outro momento? <button type="button" onClick={restart} className="font-medium text-primary hover:underline">Refazer teste →</button></p>
               </section>
 
               <div className="relative">
-              <div className="v5-halo" />
-              <section aria-label="Prévia da sua primeira conversa" className="relative overflow-hidden rounded-3xl border border-primary/40 bg-card shadow-[0_30px_60px_-24px_hsl(var(--primary)/0.5)]">
+              <section aria-label="Prévia da sua primeira conversa" className="quiz-conversation relative overflow-hidden border border-border">
                 <div className="flex items-center gap-3 border-b border-border px-4 py-3">
                   <img src={avatarAura} alt="" className="h-9 w-9 rounded-full object-cover ring-2 ring-primary/60" />
                   <div>
@@ -448,32 +444,29 @@ export default function Quiz() {
                     <span className="mt-0.5 flex justify-end text-[10px] text-muted-foreground">agora</span>
                   </div>
                 </div>
-                <Link
-                  to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); trackLandingCta("demo", "Responder à AURA (quiz)", V); }}
-                  className="flex items-center gap-2 border-t border-border/60 bg-card/95 p-3"
-                >
+                <Button variant="ghost" onClick={() => showInitialOffer("demo", "Responder à AURA (quiz)")}
+                  aria-label="Responder à AURA — ver os 7 dias por R$ 6,90"
+                  className="flex h-auto w-full items-center gap-2 rounded-none border-t border-border bg-card p-3 text-left">
                   <span className="flex flex-1 items-center gap-2 rounded-2xl border border-input bg-secondary/55 p-1.5 shadow-inner">
                     <span className="flex-1 px-2 py-2 text-base text-muted-foreground">Mensagem...</span>
                     <span className="flex h-10 w-10 items-center justify-center text-foreground"><Mic className="h-5 w-5" /></span>
                     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"><Send className="h-4 w-4" /></span>
                   </span>
-                </Link>
+                </Button>
               </section>
               </div>
               <p className="-mt-6 text-center text-xs text-foreground/80">Na sua primeira conversa no App, você pode começar exatamente por esse ponto.</p>
 
               <div ref={firstCta}>
-                <Link to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); setBilling("monthly"); trackLandingCta("hero", "Continuar a conversa (quiz)", V); }} className="block">
-                  <Button variant="sage" size="xl" className="v5-shimmer w-full rounded-2xl shadow-lg">Converse agora a partir de R$ 6,90</Button>
-                </Link>
-                <p className="mt-2 text-center text-xs text-muted-foreground">Cancele quando quiser</p>
+                <Button variant="sage" size="xl" className="quiz-cta w-full rounded-xl" onClick={() => showInitialOffer("hero", "Continuar a conversa (quiz)")}>Começar meus 7 dias por R$ 6,90</Button>
+                <p className="mt-2 text-center text-xs text-muted-foreground">Depois R$ 29,90/mês · Cancele quando quiser</p>
               </div>
 
               <div className="flex items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-center text-sm font-medium text-foreground">
                 <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
                 <span>O app nº 1 do Brasil para entender o que sente e mudar sua vida.</span>
               </div>
-              <section id="oferta" className="relative scroll-mt-6 rounded-3xl border border-border bg-card p-6 shadow-xl">
+              <section id="oferta" className="quiz-offer relative scroll-mt-6">
                 <span className="v5-chip mb-4"><Sparkles className="h-3.5 w-3.5 text-primary" /> Experiência inicial recomendada</span>
                 <p className="text-xl font-semibold">Seu acompanhamento começa agora.</p>
                 <p className="mt-1 text-sm text-muted-foreground">Escolha como prefere dar os primeiros passos com a AURA.</p>
@@ -484,15 +477,15 @@ export default function Quiz() {
                   ]).map((o) => {
                     const on = billing === o.id;
                     return (
-                      <div key={o.id} role="radio" aria-checked={on} tabIndex={0} onClick={() => setBilling(o.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setBilling(o.id); }}
+                      <Button variant="ghost" type="button" key={o.id} role="radio" aria-checked={on} onClick={() => setBilling(o.id)}
                         className={`relative cursor-pointer rounded-2xl border-2 px-3 pb-4 pt-6 text-center transition quiz-plan ${on ? "quiz-plan-on" : ""}`}>
                         <span className={`absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${on ? "bg-primary text-primary-foreground" : "quiz-plan-pill"}`}>{o.tag}</span>
                         {on && <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />}
-                        <p className="text-sm font-semibold">{o.name}</p>
-                        <p className="mt-1 text-2xl font-bold tracking-tight">{o.price}</p>
-                        <p className="text-xs text-foreground/75">{o.unit}</p>
-                        <p className="mt-2 text-[11px] leading-snug quiz-plan-muted">{o.note}</p>
-                      </div>
+                        <span className="block text-sm font-semibold">{o.name}</span>
+                        <span className="mt-1 block text-2xl font-bold">{o.price}</span>
+                        <span className="block text-xs text-foreground/75">{o.unit}</span>
+                        <span className="mt-2 block text-[11px] leading-snug quiz-plan-muted">{o.note}</span>
+                      </Button>
                     );
                   })}
                 </div>
@@ -502,21 +495,22 @@ export default function Quiz() {
                     <li key={t} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="font-medium">{t}</span></li>
                   ))}
                 </ul>
-                <Button variant="sage" size="xl" className="v5-shimmer mt-5 w-full rounded-2xl shadow-lg"
-                  onClick={() => { trackLandingCta("final", `Paywall essencial ${billing} (quiz)`, V); goCheckout("essencial", billing); }}>
-                  {billing === "yearly" ? "Garantir o plano anual" : "Começar por R$ 6,90"}
+                <Button variant="sage" size="xl" className="quiz-cta mt-5 w-full rounded-xl"
+                  onClick={() => { trackLandingCta("final", `Paywall essencial ${billing} (quiz)`, V); goCheckout(INITIAL_OFFER.plan, billing); }}>
+                  {billing === "yearly" ? "Assinar por R$ 118,80/ano" : "Começar meus 7 dias por R$ 6,90"}
                 </Button>
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80">
                   <ShieldCheck className="h-4 w-4 text-foreground/60" /> Pagamento seguro · cancele em 1 clique
                 </p>
                 <div className="mt-5 text-center">
                   <p className="text-sm font-medium text-foreground/90">Gostaria de mais encontros de 45 minutos?</p>
-                  <button type="button" onClick={() => { setRhythm("semanal"); setMoreRhythms(true); setStep("plans"); }} className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline">Confira todos os planos disponíveis →</button>
+                  <Button type="button" variant="link" onClick={() => { setRhythm("semanal"); setStep("plans"); }} className="mt-1 h-auto whitespace-normal p-0 text-sm font-semibold">Confira todos os planos disponíveis →</Button>
                 </div>
                 <p className="mt-4 text-center text-xs text-muted-foreground">
                   A Olá AURA não substitui acompanhamento médico ou psicológico.
                 </p>
               </section>
+
               <p className="-mb-6 text-center text-sm font-medium text-foreground/90">Mais de 5.000 pessoas já deram esse passo ↓</p>
               <section aria-label="Quem já começou" className="v5-band quiz-voices -mx-5 py-6">
                 <div className="flex items-end justify-between px-5">
@@ -538,16 +532,17 @@ export default function Quiz() {
                 </div>
               </section>
 
+              <footer className="border-t border-border pt-6 text-center">
+                <Button type="button" variant="link" onClick={restart} className="text-sm text-muted-foreground">Refazer teste <ArrowLeft className="h-4 w-4" /></Button>
+              </footer>
             </div>
           )}
         </main>
         {step === "result" && showSticky && (
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur animate-fade-in">
+          <div className="quiz-sticky fixed inset-x-0 bottom-0 z-40 border-t border-border animate-fade-in">
             <div className="container mx-auto flex max-w-xl items-center gap-3 px-5 py-3">
               <p className="flex-1 text-sm leading-tight"><span className="font-semibold">7 dias por R$ 6,90</span><br /><span className="text-xs text-muted-foreground">cancele quando quiser</span></p>
-              <Link to="#planos" onClick={(e) => { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); setBilling("monthly"); trackLandingCta("final", "Barra fixa (quiz)", V); }}>
-                <Button variant="sage" className="rounded-xl">Começar</Button>
-              </Link>
+              <Button variant="sage" className="quiz-cta rounded-xl" onClick={() => showInitialOffer("final", "Barra fixa (quiz)")}>Começar</Button>
             </div>
           </div>
         )}

@@ -1422,7 +1422,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
         <meta property="og:type" content="website" />
       </Helmet>}
 
-      <div className={embedded ? "v2-theme checkout-dark ck-light ck-calm ck-v5" : "v2-theme checkout-dark min-h-screen ck-light ck-calm ck-v5"}>
+      <div className={embedded ? "v2-theme checkout-dark ck-light ck-calm ck-quiz" : "v2-theme checkout-dark min-h-screen ck-light ck-calm ck-v5"}>
         
 
         {!embedded && <header className="relative py-4 md:py-5">
@@ -2022,7 +2022,7 @@ const CheckoutV2 = ({ embedded = false }: { embedded?: boolean } = {}) => {
             }, 200);
           }
         }}>
-          <DialogContent className="ck-calm-dialog ck-v5-dialog border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogContent className={`ck-calm-dialog ${embedded ? "ck-quiz-dialog" : "ck-v5-dialog"} border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto`}>
             {pixStage === "form" ? (
               <>
                 <DialogHeader>

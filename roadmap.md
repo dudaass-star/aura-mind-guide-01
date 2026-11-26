@@ -5,6 +5,11 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Refinamento do quiz aprovado
+- [x] Encurtar a última pergunta e as respostas, preservar a leitura e mover Refazer teste para depois dos depoimentos.
+- [x] Alinhar todos os convites à oferta mensal de sete dias por R$ 6,90, com continuidade R$ 29,90/mês; anual explícito e pagamento embutido claro, sem alterar checkout independente.
+- [x] Conferir perguntas, leitura, oferta, métodos de pagamento, retorno, recomeço e recarga em 320px, 536px e desktop, sem transbordamento nem erros; seis testes passaram. Sem executar cobrança; aguarda publicação.
+
 ## Leitura das mensagens de voz
 - [x] Compactar o balão com duração, leitura e horário na mesma linha; conversa autenticada verificada em 393px, 320px e desktop, sem transbordamento, reprodução ou solicitações de áudio ao abrir/recolher o texto. Aguarda publicação.
 - [x] Adicionar “Ler mensagem” e “Ocultar texto” dentro do balão com o texto existente; abertura/recolhimento verificados na conversa autenticada em celular e desktop, sem carregar, recuperar ou reproduzir áudio, sem erros de tela. Aguarda publicação.
