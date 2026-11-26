@@ -51,6 +51,19 @@
 .quiz-page .quiz-plan { white-space: normal; height: auto; border-radius: 12px; box-shadow: none; }
 .quiz-page #oferta .quiz-plan { display: flex; flex-direction: column; gap: 0; }
 .quiz-page .quiz-sticky { background: hsl(var(--background)); }
+.quiz-page .quiz-more-plans {
+  background: hsl(var(--quiz-paper));
+  border-color: hsl(var(--quiz-line));
+  color: hsl(var(--quiz-ink));
+  box-shadow: none;
+}
+.quiz-page .quiz-more-plans:hover {
+  background: hsl(var(--quiz-lilac-soft));
+  border-color: hsl(var(--quiz-sage));
+  color: hsl(var(--quiz-ink));
+}
+.quiz-page .quiz-more-plans-note { color: hsl(var(--quiz-ink-soft)); }
+.quiz-page .quiz-more-plans > svg { color: hsl(var(--quiz-sage)); }
 
 /* O último passo acompanha o checkout claro aprovado: branco, lilás e sálvia. */
 .theme-v2.theme-v5-night.quiz-checkout,

@@ -13,7 +13,7 @@ import "@fontsource/nunito/600.css";
 import "@fontsource/nunito/700.css";
 import "@/styles/quiz-theme.css";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck, Mic, Award } from "lucide-react";
+import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck, Mic, Award } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { THEMES, BARRIERS, STARTS, composeReading, type ThemeId } from "@/lib/quiz/content";
@@ -502,13 +502,13 @@ export default function Quiz() {
                 <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-foreground/80">
                   <ShieldCheck className="h-4 w-4 text-foreground/60" /> Pagamento seguro · cancele em 1 clique
                 </p>
-                <div className="mt-5 text-center">
-                  <p className="text-sm font-medium text-foreground/90">Gostaria de mais encontros de 45 minutos?</p>
-                  <Button type="button" variant="link" onClick={() => { setRhythm("semanal"); setStep("plans"); }} className="mt-1 h-auto whitespace-normal p-0 text-sm font-semibold">Confira todos os planos disponíveis →</Button>
-                </div>
-                <p className="mt-4 text-center text-xs text-muted-foreground">
-                  A Olá AURA não substitui acompanhamento médico ou psicológico.
-                </p>
+                <Button type="button" variant="ghost" onClick={() => { setRhythm("semanal"); setStep("plans"); }} className="quiz-more-plans mt-6 flex h-auto w-full items-center gap-3 whitespace-normal rounded-lg border px-4 py-4 text-left">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold leading-snug">Planos com 4 ou 8 encontros</span>
+                    <span className="quiz-more-plans-note mt-1 block text-xs font-normal leading-relaxed">Encontros guiados de 45 min por mês. Confira as opções.</span>
+                  </span>
+                  <ChevronRight aria-hidden="true" className="h-5 w-5 shrink-0" />
+                </Button>
               </section>
 
               <p className="-mb-6 text-center text-sm font-medium text-foreground/90">Mais de 5.000 pessoas já deram esse passo ↓</p>
@@ -534,6 +534,9 @@ export default function Quiz() {
 
               <footer className="border-t border-border pt-6 text-center">
                 <Button type="button" variant="link" onClick={restart} className="text-sm text-muted-foreground">Refazer teste <ArrowLeft className="h-4 w-4" /></Button>
+                <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+                  A Olá AURA não substitui acompanhamento médico ou psicológico.
+                </p>
               </footer>
             </div>
           )}
