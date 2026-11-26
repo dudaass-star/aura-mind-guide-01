@@ -95,10 +95,10 @@
   --card-foreground: 222 38% 16%;
   --primary: 153 13% 31%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 265 35% 94%;
+  --secondary: 150 24% 93%;
   --secondary-foreground: 222 38% 16%;
   --muted: 150 16% 97%;
-  --muted-foreground: 222 12% 42%;
+  --muted-foreground: 222 20% 34%;
   --border: 153 12% 84%;
   --input: 153 12% 84%;
   --ring: 153 13% 31%;
@@ -107,7 +107,7 @@
   --ck-surface: 0 0% 100%;
   --ck-text: 222 38% 16%;
   --ck-text-soft: 222 20% 30%;
-  --ck-text-muted: 222 12% 42%;
+  --ck-text-muted: 222 20% 34%;
   --ck-line: 153 12% 84%;
   --ck-cta: 153 13% 31%;
   --ck-cta-hover: 153 16% 26%;
@@ -121,8 +121,8 @@
   min-height: 0;
   font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
 }
-.quiz-checkout .v5-chip { color: hsl(var(--foreground)); background: hsl(var(--secondary)); border-color: hsl(var(--border)); }
-.quiz-checkout .quiz-summary { background: hsl(var(--secondary)); border: 1px solid hsl(var(--border)); }
+.quiz-checkout .v5-chip { color: hsl(var(--primary)); background: hsl(var(--secondary)); border-color: hsl(var(--primary) / .24); }
+.quiz-checkout .quiz-summary { background: hsl(var(--secondary)); border: 1px solid hsl(var(--primary) / .24); }
 .quiz-checkout .quiz-logo { filter: none; }
 .ck-calm.ck-quiz .ck-field, .ck-calm.ck-quiz input,
 .ck-quiz-dialog .ck-field, .ck-quiz-dialog input { background: hsl(var(--card)) !important; color: hsl(var(--foreground)) !important; }
