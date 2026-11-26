@@ -88,11 +88,11 @@ const Option = ({ label, onClick }: { label: string; onClick: () => void }) => {
     type="button"
     disabled={picked}
     onClick={() => { setPicked(true); setTimeout(onClick, 320); }}
-    className={`group flex w-full items-center gap-4 text-left quiz-opt border px-5 py-3 text-[15px] leading-snug transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.985] ${picked ? "quiz-opt-picked text-foreground" : "text-foreground/90 hover:text-foreground"}`}
+    className={`group flex w-full items-center gap-4 text-left quiz-opt border px-5 py-3 text-[15px] leading-snug transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.985] ${picked ? "quiz-opt-picked text-[hsl(var(--quiz-ink))]" : "text-[hsl(var(--quiz-ink))] hover:text-[hsl(var(--quiz-ink))]"}`}
   >
     <span className="flex-1">{label}</span>
-    <span aria-hidden="true" className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${picked ? "border-primary bg-primary" : "border-primary/45 group-hover:border-primary"}`}>
-      {picked && <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={3} />}
+    <span aria-hidden="true" className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${picked ? "border-[hsl(var(--quiz-sage))] bg-[hsl(var(--quiz-sage))]" : "border-[hsl(var(--quiz-sage)/.55)] group-hover:border-[hsl(var(--quiz-sage))]"}`}>
+      {picked && <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />}
     </span>
   </Button>
   );

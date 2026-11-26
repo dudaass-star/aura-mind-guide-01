@@ -13,8 +13,32 @@
   letter-spacing: 0;
 }
 .quiz-page h1, .quiz-page h2, .quiz-page h3 { font-family: inherit; letter-spacing: 0; }
-.quiz-page .quiz-opt { border-radius: 12px; min-height: 58px; white-space: normal; height: auto; font-weight: 500; box-shadow: none; }
-.quiz-page .quiz-opt-picked { box-shadow: none; }
+/* Cards das perguntas: pérola de alto contraste sobre o fundo noturno.
+   Fundo marfim, texto marinho e seletor sálvia — leitura imediata no celular. */
+.quiz-page .quiz-opt {
+  border-radius: 12px; min-height: 58px; white-space: normal; height: auto;
+  font-weight: 600; box-shadow: none;
+  background: hsl(var(--quiz-paper));
+  border-color: hsl(var(--quiz-line));
+  color: hsl(var(--quiz-ink));
+}
+.quiz-page .quiz-opt:hover {
+  background: hsl(150 18% 94%);
+  border-color: hsl(var(--quiz-sage) / .5);
+  color: hsl(var(--quiz-ink));
+}
+.quiz-page .quiz-opt-picked, .quiz-page .quiz-opt-picked:hover {
+  background: hsl(var(--quiz-lilac-soft));
+  border-color: hsl(var(--quiz-sage));
+  color: hsl(var(--quiz-ink));
+}
+/* Círculo seletor à direita: borda sálvia nítida, preenchimento ao escolher. */
+.quiz-page .quiz-opt [aria-hidden="true"] { border-color: hsl(var(--quiz-sage) / .55); }
+.quiz-page .quiz-opt:hover [aria-hidden="true"] { border-color: hsl(var(--quiz-sage)); }
+.quiz-page .quiz-opt-picked [aria-hidden="true"] {
+  border-color: hsl(var(--quiz-sage));
+  background: hsl(var(--quiz-sage));
+}
 .quiz-page .v5-chip { backdrop-filter: none; box-shadow: none; }
 .quiz-page .quiz-dossier { background: hsl(var(--quiz-paper)); border-color: hsl(var(--quiz-line)); border-radius: 12px; box-shadow: none; }
 .quiz-page .quiz-dossier-head { color: hsl(var(--quiz-ink)); }
