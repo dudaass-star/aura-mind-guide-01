@@ -6,6 +6,7 @@
 # Roadmap
 
 ## Refinamento do quiz aprovado
+- [x] Harmonizar toda a página de pagamento com sálvia vivo, seleção branca, textos nítidos e a mesma paleta no PIX e botão fixo, preservando preços e funcionamento.
 - [x] Destacar outros planos em card “Planos com 4 ou 8 encontros” e mover aviso médico para o rodapé; quiz completo e abertura dos planos conferidos em 393px e desktop, sem erros; seis testes passaram. Aguarda publicação.
 - [x] Encurtar a última pergunta e as respostas, preservar a leitura e mover Refazer teste para depois dos depoimentos.
 - [x] Alinhar todos os convites à oferta mensal de sete dias por R$ 6,90, com continuidade R$ 29,90/mês; anual explícito e pagamento embutido claro, sem alterar checkout independente.
