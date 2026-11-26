@@ -13,7 +13,7 @@ import "@fontsource/nunito/600.css";
 import "@fontsource/nunito/700.css";
 import "@/styles/quiz-theme.css";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck, Mic, Award } from "lucide-react";
+import { ArrowLeft, ChevronRight, Check, Sparkles, MessageCircle, CalendarHeart, Moon, Send, Star, ShieldCheck, Mic, Award, Compass } from "lucide-react";
 import logoHorizontal from "@/assets/logo-ola-aura-horizontal.png";
 import avatarAura from "@/assets/avatar-aura.jpg";
 import { THEMES, BARRIERS, STARTS, composeReading, type ThemeId } from "@/lib/quiz/content";
@@ -417,7 +417,10 @@ export default function Quiz() {
                     { k: "O que dificulta a mudança", v: reading.barrier },
                     { k: "Por onde começar", v: reading.start },
                   ].map((x, i) => (
-                    <div key={x.k} className={`quiz-dossier-act ${i ? "mt-5 pt-5" : "mt-4"}`}>
+                    <div key={x.k} className={`quiz-dossier-act ${i === 2 ? "quiz-dossier-act-final mt-5" : i ? "mt-5 pt-5" : "mt-4"}`}>
+                      {i === 2 && (
+                        <span className="quiz-dossier-path-tag"><Compass className="h-3.5 w-3.5" /> O seu caminho</span>
+                      )}
                       <p className="quiz-dossier-label text-[13px] font-medium italic"><span className="quiz-dossier-num">{["I", "II", "III"][i]}</span> {x.k}</p>
                       <p className="quiz-dossier-head mt-1.5 text-[19px] font-semibold leading-snug">{x.v.head}</p>
                       <p className="quiz-dossier-text mt-1.5 text-[15px] leading-relaxed">{x.v.text}</p>

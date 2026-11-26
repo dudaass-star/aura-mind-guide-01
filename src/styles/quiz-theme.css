@@ -44,6 +44,26 @@
 .quiz-page .quiz-dossier-head { color: hsl(var(--quiz-ink)); }
 .quiz-page .quiz-dossier-text { color: hsl(var(--quiz-ink-soft)); }
 .quiz-page .quiz-dossier-label { color: hsl(var(--quiz-ink-muted)); }
+/* Ato final da leitura: "Por onde começar" vira o caminho de ação, com destaque próprio.
+   Card interno em sálvia suave, borda refinada e tag de direção — sem glow nem vidro. */
+.quiz-page .quiz-dossier-act-final {
+  margin-top: 20px;
+  padding: 16px 16px 18px;
+  border-radius: 12px;
+  background: hsl(150 24% 93%);
+  border: 1px solid hsl(var(--quiz-sage) / .38);
+}
+.quiz-page .quiz-dossier-act-final .quiz-dossier-label { color: hsl(153 14% 30%); }
+.quiz-page .quiz-dossier-act-final .quiz-dossier-head { color: hsl(153 22% 24%); }
+.quiz-page .quiz-dossier-act-final .quiz-dossier-text { color: hsl(222 22% 26%); }
+.quiz-page .quiz-dossier-path-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-bottom: 12px;
+  padding: 4px 10px; border-radius: 999px;
+  background: hsl(var(--quiz-sage) / .14);
+  color: hsl(var(--quiz-sage));
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
 .quiz-page .quiz-conversation { border-radius: 12px; background: hsl(var(--card)); box-shadow: none; }
 .quiz-page .quiz-offer { border-radius: 0; border: 0; border-top: 1px solid hsl(var(--border)); background: transparent; box-shadow: none; padding: 28px 0 0; }
 .quiz-page .quiz-cta { min-height: 54px; padding-inline: 16px; font-size: 16px; font-weight: 700; white-space: normal; line-height: 1.3; box-shadow: none; }
