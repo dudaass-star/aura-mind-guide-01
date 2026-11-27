@@ -6,6 +6,7 @@
 # Roadmap
 
 ## Apresentação do App no Instagram
+- [ ] Produzir e conferir Story 2 sobre encontros guiados de 45 minutos, mantendo a identidade do Story 1 e sem sons de digitação; sem alterar o App ou publicar.
 - [x] Produzir e revisar o primeiro rascunho do Story 1: vídeo vertical 1080×1920, 32,4 s, conversa demonstrativa recriada, voz de teste existente e música; revisão de movimento e áudio relatada pelo produtor e quadros conferidos. Identidade vocal atual não confirmada; sem alterar o App ou publicar.
 
 ## Refinamento do quiz aprovado
