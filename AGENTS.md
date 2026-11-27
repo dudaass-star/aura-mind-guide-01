@@ -67,3 +67,4 @@
 - Plan-change cycle choices and annual savings use the shared pricing helpers while legacy billing cycles remain readable; this keeps the two-choice interface consistent without rewriting existing contracts.
 
 - The plan-change dialog loads Nunito from the installed font package; local font files avoid failed external font requests and inconsistent fallback typography.
+- Native store apps use Capacitor with fixed `appId` `br.com.olaaura.app` (immutable after first store release); store builds load bundled `dist`, and live reload to the preview only via `CAP_LIVE_RELOAD=1`, so store binaries never depend on the sandbox.
