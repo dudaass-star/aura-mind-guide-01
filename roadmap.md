@@ -6,7 +6,7 @@
 # Roadmap
 
 ## Apresentação do App no Instagram
-- [ ] Produzir e revisar o Story 1 completo sobre a conversa, em vídeo vertical, com identidade e voz oficiais; sem alterar o App ou publicar.
+- [x] Produzir e revisar o primeiro rascunho do Story 1: vídeo vertical 1080×1920, 32,4 s, conversa demonstrativa recriada, voz de teste existente e música; revisão de movimento e áudio relatada pelo produtor e quadros conferidos. Identidade vocal atual não confirmada; sem alterar o App ou publicar.
 
 ## Refinamento do quiz aprovado
 - [x] Harmonizar toda a página de pagamento com sálvia vivo, seleção branca, textos nítidos e a mesma paleta no PIX e botão fixo, preservando preços e funcionamento.
