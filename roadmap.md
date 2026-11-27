@@ -5,6 +5,9 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Apresentação do App no Instagram
+- [ ] Produzir e revisar o Story 1 completo sobre a conversa, em vídeo vertical, com identidade e voz oficiais; sem alterar o App ou publicar.
+
 ## Refinamento do quiz aprovado
 - [x] Harmonizar toda a página de pagamento com sálvia vivo, seleção branca, textos nítidos e a mesma paleta no PIX e botão fixo, preservando preços e funcionamento.
 - [x] Destacar outros planos em card “Planos com 4 ou 8 encontros” e mover aviso médico para o rodapé; quiz completo e abertura dos planos conferidos em 393px e desktop, sem erros; seis testes passaram. Aguarda publicação.
