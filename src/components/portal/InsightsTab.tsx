@@ -11,7 +11,7 @@ import { sanitizePortalText } from "./sanitize";
 import { reportPushConversion } from "@/lib/push-notifications";
 import { reportTodayDirectionProgress } from "@/lib/today-direction";
 import { takePercursoFocus } from "@/lib/percurso-focus";
-import { breatheBlocks, chapterBlocks, isFreshlySealed, pickEvolution, type ChapterBlock } from "@/lib/percurso-story";
+import { breatheBlocks, chapterBlocks, isFreshlySealed, pickEvolution, percursoDate, percursoMonthKey, type ChapterBlock } from "@/lib/percurso-story";
 
 type Snapshot = {
   id: string;
@@ -58,12 +58,11 @@ function isEmptyMonthReport(report: { metrics_json?: any; analysis_text?: string
 }
 
 function monthKeyOf(iso: string) {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return percursoMonthKey(iso);
 }
 
 function monthLabelOf(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  return percursoDate(iso).toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "America/Sao_Paulo" });
 }
 
 // Converte resumo em 3ª pessoa para a voz da AURA falando com a cliente.
@@ -236,7 +235,7 @@ export function InsightsTab({ userId, profile, onOpenConversation }: { userId: s
   const sealedChapter = chapters.find((c) => c.key !== currentKey && isFreshlySealed(c.anchorDate)) ?? null;
   const monthSessions = currentChapter?.sessions.length ?? 0;
   const nextSessionAt = data?.nextSessionAt ?? null;
-  const fmtMonth = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { month: "long" });
+  const fmtMonth = (iso: string) => percursoDate(iso).toLocaleDateString("pt-BR", { month: "long", timeZone: "America/Sao_Paulo" });
 
   // Retomada padrão: campo limpo, banner com o assunto, contexto do último encontro no 1º envio.
   const resumeFrom = (label?: string) => onOpenConversation(undefined, lastSession ? { resumeSessionId: lastSession.id, resumeLabel: label } : undefined);

@@ -5,6 +5,11 @@
 - [x] Separar resumo semanal e relatório mensal, com cartões na conversa e histórico no Percurso.
 # Roadmap
 
+## Jornada demonstrativa para UGC e lojas
+- [x] Reconstruir somente a conta fictícia Marina: 138 mensagens, seis encontros de 45 minutos, dois por mês, com continuidade de setembro a novembro e sem dados de clientes.
+- [x] Alinhar Percurso, três reflexões guardadas pelo fluxo existente, seis evidências, quatro viradas, duas cartas/capítulos, três leituras semanais e retrato à mesma história; próximo encontro preparado para 06/12 às 19h BRT.
+- [x] Validar autenticado: todas as 138 mensagens, leitura sem reprodução, áudio individual/pausa, capítulos, calendário e preparação persistida, retrato e desktop; dez testes passaram. Corrigir datas de calendário que criavam capítulo fantasma no mês anterior: dois capítulos confirmados na prévia BRT, build OK; essa correção de código aguarda publicação.
+
 ## Apresentação do App no Instagram
 - [x] Produzir rascunho do Story 2: 34 s, 1080×1920, 60fps, sem sons de digitação; quadros conferidos, telas recriadas com dados fictícios, sem alterar o App ou publicar. Voz atual não confirmada e trilha diferente do Story 1; movimento em reprodução e escuta não verificados.
 - [ ] Revisar fidelidade do Story 2 antes da versão final: remover destaques artificiais da conversa, conferir telas demonstrativas contra o App e validar movimento/áudio em reprodução; rascunho entregue para avaliação, não aprovado como final.

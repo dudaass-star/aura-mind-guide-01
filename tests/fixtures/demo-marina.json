@@ -1,0 +1,2216 @@
+{
+  "as_of": "2026-11-27",
+  "saved": [
+    {
+      "date": "2026-10-25T22:45:00+00:00",
+      "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8"
+    },
+    {
+      "date": "2026-09-27T22:45:00+00:00",
+      "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4"
+    },
+    {
+      "date": "2026-11-22T22:45:00+00:00",
+      "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd"
+    }
+  ],
+  "counts": {
+    "themes": 3,
+    "milestones": 4,
+    "weekly_reports": 3,
+    "monthly_reports": 2
+  },
+  "letters": [
+    "2026-09-01",
+    "2026-10-01"
+  ],
+  "profile": {
+    "id": "4f8a79ba-f8a3-46d8-8791-5ee1afcba54c",
+    "plan": "essencial",
+    "phone": null,
+    "status": "demo",
+    "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e"
+  },
+  "messages": [
+    {
+      "id": "a7203e4a-06bd-d67f-4617-2d47ca484b6d",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-05T22:00:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "ffa687be-9a09-004e-ceb3-2e4a3420fbe9",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "a7203e4a-06bd-d67f-4617-2d47ca484b6d"
+      },
+      "created_at": "2026-09-05T22:01:08.571429+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "8a57c56c-54e6-e787-a761-5e3176d12ed0",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "a7203e4a-06bd-d67f-4617-2d47ca484b6d"
+      },
+      "created_at": "2026-09-05T22:01:10.571429+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "b39c4e6c-5d6c-46cd-289c-4b08a69bd1b4",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-05T22:02:17.142857+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "20e00474-cf07-1758-89e7-3332ecca737c",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "b39c4e6c-5d6c-46cd-289c-4b08a69bd1b4"
+      },
+      "created_at": "2026-09-05T22:03:25.714286+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "59b71998-8735-9261-1f6f-b011ae153f36",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "b39c4e6c-5d6c-46cd-289c-4b08a69bd1b4"
+      },
+      "created_at": "2026-09-05T22:03:27.714286+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "540506d1-6857-25fc-b146-f977c2d29dd0",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-05T22:04:34.285714+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "84e27a58-1eca-00bf-894c-5b7aa4ce8240",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "540506d1-6857-25fc-b146-f977c2d29dd0"
+      },
+      "created_at": "2026-09-05T22:05:42.857143+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "646b954c-5159-d0e9-5927-2865c490fe4d",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-05T22:06:51.428571+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "d80496ad-599c-f169-8ff4-eddcfb307b37",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "646b954c-5159-d0e9-5927-2865c490fe4d"
+      },
+      "created_at": "2026-09-05T22:08:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "05bd74f5-1b99-057e-f705-283358008a09",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-13T22:00:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "bc20427b-07b1-5355-d7f2-37a2b8fd27d1",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": "05bd74f5-1b99-057e-f705-283358008a09"
+      },
+      "created_at": "2026-09-13T22:03:27.692308+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "33d3a0d4-bf40-aa9e-777d-dfacf65caec8",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-13T22:06:55.384615+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "2abe312f-5c4b-f1eb-546f-9cd5dae545ac",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": "33d3a0d4-bf40-aa9e-777d-dfacf65caec8"
+      },
+      "created_at": "2026-09-13T22:10:23.076923+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "26058af8-d678-be70-2b50-f09d1a955067",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": "33d3a0d4-bf40-aa9e-777d-dfacf65caec8"
+      },
+      "created_at": "2026-09-13T22:10:25.076923+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "c695e601-afd2-00f9-4875-6df32262bb6d",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-13T22:13:50.769231+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "e48ca1d7-84ed-2aee-f0e3-9f854060ba95",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": "c695e601-afd2-00f9-4875-6df32262bb6d"
+      },
+      "created_at": "2026-09-13T22:17:18.461538+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "98f99fe3-bf51-4dfb-cd2e-d2cf22bbde82",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-13T22:20:46.153846+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "2a02727b-2e72-98c4-b1a1-3afec80779a4",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": "98f99fe3-bf51-4dfb-cd2e-d2cf22bbde82"
+      },
+      "created_at": "2026-09-13T22:24:13.846154+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "20fd91a1-d2cf-8fa7-c640-fe2ff456ec68",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": "98f99fe3-bf51-4dfb-cd2e-d2cf22bbde82"
+      },
+      "created_at": "2026-09-13T22:24:15.846154+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "82049e8d-6ee6-5576-4189-e1c78a3457fb",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-13T22:27:41.538462+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "3fc1e5d9-ae8b-43fd-b223-377e3ce34e7a",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": "82049e8d-6ee6-5576-4189-e1c78a3457fb"
+      },
+      "created_at": "2026-09-13T22:31:09.230769+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "88b6f63f-7ed8-afbe-119b-70cb63bca9b3",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-13T22:34:36.923077+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "85853f34-49d0-46cc-0f51-e87ced414c96",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": "88b6f63f-7ed8-afbe-119b-70cb63bca9b3"
+      },
+      "created_at": "2026-09-13T22:38:04.615385+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "d08a87fa-2083-a2db-4f48-093e38b733ba",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-13T22:41:32.307692+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "cf9e3912-efb7-374b-6a56-bd637f7dad6b",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": true,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "70460e83-0f77-a384-2362-360bf86af8c1",
+        "reply_to_message_id": "d08a87fa-2083-a2db-4f48-093e38b733ba"
+      },
+      "created_at": "2026-09-13T22:45:00+00:00",
+      "audio_ready": true,
+      "duration_ms": 6888
+    },
+    {
+      "id": "a97157ec-88bf-93ef-6c12-1299c1306e91",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-18T21:10:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "a7039a2e-605d-ebc7-fdb5-c17744cf77a3",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "a97157ec-88bf-93ef-6c12-1299c1306e91"
+      },
+      "created_at": "2026-09-18T21:12:40+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "b1719eaf-451e-b9f1-f96a-cf91e590c251",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-18T21:15:20+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "12f86194-e000-df1f-4633-46215920d155",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "b1719eaf-451e-b9f1-f96a-cf91e590c251"
+      },
+      "created_at": "2026-09-18T21:18:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "f5e983c6-c821-1ac9-027e-f2005dbaf63e",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-23T22:10:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "4ed18820-ba34-95fb-221b-273296f75aff",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "f5e983c6-c821-1ac9-027e-f2005dbaf63e"
+      },
+      "created_at": "2026-09-23T22:12:40+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "26071a50-3c6c-9066-4857-a7c4b6a1472b",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "f5e983c6-c821-1ac9-027e-f2005dbaf63e"
+      },
+      "created_at": "2026-09-23T22:12:42+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "76fecdf2-bd88-9aa2-5717-e278d9d41998",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-23T22:15:20+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "acb02b42-96eb-ca38-7fc4-6f4ff45e4ae3",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "76fecdf2-bd88-9aa2-5717-e278d9d41998"
+      },
+      "created_at": "2026-09-23T22:18:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "8efe4281-e559-1051-be02-cbaf85f5ccc0",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-27T22:00:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "534f7af1-18d9-1a1a-05d6-3714435ab208",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": "8efe4281-e559-1051-be02-cbaf85f5ccc0"
+      },
+      "created_at": "2026-09-27T22:03:27.692308+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "d7bce2c2-c303-9d9e-4e85-bf36b769fe78",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-27T22:06:55.384615+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "74177219-445d-ddd1-e239-c5e40a3b2745",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": "d7bce2c2-c303-9d9e-4e85-bf36b769fe78"
+      },
+      "created_at": "2026-09-27T22:10:23.076923+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "b5308c59-260b-7089-a663-c649f1c9270f",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-27T22:13:50.769231+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "e8f89f51-ad35-49ee-8066-7609ce6aac0c",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": "b5308c59-260b-7089-a663-c649f1c9270f"
+      },
+      "created_at": "2026-09-27T22:17:18.461538+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "fe1ea0ac-a903-4b10-5b63-7c7c72d0a0b2",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": "b5308c59-260b-7089-a663-c649f1c9270f"
+      },
+      "created_at": "2026-09-27T22:17:20.461538+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "45733247-b07e-eeb7-4f55-1769c4301379",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-27T22:20:46.153846+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "73090a47-e827-372b-df91-c87e89883ebe",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": "45733247-b07e-eeb7-4f55-1769c4301379"
+      },
+      "created_at": "2026-09-27T22:24:13.846154+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "f6146afb-9b16-27d0-4aac-45952267b5ef",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-27T22:27:41.538462+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "3d9bc303-21bd-8d1c-e309-2cdec8e51bb5",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": "f6146afb-9b16-27d0-4aac-45952267b5ef"
+      },
+      "created_at": "2026-09-27T22:31:09.230769+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "d772ae31-eed8-2b7f-2992-875aedfda440",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-27T22:34:36.923077+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "2a535d3d-f55f-64b9-4b77-1be0bdd89ca2",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": "d772ae31-eed8-2b7f-2992-875aedfda440"
+      },
+      "created_at": "2026-09-27T22:38:04.615385+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "d05716f1-353d-1f6a-0067-b3ee2a534ac6",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-09-27T22:41:32.307692+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "a8923f68-66aa-2926-0940-9c4d4385bf85",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+        "reply_to_message_id": "d05716f1-353d-1f6a-0067-b3ee2a534ac6"
+      },
+      "created_at": "2026-09-27T22:45:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "c9b9034b-b607-787d-ff7f-ee2d018b4707",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-03T21:30:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "8838a48f-fceb-a5c8-8a45-503acb4915f1",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "c9b9034b-b607-787d-ff7f-ee2d018b4707"
+      },
+      "created_at": "2026-10-03T21:32:40+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "2b425736-4752-9ea2-0a42-48cb58a66b2f",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "c9b9034b-b607-787d-ff7f-ee2d018b4707"
+      },
+      "created_at": "2026-10-03T21:32:42+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "9552dfa3-acb2-6fe2-db6b-4496e5f6aaf5",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-03T21:35:20+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "6137a1a6-5094-8ba2-540a-8c0d8fee2812",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "9552dfa3-acb2-6fe2-db6b-4496e5f6aaf5"
+      },
+      "created_at": "2026-10-03T21:38:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "2efa2cc3-cc67-2c22-3da6-cbd876b6cd59",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-11T22:00:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "3020f29b-0890-e3db-2539-8a3f0edfc54c",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": "2efa2cc3-cc67-2c22-3da6-cbd876b6cd59"
+      },
+      "created_at": "2026-10-11T22:03:27.692308+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "6f83fa86-abaf-ed71-82da-d465d3690b21",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-11T22:06:55.384615+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "d17894e3-d5b9-7bae-0e04-d37314c7fb3e",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": "6f83fa86-abaf-ed71-82da-d465d3690b21"
+      },
+      "created_at": "2026-10-11T22:10:23.076923+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "b79cc018-abe6-90c0-7b52-311903ad9617",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": "6f83fa86-abaf-ed71-82da-d465d3690b21"
+      },
+      "created_at": "2026-10-11T22:10:25.076923+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "339970e8-712e-99ed-674c-387492a9025c",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-11T22:13:50.769231+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "9062dbb3-c006-2234-bc84-d4bb188a8fd6",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": "339970e8-712e-99ed-674c-387492a9025c"
+      },
+      "created_at": "2026-10-11T22:17:18.461538+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "646dc299-5180-32b0-0f75-eaff73470b01",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-11T22:20:46.153846+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "0278d5d4-488f-d73a-d4ad-309e1b79bea1",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": "646dc299-5180-32b0-0f75-eaff73470b01"
+      },
+      "created_at": "2026-10-11T22:24:13.846154+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "cb78a7d8-0624-151a-ce29-fc0e501679a7",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-11T22:27:41.538462+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "119d096f-9fd3-7da7-f998-07eaa8627d86",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": "cb78a7d8-0624-151a-ce29-fc0e501679a7"
+      },
+      "created_at": "2026-10-11T22:31:09.230769+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "cff758ef-b63f-af15-fe05-5be9e185547a",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-11T22:34:36.923077+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "c76df5fe-a43f-0756-b1eb-f3794bfe3e11",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": "cff758ef-b63f-af15-fe05-5be9e185547a"
+      },
+      "created_at": "2026-10-11T22:38:04.615385+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "974f6c86-c40b-1456-abd6-b82eb9444fc6",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-11T22:41:32.307692+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "821d4bf6-cc04-89ac-8034-f3697beeb9d3",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+        "reply_to_message_id": "974f6c86-c40b-1456-abd6-b82eb9444fc6"
+      },
+      "created_at": "2026-10-11T22:45:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "26c8451c-f749-bb5c-2280-f9cacec5702a",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-16T21:15:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "03848b99-adf0-a265-1654-6b7c31a0ef09",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "26c8451c-f749-bb5c-2280-f9cacec5702a"
+      },
+      "created_at": "2026-10-16T21:17:40+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "1c5c12d6-13b4-7b08-0a3e-92f650ea4770",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-16T21:20:20+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "4ad26093-1f33-4a24-7bd6-48b5d41d8e22",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "1c5c12d6-13b4-7b08-0a3e-92f650ea4770"
+      },
+      "created_at": "2026-10-16T21:23:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "05878209-eba0-2ae5-ae74-259bc36c07ff",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-21T23:00:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "e9e2fd51-759b-c696-5d4d-9e499bb297e2",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "05878209-eba0-2ae5-ae74-259bc36c07ff"
+      },
+      "created_at": "2026-10-21T23:02:40+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "a080ada8-9a65-b01f-11ea-9d6deb9e0e51",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-21T23:05:20+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "b69cead8-8dbb-3b73-6a25-3447ba94119a",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "a080ada8-9a65-b01f-11ea-9d6deb9e0e51"
+      },
+      "created_at": "2026-10-21T23:08:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "9221aeec-addf-47a5-689a-20451c002e1b",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-25T22:00:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "3e049913-53a8-431b-12f0-8d27e347c419",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": "9221aeec-addf-47a5-689a-20451c002e1b"
+      },
+      "created_at": "2026-10-25T22:03:27.692308+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "a669f13b-7869-3b42-18b2-5f7e77ad5698",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-25T22:06:55.384615+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "35b065a2-f960-bc72-2c1b-20a743e2eec9",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": "a669f13b-7869-3b42-18b2-5f7e77ad5698"
+      },
+      "created_at": "2026-10-25T22:10:23.076923+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "1e724b3c-dc14-6390-cfed-f422e637cd8b",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-25T22:13:50.769231+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "e065839a-e8df-1427-90c7-77fd3d3b99d2",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": "1e724b3c-dc14-6390-cfed-f422e637cd8b"
+      },
+      "created_at": "2026-10-25T22:17:18.461538+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "24941e92-751e-5660-b1fa-f9df8d2feae6",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-25T22:20:46.153846+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "fd05c50b-d6af-ea49-43aa-c1c55d6dfdb5",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": "24941e92-751e-5660-b1fa-f9df8d2feae6"
+      },
+      "created_at": "2026-10-25T22:24:13.846154+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "407ac077-efbb-eef3-33d6-d4779d0d6259",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-25T22:27:41.538462+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "f3ffddf2-0f09-d8d2-3b4b-c9a6ce798e59",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": "407ac077-efbb-eef3-33d6-d4779d0d6259"
+      },
+      "created_at": "2026-10-25T22:31:09.230769+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "3f3ff618-fd05-a13f-96c6-e410b32ded2d",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-25T22:34:36.923077+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "ab9eebe4-35e8-99bc-11a8-c2c61d72b7c7",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": "3f3ff618-fd05-a13f-96c6-e410b32ded2d"
+      },
+      "created_at": "2026-10-25T22:38:04.615385+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "46709883-c57e-b63c-87ff-2fe529c095a2",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-10-25T22:41:32.307692+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "898723ab-5d48-eabc-5499-50a1c6c74c66",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": true,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+        "reply_to_message_id": "46709883-c57e-b63c-87ff-2fe529c095a2"
+      },
+      "created_at": "2026-10-25T22:45:00+00:00",
+      "audio_ready": true,
+      "duration_ms": 3504
+    },
+    {
+      "id": "854c0cb0-9b98-d99f-7332-187614fe46d9",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-02T21:20:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "7e635f4c-40b3-9c8f-b8bd-726a9f6d50b8",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "854c0cb0-9b98-d99f-7332-187614fe46d9"
+      },
+      "created_at": "2026-11-02T21:22:40+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "7dfed489-6e5d-92c9-b3f3-436f73c8f066",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-02T21:25:20+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "4e3d3556-145d-e930-0476-fac0630afa35",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "7dfed489-6e5d-92c9-b3f3-436f73c8f066"
+      },
+      "created_at": "2026-11-02T21:28:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "89e2fad6-023a-464c-85d5-7c30abb4e6b1",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-08T22:00:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "e11b9791-17e6-4fe7-634c-72bcaf796edc",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": "89e2fad6-023a-464c-85d5-7c30abb4e6b1"
+      },
+      "created_at": "2026-11-08T22:03:27.692308+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "31e9bc14-a92a-0754-b29a-a6dd0b702cd6",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-08T22:06:55.384615+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "89c7d296-7634-ce0c-54b4-9f5b5c54dcae",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": "31e9bc14-a92a-0754-b29a-a6dd0b702cd6"
+      },
+      "created_at": "2026-11-08T22:10:23.076923+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "0ab9e01d-ddcf-9c44-ecde-1aba89f82069",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": "31e9bc14-a92a-0754-b29a-a6dd0b702cd6"
+      },
+      "created_at": "2026-11-08T22:10:25.076923+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "98badd15-a40f-014b-ece5-60c5d0790f53",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-08T22:13:50.769231+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "f54b5214-faee-b5f3-cf18-7e15bb613622",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": "98badd15-a40f-014b-ece5-60c5d0790f53"
+      },
+      "created_at": "2026-11-08T22:17:18.461538+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "689d21a4-7026-3cec-1556-198c65bdd03d",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-08T22:20:46.153846+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "ca269966-b707-65da-437b-1fa0e46bc9bc",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": "689d21a4-7026-3cec-1556-198c65bdd03d"
+      },
+      "created_at": "2026-11-08T22:24:13.846154+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "322c2bda-7da1-0ec9-2bfd-771f90c97c34",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-08T22:27:41.538462+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "41d06957-6319-0861-dd77-6b90db48aba8",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": "322c2bda-7da1-0ec9-2bfd-771f90c97c34"
+      },
+      "created_at": "2026-11-08T22:31:09.230769+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "030cdeed-c037-ae24-0fa1-2ce0a87f99f7",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-08T22:34:36.923077+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "e3ce6eea-d923-6f3a-f713-e73f76c0abef",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": "030cdeed-c037-ae24-0fa1-2ce0a87f99f7"
+      },
+      "created_at": "2026-11-08T22:38:04.615385+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "f1a5dd94-c630-9e54-adde-79834052fb72",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-08T22:41:32.307692+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "2b4788ab-9124-2bb3-7411-833733ff8072",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+        "reply_to_message_id": "f1a5dd94-c630-9e54-adde-79834052fb72"
+      },
+      "created_at": "2026-11-08T22:45:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "7362d4f9-ee2c-0218-2d9b-e0829ac81bec",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-14T22:10:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "c9d4cad1-d6ab-0faa-b477-878fadb8df6c",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "7362d4f9-ee2c-0218-2d9b-e0829ac81bec"
+      },
+      "created_at": "2026-11-14T22:12:40+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "04639f9a-9950-084e-4528-412110c20f55",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-14T22:15:20+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "ce9a747d-fae2-bf59-5642-a2de8eeaeeba",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "04639f9a-9950-084e-4528-412110c20f55"
+      },
+      "created_at": "2026-11-14T22:18:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "35cb3fb2-dff1-cab3-00f8-214b2d9de627",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-22T22:00:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "e79cde6f-b33d-4961-6f62-79a86667737e",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": "35cb3fb2-dff1-cab3-00f8-214b2d9de627"
+      },
+      "created_at": "2026-11-22T22:03:27.692308+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "80e7197b-a19f-d419-b3be-4fdab5ffce3f",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-22T22:06:55.384615+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "a996444a-a752-dab7-aa01-e88fdc926169",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": "80e7197b-a19f-d419-b3be-4fdab5ffce3f"
+      },
+      "created_at": "2026-11-22T22:10:23.076923+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "24f694c7-2312-d57a-b477-13b3f85c1852",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-22T22:13:50.769231+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "ce3e791d-a37f-2524-0703-e4761c5e312b",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": "24f694c7-2312-d57a-b477-13b3f85c1852"
+      },
+      "created_at": "2026-11-22T22:17:18.461538+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "253b4137-0a77-9595-92c1-aff5c3f27aaf",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": "24f694c7-2312-d57a-b477-13b3f85c1852"
+      },
+      "created_at": "2026-11-22T22:17:20.461538+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "be115797-865f-2cd6-f825-eb2a4c0deb8a",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-22T22:20:46.153846+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "79d84af7-e2ce-3a67-458a-69ac793f1e50",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": "be115797-865f-2cd6-f825-eb2a4c0deb8a"
+      },
+      "created_at": "2026-11-22T22:24:13.846154+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "c38f8c56-262f-77d7-2005-0281a7adc025",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-22T22:27:41.538462+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "830eb682-03cc-07a1-e0a8-fca65b0e4180",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": "c38f8c56-262f-77d7-2005-0281a7adc025"
+      },
+      "created_at": "2026-11-22T22:31:09.230769+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "4aac5251-697e-336a-b63f-9f0e76460714",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-22T22:34:36.923077+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "9b2ab057-05f8-b6d1-eb54-45f2368eed49",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": "4aac5251-697e-336a-b63f-9f0e76460714"
+      },
+      "created_at": "2026-11-22T22:38:04.615385+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "b91bcb8c-5782-cc9a-96d8-2ab6547fd467",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-22T22:41:32.307692+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "be7fc4fa-81e7-3c63-a756-c74ad6cc4f82",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+        "reply_to_message_id": "b91bcb8c-5782-cc9a-96d8-2ab6547fd467"
+      },
+      "created_at": "2026-11-22T22:45:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "a39a9388-10f0-4aa0-b7a5-bf643585805c",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-27T19:20:00+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "9646d23e-d29f-051c-a890-927d1dd63eab",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "a39a9388-10f0-4aa0-b7a5-bf643585805c"
+      },
+      "created_at": "2026-11-27T19:21:08.571429+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "220bc5b8-f0cb-642a-a8dd-98a16c2a1c61",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-27T19:22:17.142857+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "ad0ba3a7-cac9-b017-8a38-f2a4fbbf31e4",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": true,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "220bc5b8-f0cb-642a-a8dd-98a16c2a1c61"
+      },
+      "created_at": "2026-11-27T19:23:25.714286+00:00",
+      "audio_ready": true,
+      "duration_ms": 9072
+    },
+    {
+      "id": "9cc1e996-80d9-1aa6-1f29-beac23185630",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-27T19:24:34.285714+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "f3f2bda0-2b53-ba10-649e-dd42ad247652",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "9cc1e996-80d9-1aa6-1f29-beac23185630"
+      },
+      "created_at": "2026-11-27T19:25:42.857143+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "6a937ce1-30b3-8a60-11eb-e01650e9a22c",
+      "role": "user",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": false,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": null
+      },
+      "created_at": "2026-11-27T19:26:51.428571+00:00",
+      "audio_ready": false,
+      "duration_ms": null
+    },
+    {
+      "id": "34ab7f44-58c5-4493-8d9f-61f95ce9b290",
+      "role": "assistant",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "is_audio": true,
+      "metadata": {
+        "demo": true,
+        "fictional": true,
+        "session_id": null,
+        "reply_to_message_id": "6a937ce1-30b3-8a60-11eb-e01650e9a22c"
+      },
+      "created_at": "2026-11-27T19:28:00+00:00",
+      "audio_ready": true,
+      "duration_ms": 9024
+    }
+  ],
+  "sessions": [
+    {
+      "id": "70460e83-0f77-a384-2362-360bf86af8c1",
+      "status": "completed",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "ended_at": "2026-09-13T22:45:00+00:00",
+      "started_at": "2026-09-13T22:00:00+00:00",
+      "closure_type": "pergunta-pra-carregar",
+      "scheduled_at": "2026-09-13T22:00:00+00:00",
+      "duration_minutes": 45
+    },
+    {
+      "id": "639a4e63-83a9-8535-19bd-62b5475891c4",
+      "status": "completed",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "ended_at": "2026-09-27T22:45:00+00:00",
+      "started_at": "2026-09-27T22:00:00+00:00",
+      "closure_type": "tese",
+      "scheduled_at": "2026-09-27T22:00:00+00:00",
+      "duration_minutes": 45
+    },
+    {
+      "id": "843b080f-0337-dda0-c5d1-3474b81ffa37",
+      "status": "completed",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "ended_at": "2026-10-11T22:45:00+00:00",
+      "started_at": "2026-10-11T22:00:00+00:00",
+      "closure_type": "tese",
+      "scheduled_at": "2026-10-11T22:00:00+00:00",
+      "duration_minutes": 45
+    },
+    {
+      "id": "3f65fddd-5db0-e5be-6b60-8e101115c3d8",
+      "status": "completed",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "ended_at": "2026-10-25T22:45:00+00:00",
+      "started_at": "2026-10-25T22:00:00+00:00",
+      "closure_type": "pergunta-pra-carregar",
+      "scheduled_at": "2026-10-25T22:00:00+00:00",
+      "duration_minutes": 45
+    },
+    {
+      "id": "42e067c8-1d42-5793-0dbe-c1b0534a2578",
+      "status": "completed",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "ended_at": "2026-11-08T22:45:00+00:00",
+      "started_at": "2026-11-08T22:00:00+00:00",
+      "closure_type": "pergunta-pra-carregar",
+      "scheduled_at": "2026-11-08T22:00:00+00:00",
+      "duration_minutes": 45
+    },
+    {
+      "id": "ecf52674-df46-e9c3-7a82-912eded802dd",
+      "status": "completed",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "ended_at": "2026-11-22T22:45:00+00:00",
+      "started_at": "2026-11-22T22:00:00+00:00",
+      "closure_type": "tese",
+      "scheduled_at": "2026-11-22T22:00:00+00:00",
+      "duration_minutes": 45
+    },
+    {
+      "id": "f9e9c616-28e6-48d5-95cb-589ba4c9b40e",
+      "status": "scheduled",
+      "user_id": "abba7975-bef4-4dfe-8ef1-f87992604e1e",
+      "ended_at": null,
+      "started_at": null,
+      "closure_type": null,
+      "scheduled_at": "2026-12-06T22:00:00+00:00",
+      "duration_minutes": 45
+    }
+  ],
+  "snapshots": [
+    {
+      "end": "2026-11-27",
+      "start": "2026-11-09",
+      "evidence_id": "9cc1e996-80d9-1aa6-1f29-beac23185630",
+      "evidence_date": "2026-11-27T19:24:34.285714+00:00"
+    },
+    {
+      "end": "2026-11-27",
+      "start": "2026-11-09",
+      "evidence_id": "6a937ce1-30b3-8a60-11eb-e01650e9a22c",
+      "evidence_date": "2026-11-27T19:26:51.428571+00:00"
+    },
+    {
+      "end": "2026-11-08",
+      "start": "2026-11-01",
+      "evidence_id": "030cdeed-c037-ae24-0fa1-2ce0a87f99f7",
+      "evidence_date": "2026-11-08T22:34:36.923077+00:00"
+    },
+    {
+      "end": "2026-10-25",
+      "start": "2026-10-01",
+      "evidence_id": "3f3ff618-fd05-a13f-96c6-e410b32ded2d",
+      "evidence_date": "2026-10-25T22:34:36.923077+00:00"
+    },
+    {
+      "end": "2026-09-23",
+      "start": "2026-09-19",
+      "evidence_id": "76fecdf2-bd88-9aa2-5717-e278d9d41998",
+      "evidence_date": "2026-09-23T22:15:20+00:00"
+    },
+    {
+      "end": "2026-09-18",
+      "start": "2026-09-05",
+      "evidence_id": "b1719eaf-451e-b9f1-f96a-cf91e590c251",
+      "evidence_date": "2026-09-18T21:15:20+00:00"
+    }
+  ]
+}

@@ -4,21 +4,34 @@ export type Evolution = { beforeText: string; beforeDate: string; nowText: strin
 
 const dateOf = (s: EvolutionSource) => s.evidence_date || s.period_end || "";
 
+// Datas de calendário não são instantes UTC: o primeiro dia deve continuar no mesmo mês em Brasília.
+export function percursoDate(iso: string) {
+  return new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00-03:00` : iso);
+}
+
+export function percursoMonthKey(iso: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit",
+  }).formatToParts(percursoDate(iso));
+  return `${parts.find((p) => p.type === "year")?.value}-${parts.find((p) => p.type === "month")?.value}`;
+}
+
 export function pickEvolution(snapshots: EvolutionSource[]): Evolution | null {
   const dated = snapshots.filter((s) => dateOf(s)).sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
   const first = dated.find((s) => s.snapshot_before?.trim());
   const last = [...dated].reverse().find((s) => s.snapshot_change?.trim());
   if (!first || !last) return null;
   // Exige pelo menos ~3 semanas de distância para ser uma evolução real, não o mesmo momento.
-  if (new Date(dateOf(last)).getTime() - new Date(dateOf(first)).getTime() < 20 * 86400000) return null;
+  if (percursoDate(dateOf(last)).getTime() - percursoDate(dateOf(first)).getTime() < 20 * 86400000) return null;
   return { beforeText: first.snapshot_before!.trim(), beforeDate: dateOf(first), nowText: last.snapshot_change!.trim(), nowDate: dateOf(last) };
 }
 
 // Capítulo "selado" é anunciado só nos 7 primeiros dias do mês seguinte.
 export function isFreshlySealed(chapterMonthIso: string, now = new Date()) {
-  const d = new Date(chapterMonthIso);
-  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  return d.getFullYear() === prev.getFullYear() && d.getMonth() === prev.getMonth() && now.getDate() <= 7;
+  const [year, month] = percursoMonthKey(now.toISOString()).split("-").map(Number);
+  const previous = `${month === 1 ? year - 1 : year}-${String(month === 1 ? 12 : month - 1).padStart(2, "0")}`;
+  const day = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", day: "numeric" }).format(now));
+  return percursoMonthKey(chapterMonthIso) === previous && day <= 7;
 }
 
 /** Bloco editorial de leitura de um capítulo. */
