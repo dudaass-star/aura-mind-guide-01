@@ -5,6 +5,11 @@ import { customerRequestedRefund, normalizePendingActionWording, REFUND_TERMS_RE
 import { APP_SUPPORT_POLICY, normalizeAppSupportAction } from "./app-policy.ts";
 import { RENEWAL_POLICY } from "./renewal-policy.ts";
 import { resolveSupportProfile } from "../_shared/support-identity.ts";
+import { createRetentionOffer } from "../_shared/retention-offers.ts";
+import {
+  canRenewSupportOffer, offerIsPayable, offerWasPromised, retentionTerms, selectSupportOffer, supportOfferDecision, supportRenewalRequest,
+  SUPPORT_OFFER_COLUMNS, SUPPORT_RETENTION_POLICY, type SupportRetentionOffer,
+} from "../_shared/support-retention.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -155,7 +160,7 @@ REGRA DE DATAS (INVIOLÁVEL):
 REGRA DE VALORES:
 - Use os campos *_brl pré-formatados (ex: stripe.invoices[0].amount_paid_brl). Nunca divida centavos de cabeça nem invente valor.`;
 
-const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE + APP_SUPPORT_POLICY + SERVICE_POLICY + RENEWAL_POLICY;
+const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE + APP_SUPPORT_POLICY + SERVICE_POLICY + RENEWAL_POLICY + SUPPORT_RETENTION_POLICY;
 
 // Categorias seguras pra auto-resposta (nunca incluem ações financeiras/sensíveis)
 const SAFE_AUTO_REPLY_CATEGORIES = new Set(["duvida_tecnica", "elogio", "outro"]);
@@ -166,13 +171,33 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { ticket_id, hint } = await req.json();
-    if (!ticket_id) throw new Error("ticket_id required");
+    const { ticket_id, hint, renew_retention_offer_id } = await req.json();
+    if (typeof ticket_id !== "string" || !/^[0-9a-f-]{36}$/i.test(ticket_id)) throw new Error("ticket_id inválido");
+    if (renew_retention_offer_id !== undefined && (typeof renew_retention_offer_id !== "string" ||
+        !/^[0-9a-f-]{36}$/i.test(renew_retention_offer_id))) throw new Error("Oferta inválida");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    // Rascunhos aceitam a rotina interna; exceção comercial exige um administrador autenticado.
+    const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    const internal = !!jwt && jwt === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    let adminId: string | null = null;
+    if (!internal && jwt) {
+      const { data: claims } = await supabase.auth.getClaims(jwt);
+      const sub = claims?.claims?.sub;
+      if (typeof sub === "string") {
+        const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: sub, _role: "admin" });
+        if (isAdmin === true) adminId = sub;
+      }
+    }
+    if ((!internal && !adminId) || (renew_retention_offer_id && !adminId)) {
+      return new Response(JSON.stringify({ error: "Acesso administrativo necessário" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Load ticket + last inbound message
     const { data: ticket, error: tErr } = await supabase
@@ -194,6 +219,8 @@ serve(async (req) => {
 
     // Build customer context
     const context: Record<string, unknown> = { ticket: { subject: ticket.subject, category: ticket.category } };
+    let retentionOffers: SupportRetentionOffer[] = [];
+    let retentionLookupFailed = false;
 
     // ========== Histórico de tickets do cliente (últimos 90 dias) ==========
     let recurringCustomer = false;
@@ -247,7 +274,7 @@ serve(async (req) => {
     if (ticket.profile_user_id) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("name, phone, email, plan, status, trial_started_at, plan_expires_at, sessions_used_this_month, created_at")
+        .select("id, user_id, name, phone, email, plan, billing_cycle, status, trial_started_at, plan_expires_at, sessions_used_this_month, created_at")
         .eq("user_id", ticket.profile_user_id)
         .single();
       context.profile = profile;
@@ -265,6 +292,36 @@ serve(async (req) => {
         sampled_messages: activity?.length || 0,
         last_activity_brt: activity?.[0]?.created_at ? fmtBRT(Date.parse(activity[0].created_at) / 1000) : null,
         note: "Metadados de conversa sem conteúdo e sem inferir canal; amostra não representa uso total nem comprova ausência de falha.",
+      };
+
+      // Só registros comerciais e eventos da campanha; nunca lê o texto da conversa com a AURA.
+      const { data: offers, error: offersError } = await supabase.from("retention_offers")
+        .select(SUPPORT_OFFER_COLUMNS).eq("profile_user_id", ticket.profile_user_id)
+        .gte("created_at", new Date(Date.now() - 90 * 86400000).toISOString())
+        .order("created_at", { ascending: false }).limit(30);
+      retentionLookupFailed = !!offersError;
+      retentionOffers = (offers || []) as SupportRetentionOffer[];
+      const { data: offerEvents, error: eventsError } = retentionOffers.length
+        ? await supabase.from("retention_offer_events").select("offer_id,event_type,source,created_at")
+          .in("offer_id", retentionOffers.map(o => o.id)).order("created_at", { ascending: false }).limit(100)
+        : { data: [], error: null };
+      context.retention_history = {
+        available: !offersError,
+        events_available: !eventsError,
+        offers: retentionOffers.map(o => {
+          const terms = retentionTerms(o, profile?.plan || null, profile?.billing_cycle || null);
+          return {
+            id: o.id, tier: o.tier, gateway: o.gateway, origin: o.origin, status: o.status,
+            communicated: offerWasPromised(o), plan: terms?.plan || o.plan,
+            billing: terms?.billing || o.billing_cycle, amount_brl: terms ? fmtBRL(terms.amountCents) : null,
+            expired: Date.parse(o.expires_at) <= Date.now(),
+            sent_at_brt: o.sent_at ? fmtBRT(Date.parse(o.sent_at) / 1000) : null,
+            expires_at_brt: fmtBRT(Date.parse(o.expires_at) / 1000),
+            events: (offerEvents || []).filter(e => e.offer_id === o.id).map(e => ({
+              event: e.event_type, source: e.source, at_brt: fmtBRT(Date.parse(e.created_at) / 1000),
+            })),
+          };
+        }),
       };
     }
 
@@ -374,8 +431,8 @@ serve(async (req) => {
     // Sem isto o agente era cego para o PIX Automático e mandava cliente antigo
     // para o /v2 (checkout de cliente novo).
     try {
-      let prof: { id: string; user_id: string; plan: string | null; status: string | null; card_gateway: string | null; plan_expires_at: string | null } | null = null;
-      const sel = "id, user_id, plan, status, card_gateway, plan_expires_at";
+      let prof: { id: string; user_id: string; plan: string | null; billing_cycle: string | null; status: string | null; card_gateway: string | null; plan_expires_at: string | null } | null = null;
+      const sel = "id, user_id, plan, billing_cycle, status, card_gateway, plan_expires_at";
       if (ticket.profile_user_id) {
         const { data } = await supabase.from("profiles").select(sel).eq("user_id", ticket.profile_user_id).maybeSingle();
         prof = data as typeof prof;
@@ -383,6 +440,9 @@ serve(async (req) => {
       if (!prof && ticket.customer_email) {
         const { data } = await supabase.from("profiles").select(sel).ilike("email", ticket.customer_email).limit(1).maybeSingle();
         prof = data as typeof prof;
+      }
+      if (renew_retention_offer_id && (!prof || prof.card_gateway !== "woovi")) {
+        throw new Error("Renovação de oferta indisponível para este provedor");
       }
       if (prof && (prof.card_gateway === "woovi" || prof.card_gateway === "inter")) {
         const { data: sub } = await supabase.from("woovi_subscriptions")
@@ -399,18 +459,70 @@ serve(async (req) => {
           mandate_status: sub?.status || null,
           mandate_live: mandateLive,
         };
+        let selectedOffer = selectSupportOffer(retentionOffers, prof.user_id, prof.id);
+        if (renew_retention_offer_id) {
+          const previous = retentionOffers.find(o => o.id === renew_retention_offer_id);
+          const terms = previous ? retentionTerms(previous, prof.plan, prof.billing_cycle) : null;
+          if (!previous || !terms || !canRenewSupportOffer(previous, prof.user_id, prof.id) || mandateLive || prof.status === "demo") {
+            throw new Error("Oferta não pode ser renovada para este cadastro");
+          }
+          // Repetir a aprovação reutiliza a sucessora ainda válida, sem prorrogar o prazo novamente.
+          const { data: successors, error: successorError } = await supabase.from("retention_offers")
+            .select(SUPPORT_OFFER_COLUMNS).eq("profile_user_id", prof.user_id).eq("origin", "support_offer_renewal")
+            .contains("metadata", { original_offer_id: previous.id, support_ticket_id: ticket_id })
+            .order("created_at", { ascending: false }).limit(1);
+          if (successorError) throw successorError;
+          const existing = successors?.[0] as SupportRetentionOffer | undefined;
+          if (existing && !offerIsPayable(existing, prof.user_id, prof.id)) {
+            throw new Error("A renovação deste ticket já foi usada ou venceu; revisar uma nova condição");
+          }
+          if (existing) selectedOffer = existing;
+          else {
+            const created = await createRetentionOffer(supabase, {
+              profileUserId: prof.user_id, profileId: prof.id, email: lookupEmail,
+              origin: "support_offer_renewal", channel: "email", reason: "Retomar oferta comunicada, com aprovação administrativa",
+              tier: previous.tier, gateway: "woovi", plan: terms.plan, billingCycle: terms.billing,
+              amountCents: terms.amountCents,
+              metadata: { original_offer_id: previous.id, support_ticket_id: ticket_id, approved_by: adminId },
+            });
+            const { data: renewed, error: renewedError } = await supabase.from("retention_offers")
+              .select(SUPPORT_OFFER_COLUMNS).eq("id", created.id).single();
+            if (renewedError || !renewed) throw new Error("Não foi possível conferir a nova oferta");
+            selectedOffer = renewed as SupportRetentionOffer;
+          }
+        }
+        const { terms, ready: offerReady, blocked: renewalBlocked } = supportOfferDecision(
+          selectedOffer, prof.user_id, prof.id, prof.card_gateway, prof.plan, prof.billing_cycle, retentionLookupFailed,
+        );
+        if (selectedOffer) {
+          pixInfo.offer_id = selectedOffer.id;
+          pixInfo.offer_tier = selectedOffer.tier;
+          pixInfo.offer_status = offerReady ? "ready" : "review_required";
+          pixInfo.approved_renewal = selectedOffer.origin === "support_offer_renewal";
+          pixInfo.plan = terms?.plan || selectedOffer.plan;
+          pixInfo.billing = terms?.billing || selectedOffer.billing_cycle;
+          pixInfo.amount_brl = terms ? fmtBRL(terms.amountCents) : null;
+          pixInfo.offer_expires_at_brt = fmtBRT(Date.parse(selectedOffer.expires_at) / 1000);
+        } else if (retentionLookupFailed) pixInfo.offer_status = "unavailable";
+        context.pix_renewal = pixInfo;
         if (!mandateLive && expiredOrSoon && prof.status !== "demo") {
           const { data: tok } = await supabase.from("user_portal_tokens").select("token").eq("user_id", prof.user_id).maybeSingle();
-          if (tok?.token) {
-            pixInfo.renewal_url = `https://olaaura.com.br/reautorizar-pix?token=${tok.token}`;
+          if (tok?.token && !renewalBlocked) {
+            const offerQuery = selectedOffer ? `&offer=${selectedOffer.tier}&offer_id=${selectedOffer.id}` : "";
+            const renewalUrl = `https://olaaura.com.br/reautorizar-pix?token=${tok.token}${offerQuery}`;
             // Mesmo token reaproveita o QR enquanto válido: não cria mandato duplicado.
-            const { data: qr } = await supabase.functions.invoke("pix-reauth-router", { body: { action: "create", token: tok.token } });
+            const { data: qr, error: qrError } = await supabase.functions.invoke("pix-reauth-router", {
+              body: supportRenewalRequest(tok.token, selectedOffer),
+            });
             const q = qr as { copyPaste?: string; amount?: number; expiresAt?: string; error?: string } | null;
-            if (q && !q.error && q.copyPaste) {
+            const amountMatches = !terms || (typeof q?.amount === "number" && Math.round(q.amount * 100) === terms.amountCents);
+            if (!qrError && q && !q.error && q.copyPaste && amountMatches) {
+              pixInfo.renewal_url = renewalUrl;
               pixInfo.copy_paste = q.copyPaste;
               pixInfo.amount_brl = typeof q.amount === "number" ? fmtBRL(Math.round(q.amount * 100)) : null;
               pixInfo.copy_paste_expires_brt = q.expiresAt ? fmtBRT(Date.parse(q.expiresAt) / 1000) : null;
             } else {
+              pixInfo.offer_status = "unavailable";
               log("PIX renewal QR failed", { error: q?.error });
             }
           }
@@ -418,6 +530,9 @@ serve(async (req) => {
         context.pix_renewal = pixInfo;
       }
     } catch (e) {
+      // Não gera rascunho comercial se a aprovação explícita não se concluiu.
+      if (renew_retention_offer_id) throw e;
+      context.pix_renewal = { offer_status: "unavailable", note: "Conferência comercial indisponível; revisão humana, sem link de preço cheio." };
       log("PIX renewal context failed", { error: String(e) });
     }
 
@@ -732,7 +847,8 @@ ${ticket.profile_user_id ? "" : `- CADASTRO NÃO LOCALIZADO: não confirme statu
     // Bloqueia auto-resposta se ticket já foi auto-respondido antes (regra: nunca 2x)
     const previouslyAutoReplied = (ticket.auto_reply_attempts || 0) > 0 || !!ticket.reopened_at;
     const manualReview = (messages || []).some(m => m.direction === "inbound" && m.headers?.["manual-review"] === true);
-    const autoEligible = !manualReview && isSafeCategory && isSafeAction && hasGoodKbMatch && isLowSeverity && !recurringCustomer && !previouslyAutoReplied;
+    const hasRetentionContext = retentionLookupFailed || retentionOffers.some(offerWasPromised) || !!renew_retention_offer_id;
+    const autoEligible = !hasRetentionContext && !manualReview && isSafeCategory && isSafeAction && hasGoodKbMatch && isLowSeverity && !recurringCustomer && !previouslyAutoReplied;
 
     log("Auto-reply eligibility", {
       ticket_id,

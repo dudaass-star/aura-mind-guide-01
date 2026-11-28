@@ -12,6 +12,8 @@
 //
 // A ativação de acesso NUNCA acontece aqui — só no webhook, com dinheiro entrando.
 import { offerValueCents, retentionBillingCycle } from "../_shared/retention-prices.ts";
+import { PIX_PLAN_PRICES as PRICES } from "../_shared/pix-plan-prices.ts";
+import { offerIsPayable, retentionTerms, SUPPORT_OFFER_COLUMNS } from "../_shared/support-retention.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import QRCode from "https://esm.sh/qrcode@1.5.4";
 import {
@@ -28,14 +30,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-// Preços cheios em centavos — espelham plan-pricing.ts e os outros trilhos PIX.
-const PRICES: Record<string, Record<string, number>> = {
-  essencial:     { monthly: 2990, quarterly: 5970,  semestral: 8940,  yearly: 11880 },
-  direcao:       { monthly: 4990, quarterly: 10170, semestral: 14940, yearly: 20280 },
-  transformacao: { monthly: 7990, quarterly: 16170, semestral: 23940, yearly: 32280 },
-  oracoes:       { monthly: 1690, yearly: 14280 },
 };
 
 // Valor de entrada promocional: só no ciclo mensal e só na 1ª compra do cliente.
@@ -372,7 +366,7 @@ Deno.serve(async (req) => {
         .from("user_portal_tokens").select("user_id").eq("token", reauthToken).maybeSingle();
       if (!tokenRow?.user_id) return json({ error: "Link inválido ou expirado" }, 400);
       const { data: prof } = await supabase
-        .from("profiles").select("id, name, email, phone, plan, billing_cycle")
+        .from("profiles").select("id, user_id, name, email, phone, plan, billing_cycle")
         .eq("user_id", tokenRow.user_id).maybeSingle();
       if (!prof?.id) return json({ error: "Cadastro não encontrado" }, 404);
       reauthUserId = prof.id;
@@ -389,6 +383,18 @@ Deno.serve(async (req) => {
       email = email || prev?.customer_email || prof?.email || "";
       phone = phone || prev?.customer_phone || prof?.phone || "";
       cpf = cpf || prev?.customer_cpf || "";
+      if (retentionOfferId) {
+        const { data: recordedOffer, error: offerError } = await supabase.from("retention_offers")
+          .select(SUPPORT_OFFER_COLUMNS).eq("id", retentionOfferId).maybeSingle();
+        if (offerError || !recordedOffer || recordedOffer.gateway !== "woovi" ||
+            !offerIsPayable(recordedOffer, prof.user_id, prof.id) || recordedOffer.tier !== offerTier) {
+          return json({ error: "Oferta inválida, expirada ou de outro cadastro" }, 400);
+        }
+        const terms = retentionTerms(recordedOffer, prof.plan, prof.billing_cycle);
+        if (!terms) return json({ error: "Condição da oferta precisa de revisão pela equipe" }, 409);
+        plan = terms.plan;
+        billing = terms.billing;
+      }
       if (!cpf) return json({ error: "CPF do cadastro não encontrado — fale com o suporte" }, 400);
     }
 
@@ -439,6 +445,7 @@ Deno.serve(async (req) => {
         .select("id, subscription_id, correlation_id, entry_charge_correlation_id, plan, billing_period, is_trial, trial_value_cents, value_cents, qr_payload, qr_encoded_image, qr_expires_at, status, creation_status, next_charge_date, updated_at")
         .eq("request_key", requestKey).maybeSingle();
       const reusable = prior?.creation_status === "completed"
+        && prior.plan === plan && prior.billing_period === billing && prior.value_cents === amountCents
         && prior.qr_payload
         && prior.subscription_id
         && prior.qr_expires_at

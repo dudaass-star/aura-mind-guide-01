@@ -32,6 +32,7 @@ export default function ReautorizarPix() {
   const [params] = useSearchParams();
   const token = params.get("token") || "";
   const retentionCode = params.get("r") || "";
+  const retentionOfferId = params.get("offer_id") || "";
   // Oferta de retenção aceita: o mandato novo nasce já no valor reduzido.
   const offer = params.get("offer") || "";
 
@@ -52,7 +53,7 @@ export default function ReautorizarPix() {
     try {
       const { data, error: fnError } = await supabase.functions.invoke(
         "pix-reauth-router",
-        { body: { action: "create", ...(retentionCode ? { retentionCode } : { token }), ...(offer ? { offer } : {}) } },
+        { body: { action: "create", ...(retentionCode ? { retentionCode } : { token }), ...(offer ? { offer } : {}), ...(retentionOfferId ? { retentionOfferId } : {}) } },
       );
       if (fnError) throw new Error(fnError.message);
       if (!data || (data as { error?: string }).error) {
@@ -67,7 +68,7 @@ export default function ReautorizarPix() {
     } finally {
       setLoading(false);
     }
-  }, [token, retentionCode, offer]);
+  }, [token, retentionCode, offer, retentionOfferId]);
 
   // Polling do status da autorização enquanto o QR está na tela.
   useEffect(() => {
@@ -75,7 +76,7 @@ export default function ReautorizarPix() {
     const interval = setInterval(async () => {
       try {
         const { data } = await supabase.functions.invoke("pix-reauth-router", {
-          body: { action: "status", ...(retentionCode ? { retentionCode } : { token }), authorizationId: qr.authorizationId },
+          body: { action: "status", ...(retentionCode ? { retentionCode } : { token }), ...(retentionOfferId ? { retentionOfferId } : {}), authorizationId: qr.authorizationId },
         });
         const st = data as { state?: string; status?: string } | null;
         if (st?.status) setStatus(st.status);
@@ -88,7 +89,7 @@ export default function ReautorizarPix() {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [qr?.authorizationId, confirmed, token, retentionCode]);
+  }, [qr?.authorizationId, confirmed, token, retentionCode, retentionOfferId]);
 
   useEffect(() => {
     if ((token || retentionCode) && !qr && !loading && !error) void gerarQr();

@@ -9,6 +9,7 @@
 //   • status           → informa se a autorização/pagamento já foi confirmado
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { findRetentionOfferByCode, recordRetentionOfferEvent } from "../_shared/retention-offers.ts";
+import { offerIsPayable, SUPPORT_OFFER_COLUMNS, type SupportRetentionOffer } from "../_shared/support-retention.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,7 +35,7 @@ Deno.serve(async (req) => {
     let token = body.token;
     const retentionCode = body.retentionCode;
     const action = body.action || "create";
-    const retentionOffer = retentionCode ? await findRetentionOfferByCode(supabase, retentionCode) : null;
+    let retentionOffer = retentionCode ? await findRetentionOfferByCode(supabase, retentionCode) : null;
     if (retentionCode && !retentionOffer) return json({ error: "Oferta inválida ou expirada" }, 400);
     if (!token && retentionOffer?.profile_user_id) {
       const { data: portal } = await supabase.from("user_portal_tokens").select("token")
@@ -64,6 +65,23 @@ Deno.serve(async (req) => {
       .from("profiles").select("id, user_id, card_gateway, status, plan_expires_at")
       .eq("user_id", tokenRow.user_id).maybeSingle();
     if (!profile) return json({ error: "Cadastro não encontrado" }, 404);
+
+    // O ID comercial só resolve com o token do próprio cliente; jamais basta o ID da oferta.
+    if (body.retentionOfferId) {
+      if (!/^[0-9a-f-]{36}$/i.test(body.retentionOfferId)) return json({ error: "Oferta inválida" }, 400);
+      const { data, error } = await supabase.from("retention_offers").select(SUPPORT_OFFER_COLUMNS)
+        .eq("id", body.retentionOfferId).maybeSingle();
+      if (error || !data) return json({ error: "Oferta inválida" }, 400);
+      retentionOffer = data as SupportRetentionOffer;
+    }
+    if (retentionOffer && (!offerIsPayable(retentionOffer, profile.user_id, profile.id) ||
+        retentionOffer.gateway !== profile.card_gateway)) {
+      // A consulta de confirmação continua válida depois do pagamento, só para o mesmo titular.
+      const completedOwnOffer = action === "status" && ["paid", "applied"].includes(retentionOffer.status) &&
+        retentionOffer.profile_user_id === profile.user_id && (!retentionOffer.profile_id || retentionOffer.profile_id === profile.id);
+      if (!completedOwnOffer) return json({ error: "Oferta inválida, expirada ou de outro cadastro" }, 400);
+    }
+    if (retentionOffer && body.offer && body.offer !== retentionOffer.tier) return json({ error: "Condição divergente da oferta" }, 400);
 
     // Renovação pelo App: PIX Woovi sem débito automático ativo e ciclo
     // terminando em até 7 dias (ou já vencido) → mostra botão de renovar.
