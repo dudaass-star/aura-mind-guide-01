@@ -68,4 +68,4 @@
 
 - The plan-change dialog loads Nunito from the installed font package; local font files avoid failed external font requests and inconsistent fallback typography.
 - Capacitor appId `br.com.olaaura.app` is fixed; store builds bundle `dist`, live reload only via `CAP_LIVE_RELOAD=1`.
-- Support cancel actions route by the customer's real provider (profile gateway / live Woovi mandate), never by the action label; legacy `cancel_asaas_subscription` for Woovi customers is rewritten to the Woovi cancel, since Asaas is no longer the PIX rail.
+- Support cancels route by the customer's real provider, not the action label; Asaas is no longer the PIX rail.
