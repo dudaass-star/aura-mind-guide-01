@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import Stripe from "https://esm.sh/stripe@18.5.0";
+import { confirmedWooviCancellation } from "../_shared/support-action-state.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,7 +53,7 @@ serve(async (req) => {
     // cancel_asaas_subscription chegava aqui para clientes Woovi e falhava
     // na Asaas. O provedor vem do cadastro, nunca do rótulo da ação.
     let routedToWoovi = false;
-    if (action.type === "cancel_asaas_subscription") {
+    if (["cancel_asaas_subscription", "cancel_subscription"].includes(action.type)) {
       let gw: string | null = null;
       let profId: string | null = null;
       const sel = "id, card_gateway";
@@ -306,13 +307,35 @@ serve(async (req) => {
               .select("id, subscription_id, status")
               .is("replaced_by_subscription_id", null)
               .not("subscription_id", "is", null)
-              .in("status", ["ATIVA", "APROVADA", "AGUARDANDO"])
               .order("created_at", { ascending: false })
               .limit(1);
             wq = profileRow ? wq.eq("user_id", profileRow.id) : wq.ilike("customer_email", ticket.customer_email || "");
-            const { data: wooviSub } = await wq.maybeSingle();
+            const { data: wooviSub, error: lookupError } = await wq.maybeSingle();
+            if (lookupError) throw lookupError;
             if (!wooviSub?.subscription_id) {
               throw new Error("Nenhuma assinatura ativa encontrada no cartão nem no PIX Automático");
+            }
+            const { data: receipts, error: receiptError } = await supabase.from("support_ticket_actions")
+              .select("id, action_type, success, stripe_response")
+              .eq("ticket_id", ticket_id)
+              .eq("action_type", "cancel_subscription")
+              .eq("success", true)
+              .contains("stripe_response", { gateway: "woovi", subscription_id: wooviSub.subscription_id, status: "CANCELADA" })
+              .order("executed_at", { ascending: false }).limit(1);
+            if (receiptError) throw receiptError;
+            const priorCancellation = confirmedWooviCancellation(wooviSub, receipts || []);
+            if (priorCancellation) {
+              params.woovi_subscription_id = wooviSub.subscription_id;
+              stripeResponse = {
+                gateway: "woovi", subscription_id: wooviSub.subscription_id,
+                status: "CANCELADA", already_canceled: true, previous_action_id: priorCancellation.id,
+              };
+              success = true;
+              log("Cancelamento já confirmado; nenhuma chamada à Woovi", { ticket_id, previous_action_id: priorCancellation.id });
+              break;
+            }
+            if (!["ATIVA", "APROVADA", "AGUARDANDO"].includes(wooviSub.status)) {
+              throw new Error("Mandato sem renovação ativa, mas sem confirmação de cancelamento neste atendimento. Confira o histórico antes de enviar.");
             }
             const resp = await fetch(
               `https://api.woovi.com/api/v1/subscriptions/${encodeURIComponent(wooviSub.subscription_id)}/cancel`,

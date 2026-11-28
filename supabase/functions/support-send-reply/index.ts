@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import nodemailer from "npm:nodemailer@6.9.16";
+import { unresolvedCriticalFailure } from "../_shared/support-action-state.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,28 +41,17 @@ serve(async (req) => {
     if (tErr || !ticket) throw new Error("Ticket not found");
 
     // ============ GATE de consistência ============
-    // Se nos últimos 5 minutos uma ação CRÍTICA falhou neste ticket, recusa
-    // o envio pra evitar prometer ao cliente algo que não aconteceu (caso
-    // a UI seja chamada por outro caminho que não respeite o gate frontend).
-    const CRITICAL_ACTIONS = new Set([
-      "refund_invoice",
-      "pause_subscription",
-      "change_plan",
-      "cancel_subscription",
-      "refund_asaas_payment",
-      "cancel_asaas_subscription",
-    ]);
+    // Sucesso posterior da mesma operação resolve uma falha anterior;
+    // falhas de outras operações continuam impedindo promessas não cumpridas.
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { data: recentActions } = await supabase
+    const { data: recentActions, error: actionsError } = await supabase
       .from("support_ticket_actions")
-      .select("action_type, success, error_message, id")
+      .select("action_type, success, error_message, id, payload")
       .eq("ticket_id", ticket_id)
       .gte("executed_at", fiveMinAgo)
-      .order("executed_at", { ascending: false })
-      .limit(5);
-    const failedCritical = (recentActions || []).find(
-      (a: { action_type: string; success: boolean }) => CRITICAL_ACTIONS.has(a.action_type) && a.success === false,
-    );
+      .order("executed_at", { ascending: false });
+    if (actionsError) throw actionsError;
+    const failedCritical = unresolvedCriticalFailure(recentActions || []);
     if (failedCritical) {
       const msg = `Última ação crítica "${(failedCritical as { action_type: string }).action_type}" falhou (${(failedCritical as { error_message: string | null }).error_message || "sem mensagem"}). Email não enviado para evitar promessa não cumprida — reabra o draft e tente novamente.`;
       log("Blocked send due to recent failed critical action", { ticket_id, failed: failedCritical });
