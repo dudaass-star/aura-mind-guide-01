@@ -47,6 +47,40 @@ serve(async (req) => {
       ? "https://api.asaas.com/v3"
       : "https://api-sandbox.asaas.com/v3";
 
+    // ============ ROTEAMENTO PELO PROVEDOR REAL ============
+    // PIX atual roda na Woovi (PIX Automático); a ação legada
+    // cancel_asaas_subscription chegava aqui para clientes Woovi e falhava
+    // na Asaas. O provedor vem do cadastro, nunca do rótulo da ação.
+    let routedToWoovi = false;
+    if (action.type === "cancel_asaas_subscription") {
+      let gw: string | null = null;
+      let profId: string | null = null;
+      const sel = "id, card_gateway";
+      if (ticket.profile_user_id) {
+        const { data } = await supabase.from("profiles").select(sel).eq("user_id", ticket.profile_user_id).maybeSingle();
+        gw = (data as { card_gateway?: string } | null)?.card_gateway ?? null;
+        profId = (data as { id?: string } | null)?.id ?? null;
+      }
+      if (!profId && ticket.customer_email) {
+        const { data } = await supabase.from("profiles").select(sel).ilike("email", ticket.customer_email).limit(1).maybeSingle();
+        gw = (data as { card_gateway?: string } | null)?.card_gateway ?? null;
+        profId = (data as { id?: string } | null)?.id ?? null;
+      }
+      let wooviLive = false;
+      if (profId) {
+        const { count } = await supabase.from("woovi_subscriptions").select("id", { count: "exact", head: true })
+          .eq("user_id", profId).is("replaced_by_subscription_id", null)
+          .in("status", ["ATIVA", "APROVADA", "AGUARDANDO"]);
+        wooviLive = (count || 0) > 0;
+      }
+      if (gw === "woovi" || gw === "inter" || wooviLive) {
+        log("Routing legacy Asaas cancel to Woovi", { gateway: gw, wooviLive });
+        action.type = "cancel_subscription";
+        action.params = {};
+        routedToWoovi = true;
+      }
+    }
+
     let stripeResponse: unknown = null;
     let success = false;
     let errorMessage: string | null = null;
@@ -57,7 +91,7 @@ serve(async (req) => {
     // o ID concreto. Em vez de falhar, o backend resolve automaticamente a partir
     // do email do ticket (Stripe customer + última invoice/sub paga, ou Asaas pelo profile).
     const needsStripeInvoice = action.type === "refund_invoice" && !params.invoice_id;
-    const needsStripeSub = ["cancel_subscription", "pause_subscription"].includes(action.type) && !params.subscription_id;
+    const needsStripeSub = !routedToWoovi && ["cancel_subscription", "pause_subscription"].includes(action.type) && !params.subscription_id;
     const needsAsaasPayment = action.type === "refund_asaas_payment" && !params.asaas_payment_id;
     const needsAsaasSub = action.type === "cancel_asaas_subscription" && !params.asaas_subscription_id;
 

@@ -108,7 +108,8 @@ AÇÕES SUGERIDAS (use 1 ou mais, em ordem):
 
 REGRA DE PROVEDOR:
 - Cliente pagou com cartão (tem stripe.subscriptions/invoices no contexto) → use ações Stripe (refund_invoice, cancel_subscription, etc).
-- Cliente pagou com PIX (tem asaas.subscriptions/payments no contexto) → use ações Asaas (refund_asaas_payment, cancel_asaas_subscription).
+- Cliente com PIX Automático Woovi/Inter (pix_renewal.gateway = "woovi" ou "inter" no contexto) → cancelamento é cancel_subscription com params vazio; o backend localiza e cancela o mandato na Woovi. NUNCA use ações Asaas para esse cliente.
+- Cliente com PIX legado Asaas (tem asaas.subscriptions/payments e NÃO tem pix_renewal Woovi/Inter) → use ações Asaas (refund_asaas_payment, cancel_asaas_subscription).
 - Se houver os dois, prefira o provedor da cobrança em questão.
 
 PREENCHIMENTO DE PARAMS (OBRIGATÓRIO):
@@ -674,6 +675,14 @@ ${ticket.profile_user_id ? "" : `- CADASTRO NÃO LOCALIZADO: não confirme statu
             usedInvoiceIds.add(inv.id);
             log("Injected invoice_id into draft action", { id: inv.id });
           }
+        }
+        // Provedor real: cliente Woovi/Inter nunca recebe ação Asaas.
+        const pixGw = (context as { pix_renewal?: { gateway?: string } }).pix_renewal?.gateway;
+        if (sa.type === "cancel_asaas_subscription" && (pixGw === "woovi" || pixGw === "inter")) {
+          sa.type = "cancel_subscription";
+          sa.params = {};
+          log("Rewrote Asaas cancel to Woovi cancel_subscription", { gateway: pixGw });
+          continue;
         }
         if (sa.type === "cancel_asaas_subscription" && !sa.params.asaas_subscription_id) {
           const s = ctxAsaasSubs[0];
